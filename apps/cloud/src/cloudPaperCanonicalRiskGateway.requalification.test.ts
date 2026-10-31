@@ -4,7 +4,7 @@ import { readFileSync } from "node:fs";
 import { describe, it } from "node:test";
 import { CLOUD_PAPER_RISK_LIMITS } from "./cloudPaperCanonicalRiskGateway";
 
-const EXPECTED_RISK_BLOB = "4a7ef23803b0d9ed132276a772cc2838bbe17126";
+const EXPECTED_RISK_BLOB = "b43962beb41a193eda30c8dc717f2cbcc8971edd";
 
 function committedGitBlobSha(path: string): string {
   return execFileSync("git", ["rev-parse", `HEAD:${path}`], {
@@ -55,6 +55,25 @@ describe("RISK exact-source re-qualification evidence", () => {
     assert.match(source, /public lossSession\(\): CloudPaperLossSessionSnapshot \| null \{\r?\n\s*return this\.lastLossSession;/);
     assert.equal((source.match(/this\.lastLossSession/g) ?? []).length, 2, "written once per evaluation and read only by lossSession()");
     assert.match(source, /consecutiveLossCount: lossState\.consecutiveLossCount, sessionPeakEquity/, "the decision still uses the same streak");
+  });
+
+  it("re-qualifies risk rows keyed by the real PAPER account id, with the legacy account read only to tighten", () => {
+    const source = readFileSync("apps/cloud/src/cloudPaperCanonicalRiskGateway.ts", "utf8");
+    assert.doesNotMatch(source, /ACCOUNT_ID|"paper-default"/, "no fixed account label");
+    assert.match(source, /this\.accountId = resolveRiskAccountId\(options\.initialCapital, options\.accountId\)/);
+    assert.match(source, /accountId: this\.accountId,\r?\n\s+requestId: `\$\{input\.path\}:\$\{input\.commandId\}`/);
+    assert.match(source, /idempotency: \{ accountId: this\.accountId,/);
+    assert.match(source, /new CanonicalRiskSafetyGate\(new AccountScopedRiskPersistence\(this\.persistence, this\.accountId\)\)/);
+  });
+
+  it("re-qualifies the persisted drawdown peak: restored at start, only raised, unknown halts", () => {
+    const source = readFileSync("apps/cloud/src/cloudPaperCanonicalRiskGateway.ts", "utf8");
+    assert.match(source, /this\.restorePeak\(\);/);
+    assert.match(source, /this\.peakEquity = Math\.max\(this\.peakEquity, stored\.peak\)/);
+    assert.match(source, /if \(!this\.peakVerified\) return Object\.freeze\(\{ status: "HALT", reasonCodes: Object\.freeze\(\["PERSISTENCE_UNHEALTHY"\]\) \}\);/);
+    assert.match(source, /this\.peakEquity = Math\.max\(this\.peakEquity, currentEquity\);\r?\n\s+if \(!\(this\.peakEquity <= this\.persistedPeak\)\)/);
+    // The limits are the same object the existing deepEqual test pins; the drawdown ratio is not touched here.
+    assert.equal(CLOUD_PAPER_RISK_LIMITS.maxSessionDrawdownRatio, 0.2);
   });
 
   it("verifies owner-approved Cloud loss-veto removal and every other risk limit unchanged", () => {

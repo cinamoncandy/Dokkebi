@@ -1,4 +1,5 @@
 import { learningPipelineProjection, type LearningPipelineProjection } from "./learningPipelineStage";
+import { learningLoopVerdict, type LearningLoopVerdict } from "./learningLoopVerdict";
 import { LearningPipelineAlarmTracker, type LearningPipelineAlarmSnapshot } from "./learningPipelineAlarm";
 import { createHash, randomUUID } from "node:crypto";
 import http, { type IncomingMessage, type Server, type ServerResponse } from "node:http";
@@ -926,13 +927,13 @@ export function startCloudDashboardServer(options: CloudDashboardServerOptions):
     }
   });
   const pipelineAlarm = new LearningPipelineAlarmTracker();
-  const observePipeline = (): { runtime: CloudRuntimeLivenessSnapshot; learningPipeline: LearningPipelineProjection; learningPipelineAlarm: LearningPipelineAlarmSnapshot } | undefined => {
+  const observePipeline = (): { runtime: CloudRuntimeLivenessSnapshot; learningPipeline: LearningPipelineProjection; learningPipelineAlarm: LearningPipelineAlarmSnapshot; learningLoopVerdict: LearningLoopVerdict } | undefined => {
     const liveness = options.runtimeLiveness?.();
     if (liveness === undefined) return undefined;
     const now = Date.now();
     const runtime = publicRuntimeLiveness(liveness);
     const learningPipeline = learningPipelineProjection(runtime as unknown as Readonly<Record<string, unknown>>, now);
-    return { runtime, learningPipeline, learningPipelineAlarm: pipelineAlarm.update(learningPipeline, now) };
+    return { runtime, learningPipeline, learningPipelineAlarm: pipelineAlarm.update(learningPipeline, now), learningLoopVerdict: learningLoopVerdict(runtime as unknown as Readonly<Record<string, unknown>>, learningPipeline) };
   };
   const sockets = new Set<import("node:net").Socket>();
   server.on("connection", (socket) => { sockets.add(socket); socket.on("close", () => sockets.delete(socket)); });

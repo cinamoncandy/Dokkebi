@@ -1,0 +1,59 @@
+id: WO-RISK-20261030-ACCOUNT-KEY-PEAK-PERSIST
+title: Key Cloud PAPER risk rows by the real PAPER account id and persist the session drawdown peak
+status: READY_FOR_REVIEW
+priority: P1
+owner: nusa-development
+repository: cinamoncandy/NUSA
+base_branch: main
+branch: risk/WO-RISK-20261030-ACCOUNT-KEY-PEAK-PERSIST
+authority_impact: risk-account-identity-and-drawdown-persistence
+owner_approval: "2026-10-30 in chat ('다 승인'), for docs/DESIGN_ASSESSMENT_2026-10-28.md section 3 items 3 and 4."
+supersedes_design_record: WO-RISK-20261028-ACCOUNT-IDENTITY
+objective: >-
+  (a) Stop writing every account's canonical risk rows under the fixed label "paper-default" and use the PAPER account id the
+  runtime already uses (paperAccountIdForCapital). (b) Stop a restart from forgetting the session drawdown peak by persisting it
+  and restoring it at start. Both changes are stricter or equal; no limit, threshold or capital moves.
+design:
+  account_id:
+    - 'CloudPaperCanonicalRiskGatewayOptions.accountId (optional); default is paperAccountIdForCapital(initialCapital); runtime.ts passes it explicitly. The original KRW 10,000,000 account keeps "paper-default", so its rows, approval ids and idempotency keys are byte-identical to before.'
+    - 'AccountScopedRiskPersistence (cloudPaperRiskAccountScope.ts) wraps the SQLite risk persistence. Writes and the daily-loss row use the real account id. Reads that can only tighten a decision (a duplicate command id, an open order) also see rows under "paper-default", so an old row is honoured, never rewritten, deleted or double counted. The legacy daily-loss row is offered under the real account id only while that account has no day row of its own (see effect_to_state_explicitly).'
+  drawdown_peak:
+    - 'SessionPeakStore keeps the peak in the existing risk_daily_loss_state table under the key "session-peak:<accountId>" (marker SESSION_PEAK_V1); no schema change, no migration. It is written only when the peak rises and restored (max with the initial capital) when the gateway is constructed.'
+    - 'Fail closed: a read error, a wrong marker, a non-numeric value or a value below the initial capital makes the peak unknown, and every evaluation returns HALT / PERSISTENCE_UNHEALTHY until a valid peak can be read (a read is retried on each evaluation). A failed write of a new high also returns HALT. There is no path that falls back to a lower peak.'
+qualification:
+  pinned_module: apps/cloud/src/cloudPaperCanonicalRiskGateway.ts (MODULE_QUALIFICATION_SOURCE_BLOB_BY_STAGE_V1.RISK)
+  process: >-
+    The documented re-qualification path of WO-RISK-20261007-KST-TRADING-DAY: the exact-source blob is moved in the two places that
+    must move together (EXPECTED_RISK_BLOB in cloudPaperCanonicalRiskGateway.requalification.test.ts and RISK in
+    moduleQualificationV1.ts, checked by module10XS), in a commit after the source commit, together with new behaviour tests. The
+    blob is the committed git blob of the final source, not an edited value. WO-GOV-20261027-QUALIFICATION-PIN-SCOPE (convention
+    only, no rule change) is respected: the new logic lives in cloudPaperRiskAccountScope.ts, so the pinned file gains only wiring.
+  status_claim: No Level-10 or qualification-status claim is made; independent exact-source evidence by a non-author validator is still required.
+effect_to_state_explicitly:
+  - 'For the KRW 10,000,000 account nothing changes except that a drawdown peak now survives restarts (stricter).'
+  - 'For any other capital (for example KRW 100,000, account paper-krw-100000) the canonical equity-based daily-loss check uses the legacy "paper-default" day row for the same KST day when the account has none of its own, so a loss already taken earlier that day is not forgotten at deploy (review of 2026-10-30). If that legacy starting equity is larger than the account''s, new entries halt for the rest of that KST day (fail closed); once the account writes its own row the legacy row is no longer read. A stale legacy row from an earlier day is ignored by the gate. A command id already claimed under "paper-default" is refused for that account (stricter).'
+  - 'The peak is a persistent high-water mark: a drawdown of more than 20% from the highest observed equity keeps rejecting orders after a restart, as it already did until the restart. Recovering means equity returning within the limit or an owner decision; nothing here clears it.'
+  - 'An unreadable or invalid stored peak halts PAPER orders until repaired (fail closed by design).'
+exclusions:
+  - No change to any risk limit, threshold, loss-limit policy or capital.
+  - No deletion or rewrite of existing risk rows; no schema migration.
+  - No LIVE authority, broker or Oracle/production change; no deploy.
+acceptance:
+  - Risk rows (idempotency, daily loss, approval ids) carry the real PAPER account id; the legacy account keeps "paper-default".
+  - A command claimed or an order open under "paper-default" still blocks, once.
+  - A restart keeps the drawdown peak; a corrupt or unreadable stored peak halts; a failed write halts.
+  - CLOUD_PAPER_RISK_LIMITS unchanged (existing deepEqual test).
+verification_commands:
+  - rm -f node_modules/.cache/tsconfig.base.tsbuildinfo
+  - npx tsc -p tsconfig.json
+  - node -r ./tests/register-dist.cjs --test dist/apps/cloud/src/cloudPaperCanonicalRiskGateway.accountPeak.test.js dist/apps/cloud/src/cloudPaperCanonicalRiskGateway.requalification.test.js dist/apps/cloud/src/module10XS.test.js dist/apps/cloud/src/cloudPaperCanonicalRiskGateway.liveness.test.js dist/apps/cloud/src/cloudPaperConsecutiveLossLifecycle.test.js tests/cloud-runtime-canonical-risk-wiring.test.js tests/paper-risk-limit-scaling.test.js
+  - node scripts/validate-aipos-yaml.js
+safety:
+  paper_only: true
+  liveAuthority: NONE
+  productionMutationAllowed: false
+  aiAuthority: ZERO_AUTHORITY
+  fail_closed: true
+validation: 'See the PR body for the exact commands run and their results.'
+precommit_review: 'Not yet requested; a non-author /grill-me review is required before the draft is marked ready.'
+next: 'Non-author review, exact-head CI, Audit and Release. After merge, a deploy of the exact main SHA is a separate owner/CORE operation (not done here).'

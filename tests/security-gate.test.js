@@ -33,7 +33,7 @@ test("lockfile pins the patched versions for audited high advisories", () => {
     assert.equal(packages.some((item) => item.name === name && item.version === vulnerable), false, `${name} ${vulnerable} is gone`);
   }
   assert.equal(packages.some((item) => item.name === "brace-expansion" && item.version === "1.1.17"), false);
-  for (const [name, fixed, vulnerable] of [["undici", "7.30.1", "7.29.1"], ["undici", "6.29.1", "6.28.1"], ["body-parser", "1.20.9", "1.20.6"], ["joi", "17.13.7", "17.13.6"]]) {
+  for (const [name, fixed, vulnerable] of [["undici", "7.30.1", "7.29.1"], ["undici", "6.29.1", "6.28.1"], ["body-parser", "1.20.9", "1.20.6"], ["joi", "17.13.9", "17.13.7"]]) {
     assert.ok(packages.some((item) => item.name === name && item.version === fixed), `${name} ${fixed} is pinned`);
     assert.equal(packages.some((item) => item.name === name && item.version === vulnerable), false, `${name} ${vulnerable} is gone`);
   }

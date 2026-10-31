@@ -14,10 +14,23 @@ export interface LearningFunnelStage {
 export interface LearningFunnelModel {
   readonly headline: string;
   readonly sub: string;
+  /** Where the learning loop stands, in one plain sentence: whether a learning cycle (a candidate run against the baseline) has been evaluated and what it waits for. */
+  readonly loop: string;
   readonly stages: readonly LearningFunnelStage[];
 }
 
 const int = (value: unknown): number | null => (typeof value === "number" && Number.isSafeInteger(value) && value >= 0 ? value : null);
+
+/**
+ * A learning cycle runs a candidate that passed the independent holdout against the baseline in PAPER, so with no holdout pass there is
+ * nothing to evaluate and the cycle count stays at 0. Says so, and never reads as a failure of the loop itself.
+ */
+export function loopLine(holdoutPasses: number, cyclesEvaluated: number): string {
+  if (cyclesEvaluated > 0) return `학습 한 바퀴를 이번 실행에서 ${cyclesEvaluated.toLocaleString("en-US")}번 평가했어요`;
+  return holdoutPasses === 0
+    ? "학습 한 바퀴(후보를 기준 규칙과 비교하는 평가)는 아직 안 돌았어요. 독립 검증을 통과한 후보가 있어야 돌아요"
+    : "독립 검증을 통과한 후보가 있어요. 학습 한 바퀴는 아직 평가 전이에요";
+}
 
 export function buildLearningFunnel(raw: unknown): LearningFunnelModel | null {
   if (raw == null || typeof raw !== "object" || Array.isArray(raw)) return null;
@@ -29,6 +42,7 @@ export function buildLearningFunnel(raw: unknown): LearningFunnelModel | null {
   return Object.freeze({
     headline: passed === 0 ? `전략 ${fmt(tested)}개를 시험했고\n끝까지 통과한 건 0개예요` : `전략 ${fmt(tested)}개 중\n${fmt(passed)}개가 독립 검증을 통과했어요`,
     sub: passed === 0 ? "과거 데이터에선 맞아도 새 데이터에선 틀렸어요. 기준은 낮추지 않아요." : `이번 실행에서 평가한 학습 사이클 ${fmt(cycles)}번`,
+    loop: loopLine(passed, cycles),
     stages: Object.freeze([
       Object.freeze({ label: "시험한 전략", value: tested, width: 1, tone: "NORMAL" as const }),
       Object.freeze({ label: "1차 통과", value: discovered, width: width(discovered), tone: "NORMAL" as const }),

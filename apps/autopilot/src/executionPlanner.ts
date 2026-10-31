@@ -13,6 +13,9 @@ export interface AutopilotExecutionRequest {
   readonly executionId?: string | null;
   readonly dedupeKey?: string | null;
   readonly contractFingerprintSha256?: string | null;
+  /** One-time internal transport capability; never itself represents causal evidence. */
+  readonly causalDispatchCapability?: string | null;
+  readonly causalSourceRunAttempt?: number | null;
   readonly mutationAllowed: false;
 }
 

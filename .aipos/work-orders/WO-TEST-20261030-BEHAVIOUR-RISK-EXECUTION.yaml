@@ -1,0 +1,44 @@
+id: WO-TEST-20261030-BEHAVIOUR-RISK-EXECUTION
+title: "Behavioural tests for the RISK and EXECUTION stages (add only; source-regex assertions stay)"
+status: LOCAL_VALIDATED_PENDING_REVIEW_CI
+owner: nusa-development
+repository: cinamoncandy/NUSA
+base_branch: main
+branch: claude/behavioural-risk-execution-tests
+parent: docs/DESIGN_ASSESSMENT_2026-10-28.md section 3 item 8 (assessor C)
+authority_impact: none
+owner_approval: "2026-10-30 in chat: '다 승인'."
+problem: "Several qualification tests assert source text with regexes (for example assert.match(source, /function rateState[\\s\\S]*?state\\.fills/)) instead of behaviour, so a refactor that keeps the behaviour breaks them and a rewrite that keeps the text can break the behaviour."
+change:
+  - "apps/cloud/src/cloudPaperCanonicalRiskGateway.behaviour.test.ts: drives the exported CloudPaperCanonicalRiskGateway with real account state (limits immutable and not raised by capital, cash never overspent, fill-derived rate/streak/daily-notional counting incl. cancelled orders and partial fills, Asia/Seoul day boundary, loss streak enforcement/disabled policy/winning-sell reset/split sell/unmatched sell fail-closed, display-only loss session, intent-bound idempotency incl. malformed fingerprint, reconciliation/kill-switch/P0/stale-data/health fail-closed, single-use manual approval)."
+  - "apps/cloud/src/paperTradingExecutionLoop.behaviour.test.ts: real gateway + CloudPaperExecutionBoundary + PaperTradingExecutionLoop (a rejected order never reaches execution and consumes no key, approved order is idempotent and a changed payload under the same key conflicts, kill switch / open P0 block before any change), content-addressed PortfolioPlan execution intent (same plan same id, tamper refused, investmentPercent only scales down, replayed tick spends once, mismatching tick refused), SqliteCloudPaperAccountRepository writer lease (second writer refused, expired writer cannot write and neither memory nor ledger advance, lost lease stays lost, closed writer refused, clock regression stops the writer), failed save does not advance state or leak error text."
+not_changed:
+  - "No source file is edited. No qualification-pinned file (MODULE_QUALIFICATION_SOURCE_BLOB_BY_STAGE_V1) and no pinned hash is touched."
+  - "No existing test or regex assertion is deleted or edited."
+exported_surface_gaps:
+  - "There is no capital-scaled limit: CLOUD_PAPER_RISK_LIMITS is a fixed policy and the gateway accepts any custom limits that pass validateLimits (finite, non-negative, ratios <= 1) with no 'not above the default' check. 'Limits scale only downward with capital' is therefore tested as 'the order ceiling does not rise with capital' and 'investmentPercent can only shrink an intent'; a downward-only guarantee on caller-supplied limits would need a new exported check in the pinned gateway and is reported, not added."
+  - "The strategy working-order path (CloudPaperExecutionBoundary.processTick through advanceStrategyWorkingOrder with an observed order book) is covered only down to PaperTradingExecutionLoop.processTick; it needs order-book fixtures that do not exist as exported helpers. Not claimed as replaced."
+redundant_regex_assertions_after_replacement:
+  note: "Listed for the owner/reviewer to retire in a later PR. None is removed here."
+  cloudPaperCanonicalRiskGateway.requalification.test.ts:
+    - "qualifies fill-derived accounting: /function rateState|dailyNotional|realizedLossState[\\s\\S]*?state\\.fills/, /second\\.add\\(fill\\.orderId\\)/, /sellOrders\\.set\\(order\\.orderId/ and doesNotMatch order.status === CANCELLED -> replaced by the cancelled-order rate test, partial-fill streak test, daily-notional test and split-sell test."
+    - "intent-bound idempotency: /payloadFingerprintSha256\\?: string/, /input\\.payloadFingerprintSha256 \\?\\? hash\\(/, /IDEMPOTENCY_FINGERPRINT_INVALID/, doesNotMatch payloadFingerprint 'PENDING' -> replaced by the conflicting-fingerprint, derived-fingerprint and malformed-fingerprint tests."
+    - "streak scoped to the Asia/Seoul day: /completed = ...filter(dayOf === today)/, /dayOf = ...paperTradingDayKey/, the paperTradingDay.ts tradingDayKey delegation, doesNotMatch toISOString().slice(0, 10), /consecutiveLossCount: Number.MAX_SAFE_INTEGER/ -> replaced by the 01:00 KST vs 23:59 KST test and the unmatched-sell fail-closed test."
+    - "todayCompletedSells/todayLosingSells source shape -> replaced by the lossSession counts assertions."
+  cloudPaperCanonicalRiskGateway.requalification.test.ts_kept:
+    - "git blob pin test and the CLOUD_PAPER_RISK_LIMITS deepEqual stay (pin / already behavioural)."
+    - "'lastLossSession written once and read only by lossSession()' and 'decision still uses the same streak' stay: a structural no-feedback property cannot be proven by calling the exported surface."
+  paperTradingExecutionLoop.requalification.test.ts:
+    - "/verifyWriterLease\\(\\): void \\{...assertLeaseHeld/ -> replaced by the lease tests."
+    - "/paperExecutionIntentCommandId\\(canonicalExecutionIntent\\)/, /validatePaperExecutionIntent\\(fill\\.executionIntent\\)/ (partly), /paper fill execution intent mismatch/ are NOT yet redundant: the loop-level intent mismatch is covered, the persisted-fill intent mismatch and provenance checks are not."
+    - "Still source-only, not replaced: cloud_paper_account_history, cloud_paper_fill_ledger, PAPER_FILL_LEDGER_CONFLICT/CHECKSUM_MISMATCH, order-book execution receipt, PAPER_STRATEGY_PARTIALLY_FILLED/BUDGET_EXHAUSTED/WAITING_FOR_NEW_DEPTH, residual budget, cancelled order/fill reconciliation."
+verification_commands:
+  - "rm -f node_modules/.cache/tsconfig.base.tsbuildinfo; npx tsc -p tsconfig.json"
+  - "node -r ./tests/register-dist.cjs --test dist/apps/cloud/src/cloudPaperCanonicalRiskGateway.behaviour.test.js dist/apps/cloud/src/paperTradingExecutionLoop.behaviour.test.js"
+  - "pnpm run preflight"
+safety:
+  paper_only: true
+  liveAuthority: NONE
+  productionMutationAllowed: false
+  aiAuthority: ZERO_AUTHORITY
+  fail_closed: true

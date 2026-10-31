@@ -6,7 +6,7 @@ import { planAutopilotExecution } from "./executionPlanner";
 import { executeGithubDispatch } from "./githubExecutor";
 import { resolveGithubReleaseCompletion } from "./githubReleaseCompletionResolver";
 import { verifyGithubActionsOidcToken, verifyGithubEventBridgeOidcToken } from "./githubActionsOidc";
-import { CodingRunnerEvidenceError, CodingRunnerHttpEvidenceError, executeCodingRunner, validateCodingRunnerRequest, type CodingPublisher, type CodingRuntime, type WorkersAiBinding } from "./codingRunner";
+import { CodingRunnerEvidenceError, CodingRunnerHttpEvidenceError, executeCodingRunner, isWorkflowFailureCodingReason, validateCodingRunnerRequest, type CodingPublisher, type CodingRuntime, type WorkersAiBinding } from "./codingRunner";
 import { prepareProductionExecution, reconcileCodingExecutionEvidence } from "./productionExecutionSpine";
 import {
   acquirePersistentExecution,
@@ -210,6 +210,9 @@ export async function handleCodingExecute(
   if (!await verifyCodingRunnerAuthorization(provided, configured, allowedRepository)) return json({ error: "CODING_RUNNER_UNAUTHORIZED" }, 401);
   try {
     const runnerRequest = validateCodingRunnerRequest(await request.json(), allowedRepository);
+    if (isWorkflowFailureCodingReason(runnerRequest.reason)) {
+      return json({ accepted: false, status: "CODING_EXECUTION_FAILED_CLOSED", error: "CAUSAL_ACTIONABILITY_UNVERIFIED", liveAuthority: "NONE", productionMutationAllowed: false, aiAuthority: "ZERO_AUTHORITY" }, 409);
+    }
     if (!env.NUSA_EXECUTION_COORDINATOR) return json({ error: "PERSISTENT_EXECUTION_COORDINATOR_REQUIRED", status: "INTERFACE_READY" }, 503);
     const lease = await handoffOrAcquirePersistentExecution(env.NUSA_EXECUTION_COORDINATOR, {
       dedupeKey: runnerRequest.dedupeKey,

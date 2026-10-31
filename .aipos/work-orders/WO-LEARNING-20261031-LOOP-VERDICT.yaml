@@ -1,0 +1,24 @@
+id: WO-LEARNING-20261031-LOOP-VERDICT
+title: "One verdict for the PAPER closed learning loop in /health (LOOP_VERIFIED / PARTIAL / BLOCKED / FAILED / UNKNOWN)"
+status: READY_FOR_REVIEW
+created: 2026-10-31
+trigger: "The 2026-10-31 recovery work order defines the loop labels, and the analysis of cyclesEvaluated = 0 had to be done by hand from several /health fields (CANDLES_STALE, DATASET_NO_SESSION, holdoutPasses 0, a sticky lastBlockedReason of TICK_ERROR)."
+change:
+  - "apps/cloud/src/learningLoopVerdict.ts: pure learningLoopVerdict(runtime, learningPipelineProjection) -> { verdict, firstBrokenTransition, firstBrokenCode, cycleWaitingFor, criteria }."
+  - "apps/cloud/src/server.ts: /health gains learningLoopVerdict next to learningPipeline (same already-public runtime object; fixed codes and booleans only)."
+rules:
+  - "LOOP_VERIFIED only when the whole chain passes (market, decision, order, fill, candles, dataset, experiment) and a learning cycle was evaluated AND recorded; survivesRestart is always NOT_OBSERVED (one snapshot cannot show it)."
+  - "FAILED only for a current error (rollover ERROR or a current lastErrorClass); a sticky lastBlockedReason of TICK_ERROR alone is not a failure."
+  - "cycleWaitingFor NO_DEPLOYABLE_CANDIDATE when no Research candidate passed the independent holdout (holdoutPasses 0): the designed waiting state, not a broken pipe."
+  - "A missing or malformed field reads UNKNOWN, never PASS; only codes matching /^[A-Z][A-Z0-9_]*$/ are published."
+not_changed:
+  - "No gate, threshold, study rule, risk limit, execution or qualification-pinned module; nothing is fed back into execution, risk or research. Display only."
+safety:
+  paper_only: true
+  liveAuthority: NONE
+  productionMutationAllowed: false
+  aiAuthority: ZERO_AUTHORITY
+validation:
+  - "tsc clean; learningLoopVerdict.test (6 behaviour tests incl. the owner's 2026-10-31 state reading PARTIAL / CANDLES_STALE / NO_DEPLOYABLE_CANDIDATE); learning-pipeline-stage/alarm, health-export, cloud-runtime-liveness-health, cloud-runtime-bootstrap, learning-loop-contract tests pass."
+unverified: "The output on the real host /health. The app does not show the verdict yet (the app heartbeat is a separate projection)."
+next: "CI and the release path; after deploy read /health learningLoopVerdict on the host. A later step can show it in the app and compare it across restarts to observe persistence."

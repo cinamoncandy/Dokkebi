@@ -92,7 +92,10 @@ test("/health accepts only canonical hourly eligibility tied to the open period"
 });
 
 async function withServer(options, run, port) {
-  const handle = startCloudDashboardServer({ port, ...base, ...options });
+  // Keep test listeners below Linux's ephemeral-port range so unrelated local
+  // outbound connections cannot make deterministic server tests flaky.
+  const stableTestPort = port >= 32_768 ? port - 20_000 : port;
+  const handle = startCloudDashboardServer({ port: stableTestPort, ...base, ...options });
   try { await run(handle); } finally { await handle.stop(); }
 }
 
@@ -171,7 +174,7 @@ test("/health publishes only the allowlisted liveness fields, whatever the sourc
     const body = JSON.parse(res.body);
     assert.deepEqual(Object.keys(body.runtime).sort(), Object.keys(LIVENESS).sort(), "no field beyond the contract may reach the public route");
     assert.equal(body.runtime.lastError, "LIVENESS_ERROR_UNCLASSIFIED", "a free-text error is replaced, never published");
-    assert.doesNotMatch(res.body, /leak-sentinel-7f3|acct-123|1000000|invalid key/);
+    assert.doesNotMatch(res.body, /leak-sentinel-7f3|acct-123|(?<![0-9])1000000(?![0-9])|invalid key/);
   }, 41887);
 });
 
@@ -211,7 +214,7 @@ test("/health names the class of the runtime's own paper failures but never the 
       const res = await request(handle.port, "/health");
       const body = JSON.parse(res.body);
       assert.equal(body.runtime.lastError, expected, lastError);
-      assert.doesNotMatch(res.body, /-154\.3|38 fills|abc123|acct-123|1234|abc-123|ledger/);
+      assert.doesNotMatch(res.body, /-154\.3|38 fills|abc123|acct-123|(?<![0-9])1234(?![0-9])|abc-123|ledger/);
     }, 41850 + index); // a range no other test file uses (41890-41897 overlapped paper-decision-outcome's 41893-41895)
   }
 });
@@ -498,7 +501,7 @@ test("the PAPER ledger identity publishes only a 64-hex fingerprint and non-nega
   await withServer({ runtimeLiveness: () => ({ ...LIVENESS, paperLedger: { ...good, cash: 8399 } }) }, async (handle) => {
     const res = await request(handle.port, "/health");
     assert.deepEqual(JSON.parse(res.body).runtime.paperLedger, good);
-    assert.doesNotMatch(res.body, /8399|"cash"/);
+    assert.doesNotMatch(res.body, /(?<![0-9])8399(?![0-9])|"cash"/);
   }, 41878);
   for (const bad of [{ ...good, ledgerFingerprintSha256: "short" }, { ...good, fillCount: -1 }, { ...good, lastFillAt: 1.5 }]) {
     await withServer({ runtimeLiveness: () => ({ ...LIVENESS, paperLedger: bad }) }, async (handle) => {

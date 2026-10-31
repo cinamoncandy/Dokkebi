@@ -36,6 +36,18 @@ export interface CodingRunnerRequest {
   readonly aiAuthority: "ZERO_AUTHORITY";
 }
 
+/**
+ * Workflow-failure evidence is only an observation. Until a verified causal
+ * admission receipt exists, it must not enter any CodingRunner execution path.
+ * Keep this parser aligned with verifyCodingRunnerRequestAgainstGitHub's two
+ * canonical failure-reason forms.
+ */
+export function isWorkflowFailureCodingReason(reason: string): boolean {
+  const numericReason = reason.match(/(?:^|:)gha:(?:[^:]+:)?(\d+):([0-9a-f]{40}):(failure|cancelled|timed_out)(?::|$)/i);
+  if (numericReason) return true;
+  return /(?:^|:)gha:([A-Za-z][A-Za-z0-9_-]{0,63}):([0-9a-f]{40}):(failure|cancelled|timed_out)(?::|$)/i.test(reason);
+}
+
 export interface CodingRunnerEnv {
   NUSA_CODING_RUNNER_TOKEN?: string;
   NUSA_AI_CODING_ENDPOINT?: string;

@@ -1,0 +1,8 @@
+current_research_orderbook_study_outcome_20261031:
+  work_order: WO-RESEARCH-20261014-ORDERBOOK-STUDY
+  status: COMPLETED
+  outcome: INSUFFICIENT_DATA
+  branch: claude/orderbook-study-outcome
+  validation: "records only; node scripts/validate-aipos-yaml.js"
+  next: "Merge via the release path. A new order-book study needs a new pre-registration on data collected from now on."
+  safety: PAPER_ONLY_LIVE_NONE_PRODUCTION_MUTATION_FALSE_AI_ZERO_AUTHORITY

@@ -106,7 +106,11 @@
     "jsdom": "26.0.0",
     "storybook": "8.6.19",
     "typescript": "5.9.3",
-    "vitest": "4.1.11"
+    "vitest": "4.1.11",
+    "@sigstore/bundle": "5.0.0",
+    "@sigstore/core": "4.0.1",
+    "@sigstore/protobuf-specs": "0.5.0",
+    "@sigstore/verify": "4.1.2"
   },
   "dependencies": {
     "ws": "8.21.3"

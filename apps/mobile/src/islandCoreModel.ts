@@ -65,6 +65,84 @@ export function rowLight(d: number, pos: number | null): number {
   return Math.exp(-x * x);
 }
 
+/** Seconds for the idle tide to cross the island once. Much slower than a decision's band (2.6 s) so it never reads as a signal. */
+export const ISLAND_TIDE_PERIOD_S = 18;
+
+/**
+ * Idle tide: a very faint band of light that drifts slowly from the back of the island to the front while it is live, so a quiet island
+ * is never still. Its strength is capped at 0.16, far below a real decision's band (1.0), and it is 0 when `live` is false or the
+ * island is grey, so it can never be mistaken for a decision, an order or a fill.
+ */
+export function tideLight(d: number, phase: number, live: boolean): number {
+  if (!live || !Number.isFinite(phase)) return 0;
+  const pos = ((phase / ISLAND_TIDE_PERIOD_S) % 1 + 1) % 1;
+  const x = (d - pos) / 0.18;
+  return 0.16 * Math.exp(-x * x);
+}
+
+/** How long the sea keeps the flash of a new decision (ms). */
+export const SEA_FLASH_MS = 900;
+
+/** The sea answers a new decision: brightest as its band leaves the front row, fading out over SEA_FLASH_MS. 0..1, never negative. */
+export function seaFlash(ageMs: number): number {
+  if (!Number.isFinite(ageMs) || ageMs < 0 || ageMs > SEA_FLASH_MS) return 0;
+  const k = ageMs / SEA_FLASH_MS;
+  return (1 - k) * (1 - k);
+}
+
+/** Sideways drift of a whole contour row in px, so the lines slide a little against each other (parallax) and the island never looks rigid. */
+export function rowShiftPx(phase: number, d: number, width: number): number {
+  return Math.sin(phase * 0.45 + d * 5.5) * width * 0.004 * (0.4 + 0.6 * Math.max(0, Math.min(1, d)));
+}
+
+/** Move `current` towards `target` at `rate` per second (exponential, never overshoots); used to glide the summit badge. */
+export function easeToward(current: number, target: number, dt: number, rate: number): number {
+  if (!Number.isFinite(current)) return Number.isFinite(target) ? target : 0;
+  if (!Number.isFinite(target)) return current;
+  const f = 1 - Math.exp(-Math.max(0, rate) * Math.max(0, Math.min(0.1, dt)));
+  return current + (target - current) * f;
+}
+
+/** A slow twinkle (0.7..1) for star i: stars glint at their own pace and never blink. */
+export function starTwinkle(i: number, phase: number): number {
+  return 0.85 + 0.15 * Math.sin(phase * 0.8 + i * 1.7);
+}
+
+/** Share of the island's width over which its two ends fade into the sea. */
+export const ISLAND_END_FADE = 0.14;
+
+/** Lines of sea under the island, from the shore (t = 0) towards the viewer (t = 1). */
+export const SEA_LINES = 9;
+
+/**
+ * Vertical offset in px of a sea line at u (0..1 across): two waves of different length and opposite drift interfere, and the swing
+ * grows towards the viewer (perspective), so the sea reads as water instead of a ruled line. Bounded by seaWaveReach(t).
+ */
+export function seaWave(u: number, t: number, k: number, phase: number): number {
+  const reach = 0.5 + 1.8 * Math.max(0, Math.min(1, t));
+  return reach * (0.65 * Math.sin(u * 11 + k * 0.9 + phase * 1.6) + 0.35 * Math.sin(u * 23 - phase * 2.4 + k * 1.7));
+}
+export const seaWaveReach = (t: number): number => 0.5 + 1.8 * Math.max(0, Math.min(1, t));
+
+/** A slow shimmer (0.64..1) that multiplies a sea line's opacity so the water glints without blinking. */
+export function seaShimmer(k: number, phase: number): number {
+  return 0.82 + 0.18 * Math.sin(phase * 1.1 + k * 1.3);
+}
+
+/** Stroke width of a sea line: thicker next to the shore where the island is reflected, finer towards the viewer. */
+export const seaLineWidth = (t: number): number => 0.7 + 0.5 * (1 - Math.max(0, Math.min(1, t)));
+
+/**
+ * The lowest part of a contour fades by HEIGHT, smoothly and with one stroke per row: the line is painted with a vertical gradient that
+ * is fully transparent at `eps * 0.5` above the row's base and fully opaque from `eps * 4.5`, so a contour fades into the sea instead of being
+ * cut into pieces (the cut left stray dashes that appeared and vanished as the island breathed). `base` and `lift` are in px; returns the two
+ * y positions of the gradient, or null for a negative eps (a grey island draws everything at full strength).
+ */
+export function lowFadeY(base: number, lift: number, eps: number): { readonly y0: number; readonly y1: number } | null {
+  if (!Number.isFinite(base) || !Number.isFinite(lift) || lift <= 0 || !Number.isFinite(eps) || eps < 0) return null;
+  return Object.freeze({ y0: base - eps * 0.5 * lift, y1: base - eps * 4.5 * lift });
+}
+
 /** The band of light plus a softer, wider tail behind it (toward the front), so the light reads as a glide with a wake and not a dot. */
 export function rowGlow(d: number, pos: number | null): number {
   if (pos == null) return 0;

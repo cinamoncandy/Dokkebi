@@ -81,3 +81,13 @@ test("the shell draws only the status chip: the NUSA name and mark are already i
   assert.doesNotMatch(shell, /IslandMark|>NUSA</, "no second NUSA row under the app header");
   assert.match(shell, /<AiStatusChip /);
 });
+
+test("the 더보기 detail screens, the order and portfolio screens, the notifications and the connection card sit in the shell", () => {
+  const fs = require("node:fs"), path = require("node:path");
+  const read = (f) => fs.readFileSync(path.resolve(__dirname, "../apps/mobile", f), "utf8").replace(/\r\n/g, "\n");
+  for (const [file, chip] of [["src/screenFrame.tsx", 'plainScreenChip\\("MORE"\\)'], ["src/notificationView.tsx", 'plainScreenChip\\("MORE"\\)'], ["src/portfolioView.tsx", 'plainScreenChip\\("MORE"\\)'], ["src/orderHistoryView.tsx", 'plainScreenChip\\("MORE"\\)'], ["App.tsx", 'plainScreenChip\\("PAPER"\\)']]) {
+    assert.match(read(file), new RegExp(`<AiShell chip=\\{${chip}\\}>`), file);
+  }
+  for (const file of ["src/screenFrame.tsx", "src/notificationView.tsx", "src/portfolioView.tsx"]) assert.match(read(file), /backgroundColor: "transparent"/, `${file} lets the backdrop show`);
+  assert.doesNotMatch(read("src/settingsView.tsx"), /<AiShell/, "Settings keeps the user's theme because it holds the theme switch");
+});
