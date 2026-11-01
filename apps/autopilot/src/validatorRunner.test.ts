@@ -22,7 +22,7 @@ test("VALIDATOR permits PASS or P2-only notes and classifies P0/P1 as blockers",
     blockers: [], safetyInvariantResult: "PASS", mergeAllowed: true,
   }).verdict, "PASS_WITH_NOTES");
   assert.equal(validateValidatorModelVerdict({
-    verdict: "FAIL", findings: [{ code: "P1_RELEASE_BYPASS", severity: "BLOCKER", message: "bypass", evidenceRef: "x:+1" }],
+    verdict: "FAIL", findings: [{ code: "P1_RELEASE_BYPASS", severity: "BLOCKER", message: "bypass", evidenceRef: "x:+1", evidenceScope: "SOURCE_CONTENT" }],
     blockers: ["release bypass"], safetyInvariantResult: "FAIL", mergeAllowed: false,
   }).verdict, "FAIL");
 });
@@ -35,7 +35,7 @@ test("VALIDATOR rejects missing priority prefixes and severity downgrades", () =
     verdict: "PASS_WITH_NOTES", findings: [{ code: "P1_BLOCKER_AS_NOTE", severity: "NOTE", message: "bad", evidenceRef: null }], blockers: [], safetyInvariantResult: "PASS", mergeAllowed: true,
   }), /VALIDATOR_BLOCKING_PRIORITY_SEVERITY_INVALID/);
   assert.throws(() => validateValidatorModelVerdict({
-    verdict: "FAIL", findings: [{ code: "P2_NOTE_AS_BLOCKER", severity: "BLOCKER", message: "bad", evidenceRef: "x:+1" }], blockers: ["bad"], safetyInvariantResult: "FAIL", mergeAllowed: false,
+    verdict: "FAIL", findings: [{ code: "P2_NOTE_AS_BLOCKER", severity: "BLOCKER", message: "bad", evidenceRef: "x:+1", evidenceScope: "SOURCE_CONTENT" }], blockers: ["bad"], safetyInvariantResult: "FAIL", mergeAllowed: false,
   }), /VALIDATOR_NONBLOCKING_PRIORITY_SEVERITY_INVALID/);
 });
 
@@ -317,7 +317,7 @@ test("fresh VALIDATOR fails if the exact head changes during review", async () =
 });
 
 test("P1 blocker never advances to Audit", async () => {
-  const AI = { async run() { return { response: JSON.stringify({ verdict: "FAIL", findings: [{ code: "P1_RELEASE_BYPASS", severity: "BLOCKER", message: "bypass", evidenceRef: "a.ts:+1" }], blockers: ["release bypass"], safetyInvariantResult: "FAIL", mergeAllowed: false }) }; } };
+  const AI = { async run() { return { response: JSON.stringify({ verdict: "FAIL", findings: [{ code: "P1_RELEASE_BYPASS", severity: "BLOCKER", message: "bypass", evidenceRef: "a.ts:+1", evidenceScope: "SOURCE_CONTENT" }], blockers: ["release bypass"], safetyInvariantResult: "FAIL", mergeAllowed: false }) }; } };
   const result = await executeIndependentValidator(request, { AI, NUSA_AUDIT_GITHUB_TOKEN: "github-token" }, validatorGithubFetch());
   assert.equal(result.verdict, "FAIL");
   assert.equal(result.auditAllowed, false);

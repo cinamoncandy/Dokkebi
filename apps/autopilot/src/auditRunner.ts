@@ -42,6 +42,8 @@ export interface AuditRunnerFinding {
   readonly severity: "NOTE" | "BLOCKER";
   readonly message: string;
   readonly evidenceRef: string | null;
+  /** Required when evidenceRef is a hunkless file metadata reference. */
+  readonly evidenceScope?: "SOURCE_CONTENT" | "FILE_METADATA";
 }
 
 export interface ValidatorRunnerResult {
@@ -155,7 +157,7 @@ const MAX_EVIDENCE_REF_CHARS = 500;
 // malformed response still fails closed once attempts are exhausted.
 const MAX_AUDIT_MODEL_ATTEMPTS = 3;
 const ALLOWED_MODEL_KEYS = new Set(["verdict", "findings", "blockers", "safetyInvariantResult", "mergeAllowed"]);
-const ALLOWED_FINDING_KEYS = new Set(["code", "severity", "message", "evidenceRef"]);
+const ALLOWED_FINDING_KEYS = new Set(["code", "severity", "message", "evidenceRef", "evidenceScope"]);
 const NODE_BUILTIN_MODULES = new Set([
   "_http_agent", "_http_client", "_http_common", "_http_incoming", "_http_outgoing", "_http_server", "_stream_duplex", "_stream_passthrough", "_stream_readable", "_stream_transform", "_stream_wrap", "_stream_writable", "_tls_common", "_tls_wrap",
   "assert", "assert/strict", "async_hooks", "buffer", "child_process", "cluster", "console", "constants", "crypto", "dgram", "diagnostics_channel", "dns", "dns/promises", "domain", "events", "fs", "fs/promises", "http", "http2", "https", "inspector", "inspector/promises", "module", "net", "os", "path", "path/posix", "path/win32", "perf_hooks", "process", "punycode", "querystring", "readline", "readline/promises", "repl", "stream", "stream/consumers", "stream/promises", "stream/web", "string_decoder", "sys", "timers", "timers/promises", "tls", "trace_events", "tty", "url", "util", "util/types", "v8", "vm", "wasi", "worker_threads", "zlib",
@@ -170,6 +172,7 @@ const AUDIT_FINDING_SCHEMA = Object.freeze({
     severity: Object.freeze({ type: "string", enum: Object.freeze(["NOTE", "BLOCKER"]) }),
     message: Object.freeze({ type: "string" }),
     evidenceRef: Object.freeze({ anyOf: Object.freeze([{ type: "string" }, { type: "null" }]) }),
+    evidenceScope: Object.freeze({ type: "string", enum: Object.freeze(["SOURCE_CONTENT", "FILE_METADATA"]) }),
   }),
   required: Object.freeze(["code", "severity", "message", "evidenceRef"]),
 });
@@ -249,7 +252,24 @@ function validateFinding(value: unknown): AuditRunnerFinding {
   const evidenceRef = finding.evidenceRef === null
     ? null
     : boundedString(finding.evidenceRef, "AUDIT_VERDICT_FINDING_EVIDENCE_INVALID", MAX_EVIDENCE_REF_CHARS);
-  return Object.freeze({ code, severity: finding.severity, message, evidenceRef });
+  const evidenceScope = finding.evidenceScope === undefined
+    ? undefined
+    : finding.evidenceScope === "SOURCE_CONTENT" || finding.evidenceScope === "FILE_METADATA"
+      ? finding.evidenceScope
+      : (() => { throw new Error("AUDIT_VERDICT_FINDING_EVIDENCE_SCOPE_INVALID"); })();
+  if ((evidenceRef !== null) !== (evidenceScope !== undefined)) {
+    throw new Error("AUDIT_VERDICT_FINDING_EVIDENCE_SCOPE_INVALID");
+  }
+  if (evidenceScope === "FILE_METADATA" && (evidenceRef === null || !evidenceRef.endsWith(":@metadata"))) {
+    throw new Error("AUDIT_VERDICT_FINDING_EVIDENCE_SCOPE_INVALID");
+  }
+  if (evidenceScope === "SOURCE_CONTENT" && evidenceRef?.endsWith(":@metadata")) {
+    throw new Error("AUDIT_VERDICT_FINDING_EVIDENCE_SCOPE_INVALID");
+  }
+  if (evidenceRef?.endsWith(":@metadata") && evidenceScope !== "FILE_METADATA") {
+    throw new Error("AUDIT_VERDICT_FINDING_EVIDENCE_SCOPE_INVALID");
+  }
+  return Object.freeze({ code, severity: finding.severity, message, evidenceRef, ...(evidenceScope ? { evidenceScope } : {}) });
 }
 
 function normalizeAuditSafetyInvariant(value: unknown): AuditSafetyInvariantResult {
@@ -379,6 +399,9 @@ export function currentDiffEvidenceRefs(diff: string, changedFiles?: readonly Ch
 function validateBlockerEvidenceAgainstCurrentDiff(verdict: AuditModelVerdict, diff: string, changedFiles: readonly ChangedPullFile[]): AuditModelVerdict {
   const currentRefs = currentDiffEvidenceRefs(diff, changedFiles);
   for (const finding of verdict.findings) {
+    if (finding.evidenceRef?.endsWith(":@metadata") && finding.evidenceScope !== "FILE_METADATA") {
+      throw new Error("AUDIT_VERDICT_BLOCKER_EVIDENCE_SCOPE_INVALID");
+    }
     if (finding.severity !== "BLOCKER") continue;
     if (finding.evidenceRef === null || !currentRefs.has(finding.evidenceRef)) {
       throw new Error("AUDIT_VERDICT_BLOCKER_EVIDENCE_NOT_CURRENT");
@@ -451,7 +474,7 @@ async function verifyCanonicalCiPullRequestBinding(
 }
 
 function validateRepositoryPath(value: unknown): string {
-  if (typeof value !== "string" || value.length === 0 || value.length > 512 || value.startsWith("/") || value.includes("\\") || value.includes("\0")) {
+  if (typeof value !== "string" || value.length === 0 || value.length > 512 || value.startsWith("/") || value.includes("\\") || /[\p{Cc}\u2028\u2029]/u.test(value)) {
     throw new Error("VALIDATOR_REPOSITORY_PATH_INVALID");
   }
   if (value.split("/").some((part) => part.length === 0 || part === "." || part === "..")) throw new Error("VALIDATOR_REPOSITORY_PATH_INVALID");
@@ -1076,7 +1099,7 @@ function validatorPrompt(request: ValidatorRunnerRequest, diff: string, changedF
     "The model field mergeAllowed means only that this VALIDATOR found no P0/P1 blocker and the exact head may advance to independent Audit. It grants no merge, Audit, Release, GitHub approval, or production authority.",
     'Return only JSON matching response_format. safetyInvariantResult MUST be exactly "PASS" or "FAIL".',
     "PASS requires zero findings/blockers and mergeAllowed=true. PASS_WITH_NOTES permits P2 NOTE findings only, zero blockers, and mergeAllowed=true. FAIL requires at least one P0_/P1_ BLOCKER finding, blockers, and mergeAllowed=false.",
-    "For every BLOCKER, evidenceRef MUST be exactly one deterministic CURRENT DIFF EVIDENCE REF below. Added `:+N` refs cite changed current behavior; removed `:-N` refs are allowed only for a defect introduced solely by deleting a safety/authorization check. A `:@metadata` ref cites only validated file-header metadata for a hunkless path/status/mode/rename change; it does not support claims about source content. Never invent or transform a ref.",
+    "For every finding with an evidenceRef, provide evidenceScope as SOURCE_CONTENT or FILE_METADATA. Metadata refs MUST use FILE_METADATA and may support only claims about validated file-header path/status/mode/rename metadata; they cannot support source-content claims. SOURCE_CONTENT refs MUST be added or permitted deletion-only line refs, never `:@metadata`. Every BLOCKER evidenceRef must be exactly one current ref below. Never invent or transform a ref.",
     "--- BEGIN CURRENT DIFF EVIDENCE REFS ---",
     ...[...currentDiffEvidenceRefs(diff, changedFiles)].sort(),
     "--- END CURRENT DIFF EVIDENCE REFS ---",
@@ -1098,7 +1121,7 @@ function auditPrompt(request: AuditRunnerRequest, diff: string, changedFiles: re
     "Each findings item code MUST be 1-80 characters and contain only uppercase A-Z, digits 0-9, underscore (_), dot (.), colon (:), or hyphen (-). Use a stable machine-readable identifier that names the specific defect you found in this diff; never copy an identifier from these instructions, and never use spaces or lowercase letters in code.",
     "Every BLOCKER finding MUST have at least one corresponding human-readable entry in blockers; never emit a BLOCKER finding with an empty blockers array.",
     "Rules: PASS requires zero findings and zero blockers and mergeAllowed=true. PASS_WITH_NOTES requires one or more NOTE findings and zero blockers; set mergeAllowed=true only when those notes are explicitly non-blocking and the exact reviewed head is safe to merge. FAIL requires at least one BLOCKER finding, at least one blocker, and mergeAllowed=false; never emit blockers without a BLOCKER finding. Any BLOCKER finding, safety failure, test weakening, evidence integrity issue, or material uncertainty requires FAIL and mergeAllowed=false.",
-    "For every BLOCKER, evidenceRef MUST be exactly one value from the deterministic CURRENT DIFF EVIDENCE REFS lists below. Never invent or transform an evidenceRef. An added `:+N` ref cites current behavior. A removed `:-N` ref may be cited only for a defect introduced solely by deleting a safety/authorization check. A `:@metadata` ref cites only validated file-header metadata for a hunkless path/status/mode/rename change; it does not support claims about source content. If a concern depends only on removed code and is not a deletion-only regression, it is not a current blocker.",
+    "For every finding with an evidenceRef, provide evidenceScope as SOURCE_CONTENT or FILE_METADATA. Metadata refs MUST use FILE_METADATA and may support only claims about validated file-header path/status/mode/rename metadata; they cannot support source-content claims. SOURCE_CONTENT refs MUST be added or permitted deletion-only line refs, never `:@metadata`. Every BLOCKER evidenceRef must be exactly one current ref below. Never invent or transform a ref. An added `:+N` ref cites current behavior. A removed `:-N` ref may be cited only for a defect introduced solely by deleting a safety/authorization check. If a concern depends only on removed code and is not a deletion-only regression, it is not a current blocker.",
     "--- BEGIN CURRENT DIFF EVIDENCE REFS ---",
     ...[...currentDiffEvidenceRefs(diff, changedFiles)].sort(),
     "--- END CURRENT DIFF EVIDENCE REFS ---",

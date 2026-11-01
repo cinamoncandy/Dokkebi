@@ -198,6 +198,17 @@ test("hunkless rename metadata receives deterministic evidence refs without impl
   assert.equal([...refs].some((ref) => /:[+-]\d+$/.test(ref)), false);
 });
 
+test("rejects control and line-separator characters in paths before evidence refs reach prompts", () => {
+  for (const encodedPath of [String.raw`unsafe\012path.ts`, String.raw`unsafe\177path.ts`]) {
+    const diff = `diff --git "a/${encodedPath}" "b/${encodedPath}"\nnew file mode 100644\n`;
+    assert.throws(() => currentDiffEvidenceRefs(diff), /VALIDATOR_(?:REPOSITORY_PATH|DIFF_PATH)_INVALID/);
+  }
+  for (const separator of ["\u0085", "\u2028", "\u2029"]) {
+    const diff = `diff --git a/unsafe${separator}path.ts b/unsafe${separator}path.ts\nnew file mode 100644\n`;
+    assert.throws(() => currentDiffEvidenceRefs(diff), /VALIDATOR_(?:REPOSITORY_PATH|DIFF_PATH)_INVALID/);
+  }
+});
+
 test("accepts a blocker grounded in exact hunkless rename metadata", async () => {
   const renameDiff = [
     "diff --git a/guards/old-name.ts b/guards/new-name.ts",
@@ -208,7 +219,7 @@ test("accepts a blocker grounded in exact hunkless rename metadata", async () =>
   ].join("\n");
   const model = ai({ response: JSON.stringify({
     verdict: "FAIL",
-    findings: [{ code: "P1_RENAMED_GUARD_PATH", severity: "BLOCKER", message: "The safety-critical path changed without content hunks.", evidenceRef: "guards/new-name.ts:@metadata" }],
+    findings: [{ code: "P1_RENAMED_GUARD_PATH", severity: "BLOCKER", message: "A safety-critical file path changed without content hunks; inspect path consumers.", evidenceRef: "guards/new-name.ts:@metadata", evidenceScope: "FILE_METADATA" }],
     blockers: ["The renamed safety-critical path requires adjudication."],
     safetyInvariantResult: "FAIL",
     mergeAllowed: false,
@@ -220,6 +231,31 @@ test("accepts a blocker grounded in exact hunkless rename metadata", async () =>
   }) as never);
   assert.equal(result.verdict, "FAIL");
   assert.equal(result.mergeAllowed, false);
+});
+
+test("rejects source-content claims backed only by metadata evidence", async () => {
+  const renameDiff = [
+    "diff --git a/guards/old-name.ts b/guards/new-name.ts",
+    "similarity index 100%",
+    "rename from guards/old-name.ts",
+    "rename to guards/new-name.ts",
+    "",
+  ].join("\n");
+  const invalid = { response: JSON.stringify({
+    verdict: "FAIL",
+    findings: [{ code: "P1_SOURCE_CONTENT_REGRESSION", severity: "BLOCKER", message: "The renamed module contains an unsafe source implementation.", evidenceRef: "guards/new-name.ts:@metadata", evidenceScope: "SOURCE_CONTENT" }],
+    blockers: ["Unsafe source implementation."],
+    safetyInvariantResult: "FAIL",
+    mergeAllowed: false,
+  }) };
+  await assert.rejects(
+    executeIndependentAudit(request, auditEnv(aiSequence([invalid, invalid, invalid]) as never), fetchSequence({
+      firstPull: pull(HEAD, BASE, 1),
+      changedFileEntries: [{ filename: "guards/new-name.ts", previous_filename: "guards/old-name.ts", status: "renamed" }],
+      diff: renameDiff,
+    }) as never),
+    /AUDIT_VERDICT_FINDING_EVIDENCE_SCOPE_INVALID/,
+  );
 });
 
 test("parses mixed quoted and unquoted Git rename paths against exact pull-file metadata", () => {
@@ -489,7 +525,7 @@ test("safety regression is preserved as FAIL and cannot become merge allowed", a
   const model = ai({
     response: JSON.stringify({
       verdict: "FAIL",
-      findings: [{ code: "SAFETY_REGRESSION", severity: "BLOCKER", message: "production mutation became possible", evidenceRef: "a.ts:+1" }],
+      findings: [{ code: "SAFETY_REGRESSION", severity: "BLOCKER", message: "production mutation became possible", evidenceRef: "a.ts:+1", evidenceScope: "SOURCE_CONTENT" }],
       blockers: ["productionMutationAllowed invariant regressed"],
       safetyInvariantResult: "FAIL",
       mergeAllowed: false,
@@ -506,7 +542,7 @@ test("retries a blocker that cites removed rather than current diff evidence", a
   const model = aiSequence([
     { response: JSON.stringify({
       verdict: "FAIL",
-      findings: [{ code: "STALE", severity: "BLOCKER", message: "removed behavior is current", evidenceRef: "a.ts:1" }],
+      findings: [{ code: "STALE", severity: "BLOCKER", message: "removed behavior is current", evidenceRef: "a.ts:1", evidenceScope: "SOURCE_CONTENT" }],
       blockers: ["stale evidence"],
       safetyInvariantResult: "FAIL",
     }) },
@@ -520,7 +556,7 @@ test("retries a blocker that cites removed rather than current diff evidence", a
 test("fails closed when every blocker lacks current added-line evidence", async () => {
   const invalidBlocker = { response: JSON.stringify({
     verdict: "FAIL",
-    findings: [{ code: "STALE", severity: "BLOCKER", message: "removed behavior is current", evidenceRef: "a.ts:1" }],
+    findings: [{ code: "STALE", severity: "BLOCKER", message: "removed behavior is current", evidenceRef: "a.ts:1", evidenceScope: "SOURCE_CONTENT" }],
     blockers: ["stale evidence"],
     safetyInvariantResult: "FAIL",
     mergeAllowed: false,
@@ -567,7 +603,7 @@ test("returns exact-head explicitly mergeable PASS_WITH_NOTES evidence", async (
   const model = ai({
     response: "```json\n" + JSON.stringify({
       verdict: "PASS_WITH_NOTES",
-      findings: [{ code: "NON_BLOCKING_NOTE", severity: "NOTE", message: "reviewed exact diff", evidenceRef: "a.ts:+1" }],
+      findings: [{ code: "NON_BLOCKING_NOTE", severity: "NOTE", message: "reviewed exact diff", evidenceRef: "a.ts:+1", evidenceScope: "SOURCE_CONTENT" }],
       blockers: [],
       safetyInvariantResult: "PASS",
       mergeAllowed: true,
