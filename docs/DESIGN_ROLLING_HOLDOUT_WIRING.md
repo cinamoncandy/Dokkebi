@@ -64,7 +64,7 @@ Safety stays: PAPER_ONLY, liveAuthority=NONE, productionMutationAllowed=false. �
 1. 예산 계산: A(후보당 1회, 추천) 또는 B(호출 수).
 2. `SHADOW`의 부작용 격리 방식: S1(추천) / S2 / S3 (4b 참조).
 3. `SHADOW`를 먼저 켜고 며칠 지켜본 뒤 `ENFORCE`를 따로 승인하는 순서.
-3. 33일+ 백필 허용(서버 부하 확인 포함).
+4. 33일+ 백필 허용(서버 부하 확인 포함).
 5. 적용할 봉 길이(1m / 15m / 60m 중).
 
 ## 아직 확인하지 않은 것
