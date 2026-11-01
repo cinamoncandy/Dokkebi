@@ -25,6 +25,8 @@ export { OrderHistoryView } from "./orderHistoryView";
 export { StrategiesView } from "./strategiesView";
 export { MoreDetailView, type TruthfulMoreDetail } from "./moreDetailView";
 export { PrimaryNavigation } from "./primaryNavigation";
+export { AiShell } from "./aiKit";
+export { plainScreenChip } from "./stageTraceModel";
 export { SafetyLine } from "./safetyLine";
 export { EventBanner } from "./eventBanner";
 export { PerformanceView } from "./performanceView";

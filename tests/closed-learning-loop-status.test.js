@@ -413,3 +413,25 @@ test("the runtime publishes the null comparators beside the shadow and persists 
   assert.match(src, /loopStatus\.observeNullComparators\(nullComparators\.summary\(\)\)/);
   assert.match(src, /writeNullComparatorsRecord\(config\.cloudStateDbPath, persistableNulls\)\) nullComparators\.markUnpersisted\(\)/);
 });
+
+test("the cycle count the first time this process reads the ledger is kept as the boot count and never moves", () => {
+  const t = new ClosedLearningLoopStatusTracker();
+  t.observeRollover({ status: "WAITING_FOR_REALIZED_FILL", periodId: "p" }, 1000);
+  t.observeDurableCycles({ cyclesRecorded: 3, latest: cycleRecord("c", "REJECTED", 9_000) });
+  t.observeDurableCycles({ cyclesRecorded: 4, latest: cycleRecord("d", "REJECTED", 12_000) });
+  const s = t.snapshot();
+  assert.equal(s.evidence.cyclesRecordedAtBoot, 3, "the first read in this process");
+  assert.equal(s.evidence.cyclesRecorded, 4, "the current durable count still advances");
+  const fresh = new ClosedLearningLoopStatusTracker();
+  fresh.observeRollover({ status: "WAITING_FOR_REALIZED_FILL", periodId: "p" }, 1000);
+  assert.equal(fresh.snapshot()?.evidence?.cyclesRecordedAtBoot, undefined, "no read yet, no boot count");
+});
+
+test("a ledger failure withdraws the boot count and a later read is never taken for the boot read", () => {
+  const t = new ClosedLearningLoopStatusTracker();
+  t.observeRollover({ status: "WAITING_FOR_REALIZED_FILL", periodId: "p" }, 1000);
+  t.clearDurableCycles();
+  t.observeDurableCycles({ cyclesRecorded: 5, latest: cycleRecord("c", "REJECTED", 9_000) });
+  assert.equal(t.snapshot().evidence.cyclesRecordedAtBoot, undefined);
+  assert.equal(t.snapshot().evidence.cyclesRecorded, 5);
+});
