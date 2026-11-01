@@ -1,6 +1,6 @@
 id: WO-UI-20261030-ORDERBOOK-STUDY-RESULT
 title: "Show the real result of the pre-registered ORDERBOOK study on the 학습 tab"
-status: IMPLEMENTED_PENDING_REVIEW
+status: COMPLETED
 owner: nusa-development
 repository: cinamoncandy/NUSA
 base_branch: main

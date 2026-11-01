@@ -1,0 +1,36 @@
+id: WO-OPS-20261030-AIPOS-STATUS-ARCHIVE-TRUTH
+title: One work-order status enum, an archive for closed merged orders, and a generated current-truth file
+status: IN_PROGRESS
+priority: P2
+owner: nusa-development
+repository: cinamoncandy/NUSA
+authority_impact: none
+objective: >-
+  A cold agent had to reconcile 500+ work orders with about 60 spellings of status (COMPLETED, completed, COMPLETE, MERGED,
+  VERIFIED, ...) and a thousands-of-lines state.yaml (docs/DESIGN_ASSESSMENT_2026-10-28.md section 3 item 9, assessor C).
+  Approved by the owner on 2026-10-30 ("다 승인"). Records only; PAPER_ONLY, liveAuthority=NONE.
+scope:
+  - 'scripts/lib/aipos-work-order-status.js defines the one enum: READY_FOR_REVIEW, IN_PROGRESS, BLOCKED, COMPLETED, SUPERSEDED, ABANDONED.'
+  - 'scripts/validate-aipos-yaml.js enforces it. The 167 legacy files are frozen as file -> exact spelling in .aipos/work-order-status-baseline.json, which may only shrink (tests/aipos-work-order-status.test.js).'
+  - 'scripts/aipos-archive-work-orders.js moves work orders whose status is COMPLETED/completed/COMPLETE/MERGED/VERIFIED AND whose merge is proven in HEAD history (merge_commit is an ancestor, or the numeric pull_request is a merged PR subject) AND whose id is unique AND whose path no tracked file references (evidence JSON excepted) to .aipos/work-orders/archive/. Rename only; bytes unchanged.'
+  - 'scripts/lib/aipos-work-order-paths.js is the one resolver. validate-aipos-work-order-provenance.js, validate-aipos-evidence.js (subject path) and aipos-work-order-index.js read the archive through it.'
+  - 'scripts/generate-aipos-current-truth.js writes .aipos/CURRENT_TRUTH.md from the work orders and the newest handoff; tests/aipos-current-truth.test.js fails when it is stale.'
+  - 'AGENTS.md and CLAUDE.md recovery steps mention .aipos/CURRENT_TRUTH.md.'
+exclusions:
+  - 'No work order is deleted, edited or re-statused. No existing status is rewritten to the enum. Orders whose status or merge state is uncertain stay where they are.'
+  - 'No code under apps/ or packages/, no Oracle, no workflow, no risk limit, threshold or capital.'
+evidence:
+  archived: '29 of 512 work orders moved on 2026-10-30 (see the PR body for the list and the 483 that stayed, with reasons).'
+acceptance:
+  - 'node scripts/validate-aipos-yaml.js, validate-aipos-work-order-provenance.js, validate-aipos-evidence.js, validate-aipos-drift.js, validate-aipos-cross-ai-conformance.js, validate-repository-truth.js and aipos-work-order-index.js --check pass.'
+  - 'The three new test files pass.'
+verification_commands:
+  - node --test tests/aipos-work-order-status.test.js tests/aipos-archive-work-orders.test.js tests/aipos-current-truth.test.js
+  - node scripts/validate-aipos-yaml.js
+  - node scripts/generate-aipos-current-truth.js --check
+safety:
+  paper_only: true
+  liveAuthority: NONE
+  productionMutationAllowed: false
+  aiAuthority: ZERO_AUTHORITY
+next: 'PR #2940 exact head 2a93e8928b693b490b61481c859e5fda09ac43be CI run 41277077623 failed in Build because Windows checkout converted generated .aipos/CURRENT_TRUTH.md to CRLF while render() emits LF. Added explicit text eol=lf; autocrlf checkout simulation, focused AIPOS suite (13/13), validate:full, security, typecheck, build and full pnpm test (1323 isolated test files) pass locally; lint is 0 errors / 47 baseline warnings. Push the minimal tested successor to the existing branch, verify fresh exact-head CI/companions, then obtain independent review. Merge only through the governed release path. After merge, run the archive script again (merge_commit proofs grow as history is fetched) and shrink the status baseline as orders move to the enum.'

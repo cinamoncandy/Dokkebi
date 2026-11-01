@@ -18,10 +18,9 @@
  *   node scripts/aipos-work-order-index.js          # print the index of open orders
  *   node scripts/aipos-work-order-index.js --check  # fail if a new order uses a non-canonical status
  */
-const { readFileSync, readdirSync } = require("node:fs");
+const { readFileSync } = require("node:fs");
+const { listWorkOrderEntries } = require("./lib/aipos-work-order-paths.js");
 const { join } = require("node:path");
-
-const WORK_ORDER_DIR = ".aipos/work-orders";
 
 const CANONICAL_STATUSES = Object.freeze({
   PLANNED: "open",
@@ -55,9 +54,8 @@ function scalar(source, key) {
 }
 
 function readOrders(root) {
-  const dir = join(root, WORK_ORDER_DIR);
-  return readdirSync(dir).filter((n) => /\.ya?ml$/i.test(n)).sort().map((name) => {
-    const source = readFileSync(join(dir, name), "utf8");
+  return listWorkOrderEntries(root).map(({ name, path }) => {
+    const source = readFileSync(join(root, path), "utf8");
     return { name, id: scalar(source, "id") || name.replace(/\.ya?ml$/i, ""), title: scalar(source, "title"), status: scalar(source, "status") || "MISSING" };
   });
 }

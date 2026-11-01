@@ -1,6 +1,6 @@
 id: WO-OPS-20261030-LEASE-LOSS-EXIT-AUDIT
 title: "Audit and pin: a lost PAPER writer lease fails closed and the process exits"
-status: LOCAL_VALIDATED_PENDING_REVIEW_CI
+status: COMPLETED
 owner: nusa
 repository: cinamoncandy/NUSA
 base_branch: main
