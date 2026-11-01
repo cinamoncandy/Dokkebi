@@ -33,8 +33,8 @@ export interface LearningLoopVerdict {
     researchInputs: "PASS" | "NOT_PASS" | "UNKNOWN";
     cycleEvaluated: boolean | null;
     cycleRecorded: boolean | null;
-    /** A single snapshot cannot show that a record survives a restart. */
-    survivesRestart: "NOT_OBSERVED";
+    /** OBSERVED only when this process found cycle records written before it started (cyclesRecordedAtBoot > 0); otherwise one snapshot cannot show it. */
+    survivesRestart: "OBSERVED" | "NOT_OBSERVED";
   }>;
 }
 
@@ -52,6 +52,7 @@ export function learningLoopVerdict(runtime: Source, pipeline: LearningPipelineP
   const loop = record(runtime.closedLearningLoop);
   const evaluated = int(loop?.cyclesEvaluated);
   const recorded = int(loop?.cyclesRecorded);
+  const recordedAtBoot = int(loop?.cyclesRecordedAtBoot);
   const meta = record(loop?.metaLearning);
   const holdoutPasses = int(meta?.holdoutPasses);
 
@@ -96,6 +97,6 @@ export function learningLoopVerdict(runtime: Source, pipeline: LearningPipelineP
     firstBrokenCode: firstCode,
     cycleWaitingFor,
     candidateFunnel: Object.freeze({ stage: funnelStage, experiments: experiments ?? null, discoveryPasses: discoveryPasses ?? null, holdoutPasses: holdoutPasses ?? null }),
-    criteria: Object.freeze({ tradingChain: tradingState, researchInputs: researchState, cycleEvaluated, cycleRecorded, survivesRestart: "NOT_OBSERVED" as const }),
+    criteria: Object.freeze({ tradingChain: tradingState, researchInputs: researchState, cycleEvaluated, cycleRecorded, survivesRestart: recordedAtBoot !== undefined && recordedAtBoot > 0 ? "OBSERVED" as const : "NOT_OBSERVED" as const }),
   });
 }

@@ -171,3 +171,20 @@ test("the summit badge glides instead of jumping, stars twinkle slowly, and the 
   assert.match(core, /<Group layer>/, "the rows are masked in their own layer");
   assert.doesNotMatch(core, /swells\.map\(\(s\) => \(\{ pos: s\.pos, k: 0\.25 \}\)\)\) \* lift/, "no per-point allocation in the height loop");
 });
+
+test("the idle tide is faint and live-only, the sea answers a decision briefly, and rows drift a little", () => {
+  for (let p = 0; p < 40; p += 0.9) for (let d = 0; d <= 1; d += 0.1) {
+    assert.ok(m.tideLight(d, p, true) >= 0 && m.tideLight(d, p, true) <= 0.16 + 1e-9, "never as strong as a real decision band");
+    assert.equal(m.tideLight(d, p, false), 0, "no tide on a grey or not-live island");
+  }
+  assert.ok(m.tideLight(0.5, m.ISLAND_TIDE_PERIOD_S * 0.5, true) > 0.15, "the tide passes the middle at half a period");
+  assert.equal(m.tideLight(0.5, NaN, true), 0);
+  assert.ok(m.ISLAND_TIDE_PERIOD_S > m.ISLAND_PULSE_MS / 1000 * 3, "much slower than a decision's band");
+  assert.equal(m.seaFlash(0), 1);
+  assert.ok(m.seaFlash(300) < m.seaFlash(100) && m.seaFlash(300) > 0);
+  assert.equal(m.seaFlash(m.SEA_FLASH_MS + 1), 0);
+  assert.equal(m.seaFlash(-5), 0);
+  assert.equal(m.seaFlash(NaN), 0);
+  for (let p = 0; p < 40; p += 1.3) for (let d = 0; d <= 1; d += 0.25) assert.ok(Math.abs(m.rowShiftPx(p, d, 320)) <= 320 * 0.004 + 1e-9, "at most 0.4% of the width");
+  assert.equal(m.rowShiftPx(0, 0, 320), 0 * 1 + Math.sin(0 * 0.45 + 0) * 320 * 0.004 * 0.4, "settled phase is deterministic");
+});

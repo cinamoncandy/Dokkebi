@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { AppState, StyleSheet, Text, View } from "react-native";
 import { BlurMask, Canvas, Circle, Group, LinearGradient, Path, RadialGradient, Rect, Skia, vec, type SkPath } from "@shopify/react-native-skia";
-import { type IslandStill, ISLAND_PULSE_MS, ISLAND_LAND_EPS, ISLAND_ROWS, ISLAND_SEA_END, ISLAND_SHORE, ISLAND_STEPS, ISLAND_STILL_DRIFT, islandBreath, islandHeight, islandMinFrameGapMs, islandSteps, lowFadeY, rowBase, rowColor, rowGlow, rowLift, rowLight, rowOpacity, rowPhase, rowSpan, ISLAND_END_FADE, SEA_LINES, easeToward, seaLineWidth, starTwinkle, seaShimmer, seaWave, smoothDt, swellDepth } from "./islandCoreModel";
+import { type IslandStill, ISLAND_PULSE_MS, ISLAND_LAND_EPS, ISLAND_ROWS, ISLAND_SEA_END, ISLAND_SHORE, ISLAND_STEPS, ISLAND_STILL_DRIFT, islandBreath, islandHeight, islandMinFrameGapMs, islandSteps, lowFadeY, rowBase, rowColor, rowGlow, rowLift, rowLight, rowOpacity, rowPhase, rowSpan, ISLAND_END_FADE, SEA_LINES, rowShiftPx, seaFlash, tideLight, easeToward, seaLineWidth, starTwinkle, seaShimmer, seaWave, smoothDt, swellDepth } from "./islandCoreModel";
 import { fillLock, fillRise, historyTicks, pulseKick, pulsesForRise, restAmplitude, springStep, WAVE_HISTORY_MS, type WavePulse } from "./waveCoreModel";
 import { calmColors } from "./uiKitModel";
 import { islandPalette, readableFont, wavePalette } from "./designSystem";
@@ -142,11 +142,15 @@ export function IslandCore({ decisionCount, orderCount, fillCount = null, live, 
       const d = r / (ISLAND_ROWS - 1), base = rowBase(d) * height, [a, b] = rowSpan(d), lift = rowLift(d) * height;
       let light = 0, order = 0;
       for (const s of swells) { const l = rowGlow(d, s.pos); light = Math.max(light, l); if (s.order) order = Math.max(order, l); }
+      // The tide tints and brightens the lines but never adds the blurred glow (that is reserved for a real decision, and costs more).
+      const signalLight = light;
+      light = Math.max(light, tideLight(d, st.phase, live && !grey && still == null));
+      const shift = still == null || breathe ? rowShiftPx(st.phase, d, width) : 0;
       const hs: number[] = [], xs: number[] = [], ys: number[] = [];
       const steps = still != null && !breathe ? ISLAND_STEPS : stepsRef.current;
       for (let i = 0; i <= steps; i += 1) {
         const u = i / steps, h = islandHeight(u, d, rowPhase(st.phase, d), amp * islandBreath(st.phase), swellBumps) * lift;
-        hs.push(h / lift); xs.push((a + (b - a) * u) * width); ys.push(base - h);
+        hs.push(h / lift); xs.push((a + (b - a) * u) * width + shift); ys.push(base - h);
         if ((!grey || still != null) && d > 0.3 && (summit == null || h > summit.lift)) summit = { x: xs[i], y: ys[i], lift: h };
       }
       const body = Skia.Path.Make();
@@ -159,14 +163,16 @@ export function IslandCore({ decisionCount, orderCount, fillCount = null, live, 
       for (let i = 1; i < xs.length; i += 1) line.lineTo(xs[i], ys[i]);
       const fadeY = lowFadeY(base, lift, grey && still == null ? -1 : ISLAND_LAND_EPS);
       const color = grey ? wavePalette.idle : lock > 0.05 ? rowColor(d, WHITE, lock * 0.8) : order > 0.3 ? rowColor(d, PINK, order) : rowColor(d, LIT, light * 0.9);
-      rows.push({ key: r, body, line, fade: fadeY == null ? null : { ...fadeY, from: `${color}00` }, color, opacity: grey ? (still != null ? 0.3 + 0.5 * Math.pow(d, 0.9) : 0.45) : rowOpacity(d, r, light), glow: grey ? 0 : 8 * light + 5 * lock, halo: grey || d <= 0.6 ? 0 : 0.14 * d, width: (r % 5 === 4 ? 1.5 : 0.75) * (0.6 + 0.9 * d) + light });
+      rows.push({ key: r, body, line, fade: fadeY == null ? null : { ...fadeY, from: `${color}00` }, color, opacity: grey ? (still != null ? 0.3 + 0.5 * Math.pow(d, 0.9) : 0.45) : rowOpacity(d, r, light), glow: grey ? 0 : 8 * signalLight + 5 * lock, halo: grey || d <= 0.6 ? 0 : 0.14 * d, width: (r % 5 === 4 ? 1.5 : 0.75) * (0.6 + 0.9 * d) + light });
     }
+    // The sea answers a new decision: its lines brighten as the band leaves the front row.
+    const flash = pulses.current.reduce((m, p) => Math.max(m, seaFlash(now - p.born)), 0);
     const sea = Array.from({ length: SEA_LINES }, (_, k) => {
       const t = k / (SEA_LINES - 1), y = height * (ISLAND_SHORE + 0.02 + (ISLAND_SEA_END - ISLAND_SHORE - 0.02) * Math.pow(t, 1.5));
       const half = width * (0.16 + 0.28 * (1 - t)) * (0.75 + 0.25 * Math.sin(k * 1.7)), cx = width / 2 + Math.sin(k * 2.3) * width * 0.04 + Math.sin(st.phase * 0.35 + k) * width * 0.01;
       const p = Skia.Path.Make();
       for (let i = 0; i <= 30; i += 1) { const u = i / 30, x = cx - half + 2 * half * u, yy = y + seaWave(u, t, k, st.phase); if (i === 0) p.moveTo(x, yy); else p.lineTo(x, yy); }
-      return { key: k, path: p, x0: cx - half, x1: cx + half, width: seaLineWidth(t), opacity: grey ? 0.25 : (0.12 + 0.5 * (1 - t)) * seaShimmer(k, st.phase) };
+      return { key: k, path: p, x0: cx - half, x1: cx + half, width: seaLineWidth(t), opacity: grey ? 0.25 : Math.min(1, (0.12 + 0.5 * (1 - t)) * seaShimmer(k, st.phase) * (1 + 0.9 * flash)) };
     });
     // The summit badge glides to the new summit and fades in and out instead of jumping or blinking (it snaps under reduce-motion).
     const b = badge.current, dtBadge = b.at === 0 ? 0 : (now - b.at) / 1000;
