@@ -7,6 +7,7 @@ const fs = require("node:fs");
 const os = require("node:os");
 const path = require("node:path");
 const { spawnSync } = require("node:child_process");
+const { DatabaseSync } = require("node:sqlite");
 const { createBackup, readAndVerify, runDrill } = require("../scripts/backup-restore.js");
 const { SYMLINK_UNAVAILABLE, canCreateSymlink } = require("./support/symlinkCapability.js");
 
@@ -24,6 +25,22 @@ function fixture() {
 
 function cleanup(root) {
   fs.rmSync(root, { recursive: true, force: true });
+}
+
+function hashFile(file) {
+  const hash = crypto.createHash("sha256");
+  const descriptor = fs.openSync(file, fs.constants.O_RDONLY);
+  const buffer = Buffer.allocUnsafe(1024 * 1024);
+  try {
+    for (;;) {
+      const count = fs.readSync(descriptor, buffer, 0, buffer.length, null);
+      if (count === 0) break;
+      hash.update(buffer.subarray(0, count));
+    }
+  } finally {
+    fs.closeSync(descriptor);
+  }
+  return hash.digest("hex");
 }
 
 test("backup creates a missing destination, excludes secret-shaped paths, and records fail-closed safety metadata", () => {
@@ -71,6 +88,53 @@ test("backup content scanning excludes secrets hidden behind benign filenames an
   }
 });
 
+test("secret scanning detects credentials that cross the fixed I/O chunk boundary", () => {
+  const { root, source, destination } = fixture();
+  try {
+    fs.writeFileSync(path.join(source, "safe.log"), "ordinary recovery log");
+    const token = Buffer.from(["ghp_", "abcdefghijklmnop1234567890"].join(""));
+    const boundary = 1024 * 1024;
+    const bytes = Buffer.alloc(boundary + token.length + 16);
+    token.copy(bytes, boundary - 7);
+    fs.writeFileSync(path.join(source, "opaque.bin"), bytes);
+
+    const backup = createBackup({ include: [`EVIDENCE:${source}`], destination, "snapshot-id": "snapshot-boundary-secret" });
+    assert.equal(backup.manifest.entries.some((entry) => path.basename(entry.path) === "opaque.bin"), false);
+    assert.equal(backup.manifest.entries.some((entry) => path.basename(entry.path) === "safe.log"), true);
+  } finally {
+    cleanup(root);
+  }
+});
+
+test("large binary DATABASE_SNAPSHOT above Node's maximum string length backs up and verifies with bounded chunks", () => {
+  const { root, source, destination } = fixture();
+  const largeFile = path.join(source, "state.sqlite");
+  let descriptor;
+  try {
+    descriptor = fs.openSync(largeFile, "wx", 0o600);
+    const sizeBytes = 0x20000000;
+    fs.writeSync(descriptor, Buffer.from("SQLite format 3\0"), 0, 16, 0);
+    fs.ftruncateSync(descriptor, sizeBytes);
+    fs.closeSync(descriptor);
+    descriptor = undefined;
+
+    const sourceSha256 = hashFile(largeFile);
+    const backup = createBackup({ include: [`DATABASE_SNAPSHOT:${largeFile}`], destination, "snapshot-id": "snapshot-large-binary" });
+    const entry = backup.manifest.entries[0];
+    assert.equal(entry.sizeBytes, sizeBytes);
+    assert.equal(entry.sha256, sourceSha256);
+
+    const verified = readAndVerify(backup.snapshot);
+    const copied = path.join(backup.snapshot, ...entry.path.split("/"));
+    assert.equal(verified.manifest.entries[0].sha256, sourceSha256);
+    assert.equal(hashFile(copied), sourceSha256);
+    assert.equal(fs.statSync(largeFile).size, sizeBytes);
+  } finally {
+    if (descriptor != null) fs.closeSync(descriptor);
+    cleanup(root);
+  }
+});
+
 test("verify fails closed when a backed-up artifact is tampered", () => {
   const { root, source, destination } = fixture();
   try {
@@ -106,6 +170,62 @@ test("verify-only restore drill removes the target and writes a manifest-bound E
     assert.equal(evidence.automaticRestartAllowed, false);
     const { evidenceHashSha256, ...payload } = evidence;
     assert.equal(evidenceHashSha256, crypto.createHash("sha256").update(JSON.stringify(payload), "utf8").digest("hex"));
+  } finally {
+    cleanup(root);
+  }
+});
+
+test("verify-only drill checks read-only SQLite integrity on the copied snapshot and leaves source rows unchanged", () => {
+  const { root, source, destination } = fixture();
+  const databasePath = path.join(source, "paper.sqlite");
+  let database = new DatabaseSync(databasePath);
+  database.exec("CREATE TABLE recovery_probe (id INTEGER PRIMARY KEY, value TEXT NOT NULL); INSERT INTO recovery_probe(value) VALUES ('unchanged');");
+  database.close();
+  database = undefined;
+  try {
+    const sourceDigest = hashFile(databasePath);
+    const backup = createBackup({ include: [`DATABASE_SNAPSHOT:${databasePath}`], destination, "snapshot-id": "snapshot-sqlite-integrity" });
+    const drillTarget = path.join(root, "integrity-drill-target");
+    const drillLog = path.join(root, "integrity-drill-log.json");
+    const result = runDrill({ snapshot: backup.snapshot, "drill-target": drillTarget, "drill-log": drillLog, keep: "true" });
+
+    assert.deepEqual(result.databaseIntegrityChecks, [{
+      path: backup.manifest.entries[0].path,
+      quickCheck: "PASS",
+      integrityCheck: "PASS"
+    }]);
+    const log = JSON.parse(fs.readFileSync(drillLog, "utf8"));
+    assert.deepEqual(log.databaseIntegrityChecks, result.databaseIntegrityChecks);
+    assert.equal(hashFile(databasePath), sourceDigest);
+
+    const restored = new DatabaseSync(path.join(drillTarget, ...backup.manifest.entries[0].path.split("/")), { readOnly: true });
+    try {
+      assert.equal(restored.prepare("SELECT value FROM recovery_probe WHERE id = 1").get().value, "unchanged");
+    } finally {
+      restored.close();
+    }
+  } finally {
+    if (database) database.close();
+    cleanup(root);
+  }
+});
+
+test("verify-only drill fails closed on a malformed DATABASE_SNAPSHOT and removes only its temporary target", () => {
+  const { root, source, destination } = fixture();
+  const databasePath = path.join(source, "malformed.sqlite");
+  const target = path.join(root, "malformed-drill-target");
+  const drillLog = path.join(root, "malformed-drill-log.json");
+  fs.writeFileSync(databasePath, Buffer.from("not a SQLite database"));
+  try {
+    const sourceDigest = hashFile(databasePath);
+    const backup = createBackup({ include: [`DATABASE_SNAPSHOT:${databasePath}`], destination, "snapshot-id": "snapshot-malformed-sqlite" });
+    assert.throws(
+      () => runDrill({ snapshot: backup.snapshot, "drill-target": target, "drill-log": drillLog }),
+      /not a database|database disk image is malformed/i,
+    );
+    assert.equal(fs.existsSync(target), false);
+    assert.equal(fs.existsSync(drillLog), false);
+    assert.equal(hashFile(databasePath), sourceDigest);
   } finally {
     cleanup(root);
   }
