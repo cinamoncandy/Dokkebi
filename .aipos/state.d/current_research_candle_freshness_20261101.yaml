@@ -1,11 +1,12 @@
 current_research_candle_freshness_20261101:
   work_order: WO-RESEARCH-20261101-CANDLE-FRESHNESS
   issue: 2815
-  status: LOCAL_VALIDATED_PENDING_REVIEW_CI
+  status: LOCAL_VALIDATED_PENDING_SUCCESSOR_CI
   branch: WO-RESEARCH-20261101-CANDLE-FRESHNESS
   base_sha: 3e610394ab9441e925769ac66033d3ec9fedc429
   finding: "Fresh read-only /health at 2026-11-01T02:04:23Z shows runtime source e1fd3ea9363e2f66d057ecb9dfeb5948a24a64fb, research gap-fill lastRunAt 1793496251513 (about 40 minutes before observation), and the probe's persisted snapshot marks a 1m series stale at 3,270,888 ms when observed at 1793492312557. Current main's only production candle head writer is public Upbit REST gap fill every 60 minutes; probe stale threshold remains 10 minutes. This is a writer-cadence mismatch; historical TICK_ERROR cause remains UNKNOWN."
   scope: "Use the existing single gap-fill timer at 5 minutes with a one-page-per-market recurring work bound; preserve the 10-minute freshness rule, missing-data gates, existing candle rows, provenance, PAPER_ONLY, and ZERO_AUTHORITY."
-  validation: "Node 24.19.0; pnpm 11.25.0 frozen-lockfile install; preflight/build/focused 34/34/full suite 1320 isolated files/typecheck/validate:full/security (0 high/critical, 0 secrets)/lint (0 errors, 47 existing warnings)/diff-check PASS. One initial full-suite attempt exposed two stale 60-minute assertions; tests now bind to the production interval constant and preserve retry/dedupe/stop semantics. Failure output retained at /workspace/evidence/2026-11-01-research-candle-full-suite-initial-failure.txt."
-  next: "Freshly reconfirm canonical #2815 ownership and exact local base, inspect diff and AIPOS validators, then commit/push one successor and open a Draft PR for exact-head CI and independent DATA/EVIDENCE review. No deploy, restart, database mutation, threshold relaxation, or CODE_ACTIONABLE."
+  review_p1: "Review comment 4434158135 on prior head fcbb9a868b5558d6531bfa143ff093e93805c9a4 identified repeated-page stalls when the newest source close is absent. Successor retains the cursor across existing bounded passes; regression proves older-gap progress while preserving the absent close."
+  validation: "After the P1 repair: Node 24.19.0/pnpm 11.25 frozen-lockfile install and preflight PASS; focused build/tests 32/32 PASS; pnpm test PASS (1320 isolated files); typecheck/validate:full/security (0 high-critical, 0 secrets)/AIPOS provenance and tier validators/diff-check PASS; lint 0 errors/47 baseline warnings. One initial full-suite attempt exposed two stale 60-minute assertions; fixed by binding tests to the production interval constant. Failure output preserved at /workspace/evidence/2026-11-01-research-candle-full-suite-initial-failure.txt."
+  next: "Complete successor gates and commit/push to existing PR #2975; require fresh exact-head CI and independent re-review of the P1 repair. No deploy, restart, database mutation, threshold relaxation, or CODE_ACTIONABLE."
   safety: PAPER_ONLY_LIVE_NONE_PRODUCTION_MUTATION_FALSE_REAL_ORDER_FALSE_REAL_TRANSFER_FALSE_AI_ZERO_AUTHORITY

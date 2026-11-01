@@ -1,6 +1,6 @@
 id: WO-RESEARCH-20261101-CANDLE-FRESHNESS
 title: "Keep the REST-backed Research candle head within the existing freshness window"
-status: LOCAL_VALIDATED_PENDING_REVIEW_CI
+status: LOCAL_VALIDATED_PENDING_SUCCESSOR_CI
 owner: nusa-development
 repository: cinamoncandy/NUSA
 issue: 2815
@@ -49,7 +49,7 @@ runtime_acceptance:
   required_after_governed_release: true
   evidence: "Read-only exact-main runtime evidence must show the REST-backed research candle latest close advancing naturally; do not deploy or restart from this work order."
 evidence:
-  exact_head_candidate: "local changes on base 3e610394ab9441e925769ac66033d3ec9fedc429; commit not created"
+  exact_head_candidate: "PR #2975 current head is authoritative; predecessor reviewed with P1 was fcbb9a868b5558d6531bfa143ff093e93805c9a4"
   dependency_install: "pnpm 11.25.0 install --frozen-lockfile PASS; lockfile unchanged"
   preflight: PASS
   build: PASS
@@ -61,4 +61,6 @@ evidence:
   lint: "0 errors / 47 existing warnings; no new warnings after updating the stale interval assertion"
   diff_check: PASS
   initial_full_suite_attempt: "Two existing gap-retry assertions still expected a 60-minute interval. Updated them to bind to the named production interval constant while preserving exact-once/deferred-retry/stop-cancellation assertions. Raw failed attempt preserved at /workspace/evidence/2026-11-01-research-candle-full-suite-initial-failure.txt; the final full suite passed."
-next: "Before commit, recheck Issue #2815 ownership and branch refs, review the final diff/AIPOS validators, then commit/push this one canonical successor and open a Draft PR for exact-head CI and fresh non-author DATA/EVIDENCE review."
+  review_p1: "Codex review comment 4434158135 on exact head fcbb9a868b5558d6531bfa143ff093e93805c9a4 found that an exchange-missing newest close could cause every one-page pass to repeat the same page. Fixed by carrying the exclusive page cursor between existing recurring passes and added an integration regression proving older-gap progress while the newest missing close remains absent."
+  successor_validation: "After the P1 repair: pnpm test PASS (1320 isolated test files); Node 24.19/pnpm 11.25 preflight PASS; build/typecheck/validate:full/security (0 high-critical, 0 secrets)/AIPOS validators/diff-check PASS; focused build/tests 32/32 PASS; lint 0 errors/47 baseline warnings. Remote exact-head workflows and fresh review remain pending after the successor commit."
+next: "Finish successor preflight/build/typecheck/validate:full/security/lint/AIPOS/diff checks; commit and push a successor to existing PR #2975, preserve the review finding without author-resolving its thread, then require fresh exact-head CI and independent review. No deploy, restart, database mutation, threshold relaxation, or CODE_ACTIONABLE."

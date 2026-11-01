@@ -298,6 +298,8 @@ export function composeResearchExperiments(input: {
     return Object.freeze(results);
   };
   let gapFilling = false;
+  // Keep bounded page progress across recurring passes so an exchange-missing newest close does not pin the scan.
+  const gapFillCursors = new Map<string, number>();
   let gapTimer: ReturnType<typeof setInterval> | undefined;
   let gapRetry: ReturnType<typeof setTimeout> | undefined;
   const fillGaps = async (): Promise<readonly GapFillResult[]> => {
@@ -307,7 +309,9 @@ export function composeResearchExperiments(input: {
     try {
       for (const market of settings.markets) {
         if (stopped) break;
-        const result = await fillRecentGaps({ market, windowMs: targetSpanMs, nowMs: now(), store, fetchPage, sleep, maxPages: RESEARCH_GAP_FILL_MAX_PAGES_PER_RUN });
+        const result = await fillRecentGaps({ market, windowMs: targetSpanMs, nowMs: now(), store, fetchPage, sleep, maxPages: RESEARCH_GAP_FILL_MAX_PAGES_PER_RUN, startBeforeMs: gapFillCursors.get(market) });
+        if (result.nextCursorStartMs !== undefined) gapFillCursors.set(market, result.nextCursorStartMs);
+        else if (result.status !== "RATE_LIMITED" && result.status !== "ERROR") gapFillCursors.delete(market);
         results.push(result);
         if (result.status === "NO_GAPS" || result.status === "FILLED") {
           const firstClose = store.earliestCloseTime(market, M);
