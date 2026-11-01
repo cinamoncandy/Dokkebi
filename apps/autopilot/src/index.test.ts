@@ -645,6 +645,35 @@ describe("NUSA autopilot GitHub webhook", () => {
     }
   });
 
+  it("rejects workflow-failure dispatch before lease acquisition without a verified causal admission", async () => {
+    const storage = new MemoryStorage();
+    const coordinator = new ExecutionCoordinator({ storage });
+    const namespace: ExecutionCoordinatorNamespace = {
+      idFromName: () => ({}),
+      get: () => ({ fetch: (input: RequestInfo | URL, init?: RequestInit) => coordinator.fetch(new Request(input, init)) }),
+    };
+    let runtimeCalls = 0;
+    const runtime: CodingRuntime = {
+      name: "must-not-run",
+      async execute() { runtimeCalls += 1; throw new Error("workflow failure reason was not gated"); },
+    };
+    const failureRequest = { ...codingRequest, reason: `gha:${codingRequest.workflowRunId}:${codingRequest.headSha}:failure` };
+    const request = () => new Request("https://example.test/coding/execute", {
+      method: "POST",
+      headers: { authorization: "Bearer runner-token", "content-type": "application/json" },
+      body: JSON.stringify(failureRequest),
+    });
+    const env = { NUSA_CODING_RUNNER_TOKEN: "runner-token", NUSA_EXECUTION_COORDINATOR: namespace };
+    const response = await handleCodingExecute(request(), env, runtime);
+    const body = await response.json() as { accepted: boolean; error: string };
+    assert.equal(response.status, 409);
+    assert.equal(body.accepted, false);
+    assert.equal(body.error, "CAUSAL_ACTIONABILITY_UNVERIFIED");
+    assert.equal(runtimeCalls, 0);
+    const execution = await readPersistentExecution(namespace, failureRequest.dedupeKey);
+    assert.equal(execution, null, "workflow-failure denial must happen before lease acquisition");
+  });
+
   it("releases a failed coding lease so the bounded retry can reach the Worker again", async () => {
     const storage = new MemoryStorage();
     const coordinator = new ExecutionCoordinator({ storage });

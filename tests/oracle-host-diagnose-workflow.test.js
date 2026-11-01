@@ -117,3 +117,30 @@ test("the per-directory disk step is read-only, bounded per directory and publis
   assert.match(step, /TIMEOUT_OR_UNREADABLE/, "an unmeasured directory is named, never guessed");
   assert.match(step, /emit "diag-disk-by-dir" "\$out"/);
 });
+
+test("the learning readout reads the saved /health file, keeps only booleans, numbers and fixed upper-case codes, and says so when it cannot", () => {
+  const { spawnSync } = require("node:child_process");
+  const os = require("node:os");
+  const path = require("node:path");
+  const match = text.match(/readout="\$\(node -e '([\s\S]*?)' "\$HEALTH_PROBE_PATH"\)"/);
+  assert.ok(match, "the readout step exists");
+  const directory = fs.mkdtempSync(path.join(os.tmpdir(), "nusa-learning-readout-"));
+  const run = (content) => {
+    const file = path.join(directory, "h.json");
+    fs.writeFileSync(file, content);
+    const result = spawnSync(process.execPath, ["-e", match[1], file], { encoding: "utf8", timeout: 10000 });
+    assert.equal(result.status, 0, result.stderr);
+    return result.stdout.trim();
+  };
+  try {
+    const out = JSON.parse(run(JSON.stringify({
+      learningLoopVerdict: { verdict: "PARTIAL", candidateFunnel: { stage: "NO_DISCOVERY", experiments: 9 } },
+      runtime: { orderBookCoverage: { market: "KRW-BTC", ratio: 0.6, meetsStudyBar: false }, closedLearningLoop: { cycleId: "closed-learning:abc", note: "secret text", cyclesEvaluated: 0 } },
+    })));
+    assert.equal(out.learningLoopVerdict.candidateFunnel.stage, "NO_DISCOVERY");
+    assert.deepEqual(out.orderBookCoverage, { ratio: 0.6, meetsStudyBar: false }, "the market name is dropped");
+    assert.deepEqual(out.closedLearningLoop, { cyclesEvaluated: 0 }, "identifiers and free text are dropped");
+    assert.equal(run("{bad"), "LEARNING_READOUT_UNAVAILABLE");
+    assert.equal(run("{}"), "LEARNING_READOUT_EMPTY");
+  } finally { fs.rmSync(directory, { recursive: true, force: true }); }
+});

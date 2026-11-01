@@ -51,6 +51,11 @@ export const UNWIRED_CONTROL_PLANE_DEBT: readonly string[] = Object.freeze([
   "evolveStrategyLifecyclePolicy.ts#decideStrategyEdgeDecayContainment",
   "evolveValidation.ts#createEvolutionValidationResult",
   "executionCoordinator.ts#clearPersistentControlPlaneHold",
+  // #1851's provenance claim helpers are not yet in the production dispatch path. They
+  // deliberately grant no causal classification or CODE_ACTIONABLE authority; wiring
+  // them before a real protected producer positive exists would create unverified admission.
+  "causalAdmissionAuthorization.ts#dispatchWithCausalBinding",
+  "causalAdmissionAuthorization.ts#verifyClaimedCausalDispatch",
   "opportunityPlanner.ts#planOpportunity",
   "opportunityPlanner.ts#rankOpportunities",
   // #2185 intentionally lands the deterministic provider-local primitive before runtime wiring;

@@ -119,6 +119,15 @@
       "secrets": false,
       "environment": null
     },
+    "ci.yml:attest-causal-regression": {
+      "write": [
+        "artifact-metadata",
+        "attestations",
+        "id-token"
+      ],
+      "secrets": false,
+      "environment": null
+    },
     "autopilot-execution-consumer.yml:release": {
       "write": [
         "contents",

@@ -56,6 +56,8 @@ export function LearningFunnel({ model }: { readonly model: LearningFunnelModel 
     </View>
     <Text style={styles.caption}>끝까지 통과한 전략</Text>
     <Text style={styles.sub}>{model.sub}</Text>
+    {model.verdictLine == null ? null : <Text style={styles.verdict} testID="learning-loop-verdict">{model.verdictLine}</Text>}
+    <Text style={styles.loop} testID="learning-loop-line">{model.loop}</Text>
 
     {waffle ? <View style={styles.section}>
       <SectionLabel left={waffle.unit === 1 ? "전략 1개 = 1칸" : `1칸 ≈ 전략 ${waffle.unit}개`} right={tested.toLocaleString("en-US")} />
@@ -86,6 +88,8 @@ const styles = StyleSheet.create({
   of: { color: calmColors.muted, fontSize: 30, lineHeight: 40, marginLeft: 4 },
   caption: { color: calmColors.text, fontSize: readableFont(15), marginTop: 2 },
   sub: { color: calmColors.muted, fontSize: readableFont(13), lineHeight: 19, marginTop: 6 },
+  verdict: { color: calmColors.text, fontSize: readableFont(13), lineHeight: 19, marginTop: 8, fontWeight: "600" },
+  loop: { color: calmColors.text, fontSize: readableFont(13), lineHeight: 19, marginTop: 8 },
   section: { marginTop: 22 },
   wipe: { position: "absolute", left: 0, top: 0, backgroundColor: calmColors.ground },
   gate: { position: "absolute", left: 0, right: 0, height: 2, backgroundColor: calmColors.attention },

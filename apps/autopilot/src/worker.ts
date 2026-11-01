@@ -6,6 +6,7 @@ import {
   CodingRunnerEvidenceError,
   CodingRunnerHttpEvidenceError,
   executeCodingRunner,
+  isWorkflowFailureCodingReason,
   validateCodingRunnerRequest,
   verifyCodingRunnerRequestAgainstGitHub,
   type CodingProposal,
@@ -18,6 +19,9 @@ import { verifyGithubActionsOidcToken, verifyGithubReleaseControlOidcToken } fro
 import { AUDIT_PROVIDER, executeIndependentAudit, executeProviderGatedAudit, validateAuditRunnerRequest } from "./auditRunner";
 import { classifyAiBudgetState } from "./aiBudgetState";
 import { decideCodingRunnerNoAction } from "./codingRunnerRemediation";
+import { claimVerifiedCausalDispatch } from "./causalAdmissionAuthorization";
+import { verifyCausalProducerAttestation } from "./sigstoreCausalAttestation";
+import { verifyGithubCausalProducerEvidence, verifyGithubCodingPublisherIdentity, verifyGithubCodingPublisherRun, verifyGithubCodingSourceRun, type SourceExecutionIdentity } from "./githubActionsOidc";
 
 export { ExecutionCoordinator };
 
@@ -126,6 +130,86 @@ function validatePublishedFiles(value: unknown): readonly { readonly path: strin
 
 const WIP_RELEASE_IDENTITY = /^[A-Za-z0-9_.:|-]{1,512}$/;
 
+async function readBoundedCausalClaimBody(request: Request): Promise<string> {
+  if (!request.body) throw new Error("CAUSAL_DISPATCH_REQUEST_INVALID");
+  const reader = request.body.getReader();
+  const decoder = new TextDecoder("utf-8", { fatal: true });
+  let total = 0;
+  let text = "";
+  let completed = false;
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const timeout = new Promise<never>((_resolve, reject) => {
+    timer = setTimeout(() => reject(new Error("CAUSAL_DISPATCH_REQUEST_INVALID")), 5000);
+  });
+  try {
+    for (;;) {
+      const chunk = await Promise.race([reader.read(), timeout]);
+      if (chunk.done) break;
+      total += chunk.value.byteLength;
+      // A Sigstore bundle is larger than the identity-only claim. Keep a hard cap
+      // while allowing the bounded attestation envelope to reach server policy.
+      if (total > 512 * 1024) throw new Error("CAUSAL_DISPATCH_REQUEST_INVALID");
+      text += decoder.decode(chunk.value, { stream: true });
+    }
+    completed = true;
+    return text + decoder.decode();
+  } finally {
+    if (timer !== undefined) clearTimeout(timer);
+    if (!completed) void reader.cancel().catch(() => undefined);
+  }
+}
+
+/** Binds provenance only. It cannot authorize a causal result or coding admission. */
+export async function handleCausalDispatchClaim(request: Request, env: WorkerEnv, dependencies: { readonly now?: () => number; readonly fetchImpl?: NonNullable<Parameters<typeof claimVerifiedCausalDispatch>[0]["fetchImpl"]> } = {}): Promise<Response> {
+  const authority = { liveAuthority: "NONE", productionMutationAllowed: false, aiAuthority: "ZERO_AUTHORITY" } as const;
+  const provided = request.headers.get("authorization")?.replace(/^Bearer\s+/i, "").trim();
+  if (!provided) return json({ claimed: false, error: "CAUSAL_DISPATCH_UNAUTHORIZED", ...authority }, 401);
+  if (!env.NUSA_EXECUTION_COORDINATOR || !env.NUSA_GITHUB_TOKEN?.trim()) {
+    return json({ claimed: false, error: "CAUSAL_DISPATCH_EVIDENCE_UNAVAILABLE", ...authority }, 503);
+  }
+  let body: { dedupeKey?: unknown; executionId?: unknown; source?: unknown; capability?: unknown; attestationBundle?: unknown };
+  try {
+    body = JSON.parse(await readBoundedCausalClaimBody(request)) as typeof body;
+  } catch {
+    return json({ claimed: false, error: "CAUSAL_DISPATCH_REQUEST_INVALID", ...authority }, 400);
+  }
+  if (!body || typeof body !== "object" || Array.isArray(body)
+    || typeof body.dedupeKey !== "string" || !WIP_RELEASE_IDENTITY.test(body.dedupeKey)
+    || typeof body.executionId !== "string" || !WIP_RELEASE_IDENTITY.test(body.executionId)
+    || !body.source || typeof body.source !== "object" || Array.isArray(body.source)
+    || typeof body.capability !== "string" || !/^[0-9a-f]{64}$/.test(body.capability)) {
+    return json({ claimed: false, error: "CAUSAL_DISPATCH_REQUEST_INVALID", ...authority }, 400);
+  }
+  const allowedRepository = env.NUSA_GITHUB_REPOSITORY?.trim() || "cinamoncandy/NUSA";
+  const now = dependencies.now?.() ?? Date.now();
+  let causalAttestationVerified = false;
+  if (body.attestationBundle !== undefined) {
+    try {
+      // Authenticate and source-check before spending CPU on the bundle. The
+      // claim helper repeats these checks immediately before its atomic write.
+      const publisher = await verifyGithubCodingPublisherIdentity(provided, allowedRepository, dependencies.fetchImpl, Math.floor(now / 1000));
+      await verifyGithubCodingPublisherRun(publisher, env.NUSA_GITHUB_TOKEN.trim(), dependencies.fetchImpl);
+      await verifyGithubCodingSourceRun(body.source as SourceExecutionIdentity, allowedRepository, env.NUSA_GITHUB_TOKEN.trim(), dependencies.fetchImpl);
+      await verifyGithubCausalProducerEvidence(body.source as SourceExecutionIdentity, allowedRepository, env.NUSA_GITHUB_TOKEN.trim(), dependencies.fetchImpl);
+      await verifyCausalProducerAttestation(body.attestationBundle, body.source as SourceExecutionIdentity);
+      causalAttestationVerified = true;
+    } catch {
+      return json({ claimed: false, causalAttestationVerified: false, error: "CAUSAL_ATTESTATION_REJECTED", ...authority }, 409);
+    }
+  }
+  const claimed = await claimVerifiedCausalDispatch({
+    coordinator: env.NUSA_EXECUTION_COORDINATOR,
+    allowedRepository,
+    githubToken: env.NUSA_GITHUB_TOKEN.trim(),
+    dedupeKey: body.dedupeKey,
+    executionId: body.executionId,
+    source: body.source as SourceExecutionIdentity,
+    now,
+    fetchImpl: dependencies.fetchImpl,
+  }, provided, body.capability);
+  return claimed ? json({ claimed: true, causalAttestationVerified, ...authority }) : json({ claimed: false, causalAttestationVerified, error: "CAUSAL_DISPATCH_BINDING_REJECTED", ...authority }, 409);
+}
+
 /**
  * The execution consumer calls this when its coding attempt ends, successfully or not, so the single
  * active-WIP slot is freed at once instead of after ACTIVE_WIP_CLAIM_MAX_AGE_MS. Same authentication as
@@ -166,6 +250,9 @@ export async function handleCodingProposal(request: Request, env: WorkerEnv): Pr
 
   try {
     const runnerRequest = validateCodingRunnerRequest(await request.json(), allowedRepository);
+    if (isWorkflowFailureCodingReason(runnerRequest.reason)) {
+      return json({ accepted: false, status: "CODING_PROPOSAL_FAILED_CLOSED", error: "CAUSAL_ACTIONABILITY_UNVERIFIED", liveAuthority: "NONE", productionMutationAllowed: false, aiAuthority: "ZERO_AUTHORITY" }, 409);
+    }
     const capture = new ProposalCaptureRuntime();
     const coordinator = env.NUSA_EXECUTION_COORDINATOR;
     const result = await executeCodingRunner(runnerRequest, env, undefined, capture, undefined, {
@@ -273,6 +360,9 @@ export async function handleCodingPublish(request: Request, env: WorkerEnv): Pro
   try {
     const body = await request.json() as { request?: unknown; validatedFiles?: unknown };
     const runnerRequest = validateCodingRunnerRequest(body.request, allowedRepository);
+    if (isWorkflowFailureCodingReason(runnerRequest.reason)) {
+      return json({ accepted: false, status: "CODING_PUBLISH_FAILED_CLOSED", error: "CAUSAL_ACTIONABILITY_UNVERIFIED", liveAuthority: "NONE", productionMutationAllowed: false, aiAuthority: "ZERO_AUTHORITY" }, 409);
+    }
     await verifyCodingRunnerRequestAgainstGitHub(runnerRequest, env.NUSA_GITHUB_TOKEN);
     const validatedFiles = validatePublishedFiles(body.validatedFiles);
     const runtime: CodingRuntimeExecutionResult = Object.freeze({
@@ -502,6 +592,10 @@ const worker = {
 
     if (request.method === "POST" && url.pathname === "/coding/publish") {
       return handleCodingPublish(request, env);
+    }
+
+    if (request.method === "POST" && url.pathname === "/coding/causal/claim") {
+      return handleCausalDispatchClaim(request, env);
     }
 
     if (request.method === "POST" && url.pathname === "/coding/sandbox/validate") {

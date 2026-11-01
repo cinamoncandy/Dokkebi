@@ -1,0 +1,267 @@
+id: WO-AUTOPILOT-20261030-1851-CAUSAL-ADMISSION
+title: Bind publisher and source evidence before autonomous coding admission
+status: IN_PROGRESS
+owner: nusa-development
+issue: 1851
+repository: cinamoncandy/NUSA
+base_branch: main
+base_commit_observed: 1a8bb3b261f8e4ac242499a93287da6c370ed4b3
+authority_impact: fail_closed_autopilot_coding_admission
+problem: "A workflow failure is not causal code evidence; a trusted publisher and a verified source run must also have a server-authenticated relationship before causal evidence can authorize coding."
+scope:
+  - Reuse existing GitHub Actions OIDC verification, ExecutionCoordinator, coding runner and EVOLVE admission.
+  - Bind distinct publisher and source run identities with server-retained dispatch provenance and reject replay or unknown relationships.
+  - Admit CODE_ACTIONABLE only with trusted provenance and a deterministic repository-owned causal regression contract.
+  - Preserve legacy static-token uses while denying static-token-only causal authority.
+out_of_scope:
+  - New scheduler, queue, execution engine, independent governance engine, or LIVE authority.
+  - Oracle mutation, real orders or transfers, safety or risk relaxation, and fabricated evidence.
+recovery:
+  previous_partial: /workspace/nusa-1851-actionability
+  current_worktree: /workspace/nusa-1851-latest
+  preserved_patch: /workspace/evidence/1851-oidc-pre-reconvergence-20261030.patch
+  prior_pr: 1854_CLOSED_DO_NOT_REVIVE
+  current_open_implementation_pr: NONE_FOUND
+  verified_local_partial: "Signed OIDC publisher identity, separate GitHub run cross-checks, atomic coordinator binding with bounded unclaimed retries, selected-opportunity/run/SHA agreement, scheduled lease SHA, dispatch artifact capability redaction, and a fixed truth-table observation prototype exist locally. Focused OIDC/binding/coordinator/bridge/scheduled/CodingRunner/observation tests 168/168, sanitizer tests 2/2, and typecheck pass. Optional dispatch capability issuance and OIDC-only Worker claim are locally connected and tested; the scheduled admission path is not wired to them and nothing grants causal admission."
+  remaining_binding_limits:
+    - "Unclaimed capability rotation across bounded acquisition generations is tested. A claimed generation cannot be replaced until durable causal receipt deduplication and retry semantics are established."
+    - "Dispatch artifact sanitizer excludes causal_dispatch_capability locally; delivery and all remaining log/artifact paths are not yet wired or verified."
+    - "Bridge now abstains when the selected workflow opportunity's run or SHA differs from the request; exact source attempt still requires independent GitHub verification at registration."
+    - "The fixed truth-table observer produces only a local observation; it is not an authenticated causal receipt or proof of why a CI run failed."
+acceptance:
+  - Exact publisher/source repository, workflow, SHA, run and relevant attempt identities are server-verified and tied by a durable, replay-resistant authorized relationship.
+  - Unknown, malformed, unavailable or mismatched provenance fails closed; static token alone never grants causal authority.
+  - A deterministic repository-owned regression producer and verifier provide a positive path through existing CodingRunner without using generic CI failure as proof.
+  - Relevant adversarial, scheduled and CodingRunner regressions, build, typecheck, lint and security gates pass before a commit or PR.
+next: "Complete claimed-generation retry and receipt deduplication, connect a trusted source-run-bound causal producer/verifier and authenticated capability delivery, then gate all failure-based admission and publish paths without widening authority."
+safety: PAPER_ONLY_LIVE_NONE_PRODUCTION_MUTATION_FALSE_REAL_ORDER_FALSE_REAL_TRANSFER_FALSE_AI_ZERO_AUTHORITY
+
+continuation_20261031:
+  observed_main: 1a8bb3b261f8e4ac242499a93287da6c370ed4b3
+  status: LOCAL_PROTOTYPE_NOT_COMMIT_READY
+  evidence: "Script regression 9/9 PASS and git diff --check PASS; full current-worktree validation and authenticated producer evidence remain unverified."
+  first_broken_transition: "Untrusted source-run observation artifact -> independently authenticated causal producer and server verification."
+  caveat: "A truth-table mismatch is not proof that the source CI run failed because of that mismatch. Existing generic-failure scheduler admission remains unchanged."
+
+continuation_20261031_worker_bundle_policy:
+  status: LOCAL_WORKER_POLICY_CONNECTED_NOT_PRODUCTION_VERIFIED
+  changes:
+    - "Added a bounded optional Sigstore bundle field to the existing causal claim request; Worker invokes the Sigstore verifier and pinned producer identity/predicate checks before accepting a supplied bundle."
+    - "Consumer can download only the named attestation artifact from the exact cited source run/attempt with actions:read and forwards it for Worker verification."
+    - "Missing bundle remains an explicitly provenance-only claim and returns causalAttestationVerified=false; no CODE_ACTIONABLE or causal receipt is emitted."
+  evidence:
+    - "TypeScript: PASS"
+    - "Focused Worker/causal/OIDC/coordinator suites: 24/24 PASS"
+    - "Workflow/observer/claim-script suites: 10/10 PASS"
+    - "Consumer workflow YAML parse: PASS"
+    - "git diff --check: PASS"
+  limitations:
+    - "Only the upstream generic valid Sigstore fixture is available; Worker rejects it because its signer is not the pinned NUSA producer."
+    - "No real protected-main NUSA bundle has been produced, so authorized signer plus valid exact source manifest has no positive end-to-end proof."
+    - "Worker verification currently establishes signed manifest authenticity and exact predicate/source identity only; GitHub job-level cross-check, causal classification, durable one-time receipt, replay consumption, and CODE_ACTIONABLE admission are not connected."
+    - "Static trusted-root refresh lifecycle is not implemented; the existing local package.json/pnpm-lock WIP remains uncommitted and no commit, PR, CI request, deployment, or production change was performed."
+  environment:
+    - "pnpm preflight stopped before script execution because pnpm attempted to remove the pre-existing node_modules symlink target and no TTY was available; symlink remained unchanged."
+  next: "Produce a genuine protected-main attestation after governed inclusion; verify it through this Worker route, then bind exact GitHub producer job/artifact identity and implement causal receipt/replay semantics before any CODE_ACTIONABLE path."
+
+producer_contract_candidate_v1:
+  status: DESIGN_CANDIDATE_NOT_IMPLEMENTED_OR_APPROVED
+  purpose: "Attest a deterministic reproducer result for a protected-main source run; original CI failure is only a trigger."
+  allowed_producer:
+    repository: cinamoncandy/NUSA
+    workflow_path: .github/workflows/ci.yml
+    workflow_ref: refs/heads/main
+    event: push
+    source_sha_rule: "source SHA must equal the producer run head SHA; no client-selected alternate SHA"
+    job_name: causal-regression-contract
+    required_permissions:
+      contents: read
+      id-token: write
+      attestations: write
+    forbidden_permissions: "contents: write, pull-requests: write, actions: write, deployments: write"
+  reproducibility:
+    checkout: "exact producer head SHA; persist-credentials=false"
+    predicate: "REPAIRABLE_WORKFLOW_POLICY_V1 loaded from the exact protected-main checkout"
+    repetitions: 2
+    positive_rule: "both executions must produce the same explicit OBSERVED_MISMATCH for the same fixed case and fingerprint"
+    control_rule: "fixed expected truth table is embedded in the protected contract; changes require an explicit contract version bump and fresh independent validation"
+    external_dependency: "none permitted in predicate execution"
+    limit: "This establishes a regression in the protected repository policy predicate only; it does not prove an arbitrary CI failure was caused by that predicate. Admission scope must remain limited to that predicate's repair class."
+  manifest:
+    subject: "canonical deterministic JSON bytes; digest is SHA-256 of exact bytes"
+    identities: "repository, source SHA/workflow/run/attempt, producer workflow/ref/SHA/run/attempt/job, predicate id/version, observations, stable failure fingerprint"
+    secret_policy: "no bearer token, OIDC token, dispatch capability or credential in manifest or logs"
+  server_verification:
+    - "Fetch source and producer workflow runs and exact attempts from GitHub; require completed state and exact repository/path/ref/SHA/event/run/attempt match."
+    - "Fetch producer jobs; require exactly one allowlisted causal-regression-contract job with success and matching producer run id."
+    - "Fetch the artifact by exact producer run; verify artifact digest and exact subject bytes."
+    - "Verify GitHub cryptographic artifact provenance/attestation for the manifest subject, expected repository and protected producer workflow identity; unknown/unsupported bundle fails closed."
+    - "Recompute manifest digest, predicate fingerprint and result consistency; reject client assertions as authority."
+    - "Require source run identity to equal the attested producer source identity; source run status/conclusion is trigger metadata only."
+  receipt_replay_key: "repository|source_sha|source_workflow|source_run_id|source_attempt|producer_workflow|producer_sha|producer_run_id|producer_attempt|producer_job_id|predicate_id|predicate_version|manifest_digest|failure_fingerprint"
+  admission_rule: "Only the server may mint a one-time durable receipt with classification REPOSITORY_CODE_REGRESSION after all verification succeeds; otherwise EVIDENCE_INSUFFICIENT. Generic workflow failure, publisher OIDC or artifact metadata never suffice."
+  implementation_blockers:
+    - "Confirm GitHub artifact attestation support, API/bundle format, and minimal permission availability in this repository plan/runtime."
+    - "Current producer observes a policy predicate mismatch but has no source-run/job causal binding; it is not positive evidence."
+    - "Current producer job is defined in the same CI workflow and local dirty source; no deployed or protected-main producer identity exists yet."
+
+implementation_update_20261031:
+  status: LOCAL_PROTECTED_PRODUCER_ATTESTATION_STEP_ADDED_NOT_RUNTIME_VERIFIED
+  changed_scope:
+    - .github/workflows/ci.yml
+    - scripts/causal-regression-observe.js
+    - tests/causal-regression-observe.test.js
+  design:
+    - "Observation job remains without id-token permission; separate attestation job is gated to exact main push and OBSERVED_MISMATCH."
+    - "Attestation job downloads only same-run, same-attempt receipt and checks repository/workflow/ref/event/SHA/run/attempt/job plus bounded mismatch and fingerprints."
+    - "actions/attest is full-SHA pinned; custom predicate and bundle output are configured; attestation bundle is uploaded separately."
+  verification:
+    - "causal observation tests 3/3 PASS"
+    - "workflow action pin validation PASS"
+    - "workflow action input validation PASS"
+    - "git diff --check PASS"
+  limitations:
+    - "No protected-main workflow execution or real Sigstore attestation exists yet."
+    - "Worker attestation verification and producer/source authorization are not integrated; no causal receipt or CODE_ACTIONABLE is issued."
+    - "Exact-head CI, full validation, independent review, and governed inclusion remain pending."
+  added_tests: "Static workflow trust-boundary tests 3/3 PASS; source identity tests now bind workflowRef/workflowSha/ref/event/job."
+  next: "Integrate server-side Sigstore bundle verification and authorized signer/predicate policy; real positive NUSA bundle requires this protected-main job to execute. Preserve no commit until complete work-order gates pass."
+
+implementation_update_20261031_producer_job_crosscheck:
+  status: LOCAL_PARTIAL_VALIDATION_BLOCKED_ON_AUTHENTIC_POSITIVE
+  main: 1a8bb3b261f8e4ac242499a93287da6c370ed4b3
+  wip_head: 1a8bb3b261f8e4ac242499a93287da6c370ed4b3
+  ownership: "Existing #1851 WIP reused; no duplicate PR created."
+  changes:
+    - "Server checks exact source-attempt producer/attestor jobs and same-run attempt-qualified artifact metadata."
+    - "Generic workflow-failure admission abstains before lease or dispatch; consumer requires an attestation bundle and positive server verification for gha failure reasons."
+  validation:
+    safe_isolated_frozen_install: PASS
+    preflight: PASS
+    typecheck: PASS
+    build: PASS
+    validate_full: PASS
+    workflow_and_claim_tests: PASS_14_OF_14
+    causal_and_scheduled: FAIL_4_OF_137
+    lint: PASS_0_ERRORS_47_WARNINGS
+    security: FAIL_JOI_1244009_AND_SIGSTORE_METADATA_UNAVAILABLE_VIA_PRESERVED_ROOT_NODE_MODULES_SYMLINK
+    diff_check: PASS
+  unresolved:
+    - "No genuine protected-main NUSA attestation has been generated or verified."
+    - "No causal receipt lifecycle or CODE_ACTIONABLE path exists."
+    - "Four scheduled legacy positives remain failing; no assertion was relaxed."
+    - "Full isolated repository suite is still running."
+  next: "Finish independent full-suite and source/diff checks. Authentic positive attestation requires governed staged inclusion; this does not authorize direct main mutation, Audit, Release, or LIVE."
+  safety: PAPER_ONLY_LIVE_NONE_PRODUCTION_MUTATION_FALSE_REAL_ORDER_FALSE_AI_ZERO_AUTHORITY
+
+  direct_entrypoint_bypass_audit_20261031:
+    verified_at_utc: "2026-10-31T10:22:40Z"
+    status: LOCAL_FAIL_CLOSED_GUARDS_ADDED_POSITIVE_CAUSAL_PATH_STILL_BLOCKED
+    finding: "A provenance-only causal claim did not gate direct /coding/execute, /coding/propose, or /coding/publish; generic workflow-failure reason could reach lease/proposal/publish under token or OIDC authentication."
+    changes:
+      - "Added shared canonical workflow-failure reason detection for numeric and named gha failure/cancelled/timed_out forms."
+      - "Direct execute denies before persistent lease acquisition; propose denies before CodingRunner/AI; publish denies before GitHub verification/publication."
+      - "Canonical issue/backlog reasons remain unchanged."
+    validation:
+      typescript: PASS
+      coding_runner: PASS_91_OF_91
+      execute_route: PASS_19_OF_19
+      worker_proposal_publish: PASS_10_OF_10
+      causal_scheduled: PASS_31_FAIL_4_OF_35
+      aipos_yaml: PASS_541_FILES
+      diff_check: PASS
+    decision: "Preserve the four failing scheduled positive expectations; do not fabricate a receipt or weaken assertions. No commit while authentic protected producer positive path and end-to-end causal admission are absent."
+    next: "Resolve governed staged-inclusion ordering so the protected producer can generate a genuine NUSA attestation; verify it end-to-end before reopening workflow-failure admission."
+    safety: PAPER_ONLY_LIVE_NONE_PRODUCTION_MUTATION_FALSE_REAL_ORDER_FALSE_REAL_TRANSFER_FALSE_AI_ZERO_AUTHORITY
+
+recheck_20261031_current_main_and_staging:
+  verified_at_utc: "2026-10-31T10:15:58Z"
+  current_main: 9ea80540b718367758634de1fbd990eff45017a0
+  local_wip_head: 1a8bb3b261f8e4ac242499a93287da6c370ed4b3
+  branch_remote: ABSENT
+  ahead_behind: "0/3"
+  issue_1851: OPEN
+  pr_1854: CLOSED_DO_NOT_REVIVE
+  open_replacement_pr: NONE_FOUND
+  worktree_inventory: 48
+  root_node_modules_symlink: "preserved -> /workspace/nusa-1851-actionability/node_modules"
+  main_delta: "Three commits touch pnpm-lock.yaml, pnpm-workspace.yaml and tests/security-gate.test.js. Working-tree contents match current-main updates for these areas; no rebase/reset was performed."
+  validation:
+    security_gate: "PASS in isolated detached worktree based on exact current main plus WIP patch, with package postinstall security backports applied in isolated dependency tree; high/critical=0, secrets=0, license findings=0"
+    focused_causal_scheduled: FAIL_4_OF_137
+    scheduled_dist_suite: FAIL_6_OF_16
+    prior_same_wip_typecheck_build_validate_full: PASS
+    prior_same_wip_lint: "PASS_0_ERRORS_47_WARNINGS"
+    diff_check: PASS
+  first_broken_transition: "Governed staged inclusion boundary -> genuine protected-main NUSA attestation -> server-verified causal positive path."
+  decision: "Do not fabricate a positive receipt or induce a protected-main regression. Current commit gate remains unmet while authentic attestation is absent and scheduled positive contracts remain unverified."
+  next: "Use only the authorized governance path to resolve staged inclusion ordering; then produce and verify an actual protected-producer attestation."
+  safety: PAPER_ONLY_LIVE_NONE_PRODUCTION_MUTATION_FALSE_REAL_ORDER_FALSE_AI_ZERO_AUTHORITY
+
+validation_environment_correction_20261031:
+  verified_at_utc: "2026-10-31T10:18:02Z"
+  validate_full: NOT_RUN_PNPM_AUTO_INSTALL_INTERRUPTED_BEFORE_VALIDATION_SCRIPTS
+  validate_full_constituents: "PASS in isolated detached worktree at current main plus WIP patch; every constituent preflight/architecture/AIPOS/safety script returned success"
+  attempt: "pnpm run validate:full began pnpm dependency reconciliation and showed Packages +7 -1 before any validation script started; interrupted immediately."
+  root_node_modules_link: "path and target unchanged: /workspace/nusa-1851-actionability/node_modules"
+  target_directory: "still resolves; mtime changed; @sigstore symlinks are present; prior contents cannot be asserted unchanged"
+  recovery: "No cleanup, reset, or guessed rollback performed. Use isolated validation worktree/dependency directory for subsequent checks."
+  safety: PAPER_ONLY_LIVE_NONE_PRODUCTION_MUTATION_FALSE_REAL_ORDER_FALSE_AI_ZERO_AUTHORITY
+
+
+bootstrap_staged_inclusion_20261031:
+  governance_owner_order: "Gate A fail-closed bootstrap inclusion may precede a real positive attestation; this resolves the bootstrap cycle without relaxing the later evidence bar."
+  observed_at_utc: "2026-10-31T11:01:23Z"
+  protected_main: cc03c39fe631777c2253d08bace03897e62f31b8
+  local_wip_head: 1a8bb3b261f8e4ac242499a93287da6c370ed4b3
+  prior_pr: 1854_CLOSED_DO_NOT_REVIVE
+  branch_owner: "preserved local #1851 WIP; remote fix/evolve-workflow-actionability-1851 belongs to closed PR #1854 and is historical, not an active replacement PR"
+  gate_a_bootstrap_requirements:
+    - "Unsigned, missing, malformed or invalid attestation is rejected."
+    - "Workflow-derived failure cannot produce CODE_ACTIONABLE and cannot acquire a lease or dispatch."
+    - "Direct /coding/execute, /coding/propose and /coding/publish workflow-failure routes reject before side effects."
+    - "Existing backlog/issue admission contract remains available and separately guarded."
+    - "PAPER_ONLY, liveAuthority=NONE, productionMutationAllowed=false, realOrderAuthority=false, realTransferAuthority=false and aiAuthority=ZERO_AUTHORITY remain unchanged."
+  positive_attestation_requirement: "Deferred only as a prerequisite for the first fail-closed staged inclusion. Required after protected inclusion before any causal positive receipt or CODE_ACTIONABLE path."
+  current_transition: "Fresh-main minimum coherent fail-closed bootstrap set -> exact-main local validation -> successor SHA and exact-head CI."
+  last_validation_main: b087468e98767a19a60e33cc5e3f793f835b1560
+  last_validation_results:
+    full_isolated_tests: PASS_1316_OF_1316_ON_PRIOR_MAIN_HISTORICAL_AFTER_MAIN_ADVANCED
+    autopilot_tests: PASS_705_OF_705_ON_PRIOR_MAIN_HISTORICAL_AFTER_MAIN_ADVANCED
+    validate_full_constituents: PASS_ON_PRIOR_MAIN_HISTORICAL_AFTER_MAIN_ADVANCED
+    security_gate: PASS_ON_PRIOR_MAIN_HISTORICAL_AFTER_MAIN_ADVANCED
+    lint: PASS_0_ERRORS_47_WARNINGS_IDENTICAL_TO_PRIOR_MAIN_BASELINE
+    mobile_typecheck: PASS_ON_PRIOR_MAIN_HISTORICAL_AFTER_MAIN_ADVANCED
+  current_main_delta_review: "b087468e..cc03c39f adds 4 files (2 AIPOS/risk work-order files and 2 cloud behavior tests); no overlap with the bootstrap code files. Candidate was reconstructed on cc03c39f and passed local validation; protected main then advanced to a92e37d5, making those validation results historical until rerun."
+  original_node_modules: "PRESERVED; provenance UNKNOWN/UNVERIFIED; not used as validation evidence."
+  code_actionable: NOT_ISSUED
+  validation_cc03c39fe631777c2253d08bace03897e62f31b8_historical:
+    isolated_full_tests: PASS_1318_OF_1318
+    focused_autopilot_causal_and_cloud_regression: PASS_744_OF_744
+    typecheck_root_and_mobile: PASS
+    build: PASS
+    validate_full_constituents: PASS
+    security_gate: PASS
+    lint: PASS_0_ERRORS_47_WARNINGS_IDENTICAL_TO_EXACT_MAIN_BASELINE
+    new_lint_warnings: 0
+    aipos_yaml_and_work_order_provenance: PASS
+    diff_check: PASS
+  current_main_after_advance: a92e37d59d5532b74715f32775740cdd23bef683
+  main_advance_delta: "Three mobile island UI/model/test files; no overlap with autopilot bootstrap files. Candidate reconstructed on this base; all exact-main validations below passed."
+  validation_a92e37d59d5532b74715f32775740cdd23bef683:
+    isolated_full_test_files: PASS_1318_OF_1318
+    root_and_mobile_typecheck: PASS
+    build: PASS
+    validate_full_constituents: PASS
+    security_gate: PASS
+    lint: PASS_0_ERRORS_47_WARNINGS_IDENTICAL_TO_EXACT_MAIN_BASELINE
+    new_lint_warnings: 0
+    aipos_yaml_and_work_order_provenance: PASS
+    diff_check: PASS
+  current_validation_status: PASS
+  branch: codex/1851-failclosed-bootstrap-20261031
+  local_commit_status: CREATED_FROM_VALIDATED_a92e37d5
+  exact_head_ci: PENDING_UNPUSHED
+  commit_status: SUCCESSOR_SHA_CREATED; REMOTE_CI_PENDING
+  next: "Push the local successor branch and open the canonical draft PR for exact-head CI/companions, then obtain governed independent review. Positive causal attestation and CODE_ACTIONABLE remain closed until post-inclusion real evidence passes."
+  safety: PAPER_ONLY_LIVE_NONE_PRODUCTION_MUTATION_FALSE_REAL_ORDER_FALSE_REAL_TRANSFER_FALSE_AI_ZERO_AUTHORITY

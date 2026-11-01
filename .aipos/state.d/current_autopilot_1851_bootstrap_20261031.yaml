@@ -1,0 +1,63 @@
+current_autopilot_1851_bootstrap_20261031:
+  work_order: WO-AUTOPILOT-20261030-1851-CAUSAL-ADMISSION
+  issue: 1851
+  verified_at_utc: "2026-10-31T11:19:20Z"
+  verified_at_kst: "2026-10-31 20:19:20 KST"
+  status: LOCAL_BOOTSTRAP_COMMITTED_EXACT_HEAD_CI_PENDING
+  repository: cinamoncandy/NUSA
+  protected_main: a92e37d59d5532b74715f32775740cdd23bef683
+  local_wip_head: 1a8bb3b261f8e4ac242499a93287da6c370ed4b3
+  branch: codex/1851-failclosed-bootstrap-20261031
+  branch_remote: LOCAL_SUCCESSOR_NOT_PUSHED
+  remote_historical_branch: fix/evolve-workflow-actionability-1851
+  remote_historical_branch_sha: 121e7bcd04513a228e0dedf193be18d97e10a755
+  historical_pr: 1854_CLOSED_DO_NOT_REVIVE
+  issue_1851: OPEN
+  open_replacement_pr: NONE_FOUND
+  local_wip_inventory: 54
+  bootstrap_candidate_worktree: /tmp/nusa-1851-bootstrap-a92
+  bootstrap_candidate_base: a92e37d59d5532b74715f32775740cdd23bef683
+  original_node_modules_symlink: PRESERVED
+  original_node_modules_provenance: UNKNOWN_UNVERIFIED
+  current_exact_main_validation: PASS_ON_a92e37d59d5532b74715f32775740cdd23bef683
+  gate_a:
+    status: AUTHORIZED_BY_GOVERNANCE_OWNER
+    positive_attestation_prerequisite: EXEMPT_FOR_FIRST_BOOTSTRAP_INCLUSION_ONLY
+    unsigned_missing_invalid_attestation: REJECT
+    workflow_failure_code_actionable: false
+    direct_execute_propose_publish_bypass: REJECT
+    backlog_issue_contract: PRESERVED
+    production_live_authority: NONE
+  prior_main_validation:
+    main: b087468e98767a19a60e33cc5e3f793f835b1560
+    full_isolated_suite: PASS_1316_OF_1316_HISTORICAL
+    autopilot_compiled_suite: PASS_705_OF_705_HISTORICAL
+    lint: PASS_0_ERRORS_47_WARNINGS_IDENTICAL_TO_BASELINE
+    security: PASS_HISTORICAL
+    validate_full: PASS_HISTORICAL
+  current_gate_status:
+    successor_sha: CREATED_IN_THIS_COMMIT
+    current_main_local_validation: PASS
+    full_isolated_tests: PASS_1318_ISOLATED_TEST_FILES_ON_a92
+    typecheck_root_and_mobile: PASS
+    build: PASS
+    validate_full_constituents: PASS
+    security_gate: PASS
+    lint: PASS_0_ERRORS_47_WARNINGS_IDENTICAL_TO_a92_BASELINE
+    new_lint_warnings: 0
+    diff_check: PASS
+    aipos_yaml_and_work_order_provenance: PASS
+    exact_head_ci: PENDING_UNPUSHED
+    independent_review: NOT_RUN
+    formal_validator: NOT_RUN
+    audit: NOT_RUN
+    release: NOT_AUTHORIZED
+    merge: NOT_DONE
+  causal_positive_path: ABSENT
+  code_actionable: NOT_ISSUED
+  l1: PARTIAL
+  l2: HOLD
+  learning_loop_verified: false
+  performance_improvement: UNPROVEN
+  next: "Push the local successor branch and open the canonical draft PR to trigger exact-head CI/companions; then obtain governed independent review. The positive causal path remains absent and CODE_ACTIONABLE stays closed."
+  safety: PAPER_ONLY_LIVE_NONE_PRODUCTION_MUTATION_FALSE_REAL_ORDER_FALSE_AI_ZERO_AUTHORITY

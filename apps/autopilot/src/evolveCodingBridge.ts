@@ -62,6 +62,17 @@ export function prepareDiscoveredCodingRequest(input: EvolutionCodingBridgeInput
     });
   }
 
+  // A workflow opportunity and the separately supplied runner run ID must
+  // identify the same source. Selection ranking can choose a different signal
+  // from the one the scheduler used to derive workflowRunId.
+  if (selection.selectedOpportunity.source === "github-actions") {
+    const expected = `workflow:${input.workflowRunId}@${input.headSha.toLowerCase()}`;
+    const references = selection.selectedOpportunity.evidence.filter((item) => item.source === "github-actions");
+    if (references.length !== 1 || references[0]?.reference !== expected) {
+      return Object.freeze({ status: "ABSTAINED", reason: "selected-workflow-source-mismatch", rejectedSignalIds: discovery.rejectedSignalIds, request: null, authority: AUTHORITY });
+    }
+  }
+
   const request = validateCodingRunnerRequest({
     kind: "REPOSITORY_AUTOPILOT",
     repository: input.repository,

@@ -20,6 +20,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 20
     permissions:
+      actions: read
       contents: read
       id-token: write
     steps:
@@ -32,7 +33,7 @@ jobs:
       - name: Persist dispatch event
         run: |
           mkdir -p artifacts/autopilot-execution
-          cat "$GITHUB_EVENT_PATH" > artifacts/autopilot-execution/repository-dispatch.json
+          node scripts/sanitize-autopilot-dispatch.js "$GITHUB_EVENT_PATH" artifacts/autopilot-execution/repository-dispatch.json
 
       - name: Validate fail-closed execution payload
         run: |
@@ -62,6 +63,26 @@ jobs:
           test "$(git rev-parse HEAD)" = "$requested"
           current="$(gh api "repos/$GITHUB_REPOSITORY/branches/main" --jq '.commit.sha')"
           test "$current" = "$requested" || { echo "stale main: requested=$requested current=$current"; exit 1; }
+
+      - name: Download same-source-run causal attestation when present
+        env:
+          GH_TOKEN: ${{ github.token }}
+          SOURCE_RUN_ID: ${{ github.event.client_payload.workflow_run_id }}
+          SOURCE_RUN_ATTEMPT: ${{ github.event.client_payload.causal_source_run_attempt }}
+        run: |
+          set -euo pipefail
+          mkdir -p artifacts/autopilot-execution/causal-attestation
+          if [[ "$SOURCE_RUN_ID" =~ ^[1-9][0-9]{0,19}$ && "$SOURCE_RUN_ATTEMPT" =~ ^[1-9][0-9]{0,9}$ ]]; then
+            if gh run download "$SOURCE_RUN_ID" --repo "$GITHUB_REPOSITORY" \
+              --name "nusa-causal-attestation-${SOURCE_RUN_ATTEMPT}" \
+              --dir artifacts/autopilot-execution/causal-attestation 2>/dev/null; then
+              test -s artifacts/autopilot-execution/causal-attestation/attestation.json
+            else
+              echo 'No same-run causal attestation artifact; provenance-only claim remains non-authoritative.'
+            fi
+          else
+            echo 'No valid source attempt identity; no causal attestation can be supplied.'
+          fi
 
       - name: Suppress stale failure-repair dispatch
         id: freshness
@@ -116,6 +137,9 @@ jobs:
           };
           fs.writeFileSync('artifacts/autopilot-execution/coding-runner-request.json', JSON.stringify(request, null, 2));
           NODE
+
+      - name: Claim causal dispatch provenance
+        run: node scripts/autopilot-causal-claim.js
 
       - name: Select supported coding backend
         id: backend

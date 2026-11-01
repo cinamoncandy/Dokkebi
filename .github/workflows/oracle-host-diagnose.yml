@@ -128,6 +128,29 @@ jobs:
             const out = { status: v.status }; for (const [k, x] of Object.entries(v)) if (/^[a-zA-Z0-9]{1,40}$/.test(k) && Number.isSafeInteger(x)) out[k] = x; console.log(JSON.stringify(out));
           } catch { console.log(line.includes("DATA_INTEGRITY_FAILED_CLOSED") ? "DATA_INTEGRITY_FAILED_CLOSED" : "DATA_INTEGRITY_UNAVAILABLE"); }')"
           summary="${summary}"$'\n'"data_integrity=${integrity}"
+          # Learning readout from the same bounded /health response file (no new request): only booleans, finite numbers and fixed
+          # upper-case codes of a few named objects survive; identifiers, text and lower-case hashes are dropped.
+          readout="$(node -e '
+          const fs = require("node:fs");
+          const keep = (o, depth) => {
+            if (o === null || typeof o !== "object" || Array.isArray(o) || depth > 3) return undefined;
+            const out = {};
+            for (const [k, x] of Object.entries(o)) {
+              if (!/^[a-zA-Z0-9]{1,40}$/.test(k)) continue;
+              if (typeof x === "boolean" || Number.isFinite(x) || (typeof x === "string" && /^[A-Z][A-Z0-9_]{0,47}$/.test(x))) out[k] = x;
+              else { const n = keep(x, depth + 1); if (n && Object.keys(n).length > 0) out[k] = n; }
+            }
+            return out;
+          };
+          try {
+            const h = JSON.parse(fs.readFileSync(process.argv[1], "utf8")), r = h.runtime && typeof h.runtime === "object" ? h.runtime : {};
+            const out = {};
+            for (const [name, value] of [["learningLoopVerdict", h.learningLoopVerdict], ["learningPipeline", h.learningPipeline], ["orderBookCoverage", r.orderBookCoverage], ["researchGapFill", r.researchGapFill], ["closedLearningLoop", r.closedLearningLoop]]) {
+              const v = keep(value, 0); if (v && Object.keys(v).length > 0) out[name] = v;
+            }
+            console.log(Object.keys(out).length > 0 ? JSON.stringify(out) : "LEARNING_READOUT_EMPTY");
+          } catch { console.log("LEARNING_READOUT_UNAVAILABLE"); }' "$HEALTH_PROBE_PATH")"
+          summary="${summary}"$'\n'"learning_readout=${readout}"
           errors="$(journalctl -u nusa --since "-90 minutes" --no-pager -o cat 2>&1 | grep -v "^\s*at " | tail -40 | cut -c1-300 | redact)"
           autopilot="$(journalctl -u nusa-autopilot --since "-90 minutes" --no-pager -o cat 2>&1 | grep -Ei "fail|error|blocked|stopped|ready" | tail -20 | cut -c1-300 | redact)"
           emit() { local body; body="$(printf '%s' "${2:0:3500}" | sed -e 's/%/%25/g' | awk '{printf "%s%%0A", $0}')"; echo "::warning title=$1::${body}"; }

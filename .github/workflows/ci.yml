@@ -366,6 +366,122 @@ jobs:
           if-no-files-found: error
           retention-days: 7
 
+  causal-regression-contract:
+    name: causal-regression-contract
+    if: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' }}
+    outputs:
+      observation_status: ${{ steps.causal-observation.outputs.observation_status }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+      - name: Enable pnpm via Corepack
+        run: |
+          corepack enable
+          corepack prepare pnpm@11.7.0 --activate
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: 24
+          cache: pnpm
+      - name: Install locked dependencies
+        run: pnpm install --frozen-lockfile
+      - name: Compile causal contract
+        run: pnpm exec tsc -p tsconfig.json
+      - name: Causal contract observation V1
+        id: causal-observation
+        run: node scripts/causal-regression-observe.js
+      - name: Upload causal contract observation
+        if: always() && hashFiles('artifacts/causal-regression/receipt.json') != ''
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: nusa-causal-repairable-v1-${{ github.run_attempt }}
+          path: artifacts/causal-regression/receipt.json
+          compression-level: 0
+          if-no-files-found: error
+          retention-days: 7
+
+  attest-causal-regression:
+    name: attest-causal-regression
+    needs: causal-regression-contract
+    if: >-
+      ${{ always() &&
+          github.event_name == 'push' &&
+          github.ref == 'refs/heads/main' &&
+          needs.causal-regression-contract.outputs.observation_status == 'OBSERVED_MISMATCH' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      id-token: write
+      attestations: write
+      artifact-metadata: write
+    steps:
+      - name: Download the same-run observation only
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        with:
+          name: nusa-causal-repairable-v1-${{ github.run_attempt }}
+          path: causal-input
+
+      - name: Validate exact source identity and bounded predicate
+        env:
+          GH_REPOSITORY: ${{ github.repository }}
+          GH_SHA: ${{ github.sha }}
+          GH_RUN_ID: ${{ github.run_id }}
+          GH_RUN_ATTEMPT: ${{ github.run_attempt }}
+          GH_REF: ${{ github.ref }}
+          GH_EVENT_NAME: ${{ github.event_name }}
+          GH_WORKFLOW_REF: ${{ github.workflow_ref }}
+        run: |
+          node - <<'NODE'
+          const fs = require('node:fs');
+          const fail = (message) => { console.error(message); process.exit(1); };
+          let receipt;
+          try { receipt = JSON.parse(fs.readFileSync('causal-input/receipt.json', 'utf8')); }
+          catch { fail('causal observation is missing or malformed'); }
+          const source = receipt.source || {};
+          const fingerprints = receipt.fingerprints || {};
+          if (receipt.schemaVersion !== 1 || receipt.contractId !== 'REPAIRABLE_WORKFLOW_POLICY_V1') fail('causal contract identity mismatch');
+          if (receipt.observation?.contract !== receipt.contractId || receipt.observation?.status !== 'OBSERVED_MISMATCH') fail('observation is not a deterministic contract mismatch');
+          if (!/^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+$/.test(process.env.GH_REPOSITORY || '')) fail('GitHub repository context is invalid');
+          if (process.env.GH_EVENT_NAME !== 'push' || process.env.GH_REF !== 'refs/heads/main') fail('producer must run on protected main push');
+          if (process.env.GH_WORKFLOW_REF !== `${process.env.GH_REPOSITORY}/.github/workflows/ci.yml@refs/heads/main`) fail('workflow identity is not canonical CI on main');
+          if (source.repository !== process.env.GH_REPOSITORY || source.workflowPath !== '.github/workflows/ci.yml'
+            || source.workflowRef !== process.env.GH_WORKFLOW_REF || source.workflowSha !== process.env.GH_SHA
+            || source.ref !== process.env.GH_REF || source.event !== process.env.GH_EVENT_NAME
+            || source.job !== 'causal-regression-contract') fail('producer repository/workflow/ref/SHA/job identity mismatch');
+          if (source.sha !== process.env.GH_SHA || !/^[a-f0-9]{40}$/.test(source.sha || '')) fail('source SHA mismatch');
+          if (String(source.runId) !== process.env.GH_RUN_ID || String(source.runAttempt) !== process.env.GH_RUN_ATTEMPT) fail('source run/attempt mismatch');
+          for (const key of ['workflow', 'producer', 'contract', 'lockfile', 'implementation']) {
+            if (!/^[a-f0-9]{64}$/.test(fingerprints[key] || '')) fail(`invalid ${key} fingerprint`);
+          }
+          if (JSON.stringify(receipt).match(/(token|secret|capability|credential)/i)) fail('sensitive field name found in causal observation');
+          NODE
+
+      - name: Prepare signed bundle output path
+        run: mkdir -p artifacts/causal-regression
+
+      - name: Attest the exact causal observation
+        uses: actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6 # v4.2.2
+        with:
+          subject-path: causal-input/receipt.json
+          predicate-type: https://github.com/cinamoncandy/NUSA/attestations/causal-regression/v1
+          predicate-path: causal-input/receipt.json
+          bundle-path: artifacts/causal-regression/attestation.json
+          push-to-registry: false
+          create-storage-record: false
+          show-summary: false
+
+      - name: Upload signed observation bundle
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: nusa-causal-attestation-${{ github.run_attempt }}
+          path: artifacts/causal-regression/attestation.json
+          compression-level: 0
+          if-no-files-found: error
+          retention-days: 7
+
   test:
     name: test
     needs: [validation, coverage]

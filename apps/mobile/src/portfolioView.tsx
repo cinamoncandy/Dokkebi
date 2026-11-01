@@ -1,3 +1,5 @@
+import { AiShell } from "./aiKit";
+import { plainScreenChip } from "./stageTraceModel";
 import React from "react";
 import { RefreshControl, ScrollView, StyleSheet, Text, useWindowDimensions, View } from "react-native";
 import { NusaButton } from "./components";
@@ -37,7 +39,11 @@ function buildModel(snapshot: PortfolioAccountResponse | null): PortfolioViewMod
   try { return buildPortfolioViewModel(snapshot); } catch { return null; }
 }
 
-export function PortfolioView({ snapshot, investmentPercent, error, refreshing, onRefresh, upbitSnapshot = null, upbitStatus = "DISCONNECTED", upbitError = null, onOpenPaperLearning }: PortfolioViewProps) {
+export function PortfolioView(props: PortfolioViewProps) {
+  return <AiShell chip={plainScreenChip("MORE")}><PortfolioBody {...props} /></AiShell>;
+}
+
+function PortfolioBody({ snapshot, investmentPercent, error, refreshing, onRefresh, upbitSnapshot = null, upbitStatus = "DISCONNECTED", upbitError = null, onOpenPaperLearning }: PortfolioViewProps) {
   const { theme } = useTheme();
   const { width } = useWindowDimensions();
   const tablet = width >= 768;
@@ -52,7 +58,7 @@ export function PortfolioView({ snapshot, investmentPercent, error, refreshing, 
   const position = model?.position ?? null;
   const upbitConnected = upbitStatus === "READY" && upbitSnapshot != null && upbitError == null;
 
-  return <ScrollView style={{ backgroundColor: theme.colors.background }} contentContainerStyle={[styles.content, { maxWidth: tablet ? 1080 : 720 }]} refreshControl={<RefreshControl tintColor={theme.colors.primary} refreshing={refreshing} onRefresh={onRefresh} />} showsVerticalScrollIndicator={false} testID="portfolio-screen">
+  return <ScrollView style={{ backgroundColor: "transparent" }} contentContainerStyle={[styles.content, { maxWidth: tablet ? 1080 : 720 }]} refreshControl={<RefreshControl tintColor={theme.colors.primary} refreshing={refreshing} onRefresh={onRefresh} />} showsVerticalScrollIndicator={false} testID="portfolio-screen">
     <AuthorityRail detail="PAPER 자산 · 실계좌와 분리 · LIVE 없음" status={model ? (usingLocalPaper ? "이 기기 모의투자" : "서버 연결됨") : error ? "일부 불가" : "받지 못함"} tone={model ? "success" : "warning"} testID="portfolio-authority-rail" />
     <ScreenLead eyebrow="포트폴리오" title="모의투자 자산과 결과" detail="총자산과 누적 손익을 먼저 보고, 자본 배분·노출·회계 근거를 아래에서 확인해요." badge="모의투자" badgeTone="primary" />
     {error ? <StateNotice title="PAPER 자산 정보 일부 불완전" detail={error} tone="danger" /> : null}

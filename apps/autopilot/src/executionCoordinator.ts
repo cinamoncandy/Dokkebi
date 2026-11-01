@@ -2,6 +2,8 @@ import { validatePersistedEvolutionLearningMemory, type EvolutionLearningMemoryS
 import { validatePersistedCodingExecutionEvidence, type CodingExecutionEvidence } from "./codingExecutionEvidence";
 import { validateAutopilotExecutionTelemetry, type AutopilotExecutionTelemetry } from "./executionTelemetry";
 import type { ExecutionHold, HoldClearance } from "./autonomousExecutionState";
+import { claimCausalDispatchBinding, createCausalDispatchBinding, verifyClaimedCausalDispatchBinding, type CausalDispatchBinding } from "./causalDispatchBinding";
+import type { SourceExecutionIdentity, VerifiedCodingPublisherIdentity } from "./githubActionsOidc";
 
 interface DurableObjectStorageLike {
   get<T>(key: string): Promise<T | undefined>;
@@ -72,6 +74,46 @@ export interface PersistentExecutionAcquireRequest {
   headSha?: string;
   /** Optional ceiling on fresh acquisitions of the same dedupe identity (1-10); absent means unbounded. */
   maxAcquisitions?: number;
+}
+
+/** Internal-only: source is GitHub-verified before registration; digest commits a secret capability. */
+export interface CausalDispatchRegistration {
+  readonly dedupeKey: string;
+  readonly executionId: string;
+  readonly source: SourceExecutionIdentity;
+  readonly capabilityDigest: string;
+  readonly now: number;
+  readonly expiresAt: number;
+}
+
+/** Internal-only: publisher OIDC and both GitHub run identities must be verified before claim. */
+export interface CausalDispatchClaim {
+  readonly dedupeKey: string;
+  readonly executionId: string;
+  readonly source: SourceExecutionIdentity;
+  readonly publisher: VerifiedCodingPublisherIdentity;
+  readonly capabilityDigest: string;
+  readonly now: number;
+}
+
+interface CausalDispatchHistory {
+  readonly schemaVersion: 1;
+  readonly entries: readonly { readonly generation: number; readonly binding: CausalDispatchBinding }[];
+}
+
+function readCausalDispatchHistory(value: unknown): CausalDispatchHistory | null {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return null;
+  const history = value as CausalDispatchHistory;
+  if (history.schemaVersion !== 1 || !Array.isArray(history.entries) || history.entries.length > 3) return null;
+  let previous = 0;
+  for (const entry of history.entries) {
+    if (!entry || !Number.isSafeInteger(entry.generation) || entry.generation <= previous || entry.generation > 3
+      || !entry.binding || !Number.isSafeInteger(entry.binding.expiresAt)
+      || !createCausalDispatchBinding(entry.binding.source, entry.binding.capabilityDigest, entry.binding.expiresAt - 1, entry.binding.expiresAt)
+      || (entry.binding.publisher !== null && (typeof entry.binding.publisher !== "object" || Array.isArray(entry.binding.publisher)))) return null;
+    previous = entry.generation;
+  }
+  return history;
 }
 
 export interface PersistentExecutionStopRequest extends PersistentExecutionStop {
@@ -398,6 +440,9 @@ export class ExecutionCoordinator {
     if (request.method === "GET" && url.pathname === "/provider-capacity-wait") return this.readProviderCapacityWait();
     if (request.method !== "POST") return json({ error: "METHOD_NOT_ALLOWED" }, 405);
     if (url.pathname === "/acquire") return this.acquire(await request.json());
+    if (url.pathname === "/causal-dispatch/register") return this.registerCausalDispatch(await request.json());
+    if (url.pathname === "/causal-dispatch/claim") return this.claimCausalDispatch(await request.json());
+    if (url.pathname === "/causal-dispatch/verify") return this.verifyCausalDispatch(await request.json());
     if (url.pathname === "/handoff-or-acquire") return this.handoffOrAcquire(await request.json());
     if (url.pathname === "/dispatched") return this.markDispatched(await request.json());
     if (url.pathname === "/audit-dispatch-recovery") return this.recoverAuditDispatch(await request.json());
@@ -462,6 +507,72 @@ export class ExecutionCoordinator {
   private async readExecution(): Promise<Response> {
     const record = await this.ctx.storage.get<ExecutionRecord>("execution");
     return json({ record: record ?? null });
+  }
+
+  private async registerCausalDispatch(value: unknown): Promise<Response> {
+    if (!value || typeof value !== "object" || Array.isArray(value)) return json({ error: "CAUSAL_DISPATCH_REQUEST_INVALID" }, 400);
+    const request = value as CausalDispatchRegistration;
+    if (!validText(request.dedupeKey) || !validText(request.executionId)) return json({ error: "CAUSAL_DISPATCH_REQUEST_INVALID" }, 400);
+    const pending = createCausalDispatchBinding(request.source, request.capabilityDigest, request.now, request.expiresAt);
+    if (!pending) return json({ error: "CAUSAL_DISPATCH_REQUEST_INVALID" }, 400);
+    return this.mutateExecutionAtomically(async (storage) => {
+      const execution = await storage.get<ExecutionRecord>("execution");
+      if (!execution || execution.dedupeKey !== request.dedupeKey || execution.executionId !== request.executionId
+        || execution.state !== "LEASED" || execution.headSha !== pending.source.sha
+        || execution.leaseExpiresAt <= request.now || pending.expiresAt > execution.leaseExpiresAt) {
+        return json({ registered: false, reason: "CAUSAL_DISPATCH_EXECUTION_MISMATCH" }, 409);
+      }
+      const generation = execution.acquisitionCount ?? 1;
+      if (!Number.isSafeInteger(generation) || generation < 1 || generation > 3) return json({ registered: false, reason: "CAUSAL_DISPATCH_GENERATION_INVALID" }, 409);
+      const stored = await storage.get<unknown>("causal-dispatch-bindings");
+      const history = stored === undefined ? { schemaVersion: 1 as const, entries: [] } : readCausalDispatchHistory(stored);
+      if (!history) return json({ registered: false, reason: "CAUSAL_DISPATCH_STATE_INVALID" }, 409);
+      if (history.entries.some((entry) => entry.generation >= generation || entry.binding.publisher !== null)) {
+        return json({ registered: false, reason: "CAUSAL_DISPATCH_ALREADY_REGISTERED" }, 409);
+      }
+      await storage.put("causal-dispatch-bindings", { schemaVersion: 1, entries: [...history.entries, { generation, binding: pending }] });
+      return json({ registered: true }, 201);
+    });
+  }
+
+  private async claimCausalDispatch(value: unknown): Promise<Response> {
+    if (!value || typeof value !== "object" || Array.isArray(value)) return json({ error: "CAUSAL_DISPATCH_REQUEST_INVALID" }, 400);
+    const request = value as CausalDispatchClaim;
+    if (!validText(request.dedupeKey) || !validText(request.executionId)) return json({ error: "CAUSAL_DISPATCH_REQUEST_INVALID" }, 400);
+    return this.mutateExecutionAtomically(async (storage) => {
+      const execution = await storage.get<ExecutionRecord>("execution");
+      const history = readCausalDispatchHistory(await storage.get<unknown>("causal-dispatch-bindings"));
+      const generation = execution?.acquisitionCount ?? 1;
+      const binding = history?.entries.find((entry) => entry.generation === generation)?.binding;
+      if (!execution || !binding || execution.dedupeKey !== request.dedupeKey || execution.executionId !== request.executionId
+        || (execution.state !== "LEASED" && execution.state !== "HANDED_OFF") || execution.headSha !== binding.source?.sha
+        || !validSafeTimestamp(request.now) || execution.leaseExpiresAt <= request.now) {
+        return json({ claimed: false, reason: "CAUSAL_DISPATCH_EXECUTION_MISMATCH" }, 409);
+      }
+      const claimed = claimCausalDispatchBinding(binding, request.publisher, request.source, request.capabilityDigest, request.now);
+      if (!claimed) return json({ claimed: false, reason: "CAUSAL_DISPATCH_BINDING_REJECTED" }, 409);
+      await storage.put("causal-dispatch-bindings", { schemaVersion: 1, entries: history!.entries.map((entry) => entry.generation === generation ? { generation, binding: claimed } : entry) });
+      return json({ claimed: true }, 201);
+    });
+  }
+
+  private async verifyCausalDispatch(value: unknown): Promise<Response> {
+    if (!value || typeof value !== "object" || Array.isArray(value)) return json({ error: "CAUSAL_DISPATCH_REQUEST_INVALID" }, 400);
+    const request = value as CausalDispatchClaim;
+    if (!validText(request.dedupeKey) || !validText(request.executionId)) return json({ error: "CAUSAL_DISPATCH_REQUEST_INVALID" }, 400);
+    return this.mutateExecutionAtomically(async (storage) => {
+      const execution = await storage.get<ExecutionRecord>("execution");
+      const history = readCausalDispatchHistory(await storage.get<unknown>("causal-dispatch-bindings"));
+      const generation = execution?.acquisitionCount ?? 1;
+      const binding = history?.entries.find((entry) => entry.generation === generation)?.binding;
+      if (!execution || !binding || execution.dedupeKey !== request.dedupeKey || execution.executionId !== request.executionId
+        || (execution.state !== "LEASED" && execution.state !== "HANDED_OFF") || execution.headSha !== binding.source?.sha
+        || !validSafeTimestamp(request.now) || execution.leaseExpiresAt <= request.now
+        || !verifyClaimedCausalDispatchBinding(binding, request.publisher, request.source, request.capabilityDigest, request.now)) {
+        return json({ verified: false, reason: "CAUSAL_DISPATCH_BINDING_REJECTED" }, 409);
+      }
+      return json({ verified: true }, 200);
+    });
   }
 
   private async markDispatched(value: unknown): Promise<Response> {
@@ -1113,6 +1224,37 @@ function validExecutionTelemetrySummary(value: unknown): value is AutopilotExecu
 export interface ExecutionCoordinatorNamespace {
   idFromName(name: string): DurableObjectIdLike;
   get(id: DurableObjectIdLike): DurableObjectStubLike;
+}
+
+/** Coordinator-only calls; HTTP routes must authenticate and verify GitHub identities before invoking them. */
+export async function registerCausalDispatchBinding(namespace: ExecutionCoordinatorNamespace, input: CausalDispatchRegistration): Promise<boolean> {
+  const stub = namespace.get(namespace.idFromName(input.dedupeKey));
+  const response = await stub.fetch("https://execution-coordinator/causal-dispatch/register", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(input) });
+  if (response.status === 409) return false;
+  if (response.status !== 201) throw new Error("CAUSAL_DISPATCH_REGISTRATION_FAILED");
+  const body = await response.json() as { registered?: unknown };
+  if (body.registered !== true) throw new Error("CAUSAL_DISPATCH_REGISTRATION_FAILED");
+  return true;
+}
+
+export async function claimRegisteredCausalDispatch(namespace: ExecutionCoordinatorNamespace, input: CausalDispatchClaim): Promise<boolean> {
+  const stub = namespace.get(namespace.idFromName(input.dedupeKey));
+  const response = await stub.fetch("https://execution-coordinator/causal-dispatch/claim", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(input) });
+  if (response.status === 409) return false;
+  if (response.status !== 201) throw new Error("CAUSAL_DISPATCH_CLAIM_FAILED");
+  const body = await response.json() as { claimed?: unknown };
+  if (body.claimed !== true) throw new Error("CAUSAL_DISPATCH_CLAIM_FAILED");
+  return true;
+}
+
+export async function verifyRegisteredCausalDispatch(namespace: ExecutionCoordinatorNamespace, input: CausalDispatchClaim): Promise<boolean> {
+  const stub = namespace.get(namespace.idFromName(input.dedupeKey));
+  const response = await stub.fetch("https://execution-coordinator/causal-dispatch/verify", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(input) });
+  if (response.status === 409) return false;
+  if (response.status !== 200) throw new Error("CAUSAL_DISPATCH_VERIFICATION_FAILED");
+  const body = await response.json() as { verified?: unknown };
+  if (body.verified !== true) throw new Error("CAUSAL_DISPATCH_VERIFICATION_FAILED");
+  return true;
 }
 
 export async function acquirePersistentExecution(namespace: ExecutionCoordinatorNamespace, input: PersistentExecutionAcquireRequest): Promise<{ acquired: boolean; reason?: string; nextRetryAt?: number }> {

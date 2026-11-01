@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { MAX_SCHEDULED_CODING_ATTEMPTS, runScheduledEvolutionCoding } from "./scheduledEvolutionCoding";
-import { ExecutionCoordinator, readPersistentExecution, releasePersistentExecution, type ExecutionCoordinatorNamespace } from "./executionCoordinator";
+import { ExecutionCoordinator, readPersistentExecution, type ExecutionCoordinatorNamespace } from "./executionCoordinator";
 
 const MAIN_SHA = "a".repeat(40);
 const RUN_ID = 9001;
@@ -49,17 +49,10 @@ const candidates = [{
   completed_at: new Date(NOW - 60_000).toISOString(),
 }];
 
-test("the scheduler stops re-dispatching the same unfixable failure after the attempt ceiling", async () => {
+test("generic workflow failures never acquire attempts or dispatch without causal evidence", async () => {
   const ns = namespace();
   let dispatches = 0;
-  const fetchImpl = (async (input: RequestInfo | URL) => {
-    if (String(input).endsWith("/branches/main")) return new Response(JSON.stringify({ commit: { sha: MAIN_SHA } }), { status: 200 });
-    if (String(input).endsWith("/dispatches")) {
-      dispatches += 1;
-      return new Response(null, { status: 204 });
-    }
-    return new Response("not found", { status: 404 });
-  }) as typeof fetch;
+  const fetchImpl = (async () => { dispatches += 1; return new Response(null, { status: 204 }); }) as typeof fetch;
 
   const outcomes = [];
   for (let tick = 0; tick < MAX_SCHEDULED_CODING_ATTEMPTS + 2; tick += 1) {
@@ -72,25 +65,16 @@ test("the scheduler stops re-dispatching the same unfixable failure after the at
       workflowRunId: RUN_ID,
     }, fetchImpl);
     outcomes.push(outcome);
-    if (outcome.status === "EXECUTION_ACCEPTED") {
-      // The consumer fails closed and releases the lease, exactly as the failed repairs did.
-      const workIdentity = (outcome.selectedSignalIds[0] ?? "").replace(/[^A-Za-z0-9_.:-]+/g, "-").slice(0, 180);
-      const dedupeKey = `evolve-coding:${MAIN_SHA}:${workIdentity}`;
-      const record = await readPersistentExecution(ns, dedupeKey);
-      assert.ok(record, "dispatched work keeps a durable record");
-      await releasePersistentExecution(ns, { dedupeKey: record.dedupeKey, executionId: record.executionId, now: now + 1_000 });
-    }
+    assert.equal(outcome.status, "ABSTAINED");
+    assert.equal(outcome.reason, "workflow-failure-causal-evidence-unverified");
   }
 
-  assert.equal(dispatches, MAX_SCHEDULED_CODING_ATTEMPTS);
-  assert.deepEqual(outcomes.slice(0, MAX_SCHEDULED_CODING_ATTEMPTS).map((outcome) => outcome.status), Array(MAX_SCHEDULED_CODING_ATTEMPTS).fill("EXECUTION_ACCEPTED"));
-  for (const outcome of outcomes.slice(MAX_SCHEDULED_CODING_ATTEMPTS)) {
-    assert.equal(outcome.status, "DUPLICATE_SUPPRESSED");
-    assert.equal(outcome.reason, "ATTEMPT_LIMIT_REACHED");
-  }
+  assert.equal(dispatches, 0);
+  assert.equal(outcomes.length, MAX_SCHEDULED_CODING_ATTEMPTS + 2);
+  assert.equal(await readPersistentExecution(ns, `evolve-coding:${MAIN_SHA}:gha:ci:${MAIN_SHA}:failure`), null);
 });
 
-test("a new main SHA is a new identity and may be attempted again", async () => {
+test("a new main SHA does not make an unverified workflow failure code-actionable", async () => {
   const ns = namespace();
   let dispatches = 0;
   const nextSha = "c".repeat(40);
@@ -103,12 +87,13 @@ test("a new main SHA is a new identity and may be attempted again", async () => 
     return new Response("not found", { status: 404 });
   }) as typeof fetch;
   const outcome = await runScheduledEvolutionCoding({ NUSA_GITHUB_TOKEN: "token", NUSA_EXECUTION_COORDINATOR: ns }, {
-    candidates: [{ ...candidates[0], head_sha: nextSha }],
+    candidates: [{ ...candidates[0], id: RUN_ID + 1, head_sha: nextSha }],
     now: NOW,
     repository: "cinamoncandy/NUSA",
     mainSha: nextSha,
     workflowRunId: RUN_ID + 1,
   }, fetchImpl);
-  assert.equal(outcome.status, "EXECUTION_ACCEPTED");
-  assert.equal(dispatches, 1);
+  assert.equal(outcome.status, "ABSTAINED");
+  assert.equal(outcome.reason, "workflow-failure-causal-evidence-unverified");
+  assert.equal(dispatches, 0);
 });

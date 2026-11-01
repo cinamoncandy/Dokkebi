@@ -1,6 +1,7 @@
 id: WO-RESEARCH-20261014-ORDERBOOK-STUDY
 title: "Pre-registered ORDERBOOK+INTRADAY+ALL_KRW+ML study, run on the host by the existing Research service"
-status: PRE_REGISTERED
+status: COMPLETED
+outcome: INSUFFICIENT_DATA
 priority: P0
 authority_impact: none
 repository: cinamoncandy/NUSA
@@ -10,10 +11,17 @@ owner_decision: "2026-10-14 in chat: option A (collect all-KRW order books; run 
 design: "scripts/run-orderbook-study.js header, committed before any order-book row was examined. Span 2026-10-15..2026-10-28 (train 8 days, validation 2, holdout 4); 3 configurations (lambda); bar p < 0.05/195."
 execution: "scripts/run-cloud-research-snapshot.js spawns it once per daily nusa-research run (read-only, 600 s timeout, never blocks Research); it prints WAITING_DATA until 2026-10-29T02:00Z, then one deterministic result line. oracle-host-diagnose publishes the latest line as the diag-summary annotation field orderbook_study (status code plus numbers/booleans only)."
 collector_deployment: "2026-10-14 01:22Z release 2904e3353 (#2688): /health orderBookCollector 295 markets, about 280 samples per minute, 0 failures; host disk 90% (4.7 GB free), memory 410 MB available; event-loop stalls settled after startup."
-next: "After 2026-10-29: dispatch oracle-host-diagnose, read orderbook_study, record the result (pass or fail) in docs/research-ledger/experiments.json and regenerate the snapshot. A PASS qualifies only a forward SHADOW test."
+next: "Closed on 2026-10-31 as INSUFFICIENT_DATA (see outcome_20261031). No ledger entry: the study never reached a holdout verdict. Any new order-book study must be pre-registered on data collected from now on, with a training-window hour-coverage check before it starts."
 safety:
   paper_only: true
   liveAuthority: NONE
   productionMutationAllowed: false
   aiAuthority: ZERO_AUTHORITY
 data_access_addendum_20261021: "scripts/run-orderbook-study.js reads research_orderbook_samples and, since migration 032, research_orderbook_study_rows as one source (scripts/lib/orderBookSource.js), because the collector prunes books older than 14 days and the first run after 2026-10-29 would otherwise have lost training day 10-15. No rule, threshold, split or bar changed; WO-RESEARCH-20261021-ORDERBOOK-RETENTION proves the same numbers on pruned and unpruned data."
+outcome_20261031:
+  result: "ORDERBOOK_STUDY status=INSUFFICIENT_DATA markets=301 eligible=0 (service journal 2026-10-30 and 2026-10-31, operator's read-only report)."
+  cause: "Training-window hour coverage: KRW-XRP 115 of 192 hours (59.9%) against the pre-registered >= 90%; median spread 5.66 bp passes. The same 115 / 192 on the migration snapshot, so the gap predates the move to the new host."
+  rules_unchanged: true
+  not_done: "No rule, threshold or window was changed, no hour was filled or generated, no result file was written or copied, the study was not re-run."
+  unverified: "The old host's disk and its 2026-10-29 journal line (host offline). CORE did not read the host; the figures are the operator's."
+  handoff: .aipos/handoffs/2026-10-31-orderbook-study-insufficient-data.md

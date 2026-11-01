@@ -32,6 +32,28 @@ interface JwtClaims {
   readonly ref?: unknown;
   readonly event_name?: unknown;
   readonly workflow_ref?: unknown;
+  readonly sha?: unknown;
+  readonly run_id?: unknown;
+  readonly run_attempt?: unknown;
+}
+
+/** Identity extracted only after signature and the coding workflow policy pass. */
+export interface VerifiedCodingPublisherIdentity {
+  readonly repository: string;
+  readonly workflowRef: string;
+  readonly ref: string;
+  readonly sha: string;
+  readonly runId: string;
+  readonly runAttempt: string;
+  readonly event: string;
+}
+
+export interface SourceExecutionIdentity {
+  readonly repository: string;
+  readonly workflowPath: string;
+  readonly sha: string;
+  readonly runId: string;
+  readonly runAttempt: string;
 }
 
 interface JsonWebKeySet {
@@ -134,7 +156,7 @@ async function verifyWithPolicy(
   fetchImpl: FetchImpl,
   nowSeconds: number,
   audience: string,
-): Promise<void> {
+): Promise<JwtClaims> {
   const parts = token.split(".");
   if (parts.length !== 3 || parts.some((part) => !part)) fail(policy, "TOKEN_INVALID");
   const [encodedHeader, encodedClaims, encodedSignature] = parts;
@@ -167,6 +189,7 @@ async function verifyWithPolicy(
   const verified = await crypto.subtle.verify("RSASSA-PKCS1-v1_5", key, signature, signed);
   if (!verified) fail(policy, "SIGNATURE_INVALID");
   assertClaims(claims, allowedRepository, nowSeconds, audience, policy);
+  return claims;
 }
 
 export async function verifyGithubActionsOidcToken(
@@ -176,7 +199,137 @@ export async function verifyGithubActionsOidcToken(
   nowSeconds = Math.floor(Date.now() / 1000),
   audience = DEFAULT_AUDIENCE,
 ): Promise<void> {
-  return verifyWithPolicy(token, allowedRepository, CODING_RUNNER_POLICY, fetchImpl, nowSeconds, audience);
+  await verifyWithPolicy(token, allowedRepository, CODING_RUNNER_POLICY, fetchImpl, nowSeconds, audience);
+}
+
+/** This identity authenticates the publisher, not the cause or source of a failure. */
+export async function verifyGithubCodingPublisherIdentity(
+  token: string,
+  allowedRepository: string,
+  fetchImpl: FetchImpl = fetch as unknown as FetchImpl,
+  nowSeconds = Math.floor(Date.now() / 1000),
+  audience = DEFAULT_AUDIENCE,
+): Promise<VerifiedCodingPublisherIdentity> {
+  const claims = await verifyWithPolicy(token, allowedRepository, CODING_RUNNER_POLICY, fetchImpl, nowSeconds, audience);
+  if (typeof claims.sha !== "string" || !/^[a-f0-9]{40}$/i.test(claims.sha)) fail(CODING_RUNNER_POLICY, "SHA_INVALID");
+  if (typeof claims.run_id !== "string" || !/^[1-9][0-9]{0,19}$/.test(claims.run_id)) fail(CODING_RUNNER_POLICY, "RUN_ID_INVALID");
+  if (typeof claims.run_attempt !== "string" || !/^[1-9][0-9]{0,9}$/.test(claims.run_attempt)) fail(CODING_RUNNER_POLICY, "RUN_ATTEMPT_INVALID");
+  return Object.freeze({ repository: allowedRepository, workflowRef: claims.workflow_ref as string, ref: claims.ref as string,
+    sha: claims.sha.toLowerCase(), runId: claims.run_id, runAttempt: claims.run_attempt, event: claims.event_name as string });
+}
+
+/** Cross-check the publisher's signed claims against its GitHub run, not a client body.
+ * This alone does not authorize publication for any source run. */
+export async function verifyGithubCodingPublisherRun(
+  identity: VerifiedCodingPublisherIdentity,
+  token: string,
+  fetchImpl: FetchImpl = fetch as unknown as FetchImpl,
+): Promise<void> {
+  if (!token.trim() || !/^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+$/.test(identity.repository)
+    || !/^[1-9][0-9]{0,19}$/.test(identity.runId)) throw new Error("CODING_PUBLISHER_RUN_IDENTITY_INVALID");
+  let response: JsonResponse;
+  try {
+    response = await fetchImpl(`https://api.github.com/repos/${identity.repository}/actions/runs/${identity.runId}/attempts/${identity.runAttempt}`, {
+      headers: { accept: "application/vnd.github+json", authorization: `Bearer ${token}`, "user-agent": "nusa-autopilot-worker", "x-github-api-version": "2022-11-28" },
+    });
+  } catch {
+    throw new Error("CODING_PUBLISHER_RUN_UNAVAILABLE");
+  }
+  if (!response.ok) throw new Error("CODING_PUBLISHER_RUN_UNAVAILABLE");
+  let run: Record<string, unknown> | null;
+  try { run = object(await response.json()); } catch { throw new Error("CODING_PUBLISHER_RUN_UNAVAILABLE"); }
+  const repository = object(run?.repository);
+  if (!run || String(run.id) !== identity.runId || String(run.run_attempt) !== identity.runAttempt
+    || repository?.full_name !== identity.repository || run.path !== CODING_RUNNER_WORKFLOW
+    || run.head_sha !== identity.sha || run.head_branch !== "main" || run.event !== identity.event) {
+    throw new Error("CODING_PUBLISHER_RUN_MISMATCH");
+  }
+}
+
+/** Source run identity is distinct from publisher identity and carries no causal authority. */
+export async function verifyGithubCodingSourceRun(
+  source: SourceExecutionIdentity,
+  allowedRepository: string,
+  token: string,
+  fetchImpl: FetchImpl = fetch as unknown as FetchImpl,
+): Promise<void> {
+  if (!token.trim() || source.repository !== allowedRepository
+    || !/^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+$/.test(source.repository)
+    || source.workflowPath !== ".github/workflows/ci.yml"
+    || source.workflowPath !== ".github/workflows/ci.yml"
+    || !/^[a-f0-9]{40}$/.test(source.sha)
+    || !/^[1-9][0-9]{0,19}$/.test(source.runId)
+    || !/^[1-9][0-9]{0,9}$/.test(source.runAttempt)) throw new Error("CODING_SOURCE_IDENTITY_INVALID");
+  let response: JsonResponse;
+  try {
+    response = await fetchImpl(`https://api.github.com/repos/${source.repository}/actions/runs/${source.runId}/attempts/${source.runAttempt}`, {
+      headers: { accept: "application/vnd.github+json", authorization: `Bearer ${token}`, "user-agent": "nusa-autopilot-worker", "x-github-api-version": "2022-11-28" },
+    });
+  } catch { throw new Error("CODING_SOURCE_RUN_UNAVAILABLE"); }
+  if (!response.ok) throw new Error("CODING_SOURCE_RUN_UNAVAILABLE");
+  let run: Record<string, unknown> | null;
+  try { run = object(await response.json()); } catch { throw new Error("CODING_SOURCE_RUN_UNAVAILABLE"); }
+  if (!run || String(run.id) !== source.runId || String(run.run_attempt) !== source.runAttempt
+    || object(run.repository)?.full_name !== source.repository || run.path !== source.workflowPath
+    || run.head_sha !== source.sha || run.head_branch !== "main" || run.event !== "push"
+    || run.status !== "completed" || (run.conclusion !== "failure" && run.conclusion !== "timed_out")) {
+    throw new Error("CODING_SOURCE_RUN_MISMATCH");
+  }
+}
+
+/** Cross-checks the protected producer jobs and same-run signed artifact through GitHub's API. */
+export async function verifyGithubCausalProducerEvidence(
+  source: SourceExecutionIdentity,
+  allowedRepository: string,
+  token: string,
+  fetchImpl: FetchImpl = fetch as unknown as FetchImpl,
+): Promise<void> {
+  if (!token.trim() || source.repository !== allowedRepository
+    || !/^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+$/.test(source.repository)
+    || !/^[a-f0-9]{40}$/.test(source.sha)
+    || !/^[1-9][0-9]{0,19}$/.test(source.runId)
+    || !/^[1-9][0-9]{0,9}$/.test(source.runAttempt)) throw new Error("CODING_CAUSAL_PRODUCER_IDENTITY_INVALID");
+
+  const headers = {
+    accept: "application/vnd.github+json",
+    authorization: `Bearer ${token}`,
+    "user-agent": "nusa-autopilot-worker",
+    "x-github-api-version": "2022-11-28",
+  };
+  let jobsResponse: JsonResponse;
+  try {
+    jobsResponse = await fetchImpl(`https://api.github.com/repos/${source.repository}/actions/runs/${source.runId}/attempts/${source.runAttempt}/jobs?per_page=100`, { headers });
+  } catch { throw new Error("CODING_CAUSAL_PRODUCER_JOBS_UNAVAILABLE"); }
+  if (!jobsResponse.ok) throw new Error("CODING_CAUSAL_PRODUCER_JOBS_UNAVAILABLE");
+  let jobsPayload: Record<string, unknown> | null;
+  try { jobsPayload = object(await jobsResponse.json()); } catch { throw new Error("CODING_CAUSAL_PRODUCER_JOBS_UNAVAILABLE"); }
+  const jobs = Array.isArray(jobsPayload?.jobs) ? jobsPayload.jobs.map(object) : [];
+  if (!jobsPayload || jobsPayload.total_count !== jobs.length || jobs.length > 100) throw new Error("CODING_CAUSAL_PRODUCER_JOBS_MISMATCH");
+  const matchesJob = (name: string, conclusion: string) => jobs.filter((job) => job?.name === name
+    && String(job.run_id) === source.runId && String(job.run_attempt) === source.runAttempt
+    && job.head_sha === source.sha && job.status === "completed" && job.conclusion === conclusion);
+  if (matchesJob("causal-regression-contract", "failure").length !== 1
+    || matchesJob("attest-causal-regression", "success").length !== 1) throw new Error("CODING_CAUSAL_PRODUCER_JOBS_MISMATCH");
+
+  let artifactsResponse: JsonResponse;
+  try {
+    artifactsResponse = await fetchImpl(`https://api.github.com/repos/${source.repository}/actions/runs/${source.runId}/artifacts?per_page=100`, { headers });
+  } catch { throw new Error("CODING_CAUSAL_PRODUCER_ARTIFACT_UNAVAILABLE"); }
+  if (!artifactsResponse.ok) throw new Error("CODING_CAUSAL_PRODUCER_ARTIFACT_UNAVAILABLE");
+  let artifactsPayload: Record<string, unknown> | null;
+  try { artifactsPayload = object(await artifactsResponse.json()); } catch { throw new Error("CODING_CAUSAL_PRODUCER_ARTIFACT_UNAVAILABLE"); }
+  const artifacts = Array.isArray(artifactsPayload?.artifacts) ? artifactsPayload.artifacts.map(object) : [];
+  if (!artifactsPayload || artifactsPayload.total_count !== artifacts.length || artifacts.length > 100) throw new Error("CODING_CAUSAL_PRODUCER_ARTIFACT_MISMATCH");
+  const expectedName = `nusa-causal-attestation-${source.runAttempt}`;
+  const matchingArtifacts = artifacts.filter((artifact) => artifact?.name === expectedName
+    && artifact.expired === false
+    && String(object(artifact.workflow_run)?.id) === source.runId
+    && object(artifact.workflow_run)?.head_sha === source.sha
+    && typeof artifact.id === "number" && Number.isSafeInteger(artifact.id) && artifact.id > 0
+    && typeof artifact.size_in_bytes === "number" && Number.isSafeInteger(artifact.size_in_bytes)
+    && artifact.size_in_bytes > 0 && artifact.size_in_bytes <= 2 * 1024 * 1024
+    && typeof artifact.digest === "string" && /^sha256:[a-f0-9]{64}$/.test(artifact.digest));
+  if (matchingArtifacts.length !== 1) throw new Error("CODING_CAUSAL_PRODUCER_ARTIFACT_MISMATCH");
 }
 
 export async function verifyGithubEventBridgeOidcToken(
@@ -186,7 +339,7 @@ export async function verifyGithubEventBridgeOidcToken(
   nowSeconds = Math.floor(Date.now() / 1000),
   audience = DEFAULT_AUDIENCE,
 ): Promise<void> {
-  return verifyWithPolicy(token, allowedRepository, EVENT_BRIDGE_POLICY, fetchImpl, nowSeconds, audience);
+  await verifyWithPolicy(token, allowedRepository, EVENT_BRIDGE_POLICY, fetchImpl, nowSeconds, audience);
 }
 
 export async function verifyGithubReleaseControlOidcToken(
@@ -196,5 +349,5 @@ export async function verifyGithubReleaseControlOidcToken(
   nowSeconds = Math.floor(Date.now() / 1000),
   audience = DEFAULT_AUDIENCE,
 ): Promise<void> {
-  return verifyWithPolicy(token, allowedRepository, RELEASE_CONTROL_POLICY, fetchImpl, nowSeconds, audience);
+  await verifyWithPolicy(token, allowedRepository, RELEASE_CONTROL_POLICY, fetchImpl, nowSeconds, audience);
 }

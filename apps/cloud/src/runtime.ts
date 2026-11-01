@@ -44,6 +44,7 @@ import {
   type PersonalPaperRuntimeHeartbeat,
   type PersonalPaperLossLimit,
   type PersonalPaperLearningFunnel,
+  type PersonalPaperLearningLoopVerdict,
   type PersonalPaperLearningLoop,
   type PersonalPaperOrderBookStudy,
   type PersonalPaperTodayRealized
@@ -98,6 +99,9 @@ import {
 } from "./engineeringOperatingReadModel";
 import { composeResearchExperiments } from "./researchExperimentComposition";
 import { readOrderBookStudyDisplay } from "./researchStudyResult";
+import { learningLoopVerdict } from "./learningLoopVerdict";
+import { learningPipelineProjection } from "./learningPipelineStage";
+import { OrderBookCoverageWatch } from "./orderBookCoverage";
 
 export interface CloudRuntimeDashboardHydratorLike { hydrate(provider: CloudDashboardStateProvider, observations?: readonly IntelligenceObservation[]): void; }
 export interface CloudRuntimeMarketDataClientLike { subscribe(markets: readonly string[]): void; start(): void; stop(): void; }
@@ -329,6 +333,17 @@ export function startCloudRuntime(
       return realizedPnlKrw == null ? {} : { todayRealized: Object.freeze({ realizedPnlKrw, evaluatedAt: now }) };
     } catch { return {}; }
   };
+  // Display only: the same loop verdict /health publishes, for the 학습 tab. Computed from the liveness snapshot the dashboard server also uses
+  // (assigned where that snapshot is defined); fixed labels only, and nothing at all when it cannot be built.
+  let livenessSnapshotForApp: (() => Readonly<Record<string, unknown>>) | undefined;
+  const loopVerdictForApp = (): { loopVerdict?: PersonalPaperLearningLoopVerdict } => {
+    try {
+      const liveness = livenessSnapshotForApp?.();
+      if (liveness === undefined) return {};
+      const v = learningLoopVerdict(liveness, learningPipelineProjection(liveness, Date.now()));
+      return { loopVerdict: Object.freeze({ verdict: v.verdict, firstBrokenTransition: v.firstBrokenTransition, firstBrokenCode: v.firstBrokenCode, cycleWaitingFor: v.cycleWaitingFor }) };
+    } catch { return {}; }
+  };
   // Display only: the Research funnel from the closed-learning loop status (meta-learning ledger). Integers only; a failing read is ignored.
   const learningFunnelHeartbeat = (): { learningFunnel?: PersonalPaperLearningFunnel } => {
     try {
@@ -339,7 +354,7 @@ export function startCloudRuntime(
       const [configurations, discoveryPasses, holdoutPasses, cyclesEvaluated] = values as number[];
       // The ledger sums the two separately; a holdout count above discovery cannot be drawn as a funnel, so nothing is sent.
       if (discoveryPasses > configurations || holdoutPasses > discoveryPasses) return {};
-      return { learningFunnel: Object.freeze({ configurations, discoveryPasses, holdoutPasses, cyclesEvaluated, evaluatedAt: Date.now() }) };
+      return { learningFunnel: Object.freeze({ configurations, discoveryPasses, holdoutPasses, cyclesEvaluated, ...loopVerdictForApp(), evaluatedAt: Date.now() }) };
     } catch { return {}; }
   };
   // Display only: measured learning-loop numbers for the app. Each value is copied only when it is a safe integer in range and consistent with its
@@ -754,6 +769,9 @@ export function startCloudRuntime(
   const microstructureLiveness = () => { try { return microstructureRecorder == null ? {} : { microstructureRecorder: microstructureRecorder.status() }; } catch { return {}; } };
   // Daily stored-data integrity probe result written by the host Research service (display only; read each /health).
   const dataIntegrityLiveness = () => { try { const value = env.NUSA_CLOUD_STATE_DB_PATH === undefined ? undefined : readDataIntegrityResult(config.cloudStateDbPath); return value == null ? {} : { dataIntegrity: value }; } catch { return {}; } };
+  // Display only: order-book hour coverage over the last 192 hours (the study's own definition), so a gap shows while it can still be repaired.
+  const orderBookCoverageWatch = env.NUSA_CLOUD_STATE_DB_PATH === undefined ? undefined : new OrderBookCoverageWatch(config.cloudStateDbPath, (env.NUSA_RESEARCH_MARKETS ?? "KRW-BTC").split(",").map((m) => m.trim()).find((m) => m !== "") ?? "KRW-BTC");
+  const orderBookCoverageLiveness = () => { try { const value = orderBookCoverageWatch?.snapshot(); return value == null ? {} : { orderBookCoverage: value }; } catch { return {}; } };
   const futuresCollectorLiveness = () => { try { return futuresCollector == null ? {} : { futuresCollector: futuresCollector.status() }; } catch { return {}; } };
   const orderBookCollectorLiveness = () => { try { return orderBookCollector == null ? {} : { orderBookCollector: orderBookCollector.status() }; } catch { return {}; } };
   const closedLearningLiveness = () => { let status = null; try { status = closedLearningStatus?.() ?? null; } catch { status = null; } return status == null ? {} : { closedLearningLoop: status }; };
@@ -822,7 +840,7 @@ export function startCloudRuntime(
     // The PAPER loop runs off a persistent ticker subscription, so its liveness is only visible
     // from these counters. Publishing them makes 24-hour operation something that can be checked
     // rather than assumed from the process being up.
-    runtimeLiveness: () => Object.freeze({
+    runtimeLiveness: (livenessSnapshotForApp = () => Object.freeze({
       // The exact commit this process was built from, so main = deployed = running can be read directly.
       sourceCommitSha: (env.NUSA_SOURCE_COMMIT_SHA ?? env.NUSA_SOURCE_COMMIT ?? "").trim(),
       startedAt: heartbeat.startedAt,
@@ -847,12 +865,13 @@ export function startCloudRuntime(
       ...researchGapFillLiveness(),
       ...microstructureLiveness(),
       ...orderBookCollectorLiveness(),
+      ...orderBookCoverageLiveness(),
       ...futuresCollectorLiveness(),
       ...dataIntegrityLiveness(),
       ...paperLedgerLiveness(),
       ...researchIntervalLiveness(),
       ...closedLearningLiveness()
-    }),
+    })),
     runtimeHealth: () => projectPaperRuntimeHealth(
       Object.freeze({ ...heartbeat }),
       Date.now(),
