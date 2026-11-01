@@ -13,7 +13,7 @@ function jobBlock(job, nextJob) {
 
 test("only the isolated attestation job receives artifact signing permissions", () => {
   const observer = jobBlock("causal-regression-contract", "attest-causal-regression");
-  const attestor = jobBlock("attest-causal-regression", "test");
+  const attestor = jobBlock("attest-causal-regression", "causal-positive-verification");
   assert.doesNotMatch(observer, /id-token:\s*write|attestations:\s*write|artifact-metadata:\s*write/);
   assert.match(attestor, /id-token:\s*write/);
   assert.match(attestor, /attestations:\s*write/);
@@ -51,4 +51,26 @@ test("consumer reads the same source-run attestation artifact and requires serve
   const claim = fs.readFileSync("scripts/autopilot-causal-claim.js", "utf8");
   assert.match(claim, /attestationBundle/);
   assert.match(claim, /causalAttestationVerified !== true/);
+});
+
+test("positive verification attestation is manual, main-only, and domain-separated from production causal evidence", () => {
+  const producer = jobBlock("causal-positive-verification", "attest-causal-positive-verification");
+  const attestor = jobBlock("attest-causal-positive-verification", "verify-causal-positive-verification");
+  const consumer = jobBlock("verify-causal-positive-verification", "test");
+  assert.match(producer, /github\.event_name == 'workflow_dispatch'/);
+  assert.match(producer, /github\.ref == 'refs\/heads\/main'/);
+  assert.doesNotMatch(producer, /id-token:\s*write|attestations:\s*write|artifact-metadata:\s*write/);
+  assert.match(attestor, /id-token:\s*write/);
+  assert.match(attestor, /attestations:\s*write/);
+  assert.match(attestor, /artifact-metadata:\s*write/);
+  assert.match(attestor, /NUSA_CAUSAL_VERIFICATION_ONLY_V1/);
+  assert.match(attestor, /causal-regression-verification\/v1/);
+  assert.doesNotMatch(attestor, /CODE_ACTIONABLE/);
+  assert.match(consumer, /causal-positive-verification-verify\.js/);
+  assert.match(consumer, /actions:\s*read/);
+  const worker = fs.readFileSync("apps/autopilot/src/worker.ts", "utf8");
+  const verifier = fs.readFileSync("apps/autopilot/src/sigstoreCausalAttestation.ts", "utf8");
+  assert.doesNotMatch(worker, /verifyIsolatedCausalVerificationAttestation/);
+  assert.match(verifier, /const PREDICATE_TYPE = "https:\/\/github\.com\/cinamoncandy\/NUSA\/attestations\/causal-regression\/v1"/);
+  assert.match(verifier, /const VERIFICATION_PREDICATE_TYPE = "https:\/\/github\.com\/cinamoncandy\/NUSA\/attestations\/causal-regression-verification\/v1"/);
 });

@@ -265,3 +265,37 @@ bootstrap_staged_inclusion_20261031:
   commit_status: SUCCESSOR_SHA_CREATED; REMOTE_CI_PENDING
   next: "Push the local successor branch and open the canonical draft PR for exact-head CI/companions, then obtain governed independent review. Positive causal attestation and CODE_ACTIONABLE remain closed until post-inclusion real evidence passes."
   safety: PAPER_ONLY_LIVE_NONE_PRODUCTION_MUTATION_FALSE_REAL_ORDER_FALSE_REAL_TRANSFER_FALSE_AI_ZERO_AUTHORITY
+
+current_main_isolated_positive_verification_20261101:
+  observed_at_utc: "2026-11-01"
+  protected_main: dc9e4758515792a683d2b234a3cf20eca1508ca9
+  worktree: /workspace/nusa-1851-current-positive
+  branch: WO-AUTOPILOT-20261030-1851-CAUSAL-ADMISSION
+  canonical_source_policy: "Reconstructed only from current protected main and active work order; historical local WIP and validation snapshot were not copied or promoted."
+  remote_ownership: "Fresh open-PR inventory found no active #1851 implementation PR; Issue #1851 remains OPEN."
+  implementation:
+    - "Added a main-only manually dispatched isolated verification producer, separate attestor, and read-only same-run verifier jobs."
+    - "Separated the verification-only Sigstore predicate/type from production causal admission; production Worker does not call the isolated verifier."
+    - "Attestor checks exact producer identity, fixed mismatch shape, and recomputes failure, contract, and implementation fingerprints from the exact checked-out SHA."
+    - "Producer writes to the workflow-consumed RUNNER_TEMP path; added regression coverage."
+  validation:
+    isolated_full_test_suite: PASS_1324_FILES_AFTER_FINAL_FIXES
+    focused_tests: PASS_19
+    typecheck_root_and_mobile: PASS
+    validate_full: PASS
+    security_gate: PASS_HIGH_CRITICAL_ZERO_SECRETS_ZERO
+    lint_patch: PASS_0_ERRORS_47_WARNINGS
+    lint_exact_main_baseline: PASS_0_ERRORS_47_WARNINGS
+    lint_baseline_method: "Exact-main detached worktree; direct pinned ESLint and Node mobile lint using the same isolated dependency tree. pnpm wrapper refused an external node_modules symlink and no dependency mutation was attempted."
+    workflow_yaml_and_authority_validation: PASS
+    workflow_yaml_action_pins_inputs_authority: PASS
+    diff_check: PASS
+  current_status: LOCAL_IMPLEMENTATION_VALIDATED_PENDING_COMMIT_AND_EXACT_HEAD_CI
+  limitations:
+    - "Exact-head GitHub CI and independent review have not run."
+    - "Genuine GitHub-issued attestation requires governed protected-main inclusion and the authorized manual workflow dispatch."
+    - "Cloudflare Worker runtime positive verification has not run; local verification uses the shared verifier in Node."
+    - "Production CODE_ACTIONABLE remains NOT_ISSUED; CodingRunner positive E2E remains pending."
+    - "Four security audit/SBOM reports generated locally are retained as untracked evidence and excluded from implementation changes."
+  next: "Rerun focused and full validation after final fixes, validate AIPOS, inspect final diff, then commit/push only the canonical branch for exact-head CI and independent review."
+  safety: PAPER_ONLY_LIVE_NONE_PRODUCTION_MUTATION_FALSE_REAL_ORDER_FALSE_REAL_TRANSFER_FALSE_AI_ZERO_AUTHORITY

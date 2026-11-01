@@ -74,7 +74,8 @@ test("CI optimization preserves critical safety gates", () => {
     assert.ok(workflow.includes(`- name: ${step}`), `missing critical CI step: ${step}`);
   }
   assert.match(workflow, /run: pnpm run release:check:prepared/);
-  assert.match(workflow, /test:\n\s+name: test\n\s+needs: \[validation, coverage\]/);
+  assert.match(workflow, /test:\n\s+name: test\n\s+needs: \[validation, coverage, verify-causal-positive-verification\]/);
+  assert.match(workflow, /needs\.verify-causal-positive-verification\.result/);
 });
 
 

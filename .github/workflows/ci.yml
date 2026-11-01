@@ -8,6 +8,12 @@ on:
   pull_request:
     branches: [main]
   workflow_dispatch:
+    inputs:
+      run_causal_positive_verification:
+        description: Run the isolated, zero-authority causal attestation verification harness
+        type: boolean
+        required: false
+        default: false
 
 permissions:
   contents: read
@@ -482,9 +488,168 @@ jobs:
           if-no-files-found: error
           retention-days: 7
 
+  causal-positive-verification:
+    name: causal-positive-verification
+    if: ${{ github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main' && inputs.run_causal_positive_verification == true }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    outputs:
+      verification_status: ${{ steps.produce.outputs.verification_status }}
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+      - name: Enable pnpm via Corepack
+        run: |
+          corepack enable
+          corepack prepare pnpm@11.7.0 --activate
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: 24
+          cache: pnpm
+      - name: Install locked dependencies
+        run: pnpm install --frozen-lockfile
+      - name: Compile verification code
+        run: pnpm exec tsc -p tsconfig.json
+      - name: Produce isolated deterministic mismatch
+        id: produce
+        run: node scripts/causal-positive-verification-produce.js
+      - name: Upload verification predicate
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: nusa-causal-verification-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/nusa-causal-verification-${{ github.run_id }}-${{ github.run_attempt }}/verification.json
+          compression-level: 0
+          if-no-files-found: error
+          retention-days: 1
+
+  attest-causal-positive-verification:
+    name: attest-causal-positive-verification
+    needs: causal-positive-verification
+    if: ${{ always() && needs.causal-positive-verification.result == 'success' && needs.causal-positive-verification.outputs.verification_status == 'OBSERVED_MISMATCH' && github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main' && inputs.run_causal_positive_verification == true }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      id-token: write
+      attestations: write
+      artifact-metadata: write
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+      - name: Download same-run isolated predicate only
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        with:
+          name: nusa-causal-verification-${{ github.run_attempt }}
+          path: causal-verification
+      - name: Validate exact verification identity and domain separation
+        env:
+          GH_REPOSITORY: ${{ github.repository }}
+          GH_SHA: ${{ github.sha }}
+          GH_RUN_ID: ${{ github.run_id }}
+          GH_RUN_ATTEMPT: ${{ github.run_attempt }}
+          GH_REF: ${{ github.ref }}
+          GH_EVENT_NAME: ${{ github.event_name }}
+          GH_WORKFLOW_REF: ${{ github.workflow_ref }}
+        run: |
+          node - <<'NODE'
+          const fs = require('node:fs');
+          const fail = (message) => { console.error(message); process.exit(1); };
+          let value;
+          try { value = JSON.parse(fs.readFileSync('causal-verification/verification.json', 'utf8')); }
+          catch { fail('verification predicate missing or malformed'); }
+          const producer = value.producer || {};
+          const observation = value.observation || {};
+          const exactKeys = (object, expected) => JSON.stringify(Object.keys(object).sort()) === JSON.stringify([...expected].sort());
+          if (!exactKeys(value, ['schemaVersion', 'domain', 'fixtureId', 'result', 'producer', 'observation', 'failureFingerprint', 'contractFingerprint', 'implementationFingerprint'])
+            || !exactKeys(producer, ['repository', 'workflowPath', 'workflowRef', 'workflowSha', 'ref', 'event', 'job', 'sha', 'runId', 'runAttempt'])
+            || !exactKeys(observation, ['contract', 'status', 'caseId', 'expected', 'observed'])) fail('unexpected verification field');
+          if (value.schemaVersion !== 1 || value.domain !== 'NUSA_CAUSAL_VERIFICATION_ONLY_V1'
+            || value.fixtureId !== 'repairable-workflow-known-mismatch-v1' || value.result !== 'OBSERVED_MISMATCH') fail('verification domain mismatch');
+          if (process.env.GH_REPOSITORY !== 'cinamoncandy/NUSA' || process.env.GH_EVENT_NAME !== 'workflow_dispatch'
+            || process.env.GH_REF !== 'refs/heads/main'
+            || process.env.GH_WORKFLOW_REF !== 'cinamoncandy/NUSA/.github/workflows/ci.yml@refs/heads/main') fail('workflow identity mismatch');
+          if (producer.repository !== process.env.GH_REPOSITORY || producer.workflowPath !== '.github/workflows/ci.yml'
+            || producer.workflowRef !== process.env.GH_WORKFLOW_REF || producer.workflowSha !== process.env.GH_SHA
+            || producer.ref !== process.env.GH_REF || producer.event !== process.env.GH_EVENT_NAME
+            || producer.job !== 'causal-positive-verification' || producer.sha !== process.env.GH_SHA
+            || String(producer.runId) !== process.env.GH_RUN_ID || String(producer.runAttempt) !== process.env.GH_RUN_ATTEMPT) fail('run binding mismatch');
+          if (observation.contract !== 'REPAIRABLE_WORKFLOW_POLICY_V1' || observation.status !== 'OBSERVED_MISMATCH'
+            || observation.caseId !== 'main-ci-failure' || observation.expected !== true || observation.observed !== false) fail('known mismatch not reproduced');
+          for (const key of ['failureFingerprint', 'contractFingerprint', 'implementationFingerprint']) {
+            if (!/^[a-f0-9]{64}$/.test(value[key] || '')) fail(`invalid ${key}`);
+          }
+          const crypto = require('node:crypto');
+          const hashFile = (file) => crypto.createHash('sha256').update(fs.readFileSync(file)).digest('hex');
+          const failureFingerprint = crypto.createHash('sha256').update(JSON.stringify(observation)).digest('hex');
+          if (value.failureFingerprint !== failureFingerprint
+            || value.contractFingerprint !== hashFile('apps/autopilot/src/causalRegressionContract.ts')
+            || value.implementationFingerprint !== hashFile('apps/autopilot/src/repairableWorkflowRun.ts')
+            || JSON.stringify(value).match(/(token|secret|capability|credential)/i)) fail('unsafe verification evidence');
+          NODE
+      - name: Attest verification-only predicate
+        uses: actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6 # v4.2.2
+        with:
+          subject-path: causal-verification/verification.json
+          predicate-type: https://github.com/cinamoncandy/NUSA/attestations/causal-regression-verification/v1
+          predicate-path: causal-verification/verification.json
+          bundle-path: causal-verification/attestation.json
+          push-to-registry: false
+          create-storage-record: false
+          show-summary: false
+      - name: Upload genuine verification bundle
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: nusa-causal-verification-attestation-${{ github.run_attempt }}
+          path: causal-verification/attestation.json
+          compression-level: 0
+          if-no-files-found: error
+          retention-days: 1
+
+  verify-causal-positive-verification:
+    name: verify-causal-positive-verification
+    needs: [causal-positive-verification, attest-causal-positive-verification]
+    if: ${{ always() && needs.causal-positive-verification.result == 'success' && needs.attest-causal-positive-verification.result == 'success' && github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main' && inputs.run_causal_positive_verification == true }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      actions: read
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+      - name: Enable pnpm via Corepack
+        run: |
+          corepack enable
+          corepack prepare pnpm@11.7.0 --activate
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: 24
+          cache: pnpm
+      - name: Install locked dependencies
+        run: pnpm install --frozen-lockfile
+      - name: Compile verifier
+        run: pnpm exec tsc -p tsconfig.json
+      - name: Download same-run verification attestation
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        with:
+          name: nusa-causal-verification-attestation-${{ github.run_attempt }}
+          path: causal-verification
+      - name: Verify genuine bundle in the isolated verification domain
+        env:
+          GITHUB_REPOSITORY: ${{ github.repository }}
+          GITHUB_SHA: ${{ github.sha }}
+          GITHUB_RUN_ID: ${{ github.run_id }}
+          GITHUB_RUN_ATTEMPT: ${{ github.run_attempt }}
+          GITHUB_TOKEN: ${{ github.token }}
+        run: node scripts/causal-positive-verification-verify.js causal-verification/attestation.json
+
   test:
     name: test
-    needs: [validation, coverage]
+    needs: [validation, coverage, verify-causal-positive-verification]
     if: always()
     runs-on: ubuntu-latest
     steps:
@@ -493,3 +658,8 @@ jobs:
         run: |
           [ "${{ needs.validation.result }}" = "success" ]
           [ "${{ needs.coverage.result }}" = "success" ]
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ] && [ "${{ inputs.run_causal_positive_verification }}" = "true" ]; then
+            [ "${{ needs.verify-causal-positive-verification.result }}" = "success" ]
+          else
+            [ "${{ needs.verify-causal-positive-verification.result }}" = "skipped" ]
+          fi

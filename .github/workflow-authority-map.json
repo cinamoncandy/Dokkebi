@@ -128,6 +128,15 @@
       "secrets": false,
       "environment": null
     },
+    "ci.yml:attest-causal-positive-verification": {
+      "write": [
+        "artifact-metadata",
+        "attestations",
+        "id-token"
+      ],
+      "secrets": false,
+      "environment": null
+    },
     "autopilot-execution-consumer.yml:release": {
       "write": [
         "contents",

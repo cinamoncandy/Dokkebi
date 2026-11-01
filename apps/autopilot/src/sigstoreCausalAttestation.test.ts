@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import test from "node:test";
-import { verifyCausalProducerAttestation } from "./sigstoreCausalAttestation";
+import { verifyCausalProducerAttestation, verifyIsolatedCausalVerificationAttestation } from "./sigstoreCausalAttestation";
 
 const fixturePath = join(process.cwd(), "apps/autopilot/src/test-fixtures/sigstore-upstream-valid.json");
 const source = Object.freeze({ repository: "cinamoncandy/NUSA", sha: "a".repeat(40), runId: "456", runAttempt: "1" });
@@ -15,6 +15,12 @@ test("cryptographically valid upstream Sigstore evidence is rejected when signer
   // This upstream fixture is a crypto control only; its publisher is deliberately not NUSA.
   await assert.rejects(verifyCausalProducerAttestation(readFixture().bundle, source), {
     message: "CAUSAL_ATTESTATION_SIGNER_REJECTED",
+  });
+});
+
+test("generic upstream attestation cannot enter the isolated NUSA verification domain", async () => {
+  await assert.rejects(verifyIsolatedCausalVerificationAttestation(readFixture().bundle, source), {
+    message: "ISOLATED_CAUSAL_VERIFICATION_REJECTED",
   });
 });
 
