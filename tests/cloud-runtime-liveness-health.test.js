@@ -157,7 +157,9 @@ test("the published evidence carries no financial or credential data", async () 
 test("the runtime publishes exactly the fields the contract allows", () => {
   const fs = require("node:fs");
   const runtime = fs.readFileSync("apps/cloud/src/runtime.ts", "utf8");
-  const start = runtime.indexOf("runtimeLiveness: () =>");
+  // The snapshot function may also be assigned to a local for the app heartbeat: `runtimeLiveness: (livenessSnapshotForApp = () => ...)`.
+  const found = /runtimeLiveness: (?:\(livenessSnapshotForApp = )?\(\) =>/.exec(runtime);
+  const start = found == null ? -1 : found.index;
   assert.ok(start > 0, "the runtime must wire its heartbeat into the server");
   const block = runtime.slice(start, runtime.indexOf("}),", start));
   for (const banned of ["price", "balance", "capital", "position", "token", "secret"]) {
