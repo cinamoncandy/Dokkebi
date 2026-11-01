@@ -106,6 +106,37 @@ test("secret scanning detects credentials that cross the fixed I/O chunk boundar
   }
 });
 
+test("large credential-heavy artifacts are rejected without retaining every secret finding", () => {
+  const { root, destination } = fixture();
+  const credentialSource = path.join(root, "credential-only");
+  fs.mkdirSync(credentialSource);
+  const credentialFile = path.join(credentialSource, "credential-heavy.log");
+  const secretValue = ["fixture", "secret", "value", "1234567890"].join("-");
+  const secretKey = ["api", "key"].join("_");
+  const line = Buffer.from(`${secretKey} = "${secretValue}"\n`);
+  const chunk = Buffer.alloc(1024 * 1024);
+  for (let offset = 0; offset < chunk.length; offset += line.length) line.copy(chunk, offset, 0, Math.min(line.length, chunk.length - offset));
+  const descriptor = fs.openSync(credentialFile, "wx", 0o600);
+  try {
+    for (let index = 0; index < 32; index += 1) fs.writeSync(descriptor, chunk);
+  } finally {
+    fs.closeSync(descriptor);
+  }
+
+  try {
+    const sourceScript = [
+      'const { createBackup } = require(process.argv[1]);',
+      'try { createBackup({ include: [`EVIDENCE:${process.argv[2]}`], destination: process.argv[3], "snapshot-id": "secret-heavy" }); process.exitCode = 2; }',
+      'catch (error) { if (error.message !== "backup contains no non-secret files") throw error; process.stdout.write("secret-rejected"); }'
+    ].join("\n");
+    const child = spawnSync(process.execPath, ["--max-old-space-size=64", "-e", sourceScript, path.resolve(__dirname, "../scripts/backup-restore.js"), credentialSource, destination], { encoding: "utf8", timeout: 30000 });
+    assert.equal(child.status, 0, child.stderr);
+    assert.equal(child.stdout, "secret-rejected");
+  } finally {
+    cleanup(root);
+  }
+});
+
 test("large binary DATABASE_SNAPSHOT above Node's maximum string length backs up and verifies with bounded chunks", () => {
   const { root, source, destination } = fixture();
   const largeFile = path.join(source, "state.sqlite");
@@ -206,6 +237,61 @@ test("verify-only drill checks read-only SQLite integrity on the copied snapshot
     }
   } finally {
     if (database) database.close();
+    cleanup(root);
+  }
+});
+
+test("verify-only drill checks SQLite databases and skips their verified SHA-256 sidecars", () => {
+  const { root, destination } = fixture();
+  const source = path.join(root, "database-snapshots");
+  const databasePath = path.join(source, "daily-cloud-state-2026-11-01T00-00-00-000Z.db");
+  const target = path.join(root, "sidecar-drill-target");
+  const drillLog = path.join(root, "sidecar-drill-log.json");
+  fs.mkdirSync(source);
+  const database = new DatabaseSync(databasePath);
+  database.exec("CREATE TABLE recovery_probe (id INTEGER PRIMARY KEY, value TEXT NOT NULL); INSERT INTO recovery_probe(value) VALUES ('unchanged');");
+  database.close();
+  const digest = hashFile(databasePath);
+  fs.writeFileSync(`${databasePath}.sha256`, `${digest}  ${path.basename(databasePath)}\n`);
+
+  try {
+    const backup = createBackup({ include: [`DATABASE_SNAPSHOT:${source}`], destination, "snapshot-id": "snapshot-with-sidecar" });
+    assert.equal(backup.manifest.entries.length, 2);
+    const databaseEntry = backup.manifest.entries.find((entry) => !entry.path.endsWith(".sha256"));
+    const sidecarEntry = backup.manifest.entries.find((entry) => entry.path.endsWith(".sha256"));
+    assert.ok(databaseEntry);
+    assert.ok(sidecarEntry);
+
+    const result = runDrill({ snapshot: backup.snapshot, "drill-target": target, "drill-log": drillLog, keep: "true" });
+    assert.deepEqual(result.databaseIntegrityChecks, [{
+      path: databaseEntry.path,
+      quickCheck: "PASS",
+      integrityCheck: "PASS"
+    }]);
+    assert.equal(fs.readFileSync(path.join(target, ...sidecarEntry.path.split("/")), "utf8"), `${databaseEntry.sha256}  ${path.basename(databaseEntry.path)}\n`);
+    assert.equal(fs.readFileSync(path.join(target, ...databaseEntry.path.split("/"))).subarray(0, 16).toString("utf8"), "SQLite format 3\0");
+  } finally {
+    cleanup(root);
+  }
+});
+
+test("verify-only drill does not treat an unpaired SHA-256 sidecar as non-database evidence", () => {
+  const { root, destination } = fixture();
+  const databaseDirectory = path.join(root, "unpaired-snapshot");
+  const target = path.join(root, "unpaired-drill-target");
+  const drillLog = path.join(root, "unpaired-drill-log.json");
+  fs.mkdirSync(databaseDirectory);
+  fs.writeFileSync(path.join(databaseDirectory, "orphan.db.sha256"), `${"a".repeat(64)}  missing.db\n`);
+
+  try {
+    const backup = createBackup({ include: [`DATABASE_SNAPSHOT:${databaseDirectory}`], destination, "snapshot-id": "snapshot-orphan-sidecar" });
+    assert.throws(
+      () => runDrill({ snapshot: backup.snapshot, "drill-target": target, "drill-log": drillLog }),
+      /not a database|database disk image is malformed/i,
+    );
+    assert.equal(fs.existsSync(target), false);
+    assert.equal(fs.existsSync(drillLog), false);
+  } finally {
     cleanup(root);
   }
 });

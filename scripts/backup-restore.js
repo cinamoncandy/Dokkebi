@@ -66,7 +66,7 @@ function secretFindings(text, file) {
   const findings = scanText(normalized, file);
   if (SENSITIVE_ASSIGNMENT.test(text)) findings.push({ file, line: 0, rule: "SENSITIVE_ASSIGNMENT" });
   if (hasAuthorizationCredential(text)) findings.push({ file, line: 0, rule: "AUTHORIZATION_CREDENTIAL" });
-  return findings;
+  return findings.length > 0;
 }
 
 class BoundedSecretScanner {
@@ -74,23 +74,23 @@ class BoundedSecretScanner {
     this.file = file;
     this.decoder = new StringDecoder("utf8");
     this.carry = "";
-    this.findings = [];
+    this.hasFindings = false;
   }
 
   update(bytes) {
-    this.scan(this.decoder.write(bytes));
+    if (!this.hasFindings) this.scan(this.decoder.write(bytes));
   }
 
   finish() {
-    this.scan(this.decoder.end());
-    return this.findings;
+    if (!this.hasFindings) this.scan(this.decoder.end());
+    return this.hasFindings;
   }
 
   scan(decoded) {
-    if (!decoded) return;
+    if (!decoded || this.hasFindings) return;
     const window = this.carry + decoded;
-    this.findings.push(...secretFindings(window, this.file));
-    this.carry = window.slice(-SECRET_SCAN_OVERLAP_CHARS);
+    this.hasFindings = secretFindings(window, this.file);
+    this.carry = this.hasFindings ? "" : window.slice(-SECRET_SCAN_OVERLAP_CHARS);
   }
 }
 
@@ -164,7 +164,7 @@ function scanAndHashDescriptor(descriptor, sizeBytes, file) {
     hash.update(chunk);
     scanner.update(chunk);
   });
-  return { sha256: hash.digest("hex"), findings: scanner.finish() };
+  return { sha256: hash.digest("hex"), hasFindings: scanner.finish() };
 }
 
 function hashDescriptor(descriptor, sizeBytes) {
@@ -230,7 +230,7 @@ function copyStableRegularFile(file, root, output, relative) {
     const sizeBytes = Number(identity.opened.size);
     const scanned = scanAndHashDescriptor(identity.descriptor, sizeBytes, relative);
     assertStableRegularFile(identity);
-    if (scanned.findings.length > 0) return { included: false, sizeBytes, sha256: scanned.sha256 };
+    if (scanned.hasFindings) return { included: false, sizeBytes, sha256: scanned.sha256 };
 
     outputDescriptor = fs.openSync(output, fs.constants.O_WRONLY | fs.constants.O_CREAT | fs.constants.O_EXCL, 0o600);
     const copiedHash = crypto.createHash("sha256");
@@ -277,6 +277,18 @@ function verifySqliteIntegrity(file) {
     database.close();
   }
   return Object.freeze({ quickCheck: "PASS", integrityCheck: "PASS" });
+}
+
+function isVerifiedSqliteSha256Sidecar(entry, entries, copiedSidecarPath) {
+  const suffix = ".sha256";
+  if (entry.category !== "DATABASE_SNAPSHOT" || !entry.path.endsWith(suffix)) return false;
+  const databasePath = entry.path.slice(0, -suffix.length);
+  const databaseEntry = entries.find((candidate) => candidate.category === "DATABASE_SNAPSHOT" && candidate.path === databasePath);
+  if (!databaseEntry) return false;
+  const expected = `${databaseEntry.sha256}  ${path.posix.basename(databasePath)}\n`;
+  const stat = fs.lstatSync(copiedSidecarPath);
+  if (!stat.isFile() || stat.size !== Buffer.byteLength(expected)) return false;
+  return fs.readFileSync(copiedSidecarPath, "utf8") === expected;
 }
 
 function parseIncludes(raw) {
@@ -441,7 +453,7 @@ function readAndVerify(snapshotPath) {
       const inspected = scanAndHashDescriptor(identity.descriptor, sizeBytes, entry.path);
       assertStableRegularFile(identity);
       if (inspected.sha256 !== entry.sha256) throw new Error(`checksum mismatch: ${entry.path}`);
-      if (inspected.findings.length > 0) throw new Error(`secret material detected in recovery artifact: ${entry.path}`);
+      if (inspected.hasFindings) throw new Error(`secret material detected in recovery artifact: ${entry.path}`);
     } finally {
       fs.closeSync(identity.descriptor);
     }
@@ -492,7 +504,8 @@ function runDrill(args) {
       fs.mkdirSync(path.dirname(output), { recursive: true, mode: 0o700 });
       fs.copyFileSync(source, output, fs.constants.COPYFILE_EXCL);
       if (sha256File(output) !== entry.sha256) throw new Error(`drill checksum mismatch: ${entry.path}`);
-      if (entry.category === "DATABASE_SNAPSHOT") {
+      if (entry.category === "DATABASE_SNAPSHOT"
+        && !isVerifiedSqliteSha256Sidecar(entry, verified.manifest.entries, output)) {
         databaseIntegrityChecks.push(Object.freeze({ path: entry.path, ...verifySqliteIntegrity(output) }));
       }
     }

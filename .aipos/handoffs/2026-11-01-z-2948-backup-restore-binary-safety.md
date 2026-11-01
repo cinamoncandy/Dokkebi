@@ -30,3 +30,45 @@ The permitted change is limited to the existing backup/verify/verify-only drill 
 - Still not committed or opened as a PR. Next: final scope/diff review, commit, one Draft PR for #2948, exact-head checks, and independent review. No merge, release, or host operation.
 
 Safety remains `PAPER_ONLY`, `liveAuthority=NONE`, `productionMutationAllowed=false`, `realOrderAuthority=false`, `realTransferAuthority=false`, `aiAuthority=ZERO_AUTHORITY`.
+
+## Exact-head review P1 follow-up — 2026-11-01
+
+This section supersedes the earlier next-action statement above; that initial
+handoff predates the opened PR and its review.
+
+- PR #2948 remains OPEN / Draft / mergeable on exact head
+  `e78b4162bda96de06e8170cb943b689b655b5d85`, based on
+  `dc9e4758515792a683d2b234a3cf20eca1508ca9` at fresh PR inspection.
+- Exact-head CI and all five companions were SUCCESS on that predecessor.
+  Same-SHA Codex review summary `6556810301` completed with findings. The two
+  current non-outdated P1 threads are `PRRT_kwDOTUbne86yZZ0r` (associate and
+  skip only a verified `.sha256` sidecar; run SQLite checks on its database)
+  and `PRRT_kwDOTUbne86yZZ0t` (avoid retaining every secret match for large
+  credential-heavy artifacts). Neither thread was resolved by the author.
+- Both repairs are now in the local detached worktree rooted at that exact
+  head. The drill validates the exact sidecar text against the sibling
+  database's manifest SHA and basename; an unpaired sidecar remains treated as
+  a database and therefore fails closed. The scanner records a boolean and
+  stops scanning after a match while the caller continues hashing the file.
+- Added regressions for a paired SQLite/sidecar directory, unpaired sidecar
+  rejection, and 32 MiB of repeated credential-shaped content under a 64 MiB
+  child-process heap limit.
+- Node 24.19.0 / pnpm 11.25.0 frozen install succeeded without lockfile edits.
+  Focused backup suites passed 61/61; final `pnpm test` passed 1,323 isolated
+  test files; typecheck, `validate:full`, security gate (0 secrets), lint
+  (0 errors / 47 existing warnings), and diff check passed. The final full run
+  was performed after correcting the test fixture so its dummy credential is
+  assembled from fragments and not mistaken for a checked-in secret.
+- AIPOS work order and state record these repairs and successor validation
+  requirement. Generated security report changes and the test runner's
+  incidental removal of `isolated-test-failure.txt` must be restored before
+  staging. No commit or push has been made yet.
+
+Next: fresh-verify current protected main and PR #2948 head/base/branch, inspect
+the full diff (only `scripts/backup-restore.js`, its test, and AIPOS evidence
+should change), restore generated artifacts to their tracked baseline, then
+commit and push the repair to the existing PR branch. The old SHA's CI/review
+becomes historical after commit. Obtain fresh exact-head CI/companions, then a
+new non-author review; leave both findings threads unresolved for independent
+adjudication. Keep Draft; no Validator, Audit, Release, merge, deployment, or
+Oracle mutation is implied.

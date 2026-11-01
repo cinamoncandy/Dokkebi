@@ -28,6 +28,8 @@ scope:
   - "Keep SHA-256 and secret-content scanning bounded in memory for backup and verify."
   - "Preserve secret-shaped path exclusion, manifest safety bits, source immutability, and failed-snapshot cleanup."
   - "During verify-only drill, run read-only SQLite quick_check and integrity_check on each copied DATABASE_SNAPSHOT and record the results."
+  - "Recognize only a SHA-256 sidecar that exactly matches its sibling database manifest digest and filename; continue integrity-checking the database and fail closed on unpaired sidecars."
+  - "Keep secret-scan finding state bounded even when a large artifact contains many credential matches."
   - "Add deterministic coverage for a sparse binary snapshot beyond Node's maximum string length, chunk-boundary secret detection, digest preservation, and copied-database integrity."
 exclusions:
   - "No destructive restore, source database write, database row rewrite, backup deletion/retention, Oracle host access, deployment, restart, lease change, or production mutation."
@@ -45,6 +47,8 @@ acceptance:
   - "Source-to-backup-to-drill SHA-256 and byte count remain exact."
   - "Secret scanning remains fail-closed across chunk boundaries; existing redaction and secret tests pass."
   - "The copied drill database passes read-only SQLite quick_check and integrity_check; failure or unavailable SQLite verification fails the drill."
+  - "A standard SQLite backup directory containing database files and matching .sha256 sidecars drills successfully, checks the database only, and preserves the sidecar; an unpaired sidecar fails closed."
+  - "Credential-heavy large files are rejected with bounded scanner state while hashing remains complete."
   - "Source database bytes and rows are unchanged; no destructive restore or evidence deletion is introduced."
   - "Focused tests, full validation, exact-head CI and companions pass; fresh non-author review and canonical governance remain required before merge."
 safety:
@@ -68,13 +72,14 @@ verification_commands:
   - "pnpm test"
   - "git diff --check"
 validation:
-  focused: "node --test tests/backup-restore.test.js tests/recovery-backup-scan-copy-atomicity.test.js tests/backup-authorization-secret.test.js: 58/58 PASS"
+  focused: "node --test tests/backup-restore.test.js tests/recovery-backup-scan-copy-atomicity.test.js tests/backup-authorization-secret.test.js: 61/61 PASS after two independent P1 repairs"
   preflight: PASS
   typecheck: PASS
   build: "PASS via pnpm test"
   validate_full: PASS
   security_gate: "PASS; 0 secret findings; generated dated audit/SBOM reports"
   lint: "PASS; 0 errors, 47 warnings (baseline count)"
-  full_suite: "pnpm test: PASS, 1323 isolated test files"
+  full_suite: "pnpm test: PASS, 1323 isolated test files on the P1 repair worktree"
   diff_check: PASS
-next: "Review the final scoped diff, commit this canonical feature branch, and open its single Draft PR for exact-head CI and companion checks; request independent review only after all required checks pass."
+  review_findings: "Exact-head Codex review on e78b4162bda96de06e8170cb943b689b655b5d85 found two P1s: SQLite sidecars were treated as databases; secret matches accumulated without bound. Both repaired locally with regression coverage; predecessor CI/review are historical after successor commit."
+next: "Recheck protected main and PR #2948 head/base; review the complete minimal diff; commit only the two P1 repairs plus AIPOS evidence to this existing branch; push to the existing Draft PR; run fresh exact-head CI/companions and request fresh independent review after they pass. Do not resolve review threads."
