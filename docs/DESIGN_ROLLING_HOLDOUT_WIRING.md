@@ -31,6 +31,18 @@ Safety stays: PAPER_ONLY, liveAuthority=NONE, productionMutationAllowed=false. �
   `{ mode, candidatesChecked, pass, fail, insufficientEvidence, refused: { <이유코드>: n }, folds: { challengerBetter, notBetter, insufficient } }`.
 - `SHADOW`에서 이 요약은 `HOLDOUT_*` 카운터와 메타 학습 입력에 전혀 닿지 않는다. 진단 워크플로의 학습 출력(`learning_readout`)에 `rollingHoldout`을 추가한다.
 
+## 4b. SHADOW는 지금 포트로는 부작용이 없지 않다 (구현 전 점검에서 발견한 두 번째 문제)
+`runResearchExperiment`의 포트는 `variant.runtime.runExperiment`(= `ResearchAutomationRuntime.runExperiment`)이고, 이 호출은 평가만 하는 게 아니다.
+- 세션의 `experimentCount`를 올리고, `maxExperiments`에 닿으면 세션이 더는 실험을 못 한다.
+- Research 메모리(`appendExperiment`)와 평가 원장(ledger)에 기록을 남기고, 평가가 던지면 세션을 `failSession`으로 끝낸다.
+- `FAIL_*`/`REPEAT_*` 카운터는 이 원장의 검증 기록에서 다시 계산한다.
+그래서 같은 세션 포트로 롤링을 `SHADOW`로 돌리면 (후보당 최대 6번 호출) 기존 흐름의 실험 예산을 먹고, 원장을 오염시키고, 실패 카운터를 바꾼다. "기존 판정에 영향이 없다"는 SHADOW의 전제가 깨진다.
+
+선택지 (소유자 결정):
+- S1 (추천): 롤링 전용 Research 세션을 변종마다 따로 둔다 (`<세션>-ROLLING`, 자기 `maxExperiments`). 기존 세션 예산은 건드리지 않는다. 원장·메모리 기록은 남지만 세션 ID 접미사로 구분하고, `FAIL_*`/`REPEAT_*` 재계산과 메타 학습 입력(`HOLDOUT_*`)에서 롤링 세션 기록을 제외하는 필터를 둔다. 필터 누락 시 기존 카운터가 바뀌므로 테스트로 고정한다.
+- S2: 기록을 남기지 않는 평가 전용 포트를 `ResearchAutomationRuntime`에 새로 만든다. 증거 기록 핵심 코드를 건드리는 큰 변경이라 별도 작업지시서와 더 엄격한 검토가 필요하다.
+- S3: `SHADOW` 없이 곧바로 `ENFORCE`. 위험이 가장 커서 추천하지 않는다.
+
 ## 5. 이력 길이와 백필
 - 구간이 겹치지 않으려면 N×(훈련+검증+홀드아웃) = 33일 + 하루 여유가 필요하다 (현재 백필 목표는 12일: `targetSpanMs`).
 - 백필 목표를 `OFF`일 때는 지금 값, `SHADOW`/`ENFORCE`일 때만 `requiredHistoryMs(windows) + DAY`로 늘린다. 업비트 호출은 지금처럼 순차·간격·시간 제한·페이지 제한을 지킨다.
@@ -50,9 +62,10 @@ Safety stays: PAPER_ONLY, liveAuthority=NONE, productionMutationAllowed=false. �
 
 ## 소유자 결정
 1. 예산 계산: A(후보당 1회, 추천) 또는 B(호출 수).
-2. `SHADOW`를 먼저 켜고 며칠 지켜본 뒤 `ENFORCE`를 따로 승인하는 순서.
+2. `SHADOW`의 부작용 격리 방식: S1(추천) / S2 / S3 (4b 참조).
+3. `SHADOW`를 먼저 켜고 며칠 지켜본 뒤 `ENFORCE`를 따로 승인하는 순서.
 3. 33일+ 백필 허용(서버 부하 확인 포함).
-4. 적용할 봉 길이(1m / 15m / 60m 중).
+5. 적용할 봉 길이(1m / 15m / 60m 중).
 
 ## 아직 확인하지 않은 것
 - `/health` runtime에 새 필드를 낼 때의 건강 계약 검증기(`healthExport`, 모바일 동기화) 영향.
