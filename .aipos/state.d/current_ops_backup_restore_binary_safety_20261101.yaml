@@ -3,8 +3,9 @@ current_ops_backup_restore_binary_safety_20261101:
   issue: 2948
   status: IN_PROGRESS
   branch: WO-OPS-20261101-2948-BACKUP-RESTORE-BINARY-SAFETY
+  current_head: bd09b6ad9929eb3adb57b7bb2578fbfa35fa51a9
   base_sha: dc9e4758515792a683d2b234a3cf20eca1508ca9
-  first_broken_transition: e78b4162 exact-head review P1 sidecar classification + bounded secret-finding state -> repaired successor exact-head validation
+  first_broken_transition: bd09b6ad9929eb3adb57b7bb2578fbfa35fa51a9 exact-head CI and five companion workflows -> terminal result
   safety: PAPER_ONLY_LIVE_NONE_PRODUCTION_MUTATION_FALSE_REAL_ORDER_FALSE_REAL_TRANSFER_FALSE_AI_ZERO_AUTHORITY
   validation: "P1 repair worktree focused 61/61; pnpm test 1323 isolated test files PASS; typecheck/validate:full/security PASS; lint 0 errors/47 baseline warnings; diff-check PASS. Frozen install left lockfile unchanged."
   review_findings:
@@ -13,5 +14,14 @@ current_ops_backup_restore_binary_safety_20261101:
     p1_threads:
       - "PRRT_kwDOTUbne86yZZ0r: DATABASE_SNAPSHOT directory sidecars must not be opened as SQLite databases; exact sibling .sha256 association required."
       - "PRRT_kwDOTUbne86yZZ0t: retain only bounded secret-scan state while still hashing all bytes."
-    disposition: REPAIRED_LOCALLY_AWAITING_SUCCESSOR_VERIFICATION
-  next: "Fresh-verify main and PR head/base; audit the scoped diff; commit/push the repairs to the existing Draft PR branch; obtain successor exact-head CI/companions and fresh review."
+    disposition: REPAIRED_IN_SUCCESSOR_AWAITING_EXACT_HEAD_CI_AND_FRESH_REVIEW
+  exact_head_checks:
+    ci_run: 41299863980
+    companions:
+      - 41299863849
+      - 41299863826
+      - 41299863928
+      - 41299863930
+      - 41299864015
+    status_at_update: IN_PROGRESS
+  next: "Wait for all six exact-head workflows on bd09b6ad9929eb3adb57b7bb2578fbfa35fa51a9 to reach terminal status; diagnose any failure, and request one fresh non-author review on this exact SHA only after all required workflows pass."
