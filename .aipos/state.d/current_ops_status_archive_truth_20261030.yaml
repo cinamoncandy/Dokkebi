@@ -2,6 +2,6 @@ current_ops_status_archive_truth_20261030:
   work_order: WO-OPS-20261030-AIPOS-STATUS-ARCHIVE-TRUTH
   status: IN_PROGRESS
   branch: claude/aipos-status-archive-truth
-  validation: "Current-main non-force merge and generated truth refresh locally verified; focused tests 13/13, AIPOS validators, validate:full, security, typecheck, build PASS; lint 0 errors / 47 baseline warnings. Local successor uncommitted; exact-head CI pending."
-  next: "Finish local diff/state review, commit and update the existing PR branch only after local gates pass; then verify exact-head CI and required independent governance. No merge/release implied."
+  validation: "Current-main non-force merge and generated truth refresh locally verified; focused tests 13/13, AIPOS validators, validate:full, security, typecheck, build PASS; lint 0 errors / 47 baseline warnings. Successor a42847bd8821769faee3fcd8b98d46cd7291a5ce pushed to the existing PR branch; exact-head CI in progress."
+  next: "Verify all exact-head CI/companion runs on the pushed successor; then obtain the required independent review and continue only through separately evidenced governance gates. No merge/release implied."
   safety: PAPER_ONLY_LIVE_NONE_PRODUCTION_MUTATION_FALSE_AI_ZERO_AUTHORITY

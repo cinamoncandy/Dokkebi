@@ -8,7 +8,7 @@ Scope: canonical implementation inventory and continuation of the owner-approved
 - PR #2940 started at `579f9c179aa9483c55f298f0bf7d526b38feb83d`, based on older `cc03c39...`; branch was mergeable. A non-force merge of current main was clean and applied locally on the existing PR line. The deterministic `.aipos/CURRENT_TRUTH.md` generator then refreshed the stale snapshot.
 - After current-main merge, `tests/aipos-work-order-status.test.js` found one baseline entry for `WO-RESEARCH-20261014-ORDERBOOK-STUDY.yaml` whose status is now canonical `COMPLETED`. Removed only that now-fixed entry, consistent with the work order's shrink-only rule. Removed two unused symbols in changed validator/index scripts to restore lint to 47 baseline warnings.
 - Focused work-order tests: 13/13 PASS. AIPOS YAML, provenance, evidence integrity, drift, cross-AI conformance, repository truth, index, generated CURRENT_TRUTH and diff checks PASS. `pnpm run validate:full`, `pnpm run security:gate`, `pnpm run typecheck`, `pnpm run build` PASS. `pnpm run lint:scripts`: 0 errors / 47 warnings (baseline).
-- Local work is in an isolated checkout at `/tmp/nusa-2940-work`; it is not yet committed or pushed. Treat its SHA as local until fresh remote verification.
+- The local work was committed and pushed to the existing branch as `a42847bd8821769faee3fcd8b98d46cd7291a5ce`. Fresh GitHub PR metadata confirms that exact head, current base `3e610394ab9441e925769ac66033d3ec9fedc429`, OPEN/Ready/mergeable; seven exact-head workflows are still in progress. This commit has local validation only until remote checks terminate.
 
 ## Parallel gates
 
@@ -20,4 +20,4 @@ Scope: canonical implementation inventory and continuation of the owner-approved
 
 ## Next permitted action
 
-Finish local diff/state review, commit only if the work-order scope remains records-only and all local gates are green, then push the same existing #2940 branch if credentials permit. Immediately fresh-check the resulting exact-head CI and current PR metadata. Do not merge, authorize Release, or claim the independent review/Audit gate without its own evidence. Preserve L1=PARTIAL, L2=HOLD, `LEARNING_LOOP_VERIFIED=false`, `PERFORMANCE_IMPROVEMENT=UNPROVEN`.
+Wait for terminal exact-head CI/companions on #2940, then request/verify the required independent review if the work-order gate requires it. Do not merge, authorize Release, or claim the independent review/Audit gate without its own evidence. Preserve L1=PARTIAL, L2=HOLD, `LEARNING_LOOP_VERIFIED=false`, `PERFORMANCE_IMPROVEMENT=UNPROVEN`.
