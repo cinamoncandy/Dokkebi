@@ -2,10 +2,9 @@ const test = require("node:test");
 const assert = require("node:assert/strict");
 
 const { SqliteDatabase } = require("../dist/packages/storage/src/index.js");
-const { composeResearchExperiments, RESEARCH_FLAG } = require("../dist/apps/cloud/src/researchExperimentComposition.js");
+const { composeResearchExperiments, RESEARCH_FLAG, RESEARCH_GAP_FILL_INTERVAL_MS } = require("../dist/apps/cloud/src/researchExperimentComposition.js");
 
 const NOW = Date.UTC(2026, 9, 19, 10, 0, 0);
-const M = 60_000;
 
 function installFakeTimers() {
   const originals = {
@@ -88,8 +87,8 @@ test("phase-aligned periodic gap repair retries after a cooperative Research tic
   const timers = installFakeTimers();
   try {
     composition.start();
-    const gapInterval = timers.intervals.find((item) => item.delay === 60 * M);
-    assert.ok(gapInterval, "six-hour periodic gap repair must be scheduled");
+    const gapInterval = timers.intervals.find((item) => item.delay === RESEARCH_GAP_FILL_INTERVAL_MS);
+    assert.ok(gapInterval, "the configured periodic gap repair must be scheduled");
 
     const tick = composition.tickOnceAsync();
     assert.ok(timers.immediates.some((item) => !item.ran), "cooperative tick must be active at an event-loop yield");
@@ -120,7 +119,7 @@ test("stop cancels a pending periodic gap retry created by a Research tick colli
   const timers = installFakeTimers();
   try {
     composition.start();
-    const gapInterval = timers.intervals.find((item) => item.delay === 60 * M);
+    const gapInterval = timers.intervals.find((item) => item.delay === RESEARCH_GAP_FILL_INTERVAL_MS);
     assert.ok(gapInterval);
 
     const tick = composition.tickOnceAsync();

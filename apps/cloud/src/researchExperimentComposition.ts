@@ -17,6 +17,10 @@ import type { ResearchRecoveryResult } from "../../../packages/contracts/src/res
  * only logged, because new registrations require a canonical family binding that this research path never holds.
  */
 const M = 60_000;
+/** Keep the REST-backed candle head inside the read-only probe's 10-minute freshness window. */
+export const RESEARCH_GAP_FILL_INTERVAL_MS = 5 * M;
+/** Periodic repairs make bounded progress; the existing timer revisits older gaps on later passes. */
+export const RESEARCH_GAP_FILL_MAX_PAGES_PER_RUN = 1;
 const DAY_MS = 86_400_000;
 export const RESEARCH_FLAG = "NUSA_CLOUD_RESEARCH_EXPERIMENTS";
 // Upbit KRW market fee is 0.05%; slippage is a fixed conservative 5 bps. Both are explicit by design.
@@ -303,7 +307,7 @@ export function composeResearchExperiments(input: {
     try {
       for (const market of settings.markets) {
         if (stopped) break;
-        const result = await fillRecentGaps({ market, windowMs: targetSpanMs, nowMs: now(), store, fetchPage, sleep });
+        const result = await fillRecentGaps({ market, windowMs: targetSpanMs, nowMs: now(), store, fetchPage, sleep, maxPages: RESEARCH_GAP_FILL_MAX_PAGES_PER_RUN });
         results.push(result);
         if (result.status === "NO_GAPS" || result.status === "FILLED") {
           const firstClose = store.earliestCloseTime(market, M);
@@ -451,7 +455,7 @@ export function composeResearchExperiments(input: {
       first.unref?.();
       timer = setInterval(scheduleTick, settings.tickMs);
       timer.unref?.();
-      if (settings.backfill) { gapTimer = setInterval(() => scheduleGapFill(), 60 * M); gapTimer.unref?.(); }
+      if (settings.backfill) { gapTimer = setInterval(() => scheduleGapFill(), RESEARCH_GAP_FILL_INTERVAL_MS); gapTimer.unref?.(); }
       log(`[research-experiments] enabled: markets=${settings.markets.join(",")} variants=${variantCount} intervals=${settings.intervalsMinutes.join(",")}m tickMinutes=${settings.tickMs / M} backfill=${settings.backfill ? "ENABLED" : "DISABLED"}`);
     },
     stop: () => { preparationActive = false; clearPreparedRecovery(); stopped = true; if (gapTimer != null) clearInterval(gapTimer); if (gapRetry != null) clearTimeout(gapRetry); if (backfillTimer != null) clearTimeout(backfillTimer); if (tickRetry != null) clearTimeout(tickRetry); if (first != null) clearTimeout(first); if (timer != null) clearInterval(timer); },

@@ -1,0 +1,64 @@
+id: WO-RESEARCH-20261101-CANDLE-FRESHNESS
+title: "Keep the REST-backed Research candle head within the existing freshness window"
+status: LOCAL_VALIDATED_PENDING_REVIEW_CI
+owner: nusa-development
+repository: cinamoncandy/NUSA
+issue: 2815
+base_branch: main
+base_commit: 3e610394ab9441e925769ac66033d3ec9fedc429
+implementation_branch: WO-RESEARCH-20261101-CANDLE-FRESHNESS
+authority_impact: research-data-freshness-and-provenance
+owner_approval: "Owner-directed NUSA full-convergence work order; proceed with the next safe transition while preserving all PAPER/ZERO_AUTHORITY constraints."
+objective: "The only production writer of the Research 1m candle series is the Upbit public REST backfill/gap-fill path. Its existing gap pass runs every 60 minutes while the independent data-integrity probe marks a 1m series stale after 10 minutes. Reduce the recurring stale-head window without changing the freshness threshold, creating another scheduler, or allowing an unbounded repair pass."
+scope:
+  - "Keep the existing researchExperimentComposition gap-fill timer as the sole periodic scheduler and run it every 5 minutes while public-candle backfill is enabled."
+  - "Bound each recurring fillRecentGaps invocation to one Upbit page per market; retain fail-closed RATE_LIMITED/PARTIAL/ERROR behavior and let subsequent scheduled passes continue from the remaining gaps."
+  - "Keep the full startup backfill, immutable existing-row checks, Upbit provenance receipts, manifest materialization guard, research freshness threshold, experiment windows, qualification, risk, PAPER, and LIVE behavior unchanged."
+  - "Add regression coverage proving the recurring composition applies the one-page budget and that the cadence policy is exactly 5 minutes; test partial progress without rewriting existing candles."
+exclusions:
+  - "Do not add another engine, scheduler, data source, ticker-to-candle writer, or host-side timer."
+  - "Do not change the 10-minute stale threshold or infer a candle where Upbit has no source candle."
+  - "Do not modify stored historical rows, issue evidence, production databases, manifests, or runtime services."
+  - "Do not claim sealed dataset, Research success, candidate qualification, learning-cycle completion, or performance improvement from freshness recovery alone."
+safety:
+  PAPER_ONLY: true
+  liveAuthority: NONE
+  productionMutationAllowed: false
+  realOrderAuthority: false
+  realTransferAuthority: false
+  aiAuthority: ZERO_AUTHORITY
+  fail_closed: "Missing source candles remain missing; incomplete provenance remains ineligible for canonical manifest materialization and Research continues to skip it."
+rollback: "Revert this change; no database rollback or history rewrite is involved."
+verification_commands:
+  - "pnpm install --frozen-lockfile"
+  - "pnpm run preflight"
+  - "pnpm run build"
+  - "node --test tests/research-candle-backfill.test.js tests/research-experiment-composition.test.js tests/research-gap-fill-health.test.js"
+  - "pnpm run typecheck"
+  - "pnpm run validate:full"
+  - "pnpm run security:gate"
+  - "pnpm run lint"
+  - "git diff --check"
+acceptance:
+  - "The existing single periodic gap-fill scheduler is configured for a 5-minute interval only when backfill is enabled."
+  - "Each recurring gap-fill call performs no more than one public Upbit page per market and reports partial progress honestly."
+  - "Existing rows remain byte-for-byte unchanged; no synthetic OHLCV or source receipts are created."
+  - "The 10-minute stale threshold and canonical dataset provenance/continuity gates are unchanged."
+  - "Focused regression, preflight, build, typecheck, validate:full, security, lint baseline, and diff checks pass before any remote PR/CI action."
+runtime_acceptance:
+  required_after_governed_release: true
+  evidence: "Read-only exact-main runtime evidence must show the REST-backed research candle latest close advancing naturally; do not deploy or restart from this work order."
+evidence:
+  exact_head_candidate: "local changes on base 3e610394ab9441e925769ac66033d3ec9fedc429; commit not created"
+  dependency_install: "pnpm 11.25.0 install --frozen-lockfile PASS; lockfile unchanged"
+  preflight: PASS
+  build: PASS
+  focused_tests: "34/34 PASS (research candle backfill, composition, and gap-fill health)"
+  full_suite: "pnpm test PASS_1320_ISOLATED_TEST_FILES"
+  typecheck: PASS
+  validate_full: PASS
+  security_gate: "PASS; 0 high/critical, 0 secrets"
+  lint: "0 errors / 47 existing warnings; no new warnings after updating the stale interval assertion"
+  diff_check: PASS
+  initial_full_suite_attempt: "Two existing gap-retry assertions still expected a 60-minute interval. Updated them to bind to the named production interval constant while preserving exact-once/deferred-retry/stop-cancellation assertions. Raw failed attempt preserved at /workspace/evidence/2026-11-01-research-candle-full-suite-initial-failure.txt; the final full suite passed."
+next: "Before commit, recheck Issue #2815 ownership and branch refs, review the final diff/AIPOS validators, then commit/push this one canonical successor and open a Draft PR for exact-head CI and fresh non-author DATA/EVIDENCE review."

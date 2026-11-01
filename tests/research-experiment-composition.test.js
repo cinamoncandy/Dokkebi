@@ -5,7 +5,7 @@ const { join } = require("node:path");
 const { tmpdir } = require("node:os");
 
 const { SqliteDatabase, SqliteResearchCandleStore } = require("../dist/packages/storage/src/index.js");
-const { composeResearchExperiments, readResearchExperimentSettings, RESEARCH_FLAG, RESEARCH_BACKTEST_COST } = require("../dist/apps/cloud/src/researchExperimentComposition.js");
+const { composeResearchExperiments, readResearchExperimentSettings, RESEARCH_FLAG, RESEARCH_BACKTEST_COST, RESEARCH_GAP_FILL_INTERVAL_MS, RESEARCH_GAP_FILL_MAX_PAGES_PER_RUN } = require("../dist/apps/cloud/src/researchExperimentComposition.js");
 const { materializeResearchDatasetManifest } = require("../dist/apps/cloud/src/researchDatasetManifestMaterializer.js");
 const { AggregatedResearchCandleSource } = require("../dist/apps/cloud/src/researchCandleAggregation.js");
 const { UPBIT_CANDLE_SOURCE_FINGERPRINT } = require("../dist/apps/cloud/src/researchCandleBackfill.js");
@@ -239,6 +239,57 @@ test("the composition refills restart gaps in the recent history through the pub
     assert.equal(result.recorded, 2);
     assert.equal(store.count("KRW-BTC", M), 4);
     assert.ok(lines.some((l) => l.startsWith("[research-gap-fill] KRW-BTC FILLED missing=2 recorded=2")), lines.join("\n"));
+  } finally { composition.stop(); db.close(); }
+});
+
+test("the existing gap-fill timer policy is frequent and bounded, and preserves stored history", async () => {
+  assert.equal(RESEARCH_GAP_FILL_INTERVAL_MS, 5 * M);
+  assert.equal(RESEARCH_GAP_FILL_MAX_PAGES_PER_RUN, 1);
+  const db = open();
+  const scheduledDelays = [];
+  const nativeSetInterval = globalThis.setInterval;
+  const timerProbe = composeResearchExperiments({ env: env(), database: db, now: () => T_END, log: () => {} });
+  globalThis.setInterval = (callback, delay, ...args) => {
+    scheduledDelays.push(delay);
+    return nativeSetInterval(callback, 60 * M, ...args);
+  };
+  try {
+    timerProbe.start();
+    assert.ok(scheduledDelays.includes(RESEARCH_GAP_FILL_INTERVAL_MS), `the existing gap-fill scheduler must use 5 minutes: ${scheduledDelays}`);
+  } finally {
+    timerProbe.stop();
+    globalThis.setInterval = nativeSetInterval;
+  }
+  const store = new SqliteResearchCandleStore(db, 200_000);
+  const last = Math.floor(T_END / M) * M;
+  const first = last - 500 * M;
+  const existing = [];
+  for (let close = first; close <= last; close += M) {
+    if (close < last - 400 * M || close === last) existing.push({ closeTimeMs: close, open: 10, high: 11, low: 9, close: 10 });
+  }
+  store.append("KRW-BTC", M, existing);
+  const protectedRow = store.read("KRW-BTC", M, first, first)[0];
+  const requests = [];
+  const lines = [];
+  const stamp = (ms) => new Date(ms).toISOString().slice(0, 19);
+  const fetchImpl = async (url) => {
+    const to = new URL(url).searchParams.get("to");
+    const upperExclusive = to == null ? last + M : Date.parse(to);
+    const candles = [];
+    for (let start = upperExclusive - M; candles.length < 200 && start >= first; start -= M) {
+      candles.push({ market: "KRW-BTC", candle_date_time_utc: stamp(start), opening_price: 100, high_price: 101, low_price: 99, trade_price: 100.5, candle_acc_trade_volume: 2 });
+    }
+    requests.push(url);
+    return new Response(JSON.stringify(candles), { status: 200, headers: { "content-type": "application/json" } });
+  };
+  const composition = composeResearchExperiments({ env: env({ NUSA_RESEARCH_MARKETS: "KRW-BTC" }), database: db, now: () => T_END, log: (line) => lines.push(line), fetchImpl, sleep: async () => undefined });
+  try {
+    const [result] = await composition.fillGaps();
+    assert.equal(result.pages, RESEARCH_GAP_FILL_MAX_PAGES_PER_RUN);
+    assert.equal(requests.length, 1, "a periodic pass makes at most one upstream request per market");
+    assert.equal(result.status, "PARTIAL", "remaining old gaps stay visible for later bounded passes");
+    assert.ok(result.recorded > 0, `the pass still makes useful progress: ${JSON.stringify(result)} rows=${store.count("KRW-BTC", M)} requests=${requests.length} logs=${lines.join("|")}`);
+    assert.deepEqual(store.read("KRW-BTC", M, first, first)[0], protectedRow, "existing historical candles remain unchanged");
   } finally { composition.stop(); db.close(); }
 });
 
