@@ -332,17 +332,25 @@ export function currentDiffEvidenceRefs(diff: string, changedFiles?: readonly Ch
   let newFile: string | undefined;
   let newLine: number | undefined;
   let oldLine: number | undefined;
+  let fileRefStartSize = 0;
   let fileIndex = -1;
   const files = changedFiles ? [...changedFiles] : undefined;
   const usedFiles = new Set<number>();
+  const addMetadataRefsForHunklessFile = () => {
+    if (refs.size !== fileRefStartSize) return;
+    if (oldFile) refs.add(`${oldFile}:@metadata`);
+    if (newFile) refs.add(`${newFile}:@metadata`);
+  };
   for (const line of diff.split("\n")) {
     if (line.startsWith("diff --git ")) {
+      if (fileIndex >= 0) addMetadataRefsForHunklessFile();
       fileIndex += 1;
       const paths = files ? resolveGitDiffHeader(line.slice("diff --git ".length), files, usedFiles) : parseGitDiffHeader(line.slice("diff --git ".length));
       oldFile = paths.oldPath === "/dev/null" ? undefined : validateRepositoryPath(paths.oldPath.replace(/^a\//, ""));
       newFile = paths.newPath === "/dev/null" ? undefined : validateRepositoryPath(paths.newPath.replace(/^b\//, ""));
       newLine = undefined;
       oldLine = undefined;
+      fileRefStartSize = refs.size;
       continue;
     }
     if (line.startsWith("--- ") || line.startsWith("diff ") || line.startsWith("index ")) continue;
@@ -364,6 +372,7 @@ export function currentDiffEvidenceRefs(diff: string, changedFiles?: readonly Ch
       oldLine += 1;
     }
   }
+  if (fileIndex >= 0) addMetadataRefsForHunklessFile();
   if (files && (fileIndex + 1 !== files.length || usedFiles.size !== files.length)) throw new Error("VALIDATOR_DIFF_PATH_LIST_MISMATCH");
   return refs;
 }
@@ -1067,10 +1076,10 @@ function validatorPrompt(request: ValidatorRunnerRequest, diff: string, changedF
     "The model field mergeAllowed means only that this VALIDATOR found no P0/P1 blocker and the exact head may advance to independent Audit. It grants no merge, Audit, Release, GitHub approval, or production authority.",
     'Return only JSON matching response_format. safetyInvariantResult MUST be exactly "PASS" or "FAIL".',
     "PASS requires zero findings/blockers and mergeAllowed=true. PASS_WITH_NOTES permits P2 NOTE findings only, zero blockers, and mergeAllowed=true. FAIL requires at least one P0_/P1_ BLOCKER finding, blockers, and mergeAllowed=false.",
-    "For every BLOCKER, evidenceRef MUST be exactly one deterministic CURRENT DIFF EVIDENCE REF below (an added `:+N` line, or a removed `:-N` line for a defect introduced solely by deleting a safety/authorization check). Never invent or transform one.",
-    "--- BEGIN CURRENT ADDED-LINE EVIDENCE REFS ---",
+    "For every BLOCKER, evidenceRef MUST be exactly one deterministic CURRENT DIFF EVIDENCE REF below. Added `:+N` refs cite changed current behavior; removed `:-N` refs are allowed only for a defect introduced solely by deleting a safety/authorization check. A `:@metadata` ref cites only validated file-header metadata for a hunkless path/status/mode/rename change; it does not support claims about source content. Never invent or transform a ref.",
+    "--- BEGIN CURRENT DIFF EVIDENCE REFS ---",
     ...[...currentDiffEvidenceRefs(diff, changedFiles)].sort(),
-    "--- END CURRENT ADDED-LINE EVIDENCE REFS ---",
+    "--- END CURRENT DIFF EVIDENCE REFS ---",
     `Repository: ${request.repository}`, `PR: #${request.prNumber}`, `Exact head: ${request.headSha}`, `Base: ${request.baseSha}`, `Canonical CI run: ${request.workflowRunId}`,
     "--- BEGIN EXACT PR DIFF ---", diff, "--- END EXACT PR DIFF ---",
     "--- BEGIN BOUNDED EXACT-HEAD DEPENDENCY CONTEXT ---", dependencyContext || "No changed-line-referenced direct relative dependencies were identified.", "--- END BOUNDED EXACT-HEAD DEPENDENCY CONTEXT ---",
@@ -1089,10 +1098,10 @@ function auditPrompt(request: AuditRunnerRequest, diff: string, changedFiles: re
     "Each findings item code MUST be 1-80 characters and contain only uppercase A-Z, digits 0-9, underscore (_), dot (.), colon (:), or hyphen (-). Use a stable machine-readable identifier that names the specific defect you found in this diff; never copy an identifier from these instructions, and never use spaces or lowercase letters in code.",
     "Every BLOCKER finding MUST have at least one corresponding human-readable entry in blockers; never emit a BLOCKER finding with an empty blockers array.",
     "Rules: PASS requires zero findings and zero blockers and mergeAllowed=true. PASS_WITH_NOTES requires one or more NOTE findings and zero blockers; set mergeAllowed=true only when those notes are explicitly non-blocking and the exact reviewed head is safe to merge. FAIL requires at least one BLOCKER finding, at least one blocker, and mergeAllowed=false; never emit blockers without a BLOCKER finding. Any BLOCKER finding, safety failure, test weakening, evidence integrity issue, or material uncertainty requires FAIL and mergeAllowed=false.",
-    "For every BLOCKER, evidenceRef MUST be exactly one value from the deterministic CURRENT DIFF EVIDENCE REFS lists below. Never invent or transform an evidenceRef. An added `:+N` ref cites current behavior. A removed `:-N` ref may be cited only for a defect introduced solely by deleting a safety/authorization check. If a concern depends only on removed code and is not a deletion-only regression, it is not a current blocker.",
-    "--- BEGIN CURRENT ADDED-LINE EVIDENCE REFS ---",
+    "For every BLOCKER, evidenceRef MUST be exactly one value from the deterministic CURRENT DIFF EVIDENCE REFS lists below. Never invent or transform an evidenceRef. An added `:+N` ref cites current behavior. A removed `:-N` ref may be cited only for a defect introduced solely by deleting a safety/authorization check. A `:@metadata` ref cites only validated file-header metadata for a hunkless path/status/mode/rename change; it does not support claims about source content. If a concern depends only on removed code and is not a deletion-only regression, it is not a current blocker.",
+    "--- BEGIN CURRENT DIFF EVIDENCE REFS ---",
     ...[...currentDiffEvidenceRefs(diff, changedFiles)].sort(),
-    "--- END CURRENT ADDED-LINE EVIDENCE REFS ---",
+    "--- END CURRENT DIFF EVIDENCE REFS ---",
     `Repository: ${request.repository}`,
     `PR: #${request.prNumber}`,
     `Exact head: ${request.headSha}`,
@@ -1162,7 +1171,7 @@ export async function executeIndependentAudit(
           `Validator error: ${lastModelError.message}`,
           "This feedback concerns the format or validation of your prior model response, not a defect observed in the repository. It is not source evidence and must not itself become a finding, blocker, or safety failure. Do not infer repository incompatibility from a rejected response.",
           "Reassess the unchanged exact diff independently. Preserve any genuine source-grounded blocker and safety failure; do not choose PASS merely to repair JSON. If a valid grounded verdict remains unavailable, the existing bounded validator will fail closed.",
-          "Return a fresh verdict for the same exact diff. Do not copy a blocker string unless you also emit a BLOCKER finding grounded in one CURRENT ADDED-LINE EVIDENCE REF. If no grounded blocker exists, do not invent one.",
+          "Return a fresh verdict for the same exact diff. Do not copy a blocker string unless you also emit a BLOCKER finding grounded in one CURRENT DIFF EVIDENCE REF. This includes added-line refs, permitted deletion-only refs, and metadata refs only for hunkless file-header changes. If no grounded blocker exists, do not invent one.",
           "--- END REPAIR CONTEXT ---",
         ].join("\n")
       : "";

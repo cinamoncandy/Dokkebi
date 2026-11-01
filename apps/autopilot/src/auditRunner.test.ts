@@ -84,6 +84,7 @@ function fetchSequence(options: {
   readonly firstRun?: unknown;
   readonly firstHeadPulls?: readonly unknown[];
   readonly diff?: string;
+  readonly changedFileEntries?: readonly unknown[];
   readonly secondPull?: unknown;
   readonly secondRun?: unknown;
   readonly secondHeadPulls?: readonly unknown[];
@@ -92,7 +93,7 @@ function fetchSequence(options: {
   const secondRun = options.secondRun ?? firstRun;
   const firstPull = options.firstPull ?? pull();
   const secondPull = options.secondPull ?? firstPull;
-  const fileList = (value: unknown) => Array.from({ length: Number((value as { changed_files?: number }).changed_files ?? 1) }, (_, index) => ({ filename: index === 0 ? "a.ts" : `file-${index}.ts`, status: "modified" }));
+  const fileList = (value: unknown) => options.changedFileEntries ?? Array.from({ length: Number((value as { changed_files?: number }).changed_files ?? 1) }, (_, index) => ({ filename: index === 0 ? "a.ts" : `file-${index}.ts`, status: "modified" }));
   const queue = [
     response(200, firstPull),
     response(200, firstRun),
@@ -178,6 +179,47 @@ test("diff evidence binds deleted lines to the old path and resets at file bound
   assert.ok(refs.has("deleted/security.ts:-2"));
   assert.ok(refs.has("new/module.ts:+1"));
   assert.ok(!refs.has("previous.ts:-3"));
+});
+
+test("hunkless rename metadata receives deterministic evidence refs without implying source-line evidence", () => {
+  const diff = [
+    "diff --git a/guards/old-name.ts b/guards/new-name.ts",
+    "similarity index 100%",
+    "rename from guards/old-name.ts",
+    "rename to guards/new-name.ts",
+    "",
+  ].join("\n");
+  const refs = currentDiffEvidenceRefs(diff, [{
+    filename: "guards/new-name.ts",
+    previousFilename: "guards/old-name.ts",
+    status: "renamed",
+  }]);
+  assert.deepEqual([...refs], ["guards/old-name.ts:@metadata", "guards/new-name.ts:@metadata"]);
+  assert.equal([...refs].some((ref) => /:[+-]\d+$/.test(ref)), false);
+});
+
+test("accepts a blocker grounded in exact hunkless rename metadata", async () => {
+  const renameDiff = [
+    "diff --git a/guards/old-name.ts b/guards/new-name.ts",
+    "similarity index 100%",
+    "rename from guards/old-name.ts",
+    "rename to guards/new-name.ts",
+    "",
+  ].join("\n");
+  const model = ai({ response: JSON.stringify({
+    verdict: "FAIL",
+    findings: [{ code: "P1_RENAMED_GUARD_PATH", severity: "BLOCKER", message: "The safety-critical path changed without content hunks.", evidenceRef: "guards/new-name.ts:@metadata" }],
+    blockers: ["The renamed safety-critical path requires adjudication."],
+    safetyInvariantResult: "FAIL",
+    mergeAllowed: false,
+  }) });
+  const result = await executeIndependentAudit(request, auditEnv(model), fetchSequence({
+    firstPull: pull(HEAD, BASE, 1),
+    changedFileEntries: [{ filename: "guards/new-name.ts", previous_filename: "guards/old-name.ts", status: "renamed" }],
+    diff: renameDiff,
+  }) as never);
+  assert.equal(result.verdict, "FAIL");
+  assert.equal(result.mergeAllowed, false);
 });
 
 test("parses mixed quoted and unquoted Git rename paths against exact pull-file metadata", () => {
@@ -432,7 +474,7 @@ test("bounded retry supplies validator repair context without changing the revie
   assert.match(prompts[1], /Validator error: AUDIT_VERDICT_FAIL_BLOCKER_FINDING_REQUIRED/);
   assert.match(prompts[1], /same exact diff/);
   assert.match(prompts[1], new RegExp(`Exact head: ${HEAD}`));
-  assert.match(prompts[1], /CURRENT ADDED-LINE EVIDENCE REF/);
+  assert.match(prompts[1], /CURRENT DIFF EVIDENCE REF/);
 });
 
 test("a persistently ungrounded FAIL fails closed instead of becoming a verdict", async () => {
