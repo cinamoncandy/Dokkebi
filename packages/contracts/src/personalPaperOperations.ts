@@ -113,7 +113,16 @@ export interface PersonalPaperLearningFunnel {
   readonly holdoutPasses: number;
   /** Closed-learning cycles evaluated by this runtime. */
   readonly cyclesEvaluated: number;
+  /** Display only: the loop verdict of /health learningLoopVerdict (fixed labels and codes). The app drops anything it does not recognise. */
+  readonly loopVerdict?: PersonalPaperLearningLoopVerdict;
   readonly evaluatedAt: number;
+}
+
+export interface PersonalPaperLearningLoopVerdict {
+  readonly verdict: "LOOP_VERIFIED" | "PARTIAL" | "BLOCKED" | "FAILED" | "UNKNOWN";
+  readonly firstBrokenTransition: string;
+  readonly firstBrokenCode: string;
+  readonly cycleWaitingFor: "NONE" | "NO_DEPLOYABLE_CANDIDATE" | "EVALUATION_WINDOW" | "UNKNOWN";
 }
 
 /** Display only: decisions and PAPER orders per 5-minute bucket of the current 09:00 KST window (288 buckets). Buckets before `since` were not observed by this runtime. */
