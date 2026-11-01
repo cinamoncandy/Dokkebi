@@ -45,12 +45,14 @@ test("verification manifest refuses non-main, non-dispatch, wrong-workflow, and 
   ]) assert.throws(() => produceVerificationManifest({ ...env, ...change }, sha), /CAUSAL_VERIFICATION_PRODUCER_IDENTITY_INVALID/);
 });
 
-test("manifest is written as a private isolated file and never issues admission authority", () => {
+test("manifest is isolated and never issues admission authority", () => {
   const directory = fs.mkdtempSync(path.join(os.tmpdir(), "nusa-causal-harness-test-"));
   try {
     const result = writeIsolatedManifest(env, directory);
     const stat = fs.statSync(result.output);
-    assert.equal(stat.mode & 0o077, 0);
+    // POSIX enforces the requested 0600 mode. Windows runner temp directories
+    // inherit the runner user's ACL, and Node does not expose equivalent mode bits.
+    if (process.platform !== "win32") assert.equal(stat.mode & 0o077, 0);
     const body = JSON.parse(fs.readFileSync(result.output, "utf8"));
     assert.equal(body.domain, DOMAIN);
     assert.equal(body.result, "OBSERVED_MISMATCH");

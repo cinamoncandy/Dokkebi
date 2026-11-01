@@ -299,3 +299,15 @@ current_main_isolated_positive_verification_20261101:
     - "Four security audit/SBOM reports generated locally are retained as untracked evidence and excluded from implementation changes."
   next: "Rerun focused and full validation after final fixes, validate AIPOS, inspect final diff, then commit/push only the canonical branch for exact-head CI and independent review."
   safety: PAPER_ONLY_LIVE_NONE_PRODUCTION_MUTATION_FALSE_REAL_ORDER_FALSE_REAL_TRANSFER_FALSE_AI_ZERO_AUTHORITY
+
+windows_ci_mode_expectation_20261101:
+  observed_at_utc: "2026-11-01T11:47Z"
+  failed_head: e25338b314b61fdc2f4e55c57c398698378b006f
+  failure: "Windows CI reports mode bits 054 despite Node write mode 0600; POSIX-only permission assertion was not portable."
+  classification: TEST_FAILURE_PLATFORM_ASSUMPTION
+  repair: "Keep 0600 assertion on POSIX; on Windows rely on runner-temp ACL and continue asserting isolated output/path and no admission authority."
+  predecessor_evidence: HISTORICAL_AFTER_SUCCESSOR_SHA
+  status: REPAIR_VALIDATED_1324_FULL_19_FOCUSED_PENDING_SUCCESSOR_SHA_CI
+  validation: "Successor local full suite PASS 1324/1324; focused PASS 19/19; root/mobile typecheck, validate:full, security, lint 0/47, YAML/authority checks, and diff-check PASS."
+  next: "Commit/push successor on the same Draft PR; predecessor CI is historical; wait for successor exact-head CI terminal result."
+  safety: PAPER_ONLY_LIVE_NONE_PRODUCTION_MUTATION_FALSE_REAL_ORDER_FALSE_REAL_TRANSFER_FALSE_AI_ZERO_AUTHORITY
