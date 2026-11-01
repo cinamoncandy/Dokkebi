@@ -40,6 +40,15 @@ Safety stays: PAPER_ONLY, liveAuthority=NONE, productionMutationAllowed=false. �
 
 선택지 (소유자 결정):
 - S1 (추천): 롤링 전용 Research 세션을 변종마다 따로 둔다 (`<세션>-ROLLING`, 자기 `maxExperiments`). 기존 세션 예산은 건드리지 않는다. 원장·메모리 기록은 남지만 세션 ID 접미사로 구분하고, `FAIL_*`/`REPEAT_*` 재계산과 메타 학습 입력(`HOLDOUT_*`)에서 롤링 세션 기록을 제외하는 필터를 둔다. 필터 누락 시 기존 카운터가 바뀌므로 테스트로 고정한다.
+### S1 구현 전 확인한 추가 부작용과 필요한 격리 (세 번째 점검)
+`ResearchAutomationRuntime.runExperiment`는 평가가 `ELIGIBLE`이면 `registerCandidate`를 불러 **후보 승급 저장소에 후보를 등록**한다 (`researchAutomationRuntime.ts` 190~191행). 롤링 세션이 같은 런타임을 쓰면 `SHADOW`에서도 롤링 통과가 별도 후보로 등록되어 모의 배포 쪽으로 흘러갈 수 있다. 그래서 S1은 다음이 전부 필요하다.
+1. 롤링 전용 `ResearchAutomationRuntime` 인스턴스(변종마다). `coordinator`와 세션 저장소는 공유하되 `registerCandidate`와 `listCandidates`는 아무것도 하지 않는 대체 함수로 바꾼다 (등록 불가를 테스트로 고정).
+2. 롤링 세션 ID는 `research-<날짜>-<변종>_rolling`. 변종 ID 형식(`^[a-z0-9][a-z0-9_]{0,31}$`)과 세션 계획기의 `endsWith("-<변종>")` 비교와 충돌하지 않는지 확인한다.
+3. 평가 원장의 롤링 기록은 `FAIL_*`/`REPEAT_*` 재계산에서 제외한다 (`failureEvidence`의 기록 중 `provenance.sessionId`가 `_rolling`으로 끝나는 것). 제외 테스트로 고정한다.
+4. 롤링 세션의 실험 상한은 기존 일일 예산과 무관하게 "후보당 1회" 규칙으로 충분한 값으로 두되 `MAX_DAILY_RESEARCH_EXPERIMENTS` 이하로 제한한다.
+5. 롤링 세션이 실패해도 기존 세션 흐름에는 영향이 없어야 한다 (모든 롤링 호출은 try/catch로 감싸고 요약 객체의 오류 수만 올린다).
+순서: (a) 구성(composition)에서 롤링 런타임을 만든다 → (b) 오케스트레이터가 `SHADOW`일 때만 호출한다 → (c) 요약 객체와 `/health`/진단 출력 → (d) 백필 확대. 각 단계는 따로 PR이고 기본값은 `OFF`다.
+
 - S2: 기록을 남기지 않는 평가 전용 포트를 `ResearchAutomationRuntime`에 새로 만든다. 증거 기록 핵심 코드를 건드리는 큰 변경이라 별도 작업지시서와 더 엄격한 검토가 필요하다.
 - S3: `SHADOW` 없이 곧바로 `ENFORCE`. 위험이 가장 커서 추천하지 않는다.
 
