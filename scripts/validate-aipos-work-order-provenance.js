@@ -9,7 +9,7 @@
 // This deliberately enumerates every work order rather than special-casing the two known ids:
 // a third artifact reusing an existing number must fail here, not be discovered later the way
 // the WO-0063 collision was.
-const { existsSync, readFileSync, readdirSync } = require("node:fs");
+const { existsSync, readFileSync } = require("node:fs");
 const { join, normalize } = require("node:path");
 const { block, scalar } = require("./validate-aipos-drift.js");
 const { listWorkOrderEntries } = require("./lib/aipos-work-order-paths.js");

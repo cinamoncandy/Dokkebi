@@ -7,24 +7,21 @@ Everything below is what the repository's records *claim*. Re-verify on GitHub b
 
 ## Newest handoff
 
-[`.aipos/handoffs/2026-10-30-recovery-triage.md`](handoffs/2026-10-30-recovery-triage.md) — Recovery triage — 2026-10-30 (static analysis of the repository; nothing here was read on the host)
+[`.aipos/handoffs/2026-11-01-main-handoff.md`](handoffs/2026-11-01-main-handoff.md) — CORE handoff — 2026-11-01
 
-> Author: CORE session. Scope: the owner's recovery work order (TICK_ERROR, Research data, MCP, main-vs-runtime delta, learning loop,
-> off-host backup). PAPER_ONLY, `liveAuthority=NONE`, `productionMutationAllowed=false`, `aiAuthority=ZERO_AUTHORITY`.
-> No host access: the read-only diagnosis workflow ran on the runner `nusa-paper-host` (still the OLD host) and was cancelled at its time
-> limit three times (runs 40998484773, 41038648650 and earlier). The new host has the runner software installed but not registered.
+> Scope: canonical implementation inventory and continuation of the owner-approved, `authority_impact: none` AIPOS work order `WO-OPS-20261030-AIPOS-STATUS-ARCHIVE-TRUTH` in PR #2940. Safety remains PAPER_ONLY; `liveAuthority=NONE`; `productionMutationAllowed=false`; `realOrderAuthority=false`; `realTransferAuthority=false`; `aiAuthority=ZERO_AUTHORITY`.
 
 ## Work orders
 
-518 total: 489 in `.aipos/work-orders/`, 29 closed and merged in `.aipos/work-orders/archive/`.
-Of the 489 active files, 95 carry a closed status that has not been archived (merge not proven, or the path is still referenced) and 394 are open or unclassified.
+521 total: 492 in `.aipos/work-orders/`, 29 closed and merged in `.aipos/work-orders/archive/`.
+Of the 492 active files, 96 carry a closed status that has not been archived (merge not proven, or the path is still referenced) and 396 are open or unclassified.
 
 Most common statuses among the open files (new orders use only `READY_FOR_REVIEW`, `IN_PROGRESS`, `BLOCKED`, `COMPLETED`, `SUPERSEDED`, `ABANDONED`):
 
 | Status | Files |
 |---|---|
-| READY_FOR_REVIEW | 218 |
-| IN_PROGRESS | 33 |
+| READY_FOR_REVIEW | 220 |
+| IN_PROGRESS | 34 |
 | LOCAL_VALIDATED_PENDING_CI | 20 |
 | VERIFYING | 14 |
 | LOCAL_VALIDATED_PENDING_EXACT_HEAD_CI | 13 |
@@ -32,7 +29,7 @@ Most common statuses among the open files (new orders use only `READY_FOR_REVIEW
 | COMPLETED_NO_SURVIVOR | 6 |
 | LOCAL_VALIDATED_PENDING_REVIEW_CI | 6 |
 
-### In progress or blocked (40)
+### In progress or blocked (41)
 
 | Work order | Status | Title |
 |---|---|---|
@@ -50,6 +47,7 @@ Most common statuses among the open files (new orders use only `READY_FOR_REVIEW
 | `WO-20260928-JEV-NATIVE-RUNTIME-SHADOW` | BLOCKED | Wire native Workers AI Jev into Autopilot SHADOW runtime |
 | `WO-AIPOS-20261019-COMPLETION-STATE-RECONCILIATION` | IN_PROGRESS | Reconcile merged remediation work-order completion state |
 | `WO-AUTOPILOT-20260929-CAPACITY-EFFICIENCY` | IN_PROGRESS | Reduce Autopilot provider-wait overhead and optional Jev SHADOW neuron use |
+| `WO-AUTOPILOT-20261030-1851-CAUSAL-ADMISSION` | IN_PROGRESS | Bind publisher and source evidence before autonomous coding admission |
 | `WO-FUTURES-20261015-BINANCE-PUBLIC-COLLECTOR` | IN_PROGRESS | Research-only public Binance USD-M futures collector (BTCUSDT, ETHUSDT) |
 | `WO-ISSUE-2326-JEV-DOMAIN-OBSERVATION` | BLOCKED | Define canonical NUSA-wide Jev domain observation and task-type registry |
 | `WO-ISSUE-2589-TICK-ERROR-CLASS` | IN_PROGRESS | Make a failed closed-learning tick root-causable: publish a bounded error class |
@@ -75,7 +73,8 @@ Most common statuses among the open files (new orders use only `READY_FOR_REVIEW
 | `WO-UI-20261006-CALM-REDESIGN` | IN_PROGRESS | Whole-app calm redesign: 지금 · 학습 · 안전 · 기록 |
 | `WO-UI-20261019-LEARNING-FUNNEL` | IN_PROGRESS | Learning screen redesign step 2: Research funnel (tested -> discovery -> holdout) |
 | `WO-UI-20261019-NOW-RISK-GATE` | IN_PROGRESS | Now screen redesign step 1: show where the flow stopped (risk gate motion) |
-| `WO-UI-20261019-SAFETY-RECORDS-MOTION` | IN_PROGRESS | Redesign step 3: Safety lock rings and Records 'today' timeline |
+
+…and 1 more. Full list: `node scripts/aipos-work-order-index.js`.
 
 ## Refresh
 

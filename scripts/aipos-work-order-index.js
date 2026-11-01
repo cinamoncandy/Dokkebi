@@ -22,8 +22,6 @@ const { readFileSync } = require("node:fs");
 const { listWorkOrderEntries } = require("./lib/aipos-work-order-paths.js");
 const { join } = require("node:path");
 
-const WORK_ORDER_DIR = ".aipos/work-orders";
-
 const CANONICAL_STATUSES = Object.freeze({
   PLANNED: "open",
   PROPOSED: "open",
