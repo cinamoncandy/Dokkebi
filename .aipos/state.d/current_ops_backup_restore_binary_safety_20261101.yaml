@@ -1,0 +1,10 @@
+current_ops_backup_restore_binary_safety_20261101:
+  work_order: WO-OPS-20261101-2948-BACKUP-RESTORE-BINARY-SAFETY
+  issue: 2948
+  status: IN_PROGRESS
+  branch: WO-OPS-20261101-2948-BACKUP-RESTORE-BINARY-SAFETY
+  base_sha: dc9e4758515792a683d2b234a3cf20eca1508ca9
+  first_broken_transition: large binary DATABASE_SNAPSHOT -> bounded backup/verify/drill -> copied SQLite integrity acceptance
+  safety: PAPER_ONLY_LIVE_NONE_PRODUCTION_MUTATION_FALSE_REAL_ORDER_FALSE_REAL_TRANSFER_FALSE_AI_ZERO_AUTHORITY
+  validation: "focused 58/58; preflight/typecheck/build/validate:full/security PASS; lint 0 errors/47 baseline warnings; pnpm test 1323 isolated files PASS; diff-check PASS"
+  next: "Final diff review, commit and one Draft PR; then exact-head CI/companions and fresh independent review."

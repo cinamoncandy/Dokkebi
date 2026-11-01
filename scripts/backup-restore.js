@@ -6,6 +6,8 @@ const fs = require("node:fs");
 const os = require("node:os");
 const path = require("node:path");
 const { execFileSync } = require("node:child_process");
+const { StringDecoder } = require("node:string_decoder");
+const { DatabaseSync } = require("node:sqlite");
 const { validateDisasterRecoveryRestore } = require("./validate-disaster-recovery-restore.js");
 const { scanText } = require("./security-gate.js");
 
@@ -29,6 +31,8 @@ const AUTHORIZATION_SETTER = new RegExp(
   String.raw`\.\s*(?:set|append|setHeader|appendHeader|setRequestHeader)\s*\(\s*["']authorization["']\s*,\s*${AUTHORIZATION_VALUE}`,
   "i",
 );
+const IO_CHUNK_BYTES = 1024 * 1024;
+const SECRET_SCAN_OVERLAP_CHARS = 128 * 1024;
 
 function authorizationCredential(match) {
   if (!match) return undefined;
@@ -57,13 +61,37 @@ function hasAuthorizationCredential(text) {
     .some((expression) => expressionHasAuthorizationCredential(expression, normalized));
 }
 
-function secretFindings(bytes, file) {
-  const text = bytes.toString("utf8");
+function secretFindings(text, file) {
   const normalized = text.replace(/(["'])(authorization|access[_-]?key|api[_-]?key|client[_-]?secret|password|passwd|secret[_-]?key|token|credential|private[_-]?key)\1\s*:/gi, "$2:");
   const findings = scanText(normalized, file);
   if (SENSITIVE_ASSIGNMENT.test(text)) findings.push({ file, line: 0, rule: "SENSITIVE_ASSIGNMENT" });
   if (hasAuthorizationCredential(text)) findings.push({ file, line: 0, rule: "AUTHORIZATION_CREDENTIAL" });
   return findings;
+}
+
+class BoundedSecretScanner {
+  constructor(file) {
+    this.file = file;
+    this.decoder = new StringDecoder("utf8");
+    this.carry = "";
+    this.findings = [];
+  }
+
+  update(bytes) {
+    this.scan(this.decoder.write(bytes));
+  }
+
+  finish() {
+    this.scan(this.decoder.end());
+    return this.findings;
+  }
+
+  scan(decoded) {
+    if (!decoded) return;
+    const window = this.carry + decoded;
+    this.findings.push(...secretFindings(window, this.file));
+    this.carry = window.slice(-SECRET_SCAN_OVERLAP_CHARS);
+  }
 }
 
 function parseArgs(argv) {
@@ -78,8 +106,82 @@ function parseArgs(argv) {
   return args;
 }
 
+function openStableRegularFile(file, root) {
+  assertNoSymlink(file, root);
+  const before = fs.lstatSync(file, { bigint: true });
+  if (!before.isFile()) throw new Error(`recovery source must remain a regular file: ${file}`);
+  const expectedRealpath = fs.realpathSync(file);
+  const noFollow = fs.constants.O_NOFOLLOW ?? 0;
+  const descriptor = fs.openSync(file, fs.constants.O_RDONLY | noFollow);
+  try {
+    const opened = fs.fstatSync(descriptor, { bigint: true });
+    const currentRealpath = fs.realpathSync(file);
+    if (!opened.isFile()
+      || opened.dev !== before.dev
+      || opened.ino !== before.ino
+      || opened.size !== before.size
+      || currentRealpath !== expectedRealpath) {
+      throw new Error(`recovery source identity changed before read: ${file}`);
+    }
+    if (opened.size > BigInt(Number.MAX_SAFE_INTEGER)) throw new Error(`recovery source is too large to represent safely: ${file}`);
+    return { descriptor, opened, expectedRealpath, file };
+  } catch (error) {
+    fs.closeSync(descriptor);
+    throw error;
+  }
+}
+
+function assertStableRegularFile(identity) {
+  const after = fs.fstatSync(identity.descriptor, { bigint: true });
+  const currentRealpath = fs.realpathSync(identity.file);
+  if (!after.isFile()
+    || after.dev !== identity.opened.dev
+    || after.ino !== identity.opened.ino
+    || after.size !== identity.opened.size
+    || after.mtimeNs !== identity.opened.mtimeNs
+    || after.ctimeNs !== identity.opened.ctimeNs
+    || currentRealpath !== identity.expectedRealpath) {
+    throw new Error(`recovery source changed while being read: ${identity.file}`);
+  }
+}
+
+function forEachFileChunk(descriptor, sizeBytes, visit) {
+  const buffer = Buffer.allocUnsafe(IO_CHUNK_BYTES);
+  let position = 0;
+  while (position < sizeBytes) {
+    const requested = Math.min(buffer.length, sizeBytes - position);
+    const read = fs.readSync(descriptor, buffer, 0, requested, position);
+    if (read <= 0) throw new Error("recovery source ended before its verified size");
+    visit(buffer.subarray(0, read));
+    position += read;
+  }
+}
+
+function scanAndHashDescriptor(descriptor, sizeBytes, file) {
+  const hash = crypto.createHash("sha256");
+  const scanner = new BoundedSecretScanner(file);
+  forEachFileChunk(descriptor, sizeBytes, (chunk) => {
+    hash.update(chunk);
+    scanner.update(chunk);
+  });
+  return { sha256: hash.digest("hex"), findings: scanner.finish() };
+}
+
+function hashDescriptor(descriptor, sizeBytes) {
+  const hash = crypto.createHash("sha256");
+  forEachFileChunk(descriptor, sizeBytes, (chunk) => hash.update(chunk));
+  return hash.digest("hex");
+}
+
 function sha256File(file) {
-  return crypto.createHash("sha256").update(fs.readFileSync(file)).digest("hex");
+  const identity = openStableRegularFile(file, path.dirname(file));
+  try {
+    const digest = hashDescriptor(identity.descriptor, Number(identity.opened.size));
+    assertStableRegularFile(identity);
+    return digest;
+  } finally {
+    fs.closeSync(identity.descriptor);
+  }
 }
 
 function sha256Json(value) {
@@ -121,36 +223,60 @@ function assertNoSymlink(file, root) {
   }
 }
 
-function readStableRegularFile(file, root) {
-  assertNoSymlink(file, root);
-  const before = fs.lstatSync(file, { bigint: true });
-  if (!before.isFile()) throw new Error(`recovery source must remain a regular file: ${file}`);
-  const expectedRealpath = fs.realpathSync(file);
-  const noFollow = fs.constants.O_NOFOLLOW ?? 0;
-  const descriptor = fs.openSync(file, fs.constants.O_RDONLY | noFollow);
+function copyStableRegularFile(file, root, output, relative) {
+  const identity = openStableRegularFile(file, root);
+  let outputDescriptor;
   try {
-    const opened = fs.fstatSync(descriptor, { bigint: true });
-    const currentRealpath = fs.realpathSync(file);
-    if (!opened.isFile()
-      || opened.dev !== before.dev
-      || opened.ino !== before.ino
-      || opened.size !== before.size
-      || currentRealpath !== expectedRealpath) {
-      throw new Error(`recovery source identity changed before read: ${file}`);
+    const sizeBytes = Number(identity.opened.size);
+    const scanned = scanAndHashDescriptor(identity.descriptor, sizeBytes, relative);
+    assertStableRegularFile(identity);
+    if (scanned.findings.length > 0) return { included: false, sizeBytes, sha256: scanned.sha256 };
+
+    outputDescriptor = fs.openSync(output, fs.constants.O_WRONLY | fs.constants.O_CREAT | fs.constants.O_EXCL, 0o600);
+    const copiedHash = crypto.createHash("sha256");
+    forEachFileChunk(identity.descriptor, sizeBytes, (chunk) => {
+      copiedHash.update(chunk);
+      let written = 0;
+      while (written < chunk.length) {
+        const count = fs.writeSync(outputDescriptor, chunk, written, chunk.length - written);
+        if (count <= 0) throw new Error("recovery destination stopped accepting bytes");
+        written += count;
+      }
+    });
+    assertStableRegularFile(identity);
+    const copySha256 = copiedHash.digest("hex");
+    if (copySha256 !== scanned.sha256) throw new Error(`recovery source changed between secret scan and copy: ${file}`);
+    return { included: true, sizeBytes, sha256: copySha256 };
+  } catch (error) {
+    if (outputDescriptor != null) {
+      fs.closeSync(outputDescriptor);
+      outputDescriptor = undefined;
+      fs.rmSync(output, { force: true });
     }
-    const bytes = fs.readFileSync(descriptor);
-    const after = fs.fstatSync(descriptor, { bigint: true });
-    if (after.dev !== opened.dev
-      || after.ino !== opened.ino
-      || after.size !== opened.size
-      || after.mtimeNs !== opened.mtimeNs
-      || after.ctimeNs !== opened.ctimeNs) {
-      throw new Error(`recovery source changed while being read: ${file}`);
-    }
-    return bytes;
+    throw error;
   } finally {
-    fs.closeSync(descriptor);
+    if (outputDescriptor != null) fs.closeSync(outputDescriptor);
+    fs.closeSync(identity.descriptor);
   }
+}
+
+function verifySqliteIntegrity(file) {
+  const database = new DatabaseSync(file, { readOnly: true });
+  try {
+    for (const checkName of ["quick_check", "integrity_check"]) {
+      const statement = database.prepare(`PRAGMA ${checkName}`);
+      let rowCount = 0;
+      for (const row of statement.iterate()) {
+        rowCount += 1;
+        const values = Object.values(row);
+        if (values.length !== 1 || values[0] !== "ok") throw new Error(`SQLite ${checkName} failed for copied recovery database`);
+      }
+      if (rowCount === 0) throw new Error(`SQLite ${checkName} returned no result for copied recovery database`);
+    }
+  } finally {
+    database.close();
+  }
+  return Object.freeze({ quickCheck: "PASS", integrityCheck: "PASS" });
 }
 
 function parseIncludes(raw) {
@@ -249,20 +375,19 @@ function createBackup(args) {
           secretExcludedCount += 1;
           continue;
         }
-        const sourceBytes = readStableRegularFile(file, source);
-        if (secretFindings(sourceBytes, relative).length > 0) {
-          secretExcludedCount += 1;
-          continue;
-        }
         const outputRelative = `${category}/${crypto.createHash("sha256").update(source).digest("hex").slice(0, 12)}/${relative}`;
         const output = path.join(snapshot, ...outputRelative.split("/"));
         fs.mkdirSync(path.dirname(output), { recursive: true, mode: 0o700 });
-        fs.writeFileSync(output, sourceBytes, { mode: 0o600, flag: "wx" });
+        const copied = copyStableRegularFile(file, source, output, relative);
+        if (!copied.included) {
+          secretExcludedCount += 1;
+          continue;
+        }
         entries.push(Object.freeze({
           category,
           path: outputRelative,
-          sizeBytes: sourceBytes.length,
-          sha256: crypto.createHash("sha256").update(sourceBytes).digest("hex")
+          sizeBytes: copied.sizeBytes,
+          sha256: copied.sha256
         }));
       }
     }
@@ -309,9 +434,17 @@ function readAndVerify(snapshotPath) {
     seen.add(entry.path);
     const file = path.join(snapshot, ...entry.path.split("/"));
     if (!isInside(snapshot, file) || !fs.existsSync(file) || !fs.lstatSync(file).isFile()) throw new Error(`missing recovery artifact: ${entry.path}`);
-    if (fs.statSync(file).size !== entry.sizeBytes) throw new Error(`size mismatch: ${entry.path}`);
-    if (sha256File(file) !== entry.sha256) throw new Error(`checksum mismatch: ${entry.path}`);
-    if (secretFindings(fs.readFileSync(file), entry.path).length > 0) throw new Error(`secret material detected in recovery artifact: ${entry.path}`);
+    const identity = openStableRegularFile(file, snapshot);
+    try {
+      const sizeBytes = Number(identity.opened.size);
+      if (sizeBytes !== entry.sizeBytes) throw new Error(`size mismatch: ${entry.path}`);
+      const inspected = scanAndHashDescriptor(identity.descriptor, sizeBytes, entry.path);
+      assertStableRegularFile(identity);
+      if (inspected.sha256 !== entry.sha256) throw new Error(`checksum mismatch: ${entry.path}`);
+      if (inspected.findings.length > 0) throw new Error(`secret material detected in recovery artifact: ${entry.path}`);
+    } finally {
+      fs.closeSync(identity.descriptor);
+    }
   }
   return Object.freeze({ snapshot, manifest, manifestPath, manifestSha256: sha256File(manifestPath) });
 }
@@ -333,6 +466,7 @@ function writeDrillLog(args, verified, result, targetRemoved) {
     status: result.status,
     mode: result.mode,
     artifactCount: result.artifactCount,
+    databaseIntegrityChecks: result.databaseIntegrityChecks,
     targetRemoved,
     automaticRestartAllowed: false,
     destructiveRestoreAllowed: false,
@@ -351,12 +485,16 @@ function runDrill(args) {
   if (fs.existsSync(target)) throw new Error("drill target must not already exist");
   fs.mkdirSync(target, { recursive: false, mode: 0o700 });
   try {
+    const databaseIntegrityChecks = [];
     for (const entry of verified.manifest.entries) {
       const source = path.join(verified.snapshot, ...entry.path.split("/"));
       const output = path.join(target, ...entry.path.split("/"));
       fs.mkdirSync(path.dirname(output), { recursive: true, mode: 0o700 });
       fs.copyFileSync(source, output, fs.constants.COPYFILE_EXCL);
       if (sha256File(output) !== entry.sha256) throw new Error(`drill checksum mismatch: ${entry.path}`);
+      if (entry.category === "DATABASE_SNAPSHOT") {
+        databaseIntegrityChecks.push(Object.freeze({ path: entry.path, ...verifySqliteIntegrity(output) }));
+      }
     }
     const keepTarget = args.keep === "true";
     const result = Object.freeze({
@@ -364,6 +502,7 @@ function runDrill(args) {
       mode: "VERIFY_ONLY_RESTORE_DRILL",
       snapshotId: verified.manifest.snapshotId,
       artifactCount: verified.manifest.entries.length,
+      databaseIntegrityChecks,
       target,
       automaticRestartAllowed: false,
       destructiveRestoreAllowed: false,

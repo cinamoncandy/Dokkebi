@@ -1,0 +1,80 @@
+id: WO-OPS-20261101-2948-BACKUP-RESTORE-BINARY-SAFETY
+title: "Keep disaster-recovery backup and drill binary-safe for large SQLite snapshots"
+status: IN_PROGRESS
+priority: P1
+owner: nusa-server-automation
+repository: cinamoncandy/NUSA
+issue: 2948
+base_branch: main
+base_commit: dc9e4758515792a683d2b234a3cf20eca1508ca9
+implementation_branch: WO-OPS-20261101-2948-BACKUP-RESTORE-BINARY-SAFETY
+authority_impact: none
+objective: >-
+  Preserve the existing verify-only recovery contract while processing large binary SQLite snapshots
+  with bounded memory and proving the copied database passes SQLite integrity checks.
+architecture_impact:
+  acknowledged: true
+  analysis: >-
+    Reuse the existing scripts/backup-restore.js manifest, stable-file checks, hash contract, secret
+    exclusion and verify-only drill. Replace whole-file text/buffer operations with bounded chunked
+    processing and add SQLite integrity verification only to the copied drill artifact. No new backup
+    engine, scheduler, persistence schema, restore authority, or production execution path is added.
+  references:
+    - scripts/backup-restore.js
+    - scripts/sqlite-backup.js
+    - docs/operations/release-recovery.md
+scope:
+  - "Stream file bytes in fixed-size chunks while preserving stable device/inode/size/time checks and O_NOFOLLOW behavior."
+  - "Keep SHA-256 and secret-content scanning bounded in memory for backup and verify."
+  - "Preserve secret-shaped path exclusion, manifest safety bits, source immutability, and failed-snapshot cleanup."
+  - "During verify-only drill, run read-only SQLite quick_check and integrity_check on each copied DATABASE_SNAPSHOT and record the results."
+  - "Add deterministic coverage for a sparse binary snapshot beyond Node's maximum string length, chunk-boundary secret detection, digest preservation, and copied-database integrity."
+exclusions:
+  - "No destructive restore, source database write, database row rewrite, backup deletion/retention, Oracle host access, deployment, restart, lease change, or production mutation."
+  - "No weakening or bypass of secret scanning, checksum, stable-file identity, symlink, manifest, or fail-closed rules."
+  - "No new dependency, backup engine, scheduler, or control plane."
+evidence:
+  observed_issue: >-
+    Owner-authored Issue #2948 reports a 1,306,017,792-byte SQLite snapshot whose source checksum,
+    quick_check, and integrity_check passed, but backup-restore.js failed before manifest creation with
+    Node's maximum-string-length error because secretFindings converts an entire Buffer to UTF-8.
+  current_main: "Protected main dc9e4758515792a683d2b234a3cf20eca1508ca9; the same whole-file read/string conversion is present."
+  overlap_review: "Open backup PR #2877 changes the Oracle release workflow/helper and oracle tests; it does not change scripts/backup-restore.js or its tests."
+acceptance:
+  - "Large DATABASE_SNAPSHOT backup, verify, and verify-only drill complete without whole-file Buffer or UTF-8 string conversion."
+  - "Source-to-backup-to-drill SHA-256 and byte count remain exact."
+  - "Secret scanning remains fail-closed across chunk boundaries; existing redaction and secret tests pass."
+  - "The copied drill database passes read-only SQLite quick_check and integrity_check; failure or unavailable SQLite verification fails the drill."
+  - "Source database bytes and rows are unchanged; no destructive restore or evidence deletion is introduced."
+  - "Focused tests, full validation, exact-head CI and companions pass; fresh non-author review and canonical governance remain required before merge."
+safety:
+  paper_only: true
+  liveAuthority: NONE
+  productionMutationAllowed: false
+  realOrderAuthority: false
+  realTransferAuthority: false
+  aiAuthority: ZERO_AUTHORITY
+  destructive_restore: false
+  source_database_mutation: false
+  backup_deletion: false
+verification_commands:
+  - "node --test tests/backup-restore.test.js tests/recovery-backup-scan-copy-atomicity.test.js tests/backup-authorization-secret.test.js"
+  - "pnpm run preflight"
+  - "pnpm run typecheck"
+  - "pnpm run build"
+  - "pnpm run validate:full"
+  - "pnpm run security:gate"
+  - "pnpm run lint"
+  - "pnpm test"
+  - "git diff --check"
+validation:
+  focused: "node --test tests/backup-restore.test.js tests/recovery-backup-scan-copy-atomicity.test.js tests/backup-authorization-secret.test.js: 58/58 PASS"
+  preflight: PASS
+  typecheck: PASS
+  build: "PASS via pnpm test"
+  validate_full: PASS
+  security_gate: "PASS; 0 secret findings; generated dated audit/SBOM reports"
+  lint: "PASS; 0 errors, 47 warnings (baseline count)"
+  full_suite: "pnpm test: PASS, 1323 isolated test files"
+  diff_check: PASS
+next: "Review the final scoped diff, commit this canonical feature branch, and open its single Draft PR for exact-head CI and companion checks; request independent review only after all required checks pass."
