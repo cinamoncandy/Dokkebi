@@ -18,6 +18,8 @@ const expected = { repository: "cinamoncandy/NUSA", prNumber: 42, headSha: HEAD,
 test("accepts exact fresh validator PASS and P2-only notes", () => {
   assert.equal(validateFreshValidatorEvidence(evidence(), expected).auditAllowed, true);
   assert.equal(validateFreshValidatorEvidence(evidence({ verdict: "PASS_WITH_NOTES", p2: 1, findings: [{ code: "P2_METADATA_NOTE", severity: "NOTE", message: "note", evidenceRef: null }] }), expected).p2, 1);
+  assert.equal(validateFreshValidatorEvidence(evidence({ verdict: "PASS_WITH_NOTES", p2: 1, findings: [{ code: "P2_SOURCE_NOTE", severity: "NOTE", message: "source note", evidenceRef: "src/a.ts:+1", evidenceScope: "SOURCE_CONTENT" }] }), expected).p2, 1);
+  assert.equal(validateFreshValidatorEvidence(evidence({ verdict: "PASS_WITH_NOTES", p2: 1, findings: [{ code: "P2_PATH_NOTE", severity: "NOTE", message: "path note", evidenceRef: "src/a.ts:@metadata", evidenceScope: "FILE_METADATA" }] }), expected).p2, 1);
 });
 
 test("fails closed on missing/stale/self-forge-relevant identity and P0/P1 blockers", () => {
@@ -29,6 +31,9 @@ test("fails closed on missing/stale/self-forge-relevant identity and P0/P1 block
     [{ baseSha: "c".repeat(40) }, /PROVENANCE|BASE_MISMATCH/],
     [{ validatorExecutionRunId: 76 }, /RUN_MISMATCH/],
     [{ blockers: ["x"] }, /BLOCKERS_PRESENT/],
-    [{ findings: [{ code: "P1_BAD", severity: "BLOCKER", message: "bad", evidenceRef: `x` }], p2: 1, verdict: "PASS_WITH_NOTES" }, /FINDING_PRIORITY/],
+    [{ findings: [{ code: "P1_BAD", severity: "BLOCKER", message: "bad", evidenceRef: "src/a.ts:+1", evidenceScope: "SOURCE_CONTENT" }], p2: 1, verdict: "PASS_WITH_NOTES" }, /FINDING_PRIORITY/],
+    [{ verdict: "PASS_WITH_NOTES", p2: 1, findings: [{ code: "P2_SCOPE_MISSING", severity: "NOTE", message: "missing evidence scope", evidenceRef: "src/a.ts:+1" }] }, /FINDING_EVIDENCE_SCOPE_INVALID/],
+    [{ verdict: "PASS_WITH_NOTES", p2: 1, findings: [{ code: "P2_SCOPE_MISMATCH", severity: "NOTE", message: "metadata is not source content", evidenceRef: "src/a.ts:@metadata", evidenceScope: "SOURCE_CONTENT" }] }, /FINDING_EVIDENCE_SCOPE_INVALID/],
+    [{ verdict: "PASS_WITH_NOTES", p2: 1, findings: [{ code: "P2_SCOPE_INVALID", severity: "NOTE", message: "unknown evidence scope", evidenceRef: "src/a.ts:+1", evidenceScope: "UNKNOWN" }] }, /FINDING_EVIDENCE_SCOPE_INVALID/],
   ]) assert.throws(() => validateFreshValidatorEvidence(evidence(patch), expected), code);
 });

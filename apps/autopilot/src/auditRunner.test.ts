@@ -374,6 +374,65 @@ for (const candidate of [
   assert.match(promptParts[0] ?? "", /EXACT_TRACKED_TYPESCRIPT_SOURCE/);
 });
 
+test("includes base dependency context when a named safety import is removed but its module remains imported", async () => {
+  const changedPath = "apps/autopilot/src/importer.ts";
+  const dependencyPath = "apps/autopilot/src/guard.ts";
+  const diff = [
+    `diff --git a/${changedPath} b/${changedPath}`,
+    `--- a/${changedPath}`,
+    `+++ b/${changedPath}`,
+    "@@ -1,2 +1,1 @@",
+    '-import { foo, safetyGuard } from "./guard";',
+    '+import { foo } from "./guard";',
+    "-safetyGuard();",
+    " foo();",
+    "",
+  ].join("\n");
+  const headSource = 'import { foo } from "./guard";\nfoo();\n';
+  const baseSource = 'import { foo, safetyGuard } from "./guard";\nfoo();\nsafetyGuard();\n';
+  const dependencySource = "export function safetyGuard() { return 'BASE_BOUND_SAFETY_GUARD'; }\n";
+  const protocol = `NUSA grill-me protocol\n${"Review safety, evidence, exact-head identity and dependencies. ".repeat(8)}`;
+  const validatorRequest: ValidatorRunnerRequest = Object.freeze({
+    kind: "VALIDATOR_REQUEST", repository: request.repository, prNumber: request.prNumber,
+    headSha: HEAD, baseSha: BASE, workflowRunId: request.workflowRunId,
+    executionId: "validator:1362:33450000001", dedupeKey: `validator:1362:${HEAD}`,
+    mutationAllowed: false, liveAuthority: "NONE", productionMutationAllowed: false, aiAuthority: "ZERO_AUTHORITY",
+  });
+  const promptParts: string[] = [];
+  const fetchImpl = async (input: string) => {
+    const url = new URL(input);
+    if (url.pathname.endsWith(`/pulls/${request.prNumber}`)) return response(200, pull(HEAD, BASE, 1));
+    if (url.pathname.endsWith(`/actions/runs/${request.workflowRunId}`)) return response(200, run());
+    if (url.pathname.endsWith(`/pulls/${request.prNumber}/files`)) return response(200, [{ filename: changedPath, status: "modified" }]);
+    if (url.pathname.includes("/compare/")) return response(200, {}, diff);
+    if (url.pathname.endsWith("/contents/docs/GRILL_ME_PROTOCOL.md")) return response(200, {}, protocol);
+    if (url.pathname.includes("/git/commits/")) return response(200, { tree: { sha: "c".repeat(40) } });
+    if (url.pathname.includes("/git/trees/")) return response(200, { truncated: false, tree: [
+      { type: "blob", path: changedPath }, { type: "blob", path: dependencyPath },
+    ] });
+    if (url.pathname.endsWith(`/contents/${changedPath}`)) {
+      return response(200, {}, url.searchParams.get("ref") === BASE ? baseSource : headSource);
+    }
+    if (url.pathname.endsWith(`/contents/${dependencyPath}`)) return response(200, {}, dependencySource);
+    throw new Error(`unexpected GitHub request: ${url}`);
+  };
+  const model = {
+    async run(_name: string, input: unknown) {
+      promptParts.push((input as { prompt: string }).prompt);
+      return { response: JSON.stringify({ verdict: "PASS", findings: [], blockers: [], safetyInvariantResult: "PASS", mergeAllowed: true }) };
+    },
+  };
+
+  const result = await executeIndependentValidator(validatorRequest, {
+    NUSA_AUDIT_GITHUB_TOKEN: "github-token", AI: model as never,
+  }, fetchImpl as never, () => 1234);
+
+  assert.equal(result.verdict, "PASS");
+  assert.ok(result.evidenceRefs.includes(`github:dependency/${dependencyPath}@${BASE}`));
+  assert.match(promptParts[0] ?? "", new RegExp(`EXACT-BASE DEPENDENCY ${dependencyPath} @ ${BASE}`));
+  assert.match(promptParts[0] ?? "", /BASE_BOUND_SAFETY_GUARD/);
+});
+
 test("rejects any repository or production mutation attempt", () => {
   assert.throws(() => validateAuditRunnerRequest({ ...request, mutationAllowed: true }), /AUDIT_RUNNER_MUTATION_FORBIDDEN/);
   assert.throws(() => validateAuditRunnerRequest({ ...request, productionMutationAllowed: true }), /AUDIT_RUNNER_MUTATION_FORBIDDEN/);

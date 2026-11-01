@@ -1055,10 +1055,12 @@ async function fetchValidatorDependencyContext(request: ValidatorRunnerRequest, 
         if (baseSource === null) throw new Error("VALIDATOR_BASE_SOURCE_MISSING");
         sourceChars += baseSource.length;
         if (sourceChars > MAX_CONTEXT_SOURCE_CHARS) throw new Error("VALIDATOR_CONTEXT_SOURCE_BYTES_EXCEEDED");
-        const headSpecifiers = new Set(importsAtSource.map((item) => item.specifier));
+        const headImportsBySpecifier = new Map(importsAtSource.map((item) => [item.specifier, item]));
         const removedText = changes.removedLinesByPath.get(sourcePath)?.join("\n") ?? "";
         for (const imported of localImports(baseSource)) {
-          const removedFromHead = !headSpecifiers.has(imported.specifier);
+          const headImport = headImportsBySpecifier.get(imported.specifier);
+          const headBindings = new Set(headImport?.names ?? []);
+          const removedFromHead = !headImport || imported.names.some((name) => !headBindings.has(name));
           const evidenceWasRemoved = imported.names.some((name) => new RegExp(`\\b${escapeRegExp(name)}\\b`).test(removedText))
             || (imported.alwaysInclude === true && removedText.includes(imported.specifier));
           if (removedFromHead && evidenceWasRemoved) await addImportDependency(imported, request.baseSha, baseImporterPath, removedText);

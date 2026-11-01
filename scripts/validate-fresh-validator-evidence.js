@@ -9,6 +9,12 @@ const exactKeys = (value, keys, code) => {
   const expected = [...keys].sort().join(",");
   if (actual !== expected) throw new Error(code);
 };
+const exactKeysWithOptional = (value, required, optional, code) => {
+  if (!value || typeof value !== "object" || Array.isArray(value)) throw new Error(code);
+  const allowed = new Set([...required, ...optional]);
+  const actual = Object.keys(value);
+  if (required.some((key) => !Object.hasOwn(value, key)) || actual.some((key) => !allowed.has(key))) throw new Error(code);
+};
 const positiveInt = (value, code) => {
   if (!Number.isSafeInteger(value) || value <= 0) throw new Error(code);
   return value;
@@ -47,10 +53,17 @@ function validateFreshValidatorEvidence(value, expected) {
   if (value.blockers.length !== 0) throw new Error("VALIDATOR_BLOCKERS_PRESENT");
   if (value.findings.length !== value.p2) throw new Error("VALIDATOR_P2_COUNT_MISMATCH");
   for (const finding of value.findings) {
-    exactKeys(finding, ["code", "severity", "message", "evidenceRef"], "VALIDATOR_FINDING_KEYS_INVALID");
+    exactKeysWithOptional(finding, ["code", "severity", "message", "evidenceRef"], ["evidenceScope"], "VALIDATOR_FINDING_KEYS_INVALID");
     if (typeof finding.code !== "string" || !/^P2_[A-Z0-9_.:-]{1,77}$/.test(finding.code) || finding.severity !== "NOTE") throw new Error("VALIDATOR_FINDING_PRIORITY_INVALID");
     if (typeof finding.message !== "string" || !finding.message.trim()) throw new Error("VALIDATOR_FINDING_MESSAGE_INVALID");
     if (!(finding.evidenceRef === null || typeof finding.evidenceRef === "string")) throw new Error("VALIDATOR_FINDING_EVIDENCE_INVALID");
+    if (finding.evidenceRef === null) {
+      if (finding.evidenceScope !== undefined) throw new Error("VALIDATOR_FINDING_EVIDENCE_SCOPE_INVALID");
+    } else {
+      if (finding.evidenceScope !== "SOURCE_CONTENT" && finding.evidenceScope !== "FILE_METADATA") throw new Error("VALIDATOR_FINDING_EVIDENCE_SCOPE_INVALID");
+      if (finding.evidenceScope === "FILE_METADATA" && !finding.evidenceRef.endsWith(":@metadata")) throw new Error("VALIDATOR_FINDING_EVIDENCE_SCOPE_INVALID");
+      if (finding.evidenceScope === "SOURCE_CONTENT" && finding.evidenceRef.endsWith(":@metadata")) throw new Error("VALIDATOR_FINDING_EVIDENCE_SCOPE_INVALID");
+    }
   }
   if (value.verdict === "PASS" && value.findings.length !== 0) throw new Error("VALIDATOR_PASS_FINDINGS_INVALID");
   if (value.verdict === "PASS_WITH_NOTES" && value.findings.length === 0) throw new Error("VALIDATOR_NOTES_REQUIRED");
