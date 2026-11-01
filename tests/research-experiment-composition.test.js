@@ -317,24 +317,80 @@ test("bounded gap-fill passes advance past an exchange-missing newest minute", a
     requests.push({ to: to == null ? null : Date.parse(to) });
     return new Response(JSON.stringify(candles), { status: 200, headers: { "content-type": "application/json" } });
   };
+  let clock = T_END;
   const composition = composeResearchExperiments({
     env: env({ NUSA_RESEARCH_MARKETS: "KRW-BTC", NUSA_RESEARCH_TRAIN_DAYS: "1", NUSA_RESEARCH_VALIDATION_DAYS: "1", NUSA_RESEARCH_HOLDOUT_DAYS: "1" }),
     database: db,
-    now: () => T_END,
+    now: () => clock,
     log: () => {},
     fetchImpl,
     sleep: async () => undefined,
   });
   try {
     const passes = [];
-    for (let index = 0; index < 3; index += 1) passes.push((await composition.fillGaps())[0]);
-    assert.equal(requests.length, 3);
-    assert.deepEqual(requests.map((request) => request.to), [anchor, anchor - 201 * M, anchor - 401 * M]);
+    for (let index = 0; index < 4; index += 1) {
+      clock = T_END + index * 5 * M;
+      passes.push((await composition.fillGaps())[0]);
+    }
+    assert.equal(requests.length, 4);
+    assert.deepEqual(requests.map((request) => request.to), [anchor, anchor - 201 * M, anchor + 10 * M, anchor - 401 * M]);
     assert.equal(passes[0].status, "PARTIAL");
     assert.equal(passes[1].status, "PARTIAL");
-    assert.equal(passes[2].recorded, 1, "the later pass reaches and fills the older missing source candle");
+    assert.ok(passes[2].recorded > 0, "the next head-priority pass fills newly closed recent candles");
+    assert.equal(passes[3].recorded, 1, "the historical continuation reaches the older missing source candle");
     assert.equal(store.read("KRW-BTC", M, oldGapClose, oldGapClose)[0].close, 20.5);
+    assert.equal(store.read("KRW-BTC", M, anchor + 10 * M, anchor + 10 * M).length, 1, "new head closes remain prioritized while older pages advance");
     assert.equal(store.read("KRW-BTC", M, anchor, anchor).length, 0, "the exchange-missing newest close remains missing");
+  } finally { composition.stop(); db.close(); }
+});
+
+test("malformed historical pages fail closed without discarding the last verified cursor", async () => {
+  const db = open();
+  const store = new SqliteResearchCandleStore(db, 200_000);
+  const anchor = Math.floor(T_END / M) * M;
+  const first = anchor - 600 * M;
+  const oldGapClose = anchor - 450 * M;
+  const rows = [];
+  for (let close = first; close <= anchor; close += M) if (close !== anchor && close !== oldGapClose) rows.push({ closeTimeMs: close, open: 10, high: 11, low: 9, close: 10 });
+  store.append("KRW-BTC", M, rows);
+  const requests = [];
+  const stamp = (ms) => new Date(ms).toISOString().slice(0, 19);
+  let clock = T_END;
+  let malformedHistoricalPage = true;
+  const fetchImpl = async (url) => {
+    const to = new URL(url).searchParams.get("to");
+    const exclusiveUpper = to == null ? anchor + M : Date.parse(to);
+    requests.push(to == null ? null : Date.parse(to));
+    if (malformedHistoricalPage && exclusiveUpper === anchor - 201 * M) {
+      malformedHistoricalPage = false;
+      return new Response(JSON.stringify({ malformed: true }), { status: 200, headers: { "content-type": "application/json" } });
+    }
+    const candles = [];
+    for (let start = exclusiveUpper - M; candles.length < 200 && start >= first - M; start -= M) {
+      if (start === anchor - M) continue; // The upstream source has no candle at the newest missing close.
+      candles.push({ market: "KRW-BTC", candle_date_time_utc: stamp(start), opening_price: 20, high_price: 21, low_price: 19, trade_price: 20.5, candle_acc_trade_volume: 2 });
+    }
+    return new Response(JSON.stringify(candles), { status: 200, headers: { "content-type": "application/json" } });
+  };
+  const composition = composeResearchExperiments({
+    env: env({ NUSA_RESEARCH_MARKETS: "KRW-BTC", NUSA_RESEARCH_TRAIN_DAYS: "1", NUSA_RESEARCH_VALIDATION_DAYS: "1", NUSA_RESEARCH_HOLDOUT_DAYS: "1" }),
+    database: db,
+    now: () => clock,
+    log: () => {},
+    fetchImpl,
+    sleep: async () => undefined,
+  });
+  try {
+    const results = [];
+    for (let index = 0; index < 4; index += 1) {
+      clock = T_END + index * 5 * M;
+      results.push((await composition.fillGaps())[0]);
+    }
+    assert.deepEqual(requests, [anchor, anchor - 201 * M, anchor + 10 * M, anchor - 201 * M]);
+    assert.equal(results[1].status, "ERROR");
+    assert.equal(results[1].errorCode, "MALFORMED_PAGE");
+    assert.equal(results[3].pages, 1, "the failed historical page is retried from the last verified cursor");
+    assert.ok(results[3].status === "PARTIAL" || results[3].status === "FILLED");
   } finally { composition.stop(); db.close(); }
 });
 

@@ -1,12 +1,14 @@
 current_research_candle_freshness_20261101:
   work_order: WO-RESEARCH-20261101-CANDLE-FRESHNESS
   issue: 2815
-  status: LOCAL_VALIDATED_PENDING_SUCCESSOR_CI
+  status: LOCAL_VALIDATED_PENDING_SUCCESSOR_COMMIT
   branch: WO-RESEARCH-20261101-CANDLE-FRESHNESS
   base_sha: 3e610394ab9441e925769ac66033d3ec9fedc429
   finding: "Fresh read-only /health at 2026-11-01T02:04:23Z shows runtime source e1fd3ea9363e2f66d057ecb9dfeb5948a24a64fb, research gap-fill lastRunAt 1793496251513 (about 40 minutes before observation), and the probe's persisted snapshot marks a 1m series stale at 3,270,888 ms when observed at 1793492312557. Current main's only production candle head writer is public Upbit REST gap fill every 60 minutes; probe stale threshold remains 10 minutes. This is a writer-cadence mismatch; historical TICK_ERROR cause remains UNKNOWN."
   scope: "Use the existing single gap-fill timer at 5 minutes with a one-page-per-market recurring work bound; preserve the 10-minute freshness rule, missing-data gates, existing candle rows, provenance, PAPER_ONLY, and ZERO_AUTHORITY."
   review_p1: "Review comment 4434158135 on prior head fcbb9a868b5558d6531bfa143ff093e93805c9a4 identified repeated-page stalls when the newest source close is absent. Successor retains the cursor across existing bounded passes; regression proves older-gap progress while preserving the absent close."
-  validation: "After the P1 repair: Node 24.19.0/pnpm 11.25 frozen-lockfile install and preflight PASS; focused build/tests 32/32 PASS; pnpm test PASS (1320 isolated files); typecheck/validate:full/security (0 high-critical, 0 secrets)/AIPOS provenance and tier validators/diff-check PASS; lint 0 errors/47 baseline warnings. One initial full-suite attempt exposed two stale 60-minute assertions; fixed by binding tests to the production interval constant. Failure output preserved at /workspace/evidence/2026-11-01-research-candle-full-suite-initial-failure.txt."
-  next: "Complete successor gates and commit/push to existing PR #2975; require fresh exact-head CI and independent re-review of the P1 repair. No deploy, restart, database mutation, threshold relaxation, or CODE_ACTIONABLE."
+  review_successor_p1: "Fresh review on c02d38e4b9ce53d2e3e0e37e2eecc92db8290141 found historical scanning could starve newly missing head candles; alternating head and history passes addresses it."
+  review_successor_p2: "Fresh review on c02d38e4b9ce53d2e3e0e37e2eecc92db8290141 found malformed partial pages could discard the saved cursor; they now fail closed as ERROR/MALFORMED_PAGE and preserve the verified cursor."
+  validation: "Fresh review on c02d38e4 found a P1 head-starvation issue and P2 malformed-page cursor-loss issue; both repaired locally. Frozen-lockfile install, Node 24.19/pnpm 11.25 preflight, build, focused candle/composition/health 36/36, pnpm test 1320 isolated files, typecheck, validate:full, security (0 high/critical, 0 secrets), AIPOS validators, lint (0 errors/47 baseline warnings), and diff check PASS. Generated security reports preserved outside repo; isolated-test-failure.txt restored unchanged."
+  next: "Fresh-verify protected main and PR #2975 head/base, inspect final diff, then commit/push a successor only if unchanged and safe. Preserve both review threads and require exact-head CI plus fresh independent review. No deploy, restart, database mutation, threshold relaxation, or CODE_ACTIONABLE."
   safety: PAPER_ONLY_LIVE_NONE_PRODUCTION_MUTATION_FALSE_REAL_ORDER_FALSE_REAL_TRANSFER_FALSE_AI_ZERO_AUTHORITY

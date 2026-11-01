@@ -283,7 +283,10 @@ export async function fillRecentGaps(input: {
     pages += 1;
     const parsed = parseUpbitMinuteCandles(raw, market);
     rejected += parsed.rejected;
-    if (parsed.oldestStartMs === undefined) break;
+    if (parsed.oldestStartMs === undefined) {
+      if (parsed.rejected > 0) return done("ERROR", "MALFORMED_PAGE");
+      break;
+    }
     try {
       const wanted = parsed.candles.filter((candle) => candle.closeTimeMs >= oldestMissing && candle.closeTimeMs <= top);
       if (wanted.length > 0) {

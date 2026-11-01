@@ -298,8 +298,9 @@ export function composeResearchExperiments(input: {
     return Object.freeze(results);
   };
   let gapFilling = false;
-  // Keep bounded page progress across recurring passes so an exchange-missing newest close does not pin the scan.
-  const gapFillCursors = new Map<string, number>();
+  // Alternate newest-page checks with historical continuation: a bounded old-gap scan must not starve newly
+  // missing head candles, and a missing head source row must not erase progress through older gaps.
+  const gapFillProgress = new Map<string, { historyCursorStartMs?: number; prioritizeHeadNext: boolean }>();
   let gapTimer: ReturnType<typeof setInterval> | undefined;
   let gapRetry: ReturnType<typeof setTimeout> | undefined;
   const fillGaps = async (): Promise<readonly GapFillResult[]> => {
@@ -309,9 +310,25 @@ export function composeResearchExperiments(input: {
     try {
       for (const market of settings.markets) {
         if (stopped) break;
-        const result = await fillRecentGaps({ market, windowMs: targetSpanMs, nowMs: now(), store, fetchPage, sleep, maxPages: RESEARCH_GAP_FILL_MAX_PAGES_PER_RUN, startBeforeMs: gapFillCursors.get(market) });
-        if (result.nextCursorStartMs !== undefined) gapFillCursors.set(market, result.nextCursorStartMs);
-        else if (result.status !== "RATE_LIMITED" && result.status !== "ERROR") gapFillCursors.delete(market);
+        const previous = gapFillProgress.get(market) ?? { prioritizeHeadNext: true };
+        const hasHistoryCursor = previous.historyCursorStartMs !== undefined;
+        const headPass = !hasHistoryCursor || previous.prioritizeHeadNext;
+        const result = await fillRecentGaps({ market, windowMs: targetSpanMs, nowMs: now(), store, fetchPage, sleep, maxPages: RESEARCH_GAP_FILL_MAX_PAGES_PER_RUN, startBeforeMs: headPass ? undefined : previous.historyCursorStartMs });
+        let historyCursorStartMs = previous.historyCursorStartMs;
+        let prioritizeHeadNext: boolean;
+        if (result.status === "RATE_LIMITED" || result.status === "ERROR") {
+          // Keep the last verified historical cursor across malformed pages and transient request failures.
+          prioritizeHeadNext = true;
+        } else if (headPass) {
+          // A head check must not overwrite an older scan cursor. Seed the historical scan from the first page only.
+          if (historyCursorStartMs === undefined) historyCursorStartMs = result.nextCursorStartMs;
+          prioritizeHeadNext = false;
+        } else {
+          historyCursorStartMs = result.nextCursorStartMs;
+          prioritizeHeadNext = true;
+        }
+        if (historyCursorStartMs === undefined && result.status !== "RATE_LIMITED" && result.status !== "ERROR") gapFillProgress.delete(market);
+        else gapFillProgress.set(market, { ...(historyCursorStartMs === undefined ? {} : { historyCursorStartMs }), prioritizeHeadNext });
         results.push(result);
         if (result.status === "NO_GAPS" || result.status === "FILLED") {
           const firstClose = store.earliestCloseTime(market, M);
