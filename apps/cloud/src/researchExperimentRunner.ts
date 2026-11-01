@@ -2,7 +2,7 @@ import type { ResearchComparisonEvidence, ResearchInputSnapshot } from "../../..
 import type { GeneratedStrategy } from "../../../packages/core/src/optimizer/aiStrategyEngine";
 import type { ResearchCandleSource } from "./backtestResearchEvaluator";
 import { buildResearchProvenance, canonicalSha256, hashResearchInputCore, ResearchProvenanceError } from "./researchProvenanceBuilder";
-import { buildWalkForwardWindows, type WalkForwardWindowConfig } from "./researchWalkForwardWindows";
+import { buildRollingFolds, buildWalkForwardWindows, decideRollingHoldout, requiredHistoryMs, ROLLING_FOLDS, type FoldOutcome, type RollingHoldoutDecision, type WalkForwardWindowConfig } from "./researchWalkForwardWindows";
 import type { HoldoutKey } from "../../../packages/storage/src/researchHoldoutLedger";
 import { createResearchPrecommit, type ResearchPrecommit } from "../../../packages/contracts/src/researchPrecommit";
 import { calculateResearchCandleSha256, calculateResearchDatasetId, calculateResearchDatasetIdV2, type HistoricalDatasetManifest } from "../../../packages/contracts/src/researchDatasetSemantics";
@@ -163,5 +163,41 @@ export function runResearchExperiment(ports: ExperimentRunnerPorts, spec: Experi
   } catch (error) {
     const reason = error instanceof ResearchProvenanceError ? `PROVENANCE_${error.code}` : typeof (error as { code?: unknown })?.code === "string" ? String((error as { code: string }).code) : "EXPERIMENT_FAILED";
     return Object.freeze({ status: "ERROR", reason });
+  }
+}
+
+/** Result of the un-wired K-of-N composition. */
+export interface RollingExperimentOutcome {
+  readonly decision: RollingHoldoutDecision;
+  readonly folds: readonly Readonly<{ index: number; endCloseMs: number; outcome: FoldOutcome; note: string }>[];
+  readonly refusal?: string;
+}
+
+const refuseRolling = (reason: string): RollingExperimentOutcome => Object.freeze({ decision: decideRollingHoldout([]), folds: Object.freeze([]), refusal: reason });
+
+/**
+ * Runs the existing single-fold experiment once per fold. This exported composition is
+ * deliberately not called by the orchestrator, scheduler, ledger, backfill, or /health.
+ */
+export function runRollingResearchExperiment(ports: ExperimentRunnerPorts, spec: ExperimentSpec, folds: number = ROLLING_FOLDS): RollingExperimentOutcome {
+  try {
+    const need = requiredHistoryMs(spec.windows, folds);
+    const rows = ports.candles.read(spec.market, spec.intervalMs, spec.endCloseMs - need + spec.intervalMs, spec.endCloseMs);
+    const built = buildRollingFolds({ candles: rows.map((r) => ({ timestamp: r.closeTimeMs, open: r.open, high: r.high, low: r.low, close: r.close, volume: 0 })), endCloseMs: spec.endCloseMs, config: spec.windows, folds });
+    if (built.status === "REFUSED") return refuseRolling(`ROLLING_${built.reason}${built.foldIndex === undefined ? "" : `_FOLD_${built.foldIndex}`}`);
+
+    const results = built.folds.map((fold) => {
+      const endCloseMs = fold.bounds.holdout.endCloseMs;
+      const outcome = runResearchExperiment(ports, { ...spec, endCloseMs });
+      let classified: FoldOutcome, note: string;
+      if (outcome.status !== "COMPLETED") { classified = "INSUFFICIENT"; note = `${outcome.status}_${outcome.reason}`; }
+      else if (outcome.holdout != null) { classified = outcome.holdout.result === "CHALLENGER_BETTER" ? "CHALLENGER_BETTER" : "NOT_BETTER"; note = "HOLDOUT_EVALUATED"; }
+      else if (outcome.holdoutNote === "VALIDATION_NOT_FAVOURABLE") { classified = "NOT_BETTER"; note = "VALIDATION_NOT_FAVOURABLE"; }
+      else { classified = "INSUFFICIENT"; note = outcome.holdoutNote ?? "HOLDOUT_NOT_EVALUATED"; }
+      return Object.freeze({ index: fold.index, endCloseMs, outcome: classified, note });
+    });
+    return Object.freeze({ decision: decideRollingHoldout(results.map((r) => r.outcome), undefined, folds), folds: Object.freeze(results) });
+  } catch {
+    return refuseRolling("ROLLING_RUN_FAILED");
   }
 }

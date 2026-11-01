@@ -6,11 +6,10 @@ const { join } = require("node:path");
 const { tmpdir } = require("node:os");
 const { SqliteDatabase, SqliteResearchCandleStore, SqliteResearchHoldoutLedger } = require("../dist/packages/storage/src/index.js");
 const { canonicalSha256 } = require("../dist/apps/cloud/src/researchProvenanceBuilder.js");
-const { runRollingResearchExperiment } = require("../dist/apps/cloud/src/researchRollingRunner.js");
+const { runRollingResearchExperiment } = require("../dist/apps/cloud/src/researchExperimentRunner.js");
 
 const M = 60_000;
 const END = 5000 * M;
-const SPAN = 360 * M;
 const windows = { intervalMs: M, trainMs: 200 * M, validationMs: 80 * M, holdoutMs: 80 * M, maxMissingRatio: 0 };
 const wave = (count, startMinute) => Array.from({ length: count }, (_, i) => { const close = 100 + 12 * Math.sin(i / 6); return { closeTimeMs: (startMinute + i) * M, open: close, high: close + 1, low: close - 1, close: Number(close.toFixed(4)) }; });
 const strategy = { strategyId: "challenger", version: "1.0.0", dsl: {} };

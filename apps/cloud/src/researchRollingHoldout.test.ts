@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
-import { buildRollingFolds, decideRollingHoldout, foldSpanMs, requiredHistoryMs, ROLLING_FOLDS, ROLLING_FOLDS_REQUIRED, type FoldOutcome } from "./researchRollingHoldout";
+import { buildRollingFolds, decideRollingHoldout, foldSpanMs, requiredHistoryMs, ROLLING_FOLDS, ROLLING_FOLDS_REQUIRED, type FoldOutcome } from "./researchWalkForwardWindows";
 
 const M = 3_600_000, DAY = 86_400_000;
 const config = { intervalMs: M, trainMs: 7 * DAY, validationMs: 2 * DAY, holdoutMs: 2 * DAY, maxMissingRatio: 0.05 };

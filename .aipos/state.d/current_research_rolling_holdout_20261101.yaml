@@ -1,0 +1,11 @@
+current_research_rolling_holdout_20261101:
+  work_order: WO-RESEARCH-20261031-ROLLING-HOLDOUT-FOLDS
+  status: LOCAL_VALIDATED_PENDING_EXACT_HEAD_CI
+  branch: claude/rolling-holdout
+  pull_request: 2973
+  pre_repair_head: e0b3f2766fcea8d835bb2e91a8d2b304a532e077
+  protected_main_observed: 8b4394cdfd4ad261e3f114a2bfc13309d2fef0de
+  finding: "Exact-head CI failed because new researchRollingHoldout.ts and researchRollingRunner.ts were not reachable under the one-way cloud-unreached baseline. Reproduced locally and repaired by co-locating pure exports in existing reachable research modules; no baseline relaxation or runtime wiring."
+  validation: "Frozen-lockfile install; preflight, typecheck, build, 1322 isolated tests, validate:full, security PASS, lint 0 errors/47 baseline warnings, 15 focused tests and diff-check PASS on the local repair worktree."
+  next: "Commit on the existing PR branch, keep Draft, then fresh exact-head CI and independent non-author review."
+  safety: PAPER_ONLY_LIVE_NONE_PRODUCTION_MUTATION_FALSE_AI_ZERO_AUTHORITY
