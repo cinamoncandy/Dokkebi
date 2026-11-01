@@ -17,8 +17,8 @@ import type { ResearchRecoveryResult } from "../../../packages/contracts/src/res
  * only logged, because new registrations require a canonical family binding that this research path never holds.
  */
 const M = 60_000;
-/** Keep the REST-backed candle head inside the read-only probe's 10-minute freshness window. */
-export const RESEARCH_GAP_FILL_INTERVAL_MS = 5 * M;
+/** Alternate pages every 2.5 minutes so the REST-backed head is revisited every 5 minutes, below the 10-minute stale bound. */
+export const RESEARCH_GAP_FILL_INTERVAL_MS = 2.5 * M;
 /** Periodic repairs make bounded progress; the existing timer revisits older gaps on later passes. */
 export const RESEARCH_GAP_FILL_MAX_PAGES_PER_RUN = 1;
 const DAY_MS = 86_400_000;

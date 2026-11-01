@@ -1,6 +1,6 @@
 id: WO-RESEARCH-20261101-CANDLE-FRESHNESS
 title: "Keep the REST-backed Research candle head within the existing freshness window"
-status: LOCAL_VALIDATED_PENDING_SUCCESSOR_CI
+status: LOCAL_VALIDATED_PENDING_SUCCESSOR_COMMIT
 owner: nusa-development
 repository: cinamoncandy/NUSA
 issue: 2815
@@ -11,11 +11,11 @@ authority_impact: research-data-freshness-and-provenance
 owner_approval: "Owner-directed NUSA full-convergence work order; proceed with the next safe transition while preserving all PAPER/ZERO_AUTHORITY constraints."
 objective: "The only production writer of the Research 1m candle series is the Upbit public REST backfill/gap-fill path. Its existing gap pass runs every 60 minutes while the independent data-integrity probe marks a 1m series stale after 10 minutes. Reduce the recurring stale-head window without changing the freshness threshold, creating another scheduler, or allowing an unbounded repair pass."
 scope:
-  - "Keep the existing researchExperimentComposition gap-fill timer as the sole periodic scheduler and run it every 5 minutes while public-candle backfill is enabled."
+  - "Keep the existing researchExperimentComposition gap-fill timer as the sole periodic scheduler and run it every 2.5 minutes while public-candle backfill is enabled; alternating head/history pages revisits the head every 5 minutes."
   - "Bound each recurring fillRecentGaps invocation to one Upbit page per market; alternate recent-head checks with historical continuation so either work class cannot starve the other."
   - "Malformed Upbit pages fail closed while preserving the last verified historical cursor; valid missing source rows remain absent."
   - "Keep the full startup backfill, immutable existing-row checks, Upbit provenance receipts, manifest materialization guard, research freshness threshold, experiment windows, qualification, risk, PAPER, and LIVE behavior unchanged."
-  - "Add regression coverage proving the recurring composition applies the one-page budget and that the cadence policy is exactly 5 minutes; test partial progress without rewriting existing candles."
+  - "Add regression coverage proving the recurring composition applies the one-page budget, head revisits stay inside the strict 10-minute stale threshold, and cadence policy is exactly 2.5 minutes; test partial progress without rewriting existing candles."
 exclusions:
   - "Do not add another engine, scheduler, data source, ticker-to-candle writer, or host-side timer."
   - "Do not change the 10-minute stale threshold or infer a candle where Upbit has no source candle."
@@ -41,7 +41,7 @@ verification_commands:
   - "pnpm run lint"
   - "git diff --check"
 acceptance:
-  - "The existing single periodic gap-fill scheduler is configured for a 5-minute interval only when backfill is enabled."
+  - "The existing single periodic gap-fill scheduler is configured for a 2.5-minute interval only when backfill is enabled; alternating pages revisit the head every 5 minutes, leaving margin under the strict 10-minute stale threshold."
   - "Each recurring gap-fill call performs no more than one public Upbit page per market and reports partial progress honestly."
   - "Newly missing head candles are revisited between historical pages, and historical progress survives malformed/transient pages."
   - "Existing rows remain byte-for-byte unchanged; no synthetic OHLCV or source receipts are created."
@@ -66,6 +66,7 @@ evidence:
   review_p1: "Codex review comment 4434158135 on exact head fcbb9a868b5558d6531bfa143ff093e93805c9a4 found that an exchange-missing newest close could cause every one-page pass to repeat the same page. Fixed by carrying the exclusive page cursor between existing recurring passes and added an integration regression proving older-gap progress while the newest missing close remains absent."
   review_successor_p1: "Fresh review on c02d38e4b9ce53d2e3e0e37e2eecc92db8290141 found that a historical cursor could starve newly missing head candles; implementation now alternates recent-head and historical passes."
   review_successor_p2: "Fresh review on c02d38e4b9ce53d2e3e0e37e2eecc92db8290141 found malformed partial pages could drop the saved cursor; malformed pages now return ERROR/MALFORMED_PAGE so the verified cursor is retained."
-  local_repair_validation: "After the second review findings: frozen-lockfile install, Node 24.19/pnpm 11.25 preflight, build, focused candle/composition/health tests 36/36, pnpm test (1320 isolated files), typecheck, validate:full, security (0 high/critical, 0 secrets), AIPOS YAML/provenance/drift/conformance/tier, lint (0 errors/47 baseline warnings), and git diff --check PASS. Generated security reports were preserved outside the repo; isolated-test-failure.txt restored unchanged."
-  successor_validation: "The predecessor c02d38e4 exact-head CI/companions and PAPER public-market workflow passed; its fresh review identified one P1 and one P2, both fixed in the current local diff. Current repair local gates are PASS; successor exact-head CI and independent re-review are pending its commit."
-next: "Fresh-verify protected main and PR #2975 head/base, inspect the final five-file diff, then commit/push a successor only if unchanged and safe. Preserve both review threads without author-resolving, require fresh exact-head CI and independent review. No deploy, restart, database mutation, threshold relaxation, or CODE_ACTIONABLE."
+  review_successor_p1_head_deadline: "Fresh Codex review on exact head 0dea3f66d87847e33577987e85e3be38a7ea4446 found alternate head/history passes at a 5-minute timer revisit the head only every 10 minutes and may cross the strict stale deadline due minute alignment and request latency. Repair uses the same timer at 2.5 minutes, preserving one page per market and alternating page classes so head revisit interval is 5 minutes."
+  local_repair_validation: "Current 2.5-minute cadence repair: focused candle/composition/health 36/36, pnpm test (1320 isolated test files), build, typecheck, validate:full, security (0 high/critical, 0 secrets), AIPOS YAML/provenance/drift/conformance/tier, lint (0 errors/47 warnings), and diff check PASS. These are local results only and do not replace successor exact-head CI or independent review."
+  successor_validation: "PR #2975 head 0dea3f66 exact-head CI run 41268563048, required companions 5/5, and PAPER public-market run 41268562951 passed. Fresh review found a new P1 on that SHA; current cadence repair is uncommitted, so those results are historical until successor CI/review."
+next: "Fresh-verify protected main and PR #2975 head/base, inspect the final four-file diff, then commit/push a successor to the same PR only if unchanged and safe. Preserve all review threads without author-resolving, require fresh exact-head CI and independent review. No deploy, restart, database mutation, threshold relaxation, or CODE_ACTIONABLE."

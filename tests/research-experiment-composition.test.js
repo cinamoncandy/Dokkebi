@@ -243,7 +243,9 @@ test("the composition refills restart gaps in the recent history through the pub
 });
 
 test("the existing gap-fill timer policy is frequent and bounded, and preserves stored history", async () => {
-  assert.equal(RESEARCH_GAP_FILL_INTERVAL_MS, 5 * M);
+  assert.equal(RESEARCH_GAP_FILL_INTERVAL_MS, 2.5 * M);
+  assert.equal(RESEARCH_GAP_FILL_INTERVAL_MS * 2, 5 * M, "alternating head and history revisits the head every five minutes");
+  assert.ok(RESEARCH_GAP_FILL_INTERVAL_MS * 2 < 10 * M, "the head revisit period stays strictly inside the stale threshold");
   assert.equal(RESEARCH_GAP_FILL_MAX_PAGES_PER_RUN, 1);
   const db = open();
   const scheduledDelays = [];
@@ -255,7 +257,7 @@ test("the existing gap-fill timer policy is frequent and bounded, and preserves 
   };
   try {
     timerProbe.start();
-    assert.ok(scheduledDelays.includes(RESEARCH_GAP_FILL_INTERVAL_MS), `the existing gap-fill scheduler must use 5 minutes: ${scheduledDelays}`);
+    assert.ok(scheduledDelays.includes(RESEARCH_GAP_FILL_INTERVAL_MS), `the existing gap-fill scheduler must use 2.5 minutes: ${scheduledDelays}`);
   } finally {
     timerProbe.stop();
     globalThis.setInterval = nativeSetInterval;
@@ -329,17 +331,17 @@ test("bounded gap-fill passes advance past an exchange-missing newest minute", a
   try {
     const passes = [];
     for (let index = 0; index < 4; index += 1) {
-      clock = T_END + index * 5 * M;
+      clock = T_END + index * RESEARCH_GAP_FILL_INTERVAL_MS;
       passes.push((await composition.fillGaps())[0]);
     }
     assert.equal(requests.length, 4);
-    assert.deepEqual(requests.map((request) => request.to), [anchor, anchor - 201 * M, anchor + 10 * M, anchor - 401 * M]);
+    assert.deepEqual(requests.map((request) => request.to), [anchor, anchor - 201 * M, anchor + 5 * M, anchor - 401 * M]);
     assert.equal(passes[0].status, "PARTIAL");
     assert.equal(passes[1].status, "PARTIAL");
     assert.ok(passes[2].recorded > 0, "the next head-priority pass fills newly closed recent candles");
     assert.equal(passes[3].recorded, 1, "the historical continuation reaches the older missing source candle");
     assert.equal(store.read("KRW-BTC", M, oldGapClose, oldGapClose)[0].close, 20.5);
-    assert.equal(store.read("KRW-BTC", M, anchor + 10 * M, anchor + 10 * M).length, 1, "new head closes remain prioritized while older pages advance");
+    assert.equal(store.read("KRW-BTC", M, anchor + 5 * M, anchor + 5 * M).length, 1, "new head closes remain prioritized while older pages advance");
     assert.equal(store.read("KRW-BTC", M, anchor, anchor).length, 0, "the exchange-missing newest close remains missing");
   } finally { composition.stop(); db.close(); }
 });
@@ -383,10 +385,10 @@ test("malformed historical pages fail closed without discarding the last verifie
   try {
     const results = [];
     for (let index = 0; index < 4; index += 1) {
-      clock = T_END + index * 5 * M;
+      clock = T_END + index * RESEARCH_GAP_FILL_INTERVAL_MS;
       results.push((await composition.fillGaps())[0]);
     }
-    assert.deepEqual(requests, [anchor, anchor - 201 * M, anchor + 10 * M, anchor - 201 * M]);
+    assert.deepEqual(requests, [anchor, anchor - 201 * M, anchor + 5 * M, anchor - 201 * M]);
     assert.equal(results[1].status, "ERROR");
     assert.equal(results[1].errorCode, "MALFORMED_PAGE");
     assert.equal(results[3].pages, 1, "the failed historical page is retried from the last verified cursor");
