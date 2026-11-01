@@ -7,9 +7,9 @@ Everything below is what the repository's records *claim*. Re-verify on GitHub b
 
 ## Newest handoff
 
-[`.aipos/handoffs/2026-11-01-main-handoff.md`](handoffs/2026-11-01-main-handoff.md) — CORE handoff — 2026-11-01
+[`.aipos/handoffs/2026-11-01-z-1851-sigstore-san.md`](handoffs/2026-11-01-z-1851-sigstore-san.md) — CORE handoff — #1851 Sigstore signer identity repair
 
-> Scope: canonical implementation inventory and continuation of the owner-approved, `authority_impact: none` AIPOS work order `WO-OPS-20261030-AIPOS-STATUS-ARCHIVE-TRUTH` in PR #2940. Safety remains PAPER_ONLY; `liveAuthority=NONE`; `productionMutationAllowed=false`; `realOrderAuthority=false`; `realTransferAuthority=false`; `aiAuthority=ZERO_AUTHORITY`.
+> Scope: repair fresh non-author P1 on PR #2976 while preserving the isolated verification-only trust domain. Safety is `PAPER_ONLY`; `liveAuthority=NONE`; `productionMutationAllowed=false`; `realOrderAuthority=false`; `realTransferAuthority=false`; `aiAuthority=ZERO_AUTHORITY`.
 
 ## Work orders
 

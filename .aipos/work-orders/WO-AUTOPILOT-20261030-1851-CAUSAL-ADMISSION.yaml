@@ -311,3 +311,23 @@ windows_ci_mode_expectation_20261101:
   validation: "Successor local full suite PASS 1324/1324; focused PASS 19/19; root/mobile typecheck, validate:full, security, lint 0/47, YAML/authority checks, and diff-check PASS."
   next: "Commit/push successor on the same Draft PR; predecessor CI is historical; wait for successor exact-head CI terminal result."
   safety: PAPER_ONLY_LIVE_NONE_PRODUCTION_MUTATION_FALSE_REAL_ORDER_FALSE_REAL_TRANSFER_FALSE_AI_ZERO_AUTHORITY
+
+sigstore_uri_san_review_repair_20261101:
+  reviewed_head: 97657fb9c7a27ea7891c48fc87bbe943fd6a5e40
+  finding: "Fresh non-author review found the exact signer SAN comparison omitted the https://github.com/ URI prefix used by GitHub Actions Fulcio certificates, rejecting all genuine producer bundles."
+  repair: "Added a separate pinned URI-form certificate SAN identity; retained the bare workflowRef in the signed predicate. Both production and isolated verifier policies use the URI SAN, and a shared exact identity matcher now rejects bare-form, wrong-issuer, and suffix identities."
+  local_validation:
+    focused_sigstore: PASS_5_OF_5
+    full_isolated_test_suite: PASS_1324_FILES
+    typecheck_and_build: PASS
+    validate_full: PASS
+    security_gate: PASS_HIGH_CRITICAL_ZERO_SECRETS_ZERO
+    lint: PASS_0_ERRORS_47_BASELINE_WARNINGS
+    git_diff_check: PASS
+  predecessor_head_evidence: HISTORICAL_AFTER_REPAIR_COMMIT
+  current_status: LOCAL_REPAIR_VALIDATED_PENDING_SUCCESSOR_SHA_EXACT_HEAD_CI_AND_REVIEW
+  remaining_limits:
+    - "No genuine NUSA attestation has been emitted or verified; protected inclusion and authorized workflow dispatch are still required."
+    - "Production causal receipt, CODE_ACTIONABLE, and CodingRunner positive E2E remain absent."
+  next: "Commit and push only this minimal repair to the existing #2976 Draft PR; require fresh exact-head CI/companions and non-author review. Preserve PAPER_ONLY and ZERO_AUTHORITY."
+  safety: PAPER_ONLY_LIVE_NONE_PRODUCTION_MUTATION_FALSE_REAL_ORDER_FALSE_REAL_TRANSFER_FALSE_AI_ZERO_AUTHORITY

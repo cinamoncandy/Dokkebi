@@ -2,7 +2,11 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import test from "node:test";
-import { verifyCausalProducerAttestation, verifyIsolatedCausalVerificationAttestation } from "./sigstoreCausalAttestation";
+import {
+  isPinnedCausalProducerIdentity,
+  verifyCausalProducerAttestation,
+  verifyIsolatedCausalVerificationAttestation,
+} from "./sigstoreCausalAttestation";
 
 const fixturePath = join(process.cwd(), "apps/autopilot/src/test-fixtures/sigstore-upstream-valid.json");
 const source = Object.freeze({ repository: "cinamoncandy/NUSA", sha: "a".repeat(40), runId: "456", runAttempt: "1" });
@@ -10,6 +14,16 @@ const source = Object.freeze({ repository: "cinamoncandy/NUSA", sha: "a".repeat(
 function readFixture(): Record<string, any> {
   return JSON.parse(readFileSync(fixturePath, "utf8")) as Record<string, any>;
 }
+
+test("pinned producer identity uses the URI-form GitHub Actions certificate SAN", () => {
+  const uriSan = "https://github.com/cinamoncandy/NUSA/.github/workflows/ci.yml@refs/heads/main";
+  const issuer = "https://token.actions.githubusercontent.com";
+
+  assert.equal(isPinnedCausalProducerIdentity(uriSan, issuer), true);
+  assert.equal(isPinnedCausalProducerIdentity(uriSan.slice("https://github.com/".length), issuer), false);
+  assert.equal(isPinnedCausalProducerIdentity(uriSan, "https://example.invalid"), false);
+  assert.equal(isPinnedCausalProducerIdentity(`${uriSan}suffix`, issuer), false);
+});
 
 test("cryptographically valid upstream Sigstore evidence is rejected when signer identity is not the pinned NUSA producer", async () => {
   // This upstream fixture is a crypto control only; its publisher is deliberately not NUSA.

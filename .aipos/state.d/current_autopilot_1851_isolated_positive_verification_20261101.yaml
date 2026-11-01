@@ -1,8 +1,8 @@
 current_autopilot_1851_isolated_positive_verification_20261101:
   work_order: WO-AUTOPILOT-20261030-1851-CAUSAL-ADMISSION
-  status: REPAIR_VALIDATED_PENDING_SUCCESSOR_SHA_EXACT_HEAD_CI
+  status: REVIEW_P1_REPAIRED_LOCAL_FULL_VALIDATION_PASS_PENDING_SUCCESSOR_SHA
   branch: WO-AUTOPILOT-20261030-1851-CAUSAL-ADMISSION
   current_main: dc9e4758515792a683d2b234a3cf20eca1508ca9
-  validation: "Windows CI exposed a POSIX mode-bit assertion in the initial head; successor now checks 0600 on POSIX and keeps isolation/no-authority assertions on all platforms. Successor local full suite 1324/1324, focused 19/19, typecheck, validate:full, security, lint 0 errors/47 baseline warnings, and workflow checks PASS."
+  validation: "Windows CI portability repair had passed. Fresh non-author review on exact head 97657fb found P1: GitHub Actions certificate SAN requires https://github.com/ URI prefix. Added separate URI SAN matcher while retaining bare workflowRef in signed predicate, plus exact identity positive/negative tests. Focused Sigstore 5/5, full suite 1324/1324, typecheck, validate:full, security gate and lint 0 errors/47 baseline warnings PASS."
   safety: PAPER_ONLY_LIVE_NONE_PRODUCTION_MUTATION_FALSE_REAL_ORDER_FALSE_REAL_TRANSFER_FALSE_AI_ZERO_AUTHORITY
-  next: "Push successor to PR #2976 and verify fresh exact-head CI; then request independent review only after required checks pass. No production CODE_ACTIONABLE or real attestation before governed main inclusion."
+  next: "Commit and push the minimal repair to the existing #2976 branch, then verify exact-head CI/companions and obtain fresh independent review. No production CODE_ACTIONABLE or genuine attestation before governed main inclusion."

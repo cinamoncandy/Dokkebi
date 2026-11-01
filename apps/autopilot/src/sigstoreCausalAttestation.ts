@@ -7,6 +7,7 @@ import { SIGSTORE_TRUSTED_ROOT_JSON_TEXT } from "./sigstoreTrustedRoot";
 const REPOSITORY = "cinamoncandy/NUSA";
 const WORKFLOW_PATH = ".github/workflows/ci.yml";
 const WORKFLOW_REF = `${REPOSITORY}/${WORKFLOW_PATH}@refs/heads/main`;
+const SIGNER_SUBJECT_ALT_NAME = `https://github.com/${WORKFLOW_REF}`;
 const OIDC_ISSUER = "https://token.actions.githubusercontent.com";
 const PREDICATE_TYPE = "https://github.com/cinamoncandy/NUSA/attestations/causal-regression/v1";
 const VERIFICATION_PREDICATE_TYPE = "https://github.com/cinamoncandy/NUSA/attestations/causal-regression-verification/v1";
@@ -74,6 +75,10 @@ function asObject(value: unknown): Record<string, unknown> | null {
 
 function isIdentity(value: unknown): value is string {
   return typeof value === "string" && value.length > 0 && value.length <= 4096;
+}
+
+export function isPinnedCausalProducerIdentity(subjectAlternativeName: unknown, issuer: unknown): boolean {
+  return subjectAlternativeName === SIGNER_SUBJECT_ALT_NAME && issuer === OIDC_ISSUER;
 }
 
 function hasExactKeys(value: Record<string, unknown>, keys: readonly string[]): boolean {
@@ -198,7 +203,7 @@ export async function verifyCausalProducerAttestation(
     try {
       try {
         signer = new Verifier(toTrustMaterial(root), { ctlogThreshold: 1, tlogThreshold: 1, timestampThreshold: 1 }).verify(entity, {
-          subjectAlternativeName: new RegExp(`^${WORKFLOW_REF.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}$`),
+          subjectAlternativeName: new RegExp(`^${SIGNER_SUBJECT_ALT_NAME.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}$`),
           extensions: { issuer: OIDC_ISSUER },
         });
       } catch (error) {
@@ -209,8 +214,8 @@ export async function verifyCausalProducerAttestation(
       restoreDigestAdapter();
     }
     const identity = signer.identity;
-    if (!isIdentity(identity?.subjectAlternativeName) || identity.subjectAlternativeName !== WORKFLOW_REF
-      || identity.extensions?.issuer !== OIDC_ISSUER) fail();
+    if (!isIdentity(identity?.subjectAlternativeName)
+      || !isPinnedCausalProducerIdentity(identity.subjectAlternativeName, identity.extensions?.issuer)) fail();
 
     const dsse = (entity.signature as typeof entity.signature & { env?: { payload?: Uint8Array } }).env;
     if (!(dsse?.payload instanceof Uint8Array) || dsse.payload.byteLength > 64_000) fail();
@@ -229,7 +234,7 @@ export async function verifyCausalProducerAttestation(
     if (statementDigest !== digest.sha256) fail();
     return Object.freeze({
       manifest,
-      signerIdentity: Object.freeze({ subjectAlternativeName: identity.subjectAlternativeName, issuer: identity.extensions.issuer }),
+      signerIdentity: Object.freeze({ subjectAlternativeName: identity.subjectAlternativeName, issuer: OIDC_ISSUER }),
       statementDigest,
     });
   } catch (error) {
@@ -262,15 +267,15 @@ export async function verifyIsolatedCausalVerificationAttestation(
     let signer;
     try {
       signer = new Verifier(toTrustMaterial(root), { ctlogThreshold: 1, tlogThreshold: 1, timestampThreshold: 1 }).verify(entity, {
-        subjectAlternativeName: new RegExp(`^${WORKFLOW_REF.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}$`),
+        subjectAlternativeName: new RegExp(`^${SIGNER_SUBJECT_ALT_NAME.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}$`),
         extensions: { issuer: OIDC_ISSUER },
       });
     } finally {
       restoreDigestAdapter();
     }
     const identity = signer.identity;
-    if (!isIdentity(identity?.subjectAlternativeName) || identity.subjectAlternativeName !== WORKFLOW_REF
-      || identity.extensions?.issuer !== OIDC_ISSUER) fail();
+    if (!isIdentity(identity?.subjectAlternativeName)
+      || !isPinnedCausalProducerIdentity(identity.subjectAlternativeName, identity.extensions?.issuer)) fail();
     const dsse = (entity.signature as typeof entity.signature & { env?: { payload?: Uint8Array } }).env;
     if (!(dsse?.payload instanceof Uint8Array) || dsse.payload.byteLength > 64_000) fail();
     const statement = asObject(JSON.parse(new TextDecoder("utf-8", { fatal: true }).decode(dsse.payload)));
@@ -309,7 +314,7 @@ export async function verifyIsolatedCausalVerificationAttestation(
       producer: Object.freeze({ repository: REPOSITORY, workflowRef: WORKFLOW_REF, sha: expectedProducer.sha, runId: expectedProducer.runId, runAttempt: expectedProducer.runAttempt }),
       fixtureId: "repairable-workflow-known-mismatch-v1",
       statementDigest,
-      signerIdentity: Object.freeze({ subjectAlternativeName: identity.subjectAlternativeName, issuer: identity.extensions.issuer }),
+      signerIdentity: Object.freeze({ subjectAlternativeName: identity.subjectAlternativeName, issuer: OIDC_ISSUER }),
     });
   } catch {
     throw new Error("ISOLATED_CAUSAL_VERIFICATION_REJECTED");
