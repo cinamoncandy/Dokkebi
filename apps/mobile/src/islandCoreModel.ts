@@ -129,6 +129,27 @@ export function seaShimmer(k: number, phase: number): number {
   return 0.82 + 0.18 * Math.sin(phase * 1.1 + k * 1.3);
 }
 
+/** Points of light that drift and glint on the water. */
+export const SEA_GLINTS = 14;
+const frac = (x: number): number => x - Math.floor(x);
+
+/**
+ * One glint on the sea: where it sits (depth t from the shore, across u), and how bright it is right now. Each glint drifts slowly
+ * sideways and swells and fades smoothly (a cubed half-sine, so it is mostly dim and briefly bright, never a hard blink).
+ * Deterministic in (i, phase): nothing random, so every frame follows the last.
+ */
+export function seaGlint(i: number, phase: number): { readonly t: number; readonly u: number; readonly a: number } {
+  const t = frac(i * 0.61803 + 0.13);
+  const u = frac(i * 0.37 + 0.21 + phase * (0.012 + 0.006 * (i % 3)));
+  const swell = Math.max(0, Math.sin(phase * (0.55 + 0.17 * (i % 4)) + i * 2.1));
+  return { t, u, a: swell * swell * swell };
+}
+
+/** A soft highlight that slowly travels along the shoreline: centre (0..1 across) and strength (0.25..1). */
+export function shoreShine(phase: number): { readonly x: number; readonly a: number } {
+  return { x: 0.5 + 0.5 * Math.sin(phase * 0.21), a: 0.625 + 0.375 * Math.sin(phase * 0.13 + 1) };
+}
+
 /** Stroke width of a sea line: thicker next to the shore where the island is reflected, finer towards the viewer. */
 export const seaLineWidth = (t: number): number => 0.7 + 0.5 * (1 - Math.max(0, Math.min(1, t)));
 

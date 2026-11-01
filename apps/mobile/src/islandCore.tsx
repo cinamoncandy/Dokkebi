@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { AppState, StyleSheet, Text, View } from "react-native";
 import { BlurMask, Canvas, Circle, Group, LinearGradient, Path, RadialGradient, Rect, Skia, vec, type SkPath } from "@shopify/react-native-skia";
-import { type IslandStill, ISLAND_PULSE_MS, ISLAND_LAND_EPS, ISLAND_ROWS, ISLAND_SEA_END, ISLAND_SHORE, ISLAND_STEPS, ISLAND_STILL_DRIFT, islandBreath, islandHeight, islandMinFrameGapMs, islandSteps, lowFadeY, rowBase, rowColor, rowGlow, rowLift, rowLight, rowOpacity, rowPhase, rowSpan, ISLAND_END_FADE, SEA_LINES, rowShiftPx, seaFlash, tideLight, easeToward, seaLineWidth, starTwinkle, seaShimmer, seaWave, smoothDt, swellDepth } from "./islandCoreModel";
+import { type IslandStill, ISLAND_PULSE_MS, ISLAND_LAND_EPS, ISLAND_ROWS, ISLAND_SEA_END, ISLAND_SHORE, ISLAND_STEPS, ISLAND_STILL_DRIFT, islandBreath, islandHeight, islandMinFrameGapMs, islandSteps, lowFadeY, rowBase, rowColor, rowGlow, rowLift, rowLight, rowOpacity, rowPhase, rowSpan, ISLAND_END_FADE, SEA_GLINTS, SEA_LINES, seaGlint, shoreShine, rowShiftPx, seaFlash, tideLight, easeToward, seaLineWidth, starTwinkle, seaShimmer, seaWave, smoothDt, swellDepth } from "./islandCoreModel";
 import { fillLock, fillRise, historyTicks, pulseKick, pulsesForRise, restAmplitude, springStep, WAVE_HISTORY_MS, type WavePulse } from "./waveCoreModel";
 import { calmColors } from "./uiKitModel";
 import { islandPalette, readableFont, wavePalette } from "./designSystem";
@@ -211,12 +211,30 @@ export function IslandCore({ decisionCount, orderCount, fillCount = null, live, 
         <LinearGradient start={vec(0, 0)} end={vec(width, 0)} colors={["transparent", "black", "black", "transparent"]} positions={[0, ISLAND_END_FADE, 1 - ISLAND_END_FADE, 1]} />
       </Rect>
       </Group>
+      {scene.grey ? null : <Group clip={{ x: 0, y: shoreY + 2, width, height: height * (ISLAND_SEA_END - ISLAND_SHORE) }}>
+        <Rect x={0} y={shoreY} width={width} height={height * (ISLAND_SEA_END - ISLAND_SHORE) + 4} opacity={0.2}>
+          <RadialGradient c={vec(width / 2, shoreY)} r={width * 0.6} colors={[wavePalette.cyan, "transparent"]} />
+        </Rect>
+      </Group>}
       <Rect x={width * 0.02} y={shoreY + 2} width={width * 0.96} height={1.2}>
         <LinearGradient start={vec(width * 0.02, 0)} end={vec(width * 0.98, 0)} colors={["transparent", scene.grey ? wavePalette.idle : islandPalette.horizon, "transparent"]} />
       </Rect>
       {scene.sea.map((s) => <Path key={`sea${s.key}`} path={s.path} style="stroke" strokeWidth={s.width} opacity={s.opacity}>
         <LinearGradient start={vec(s.x0, 0)} end={vec(s.x1, 0)} colors={["transparent", scene.grey ? wavePalette.idle : wavePalette.cyan, "transparent"]} />
       </Path>)}
+      {scene.grey || still != null ? null : (() => {
+        const sh = shoreShine(scene.phase), c = 0.2 + 0.6 * sh.x;
+        return <Rect x={width * 0.02} y={shoreY + 1.4} width={width * 0.96} height={2.4} opacity={0.55 * sh.a}>
+          <LinearGradient start={vec(width * 0.02, 0)} end={vec(width * 0.98, 0)} colors={["transparent", calmColors.text, "transparent"]} positions={[c - 0.2, c, c + 0.2]} />
+        </Rect>;
+      })()}
+      {scene.grey || still != null ? null : Array.from({ length: SEA_GLINTS }, (_, i) => {
+        const g = seaGlint(i, scene.phase);
+        if (g.a < 0.04) return null;
+        const y = height * (ISLAND_SHORE + 0.02 + (ISLAND_SEA_END - ISLAND_SHORE - 0.02) * Math.pow(g.t, 1.5));
+        const x = width / 2 + (g.u - 0.5) * 2 * width * (0.16 + 0.28 * (1 - g.t)) * 0.9;
+        return <Circle key={`gl${i}`} cx={x} cy={y} r={4.5} opacity={0.7 * g.a}><RadialGradient c={vec(x, y)} r={4.5} colors={[calmColors.text, wavePalette.cyan, "transparent"]} /></Circle>;
+      })}
       {scene.summit == null ? null : <>
         <Rect x={scene.summit.x - 1} y={shoreY + 4} width={2} height={height * (ISLAND_SEA_END - ISLAND_SHORE)} opacity={0.35}>
           <LinearGradient start={vec(0, shoreY)} end={vec(0, height * ISLAND_SEA_END)} colors={[islandPalette.reflection, "transparent"]} />
