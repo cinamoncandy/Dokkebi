@@ -72,3 +72,25 @@ becomes historical after commit. Obtain fresh exact-head CI/companions, then a
 new non-author review; leave both findings threads unresolved for independent
 adjudication. Keep Draft; no Validator, Audit, Release, merge, deployment, or
 Oracle mutation is implied.
+
+## Successor commit and exact-head checks — 2026-11-01
+
+This update supersedes the preceding pre-commit next-action text.
+
+- Repairs were committed to the existing PR branch as
+  `bd09b6ad9929eb3adb57b7bb2578fbfa35fa51a9` and pushed to PR #2948. The PR
+  remains OPEN / Draft / mergeable, based on protected main
+  `dc9e4758515792a683d2b234a3cf20eca1508ca9` at fresh verification.
+- The PR description now documents the two repaired review findings and local
+  validation. The predecessor review and checks remain historical.
+- Exact-head CI run `41299863980` and five companion runs `41299863849`,
+  `41299863826`, `41299863928`, `41299863930`, and `41299864015` were all
+  in progress at the latest fresh query. No successor review has been
+  requested yet.
+
+Next: wait for all six exact-head workflows to finish. If all pass, request one
+fresh non-author review for `bd09b6ad9929eb3adb57b7bb2578fbfa35fa51a9` and
+request independent adjudication of both P1 threads. If any check fails,
+inspect its job/log and classify before changing code. Keep the PR Draft and
+the threads unresolved. No Formal Validator, Audit, Release, merge, deploy,
+Oracle mutation, or production operation is authorized by this update.

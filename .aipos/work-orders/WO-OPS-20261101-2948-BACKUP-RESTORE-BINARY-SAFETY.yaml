@@ -8,6 +8,7 @@ issue: 2948
 base_branch: main
 base_commit: dc9e4758515792a683d2b234a3cf20eca1508ca9
 implementation_branch: WO-OPS-20261101-2948-BACKUP-RESTORE-BINARY-SAFETY
+current_head: bd09b6ad9929eb3adb57b7bb2578fbfa35fa51a9
 authority_impact: none
 objective: >-
   Preserve the existing verify-only recovery contract while processing large binary SQLite snapshots
@@ -82,4 +83,4 @@ validation:
   full_suite: "pnpm test: PASS, 1323 isolated test files on the P1 repair worktree"
   diff_check: PASS
   review_findings: "Exact-head Codex review on e78b4162bda96de06e8170cb943b689b655b5d85 found two P1s: SQLite sidecars were treated as databases; secret matches accumulated without bound. Both repaired locally with regression coverage; predecessor CI/review are historical after successor commit."
-next: "Recheck protected main and PR #2948 head/base; review the complete minimal diff; commit only the two P1 repairs plus AIPOS evidence to this existing branch; push to the existing Draft PR; run fresh exact-head CI/companions and request fresh independent review after they pass. Do not resolve review threads."
+next: "Wait for exact-head CI run 41299863980 and five companions 41299863849, 41299863826, 41299863928, 41299863930, and 41299864015 on bd09b6ad9929eb3adb57b7bb2578fbfa35fa51a9. If all pass, request one fresh non-author review bound to this SHA and ask for both current P1 threads to be independently adjudicated. Do not resolve review threads."
