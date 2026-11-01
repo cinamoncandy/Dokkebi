@@ -24,10 +24,12 @@ Safety stays: PAPER_ONLY, liveAuthority=NONE, productionMutationAllowed=false. �
 - 구간마다 서로 다른 `endCloseMs`를 쓰므로 홀드아웃 키(후보 설정 해시 + 마켓 + 봉 + 구간)가 달라서, 구간마다 따로 한 번씩만 쓴다.
 - 같은 후보를 다음 날 다시 돌리면 구간이 하루 밀려서 이전 홀드아웃과 겹친다 → `HOLDOUT_OVERLAPS_USED` → 구간 결과 INSUFFICIENT → 롤링 결과 증거 부족. 즉 후보는 구간이 2일 이상 밀린 뒤에야 다시 시험된다. 기존 단일 홀드아웃과 같은 성질이다.
 
-## 4. 카운터 이름
-- 구간별: `ROLLING_FOLD_CHALLENGER_BETTER`, `ROLLING_FOLD_NOT_BETTER`, `ROLLING_FOLD_INSUFFICIENT`.
-- 후보별: `ROLLING_PASS`, `ROLLING_FAIL`, `ROLLING_INSUFFICIENT_EVIDENCE`, 거절은 `ROLLING_REFUSED_<이유>`.
-- 모두 기존 코드 형식(`^[A-Z][A-Z0-9_]{1,47}$`)을 따른다. 서로 다른 일반 키 개수 상한(`MAX_ORDINARY_COUNT_KEYS`)을 확인하고 필요하면 파생 키로 분류한다.
+## 4. 카운터는 기존 `counts`에 섞지 않는다 (구현 전 점검에서 발견한 문제)
+- `counts`는 /health에 최대 40개 키만 낸다. 일반 키 30개 + `FAIL_*` 5개 + `REPEAT_*` 5개로 이미 가득 차 있다 (`MAX_ORDINARY_COUNT_KEYS = 30`).
+- `ROLLING_*` 키(구간별 3 + 후보별 3 + 거절 이유)를 일반 키로 넣으면 두 가지가 잘못된다. 40개 한도를 넘거나, 일반 키 자리를 먼저 차지해서 나중에 처음 나오는 `HOLDOUT_CHALLENGER_BETTER` 같은 메타 학습 입력 키가 밀려 사라질 수 있다.
+- 그래서 롤링 결과는 `counts`가 아니라 **별도 요약 객체** `rollingHoldout`로 낸다. `researchGapFill`처럼 오케스트레이터가 들고 있고, `/health`의 runtime에 새 필드로 나간다 (고정 코드와 정수만):
+  `{ mode, candidatesChecked, pass, fail, insufficientEvidence, refused: { <이유코드>: n }, folds: { challengerBetter, notBetter, insufficient } }`.
+- `SHADOW`에서 이 요약은 `HOLDOUT_*` 카운터와 메타 학습 입력에 전혀 닿지 않는다. 진단 워크플로의 학습 출력(`learning_readout`)에 `rollingHoldout`을 추가한다.
 
 ## 5. 이력 길이와 백필
 - 구간이 겹치지 않으려면 N×(훈련+검증+홀드아웃) = 33일 + 하루 여유가 필요하다 (현재 백필 목표는 12일: `targetSpanMs`).
@@ -53,6 +55,6 @@ Safety stays: PAPER_ONLY, liveAuthority=NONE, productionMutationAllowed=false. �
 4. 적용할 봉 길이(1m / 15m / 60m 중).
 
 ## 아직 확인하지 않은 것
-- `MAX_ORDINARY_COUNT_KEYS` 값과 파생 키 분류 규칙의 정확한 한계.
+- `/health` runtime에 새 필드를 낼 때의 건강 계약 검증기(`healthExport`, 모바일 동기화) 영향.
 - 매니페스트 갱신 시점과 33일 범위의 호환 (`datasetIdForMarket`의 `latest`).
 - 실제 서버의 백필 소요 시간.
