@@ -69,6 +69,8 @@ export type ClosedLearningEvidenceCorrelation = Readonly<Partial<{
   cycleId: string; cycleEvidenceId: string; cycleEvidenceFingerprint: string; decisionId: string; decisionReference: string; decisionCandidateId: string; deploymentId: string;
   /** Durable (survives restarts): how many cycles the ledger holds, and when the latest was recorded. */
   cyclesRecorded: number; lastCycleRecordedAt: number;
+  /** The ledger's cycle count the first time THIS process read it: above 0 means records written by an earlier process were found after a restart. */
+  cyclesRecordedAtBoot: number;
   failuresRecorded: number; latestFailureId: string; latestFailurePeriodId: string; latestFailureEvidenceId: string; latestFailureEvidenceFingerprint: string;
   latestFailureSourceCommitSha: string; latestFailureRuntimeSourceCommitSha: string; latestFailureStage: string; latestFailureCode: string; latestFailureRecordedAt: number;
   /**
@@ -106,6 +108,9 @@ export class ClosedLearningLoopStatusTracker {
   private periods: ClosedLearningEvidenceCorrelation = {};
   private cycle: ClosedLearningEvidenceCorrelation = {};
   private durable: { cyclesRecorded: number; lastCycleRecordedAt?: number } | null = null;
+  private durableAtBoot: number | undefined;
+  /** Set by the first ledger read (or failure) in this process, so a later read can never be mistaken for the boot read. */
+  private bootReadDone = false;
   private durableOutcome: string | undefined;
   /** The outcome of a cycle evaluated by THIS process (wins over the durable copy). */
   private processCycleOutcome: string | undefined;
@@ -150,6 +155,10 @@ export class ClosedLearningLoopStatusTracker {
    * (cyclesEvaluated, lastCycle*) stay per process; what a cycle in this process observed always wins over the durable copy.
    */
   public observeDurableCycles(summary: { readonly cyclesRecorded: number; readonly latest?: ClosedLearningCycleRecord }): void {
+    if (!this.bootReadDone) {
+      this.bootReadDone = true;
+      if (Number.isSafeInteger(summary.cyclesRecorded) && summary.cyclesRecorded >= 0) this.durableAtBoot = summary.cyclesRecorded;
+    }
     this.durable = Object.freeze({ cyclesRecorded: summary.cyclesRecorded, ...(summary.latest == null ? {} : { lastCycleRecordedAt: summary.latest.recordedAt }) });
     const latest = summary.latest;
     this.durableOutcome = code(latest?.decision?.outcome);
@@ -211,6 +220,8 @@ export class ClosedLearningLoopStatusTracker {
   /** The durable ledger could not be read: withdraw everything published from it, so /health never presents stale durable evidence as current. */
   public clearDurableCycles(): void {
     this.durable = null;
+    this.durableAtBoot = undefined;
+    this.bootReadDone = true;
     this.durableOutcome = undefined;
     this.durableCycleIdentity = {};
     this.publish();
@@ -234,6 +245,7 @@ export class ClosedLearningLoopStatusTracker {
     const evidence = Object.freeze({
       ...this.durableCycleIdentity,
       ...this.durableFailure,
+      ...(this.durableAtBoot === undefined ? {} : { cyclesRecordedAtBoot: this.durableAtBoot }),
       ...(this.durable == null ? {} : { cyclesRecorded: this.durable.cyclesRecorded, ...(this.durable.lastCycleRecordedAt === undefined || !Number.isSafeInteger(this.durable.lastCycleRecordedAt) ? {} : { lastCycleRecordedAt: this.durable.lastCycleRecordedAt }) }),
       ...this.periods,
       ...this.cycle,

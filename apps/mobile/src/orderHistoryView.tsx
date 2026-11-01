@@ -1,3 +1,5 @@
+import { AiShell } from "./aiKit";
+import { plainScreenChip } from "./stageTraceModel";
 import React, { useMemo, useState } from "react";
 import { ActivityIndicator, RefreshControl, ScrollView, StyleSheet, Text, View } from "react-native";
 import { NusaButton, NusaTextField, StatusChip } from "./components";
@@ -30,7 +32,11 @@ function OrderRow({ order, last }: Readonly<{ order: ReturnType<typeof buildOrde
   </View>;
 }
 
-export function OrderHistoryView({ rawOrders, error, refreshing, onRefresh }: OrderHistoryViewProps) {
+export function OrderHistoryView(props: OrderHistoryViewProps) {
+  return <AiShell chip={plainScreenChip("MORE")}><OrderHistoryBody {...props} /></AiShell>;
+}
+
+function OrderHistoryBody({ rawOrders, error, refreshing, onRefresh }: OrderHistoryViewProps) {
   const { theme } = useTheme();
   const [query, setQuery] = useState(""); const [filter, setFilter] = useState<OrderHistoryFilter>("ALL"); const [sort, setSort] = useState<OrderHistorySort>("TIME_DESC"); const [page, setPage] = useState(1); const [period, setPeriod] = useState<OrderHistoryPeriod>("ALL");
   const model = useMemo(() => buildOrderHistoryViewModel({ rawOrders, query, filter, sort, page, period }), [filter, page, period, query, rawOrders, sort]);
