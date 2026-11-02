@@ -290,6 +290,13 @@
       "secrets": false,
       "environment": null
     },
+    "security-gate-watch.yml:watch": {
+      "write": [
+        "issues"
+      ],
+      "secrets": false,
+      "environment": null
+    },
     "windows-desktop-stable-release.yml:release": {
       "write": [
         "contents"
