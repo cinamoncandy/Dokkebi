@@ -604,3 +604,15 @@ test("/health publishes the public futures collector counters as non-negative in
     assert.equal(JSON.parse((await request(handle.port, "/health")).body).runtime.futuresCollector, undefined);
   }, 42391);
 });
+
+test("/health publishes the open period's observation status counts as non-negative integers only", async () => {
+  const loop = { cyclesEvaluated: 0, deployments: 0, ticks: 1, lastTickAt: 1_900, bootstrap: "RESEARCH_NOT_DEPLOYABLE", rollover: "WAITING_FOR_CANONICAL_BOUNDARY", evidence: { openObservations: 12, openFilledObservations: 0, openWaitObservations: 9, openBlockedObservations: 2, openRejectedObservations: 1, openFailedObservations: -1, openDuplicateObservations: "3" } };
+  await withServer({ runtimeLiveness: () => ({ ...LIVENESS, closedLearningLoop: loop }) }, async (handle) => {
+    const evidence = JSON.parse((await request(handle.port, "/health")).body).runtime.closedLearningLoop.evidence;
+    assert.equal(evidence.openWaitObservations, 9);
+    assert.equal(evidence.openBlockedObservations, 2);
+    assert.equal(evidence.openRejectedObservations, 1);
+    assert.equal(evidence.openFailedObservations, undefined, "a negative count is withdrawn");
+    assert.equal(evidence.openDuplicateObservations, undefined, "a non-integer is withdrawn");
+  }, 41897);
+});
