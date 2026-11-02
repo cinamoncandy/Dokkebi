@@ -200,6 +200,7 @@ export function startClosedLearningProductionRuntime(env: NodeJS.ProcessEnv = pr
     aiRuntime: cloudAiRuntime,
     closedLearningStatus: () => loopStatus.snapshot(),
     researchIntervalTicks: () => researchExperiments?.experimentTicksByInterval() ?? null,
+    researchRollingHoldout: () => researchExperiments?.rollingHoldoutByInterval() ?? null,
     microstructureRecorder,
     orderBookCollector,
     futuresCollector,

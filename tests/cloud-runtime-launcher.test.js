@@ -214,3 +214,21 @@ test("the owner research file turns the research experiments on over the host en
   assert.equal(readResearchExperimentSettings({ ...off.env, NUSA_SOURCE_COMMIT_SHA: "a".repeat(40) }).status, "ENABLED");
   assert.deepEqual([...readResearchExperimentSettings({ ...off.env, NUSA_SOURCE_COMMIT_SHA: "a".repeat(40), NUSA_RESEARCH_MARKETS: "KRW-XRP" }).settings.markets], ["KRW-XRP"]);
 });
+
+test("the optional rollingHoldout owner key accepts only the exact words OFF or SHADOW, is not set in the shipped file, and defaults to OFF in the settings", () => {
+  const { readOwnerResearch, buildRuntimeEnv: build } = require("../scripts/start-cloud-runtime.js");
+  const { readResearchExperimentSettings } = require("../dist/apps/cloud/src/researchExperimentComposition.js");
+  assert.equal(readOwnerResearch().rollingHoldout, undefined, "the shipped owner file does not enable the rolling check");
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "owner-rolling-"));
+  const write = (value) => { const f = path.join(dir, "r.json"); fs.writeFileSync(f, JSON.stringify(value)); return f; };
+  for (const bad of ["shadow", "ENFORCE", true, 1, null]) assert.throws(() => readOwnerResearch(write({ schemaVersion: 1, experiments: true, rollingHoldout: bad })), /owner research file is invalid/);
+  const shadow = readOwnerResearch(write({ schemaVersion: 1, experiments: true, rollingHoldout: "SHADOW" }));
+  const applied = build({}, TOKEN, null, null, shadow);
+  assert.equal(applied.env.NUSA_RESEARCH_ROLLING_HOLDOUT, "SHADOW");
+  assert.ok(applied.applied.includes("NUSA_RESEARCH_ROLLING_HOLDOUT"));
+  assert.equal(build({}, TOKEN, null, null, { experiments: true }).env.NUSA_RESEARCH_ROLLING_HOLDOUT, undefined, "no key, nothing applied");
+  const base = { NUSA_CLOUD_RESEARCH_EXPERIMENTS: "1", NUSA_SOURCE_COMMIT_SHA: "a".repeat(40) };
+  assert.equal(readResearchExperimentSettings(base).settings.rollingHoldout, "OFF");
+  assert.equal(readResearchExperimentSettings({ ...base, NUSA_RESEARCH_ROLLING_HOLDOUT: "SHADOW" }).settings.rollingHoldout, "SHADOW");
+  for (const typo of ["shadow", "ENFORCE", "1", ""]) assert.equal(readResearchExperimentSettings({ ...base, NUSA_RESEARCH_ROLLING_HOLDOUT: typo }).settings.rollingHoldout, "OFF", `a typo (${typo}) never turns it on`);
+});

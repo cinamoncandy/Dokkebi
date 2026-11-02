@@ -135,10 +135,11 @@ test("the learning readout reads the saved /health file, keeps only booleans, nu
   try {
     const out = JSON.parse(run(JSON.stringify({
       learningLoopVerdict: { verdict: "PARTIAL", candidateFunnel: { stage: "NO_DISCOVERY", experiments: 9 } },
-      runtime: { orderBookCoverage: { market: "KRW-BTC", ratio: 0.6, meetsStudyBar: false }, closedLearningLoop: { cycleId: "closed-learning:abc", note: "secret text", cyclesEvaluated: 0 } },
+      runtime: { researchRollingHoldout: { "1m": { mode: "SHADOW", candidatesChecked: 2, refused: { ROLLING_INSUFFICIENT_HISTORY_FOLD_0: 2 }, folds: { notBetter: 1 } } }, orderBookCoverage: { market: "KRW-BTC", ratio: 0.6, meetsStudyBar: false }, closedLearningLoop: { cycleId: "closed-learning:abc", note: "secret text", cyclesEvaluated: 0 } },
     })));
     assert.equal(out.learningLoopVerdict.candidateFunnel.stage, "NO_DISCOVERY");
     assert.deepEqual(out.orderBookCoverage, { ratio: 0.6, meetsStudyBar: false }, "the market name is dropped");
+    assert.deepEqual(out.researchRollingHoldout, { "1m": { mode: "SHADOW", candidatesChecked: 2, refused: { ROLLING_INSUFFICIENT_HISTORY_FOLD_0: 2 }, folds: { notBetter: 1 } } }, "the SHADOW rolling summary is read");
     assert.deepEqual(out.closedLearningLoop, { cyclesEvaluated: 0 }, "identifiers and free text are dropped");
     assert.equal(run("{bad"), "LEARNING_READOUT_UNAVAILABLE");
     assert.equal(run("{}"), "LEARNING_READOUT_EMPTY");

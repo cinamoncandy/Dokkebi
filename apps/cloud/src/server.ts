@@ -114,6 +114,7 @@ export interface CloudRuntimeLivenessSnapshot {
   readonly microstructureRecorder?: { readonly orderBookSamples: number; readonly tradeTicks: number; readonly writeFailures: number; readonly rejectedRows?: number; readonly lastRecordedAt?: number };
   readonly researchExperimentTicks?: { readonly lastTickAt: number; readonly lastStatus: string; readonly ticks: number; readonly sessionsStarted: number; readonly counts: Readonly<Record<string, number>> };
   /** Display-only outcome of the hourly REST gap fill (the candle series head writer): fixed codes and integers. */
+  readonly researchRollingHoldout?: Readonly<Record<string, object>>;
   readonly researchGapFill?: { readonly lastRunAt?: number; readonly runs: number; readonly deferred: number; readonly counts: Readonly<Record<string, number>>; readonly lastErrorCode?: string };
   /** The same research experiment summaries keyed by bar length ("1m", "15m", "60m", "240m"). */
   readonly researchExperimentTicksByInterval?: Readonly<Record<string, { readonly lastTickAt: number; readonly lastStatus: string; readonly ticks: number; readonly sessionsStarted: number; readonly counts: Readonly<Record<string, number>> }>>;
@@ -422,6 +423,28 @@ function publicRuntimeLiveness(value: CloudRuntimeLivenessSnapshot): CloudRuntim
     }
     if (Object.keys(byInterval).length > 0) experimentTicksByInterval = { researchExperimentTicksByInterval: byInterval };
   }
+  // SHADOW rolling-holdout summary per declared bar length: SHADOW mode, integers and at most 12 code-keyed refusal counts; nothing else.
+  const rawRolling = source.researchRollingHoldout as Record<string, unknown> | null | undefined;
+  let rollingHoldout: { researchRollingHoldout?: Record<string, Record<string, unknown>> } = {};
+  if (rawRolling != null && typeof rawRolling === "object" && !Array.isArray(rawRolling)) {
+    const nat = (value: unknown): number | undefined => (Number.isSafeInteger(value) && Number(value) >= 0 ? Number(value) : undefined);
+    const byInterval: Record<string, Record<string, unknown>> = {};
+    for (const [key, value] of Object.entries(rawRolling)) {
+      if (!/^(1|15|60|240)m$/.test(key) || value == null || typeof value !== "object" || Array.isArray(value)) continue;
+      const v = value as Record<string, unknown>, f = (v.folds ?? {}) as Record<string, unknown>;
+      const nums = [nat(v.candidatesChecked), nat(v.pass), nat(v.fail), nat(v.insufficientEvidence), nat(v.errors), nat(f.challengerBetter), nat(f.notBetter), nat(f.insufficient)];
+      if (v.mode !== "SHADOW" || nums.some((n) => n === undefined)) continue;
+      const refused: Record<string, number> = {};
+      if (v.refused != null && typeof v.refused === "object" && !Array.isArray(v.refused)) {
+        for (const [code, count] of Object.entries(v.refused as Record<string, unknown>)) {
+          if (Object.keys(refused).length >= 12) break;
+          if (/^[A-Z][A-Z0-9_]{1,47}$/.test(code) && nat(count) !== undefined) refused[code] = Number(count);
+        }
+      }
+      byInterval[key] = { mode: "SHADOW", candidatesChecked: nums[0], pass: nums[1], fail: nums[2], insufficientEvidence: nums[3], errors: nums[4], refused, folds: { challengerBetter: nums[5], notBetter: nums[6], insufficient: nums[7] }, ...(nat(v.lastCheckedAt) === undefined ? {} : { lastCheckedAt: Number(v.lastCheckedAt) }) };
+    }
+    if (Object.keys(byInterval).length > 0) rollingHoldout = { researchRollingHoldout: byInterval };
+  }
   // Closed-learning loop: integers for the counters and the tick time, fixed codes for the steps; nothing else.
   const rawLoop = source.closedLearningLoop as Record<string, unknown> | null | undefined;
   let closedLearningLoop: { closedLearningLoop?: Record<string, string | number | Record<string, string | number>> } = {};
@@ -556,7 +579,7 @@ function publicRuntimeLiveness(value: CloudRuntimeLivenessSnapshot): CloudRuntim
     : {};
   // Build identity: only a full lowercase 40-hex commit is published, never other text.
   const sourceCommitSha = typeof source.sourceCommitSha === "string" && /^[0-9a-f]{40}$/.test(source.sourceCommitSha) ? { sourceCommitSha: source.sourceCommitSha } : {};
-  return Object.freeze({ ...sourceCommitSha, ...paperLedger, ...timestamps, ...counters, ...(lastPaperDecisionOutcome === undefined ? {} : { lastPaperDecisionOutcome }), lastError, ...(previousStop === undefined ? {} : { previousStop }), ...stall, ...research, ...funnel, ...lossSession, ...lossAttribution, ...experimentTicks, ...experimentTicksByInterval, ...researchGapFill, ...closedLearningLoop, ...microstructure, ...orderBookCollector, ...futuresCollector, ...dataIntegrity }) as unknown as CloudRuntimeLivenessSnapshot;
+  return Object.freeze({ ...sourceCommitSha, ...paperLedger, ...timestamps, ...counters, ...(lastPaperDecisionOutcome === undefined ? {} : { lastPaperDecisionOutcome }), lastError, ...(previousStop === undefined ? {} : { previousStop }), ...stall, ...research, ...funnel, ...lossSession, ...lossAttribution, ...experimentTicks, ...experimentTicksByInterval, ...researchGapFill, ...rollingHoldout, ...closedLearningLoop, ...microstructure, ...orderBookCollector, ...futuresCollector, ...dataIntegrity }) as unknown as CloudRuntimeLivenessSnapshot;
 }
 
 const PUBLIC_HEALTH_REASONS = new Set(["EVIDENCE_HEALTHY", "EVIDENCE_DEGRADED", "EVIDENCE_FAILED", "EVIDENCE_STALE", "EVIDENCE_MISSING", "EVIDENCE_INVALID_TIME", "RECOVERY_NOT_VERIFIED"]);

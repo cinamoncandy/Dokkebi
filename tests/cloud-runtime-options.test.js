@@ -12,7 +12,7 @@ function positionalNames() {
 
 test("startCloudRuntimeFromOptions forwards every named option to the matching positional slot", () => {
   const names = positionalNames();
-  assert.equal(names.length, 20);
+  assert.equal(names.length, 21);
   const body = source.slice(source.indexOf("export function startCloudRuntimeFromOptions("), source.indexOf("export function startCloudRuntime(\n"));
   const forwarded = [...body.matchAll(/^    options\.([a-zA-Z]+),$/gm)].map((match) => match[1]);
   assert.deepEqual(forwarded, names);

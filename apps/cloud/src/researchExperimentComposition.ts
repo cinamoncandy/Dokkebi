@@ -45,6 +45,8 @@ export interface ResearchExperimentSettings {
   readonly intervalsMinutes: readonly number[];
   /** Fill history from Upbit's public 1-minute candles at start. On unless NUSA_RESEARCH_BACKFILL is set to anything but ENABLED. */
   readonly backfill: boolean;
+  /** K-of-N rolling holdout: OFF (default) or SHADOW (display only; see docs/DESIGN_ROLLING_HOLDOUT_WIRING.md). */
+  readonly rollingHoldout: "OFF" | "SHADOW";
 }
 
 export type ResearchExperimentSettingsResult =
@@ -85,6 +87,8 @@ export function readResearchExperimentSettings(env: NodeJS.ProcessEnv): Research
       sourceCommitSha: commit,
       intervalsMinutes: Object.freeze(intervalsMinutes),
       backfill: env.NUSA_RESEARCH_BACKFILL === undefined || env.NUSA_RESEARCH_BACKFILL === "ENABLED",
+      // Anything but the exact word SHADOW is OFF: a typo can never turn the rolling check on.
+      rollingHoldout: env.NUSA_RESEARCH_ROLLING_HOLDOUT === "SHADOW" ? ("SHADOW" as const) : ("OFF" as const),
     }),
   });
 }
@@ -99,6 +103,8 @@ export interface ResearchExperimentComposition {
   readonly orchestrators: readonly ResearchExperimentOrchestrator[];
   /** Display only: each bar length's experiment tick summary, keyed "1m", "15m", ... */
   readonly experimentTicksByInterval: () => Readonly<Record<string, ReturnType<ResearchExperimentOrchestrator["experimentTicks"]>>>;
+  /** Display only: each bar length's SHADOW rolling-holdout summary; empty unless the mode is SHADOW. */
+  readonly rollingHoldoutByInterval: () => Readonly<Record<string, NonNullable<ReturnType<ResearchExperimentOrchestrator["rollingHoldout"]>>>>;
   readonly tickOnce: () => TickReport;
   /** Cooperative production path: same deterministic tick, yielding between bounded experiment steps. */
   readonly tickOnceAsync: () => Promise<TickReport>;
@@ -247,6 +253,7 @@ export function composeResearchExperiments(input: {
       evaluator: { version: "backtest-eval-v1", modelVersion: "dsl-backtest-v1" },
       featurePipeline: { version: "closed-candle-agg-v1", config: { intervalMs, maxInternalGapMs: 30_000, volume: 0 } },
       experimentFamilyPrefix: `sma-research${tag}`,
+      ...(settings.rollingHoldout === "SHADOW" ? { rollingHoldout: { mode: "SHADOW" as const } } : {}),
       datasetManifest: { read: (datasetId: string) => datasetManifests.read(datasetId) },
       datasetIdForMarket: (targetMarket: string) => datasetManifests.latest(targetMarket, `${intervalMs / 60_000}m`)?.datasetId ?? "missing-dataset-manifest",
       failureEvidence: () => ledger.list().filter((record) => record.provenance?.windowRole === "VALIDATION" && record.provenance.interval === `${minutes}m`),
@@ -431,6 +438,11 @@ export function composeResearchExperiments(input: {
     experimentTicksByInterval: () => {
       const byInterval: Record<string, ReturnType<ResearchExperimentOrchestrator["experimentTicks"]>> = {};
       settings.intervalsMinutes.forEach((minutes, index) => { byInterval[`${minutes}m`] = orchestrators[index]!.experimentTicks(); });
+      return Object.freeze(byInterval);
+    },
+    rollingHoldoutByInterval: () => {
+      const byInterval: Record<string, NonNullable<ReturnType<ResearchExperimentOrchestrator["rollingHoldout"]>>> = {};
+      settings.intervalsMinutes.forEach((minutes, index) => { const summary = orchestrators[index]!.rollingHoldout(); if (summary != null) byInterval[`${minutes}m`] = summary; });
       return Object.freeze(byInterval);
     },
     tickOnce,

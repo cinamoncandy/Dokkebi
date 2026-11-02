@@ -136,7 +136,7 @@ jobs:
             if (o === null || typeof o !== "object" || Array.isArray(o) || depth > 3) return undefined;
             const out = {};
             for (const [k, x] of Object.entries(o)) {
-              if (!/^[a-zA-Z0-9]{1,40}$/.test(k)) continue;
+              if (!/^[a-zA-Z0-9][a-zA-Z0-9_]{0,47}$/.test(k)) continue;
               if (typeof x === "boolean" || Number.isFinite(x) || (typeof x === "string" && /^[A-Z][A-Z0-9_]{0,47}$/.test(x))) out[k] = x;
               else { const n = keep(x, depth + 1); if (n && Object.keys(n).length > 0) out[k] = n; }
             }
@@ -145,7 +145,7 @@ jobs:
           try {
             const h = JSON.parse(fs.readFileSync(process.argv[1], "utf8")), r = h.runtime && typeof h.runtime === "object" ? h.runtime : {};
             const out = {};
-            for (const [name, value] of [["learningLoopVerdict", h.learningLoopVerdict], ["learningPipeline", h.learningPipeline], ["orderBookCoverage", r.orderBookCoverage], ["researchGapFill", r.researchGapFill], ["closedLearningLoop", r.closedLearningLoop]]) {
+            for (const [name, value] of [["learningLoopVerdict", h.learningLoopVerdict], ["learningPipeline", h.learningPipeline], ["orderBookCoverage", r.orderBookCoverage], ["researchGapFill", r.researchGapFill], ["researchRollingHoldout", r.researchRollingHoldout], ["closedLearningLoop", r.closedLearningLoop]]) {
               const v = keep(value, 0); if (v && Object.keys(v).length > 0) out[name] = v;
             }
             console.log(Object.keys(out).length > 0 ? JSON.stringify(out) : "LEARNING_READOUT_EMPTY");

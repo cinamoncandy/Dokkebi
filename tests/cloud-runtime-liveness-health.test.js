@@ -604,3 +604,17 @@ test("/health publishes the public futures collector counters as non-negative in
     assert.equal(JSON.parse((await request(handle.port, "/health")).body).runtime.futuresCollector, undefined);
   }, 42391);
 });
+
+test("/health publishes the SHADOW rolling-holdout summary only as the declared shape: a mode, integers and code-keyed counts", async () => {
+  const good = { mode: "SHADOW", candidatesChecked: 3, pass: 1, fail: 1, insufficientEvidence: 1, errors: 0, refused: { ROLLING_INSUFFICIENT_HISTORY_FOLD_0: 2, "bad key": 5 }, folds: { challengerBetter: 4, notBetter: 2, insufficient: 3 }, lastCheckedAt: 1_900, market: "KRW-XRP", note: "leak-sentinel-rolling" };
+  await withServer({ runtimeLiveness: () => ({ ...LIVENESS, researchRollingHoldout: { "1m": good, "7m": good, "15m": { ...good, mode: "ENFORCE" }, "60m": { ...good, pass: -1 } } }) }, async (handle) => {
+    const res = await request(handle.port, "/health");
+    const body = JSON.parse(res.body);
+    assert.deepEqual(Object.keys(body.runtime.researchRollingHoldout), ["1m"], "only declared lengths in SHADOW with valid integers");
+    assert.deepEqual(body.runtime.researchRollingHoldout["1m"], { mode: "SHADOW", candidatesChecked: 3, pass: 1, fail: 1, insufficientEvidence: 1, errors: 0, refused: { ROLLING_INSUFFICIENT_HISTORY_FOLD_0: 2 }, folds: { challengerBetter: 4, notBetter: 2, insufficient: 3 }, lastCheckedAt: 1_900 });
+    assert.doesNotMatch(res.body, /leak-sentinel-rolling|KRW-XRP|bad key/);
+  }, 41899);
+  await withServer({ runtimeLiveness: () => ({ ...LIVENESS }) }, async (handle) => {
+    assert.equal(JSON.parse((await request(handle.port, "/health")).body).runtime.researchRollingHoldout, undefined, "absent unless the mode is SHADOW");
+  }, 41898);
+});
