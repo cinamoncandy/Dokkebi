@@ -255,3 +255,16 @@ test("the Donchian grid and time limit fit inside the shortest evaluation window
   assert.deepEqual([...DONCHIAN_GRID], [10, 20, 30], "the grid is pre-committed");
   assert.ok(Math.max(...DONCHIAN_GRID) + DONCHIAN_TIMEOUT_BARS < shortestWindowBars, "warm-up plus time limit must fit in the window");
 });
+
+test("the history target stays 12 days when OFF and grows to 34 days only in rolling SHADOW mode", () => {
+  const { readResearchExperimentSettings, researchTargetSpanMs } = require("../dist/apps/cloud/src/researchExperimentComposition.js");
+  const DAY = 86_400_000;
+  const base = { NUSA_CLOUD_RESEARCH_EXPERIMENTS: "1", NUSA_SOURCE_COMMIT_SHA: "a".repeat(40) };
+  const off = readResearchExperimentSettings(base).settings;
+  assert.equal(researchTargetSpanMs(off), (7 + 2 + 2 + 1) * DAY, "OFF keeps exactly the existing span");
+  const shadow = readResearchExperimentSettings({ ...base, NUSA_RESEARCH_ROLLING_HOLDOUT: "SHADOW" }).settings;
+  assert.equal(researchTargetSpanMs(shadow), (3 * 11 + 1) * DAY, "3 disjoint folds plus a day");
+  assert.equal(researchTargetSpanMs(readResearchExperimentSettings({ ...base, NUSA_RESEARCH_ROLLING_HOLDOUT: "shadow" }).settings), (7 + 2 + 2 + 1) * DAY, "a typo is OFF");
+  const custom = readResearchExperimentSettings({ ...base, NUSA_RESEARCH_ROLLING_HOLDOUT: "SHADOW", NUSA_RESEARCH_TRAIN_DAYS: "10", NUSA_RESEARCH_VALIDATION_DAYS: "3", NUSA_RESEARCH_HOLDOUT_DAYS: "3" }).settings;
+  assert.equal(researchTargetSpanMs(custom), (3 * 16 + 1) * DAY, "follows the configured windows");
+});

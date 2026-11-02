@@ -6,6 +6,7 @@ import { ResearchRecoveryCoordinator } from "./researchRecoveryCoordinator";
 import { ResearchRuntimeCoordinator } from "./researchRuntimeCoordinator";
 import { backfillMarket, createUpbitMinuteCandleFetcher, fillRecentGaps, type BackfillResult, type GapFillResult } from "./researchCandleBackfill";
 import { AggregatedResearchCandleSource } from "./researchCandleAggregation";
+import { requiredHistoryMs } from "./researchWalkForwardWindows";
 import { materializeResearchDatasetManifest } from "./researchDatasetManifestMaterializer";
 import type { ResearchRecoveryResult } from "../../../packages/contracts/src/researchRecovery";
 
@@ -58,6 +59,16 @@ function intIn(raw: string | undefined, fallback: number, min: number, max: numb
   if (raw == null || raw.trim() === "") return fallback;
   const value = Number(raw);
   return Number.isInteger(value) && value >= min && value <= max ? value : undefined;
+}
+
+/**
+ * How much 1-minute history the backfill, the gap fill and the dataset manifest cover: one train + validation + holdout set plus a day,
+ * or, only in rolling SHADOW mode, N fully disjoint sets plus a day (3 x 11 + 1 = 34 days with the 7/2/2 defaults), because the older folds
+ * need their own history. OFF keeps exactly the existing span.
+ */
+export function researchTargetSpanMs(settings: Pick<ResearchExperimentSettings, "windows" | "rollingHoldout">): number {
+  const w = settings.windows;
+  return (settings.rollingHoldout === "SHADOW" ? requiredHistoryMs(w) : w.trainMs + w.validationMs + w.holdoutMs) + DAY_MS;
 }
 
 export function readResearchExperimentSettings(env: NodeJS.ProcessEnv): ResearchExperimentSettingsResult {
@@ -270,8 +281,7 @@ export function composeResearchExperiments(input: {
   let backfillTimer: ReturnType<typeof setTimeout> | undefined;
   let backfilling = false;
   let researchTickActive = false;
-  const w = settings.windows;
-  const targetSpanMs = w.trainMs + w.validationMs + w.holdoutMs + DAY_MS;
+  const targetSpanMs = researchTargetSpanMs(settings);
   const backfill = async (): Promise<readonly BackfillResult[]> => {
     if (backfilling || researchTickActive || stopped) return Object.freeze([]);
     backfilling = true;
