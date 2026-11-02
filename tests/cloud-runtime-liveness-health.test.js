@@ -616,3 +616,18 @@ test("/health publishes the open period's observation status counts as non-negat
     assert.equal(evidence.openDuplicateObservations, undefined, "a non-integer is withdrawn");
   }, 41897);
 });
+
+test("/health publishes the gap-fill timings only as six non-negative integers", async () => {
+  const gap = (timingsMs) => ({ runs: 3, deferred: 0, counts: { FILLED: 3 }, lastRunAt: 1_900, timingsMs });
+  const good = { lastFillMs: 120, lastReadMs: 230, lastMaterializeMs: 986, maxFillMs: 300, maxReadMs: 410, maxMaterializeMs: 1_200 };
+  await withServer({ runtimeLiveness: () => ({ ...LIVENESS, researchGapFill: gap({ ...good, extra: 5 }) }) }, async (handle) => {
+    assert.deepEqual(JSON.parse((await request(handle.port, "/health")).body).runtime.researchGapFill.timingsMs, good, "an extra key is dropped");
+  }, 41865);
+  for (const [index, bad] of [{ ...good, maxReadMs: -1 }, { ...good, lastFillMs: 1.5 }, { lastFillMs: 1 }, "x"].entries()) {
+    await withServer({ runtimeLiveness: () => ({ ...LIVENESS, researchGapFill: gap(bad) }) }, async (handle) => {
+      const published = JSON.parse((await request(handle.port, "/health")).body).runtime.researchGapFill;
+      assert.equal(published.timingsMs, undefined, "an invalid set is withdrawn whole");
+      assert.equal(published.runs, 3);
+    }, 41866 + index);
+  }
+});
