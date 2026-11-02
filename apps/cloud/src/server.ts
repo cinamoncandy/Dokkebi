@@ -461,6 +461,7 @@ function publicRuntimeLiveness(value: CloudRuntimeLivenessSnapshot): CloudRuntim
         latestFailureStage: (v) => typeof v === "string" && /^(IDENTITY|CYCLE|FINALIZE)$/.test(v), latestFailureCode: (v) => typeof v === "string" && /^[A-Z][A-Z0-9_]{1,63}$/.test(v),
         latestFailureRecordedAt: (v) => Number.isSafeInteger(v) && Number(v) >= 0, failuresRecorded: (v) => Number.isSafeInteger(v) && Number(v) >= 0,
         openPeriodStartAt: (v) => Number.isSafeInteger(v) && Number(v) >= 0, openObservations: (v) => Number.isSafeInteger(v) && Number(v) >= 0,
+        openWaitObservations: (v) => Number.isSafeInteger(v) && Number(v) >= 0, openBlockedObservations: (v) => Number.isSafeInteger(v) && Number(v) >= 0, openRejectedObservations: (v) => Number.isSafeInteger(v) && Number(v) >= 0, openFailedObservations: (v) => Number.isSafeInteger(v) && Number(v) >= 0, openDuplicateObservations: (v) => Number.isSafeInteger(v) && Number(v) >= 0,
         openFilledObservations: (v) => Number.isSafeInteger(v) && Number(v) >= 0, realizedPeriods: (v) => Number.isSafeInteger(v) && Number(v) >= 0,
         baselineObservations: (v) => Number.isSafeInteger(v) && Number(v) >= 0,
         realizedPeriodEndAt: (v) => Number.isSafeInteger(v) && Number(v) >= 0,

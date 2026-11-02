@@ -61,6 +61,8 @@ export type ClosedLearningMetaLearningStatus = Readonly<{
 
 export type ClosedLearningEvidenceCorrelation = Readonly<Partial<{
   openPeriodId: string; openMarket: string; openCandidateId: string; openPeriodStartAt: number; openObservations: number; openFilledObservations: number;
+  /** The open period's other observation statuses, so "no fills" can be told from "waiting" and from "blocked". */
+  openWaitObservations: number; openBlockedObservations: number; openRejectedObservations: number; openFailedObservations: number; openDuplicateObservations: number;
   realizedPeriods: number;
   ineligiblePeriods: number; latestIneligiblePeriodId: string; latestIneligibleFingerprint: string; latestIneligibleReason: string; latestIneligibleRuntimeSha: string;
   /** Realized owner-baseline periods: durable self-observations without Research lineage, never counted as learning cycles. */
@@ -137,6 +139,11 @@ export class ClosedLearningLoopStatusTracker {
         openPeriodStartAt: open.periodStartAt,
         openObservations: open.observations.length,
         openFilledObservations: open.observations.filter((item) => item.status === "FILLED").length,
+        openWaitObservations: open.observations.filter((item) => item.status === "WAIT").length,
+        openBlockedObservations: open.observations.filter((item) => item.status === "BLOCKED").length,
+        openRejectedObservations: open.observations.filter((item) => item.status === "REJECTED").length,
+        openFailedObservations: open.observations.filter((item) => item.status === "FAILED").length,
+        openDuplicateObservations: open.observations.filter((item) => item.status === "DUPLICATE").length,
       }),
       realizedPeriods: realized.length,
       baselineObservations: realized.filter((item) => item.candidateProvenance?.length === 1 && item.candidateProvenance[0]?.candidateId === OWNER_BASELINE_CANDIDATE_ID).length,
