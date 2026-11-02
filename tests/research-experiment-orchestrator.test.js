@@ -26,7 +26,7 @@ function candles(count, endCloseMs) {
 }
 const strat = (id, fast, slow) => buildSmaResearchStrategy({ strategyId: id, version: "1.0.0", market: "KRW-BTC", fastPeriod: fast, slowPeriod: slow, takeProfitPercent: 4, stopLossPercent: 2, positionPercent: 50, maxPositionNotional: 500_000 });
 
-function build(filename, state = { now: T_END }) {
+function build(filename, state = { now: T_END }, extra = {}) {
   const db = new SqliteDatabase(filename);
   const store = new SqliteResearchCandleStore(db);
   const holdout = new SqliteResearchHoldoutLedger(db);
@@ -44,14 +44,16 @@ function build(filename, state = { now: T_END }) {
     const runtime = new ResearchAutomationRuntime({ coordinator, sessions, memory, registerCandidate: (identity) => promotion.registerCandidate(identity), listCandidates: () => candidates.listCandidates(), recovery, now: () => state.now, maxEvidenceAgeMs: 30 * DAY });
     return { variantId, champion: { strategy: champion, config: { fast: 3, slow: 8 } }, challenger: { strategy: challenger, config: { fast: fast, slow } }, runtime };
   };
+  const variants = [mkVariant("v1", 5, 12), mkVariant("v2", 4, 16)];
   const orchestrator = new ResearchExperimentOrchestrator({
-    variants: [mkVariant("v1", 5, 12), mkVariant("v2", 4, 16)], sessions, markets: ["KRW-BTC"], intervalMs: M, windows: WINDOWS, dailyBudgetPerVariant: 20,
+    variants, sessions, markets: ["KRW-BTC"], intervalMs: M, windows: WINDOWS, dailyBudgetPerVariant: 20,
     collect: () => {}, candles: store, holdout, now: () => state.now, sourceCommitSha: "a".repeat(40),
     models: { fill: "fill-close-v1", fee: "fee-0.0005-v1", slippage: "slip-5bps-v1" }, evaluator: { version: "backtest-eval-v1", modelVersion: "dsl-backtest-v1" },
     featurePipeline: { version: "closed-candle-agg-v1", config: { intervalMs: M } }, experimentFamilyPrefix: "sma-family",
     failureEvidence: () => ledger.list().filter((record) => record.provenance?.windowRole === "VALIDATION" && record.provenance.interval === "1m"),
+    ...extra,
   });
-  return { db, store, sessions, orchestrator, holdout, state, ledger };
+  return { db, store, sessions, orchestrator, holdout, state, ledger, variants };
 }
 const fresh = () => join(mkdtempSync(join(tmpdir(), "nusa-orch-")), "o.db");
 const seed = (s, count = 400, end = T_END) => s.store.append("KRW-BTC", M, candles(count, end));
@@ -213,4 +215,79 @@ test("ordinary outcome count keys are capped at 30 so the derived FAIL_ and REPE
   addOutcomeCount(counts, "bad key");
   assert.equal(counts.FAIL_INJECTED, undefined, "derived keys are never written by the ordinary path");
   assert.equal(counts["bad key"], undefined);
+});
+
+// --- K-of-N rolling holdout, SHADOW only (docs/DESIGN_ROLLING_HOLDOUT_WIRING.md) ---
+const scripted = (s, script) => {
+  for (const variant of s.variants) {
+    const real = variant.runtime.runExperiment.bind(variant.runtime);
+    variant.runtime.runExperiment = (input) => {
+      const rolling = String(input.researchRunId).endsWith("_rolling");
+      const verdict = script({ rolling, role: input.provenance.windowRole });
+      if (verdict == null) return real(input);
+      if (verdict instanceof Error) throw verdict;
+      return { ...real(input), result: verdict };
+    };
+  }
+};
+
+test("rolling holdout is off by default: no rolling session, no summary", () => {
+  const s = build(fresh()); seed(s, 3 * 360 + 60);
+  try {
+    s.orchestrator.recover(); s.orchestrator.tick();
+    assert.equal(s.orchestrator.rollingHoldout(), null);
+    assert.ok(s.sessions.list().every((x) => !x.sessionId.endsWith("_rolling")));
+    const off = build(fresh(), { now: T_END }, { rollingHoldout: { mode: "OFF" } });
+    try { assert.equal(off.orchestrator.rollingHoldout(), null); } finally { off.db.close(); }
+  } finally { s.db.close(); }
+});
+
+test("SHADOW checks a favourable challenger in its own rolling session and leaves the real counters and sessions alone", () => {
+  const plain = build(fresh()); seed(plain, 3 * 360 + 60);
+  const s = build(fresh(), { now: T_END }, { rollingHoldout: { mode: "SHADOW" } }); seed(s, 3 * 360 + 60);
+  try {
+    for (const x of [plain, s]) { scripted(x, () => "CHALLENGER_BETTER"); x.orchestrator.recover(); x.orchestrator.tick(); }
+    const summary = s.orchestrator.rollingHoldout();
+    assert.equal(summary.mode, "SHADOW");
+    assert.equal(summary.candidatesChecked, 2, "one rolling check per favourable variant");
+    assert.equal(summary.pass, 2);
+    assert.equal(summary.folds.challengerBetter, 6);
+    const rollingIds = s.sessions.list().map((x) => x.sessionId).filter((id) => id.endsWith("_rolling")).sort();
+    assert.deepEqual(rollingIds, [`research-${dayKey(T_END)}-v1_rolling`, `research-${dayKey(T_END)}-v2_rolling`]);
+    const real = (x) => x.sessions.list().filter((y) => !y.sessionId.endsWith("_rolling")).map((y) => [y.sessionId, y.experimentCount, y.state]);
+    assert.deepEqual(real(s), real(plain), "the real sessions are exactly what they are without SHADOW");
+    assert.deepEqual(s.orchestrator.experimentTicks().counts, plain.orchestrator.experimentTicks().counts, "the published counts do not move");
+  } finally { plain.db.close(); s.db.close(); }
+});
+
+test("a rolling failure is counted and never reaches the real flow", () => {
+  const s = build(fresh(), { now: T_END }, { rollingHoldout: { mode: "SHADOW" } }); seed(s, 3 * 360 + 60);
+  try {
+    scripted(s, ({ rolling, role }) => (rolling ? new Error("boom") : role === "VALIDATION" ? "CHALLENGER_BETTER" : null));
+    s.orchestrator.recover();
+    const report = s.orchestrator.tick();
+    assert.equal(report.status, "OK");
+    for (const e of report.experiments) assert.equal(e.outcome.status, "COMPLETED");
+    const summary = s.orchestrator.rollingHoldout();
+    assert.ok(summary.errors + summary.insufficientEvidence >= 1);
+    assert.equal(summary.pass, 0);
+  } finally { s.db.close(); }
+});
+
+test("without enough history the rolling check is refused with a fixed code", () => {
+  const s = build(fresh(), { now: T_END }, { rollingHoldout: { mode: "SHADOW" } }); seed(s, 400);
+  try {
+    scripted(s, ({ role, rolling }) => (!rolling && role === "VALIDATION" ? "CHALLENGER_BETTER" : null));
+    s.orchestrator.recover(); s.orchestrator.tick();
+    const summary = s.orchestrator.rollingHoldout();
+    assert.ok(Object.keys(summary.refused).some((code) => /^ROLLING_INSUFFICIENT_HISTORY/.test(code)), JSON.stringify(summary));
+    for (const code of Object.keys(summary.refused)) assert.match(code, /^[A-Z][A-Z0-9_]{1,47}$/);
+  } finally { s.db.close(); }
+});
+
+test("rolling session records are left out of the failure counters", () => {
+  const { isRollingRecord } = require("../dist/apps/cloud/src/researchExperimentOrchestrator.js");
+  assert.equal(isRollingRecord({ provenance: { sessionId: "research-2026-11-01-sma_5_12_rolling" } }), true);
+  assert.equal(isRollingRecord({ provenance: { sessionId: "research-2026-11-01-sma_5_12" } }), false);
+  assert.equal(isRollingRecord({}), false);
 });

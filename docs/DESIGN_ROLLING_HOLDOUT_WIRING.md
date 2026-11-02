@@ -52,6 +52,9 @@ Safety stays: PAPER_ONLY, liveAuthority=NONE, productionMutationAllowed=false. �
 - S2: 기록을 남기지 않는 평가 전용 포트를 `ResearchAutomationRuntime`에 새로 만든다. 증거 기록 핵심 코드를 건드리는 큰 변경이라 별도 작업지시서와 더 엄격한 검토가 필요하다.
 - S3: `SHADOW` 없이 곧바로 `ENFORCE`. 위험이 가장 커서 추천하지 않는다.
 
+## 4c. 가장 최근 구간은 기존 실험 결과를 그대로 쓴다 (구현 중 발견)
+기존 실험은 이미 가장 최근 구간의 홀드아웃 사용 기록을 가져갔다. 롤링 검사가 그 구간을 다시 돌리면 항상 `HOLDOUT_ALREADY_USED`(증거 부족)만 나온다. 그래서 SHADOW는 기존 실험 결과(`ExperimentOutcome`)를 가장 최근 구간의 결과로 분류해서 쓰고, 더 오래된 구간만 새로 돌린다 (`runRollingResearchExperiment`의 `newestOutcome`). 후보당 새로 쓰는 홀드아웃은 2개이고, 가장 최근 구간의 홀드아웃은 추가로 소모되지 않는다.
+
 ## 5. 이력 길이와 백필
 - 구간이 겹치지 않으려면 N×(훈련+검증+홀드아웃) = 33일 + 하루 여유가 필요하다 (현재 백필 목표는 12일: `targetSpanMs`).
 - 백필 목표를 `OFF`일 때는 지금 값, `SHADOW`/`ENFORCE`일 때만 `requiredHistoryMs(windows) + DAY`로 늘린다. 업비트 호출은 지금처럼 순차·간격·시간 제한·페이지 제한을 지킨다.

@@ -87,3 +87,15 @@ test("a failing port is reported as a refusal, never a pass", () => {
   assert.equal(out.refusal, "ROLLING_RUN_FAILED");
   assert.equal(out.decision.decision, "INSUFFICIENT_EVIDENCE");
 });
+
+test("a newest-fold outcome the caller already has is classified instead of run again, and only the older folds run", () => {
+  const s = setup(3 * 360 + 40);
+  const seen = [];
+  const given = { status: "COMPLETED", validation: { result: "CHALLENGER_BETTER" }, holdout: { result: "CHALLENGER_BETTER" } };
+  const out = runRollingResearchExperiment(portsFor(s, () => "CHALLENGER_BETTER", seen), spec, 3, given);
+  assert.deepEqual(out.folds.map((f) => f.outcome), ["CHALLENGER_BETTER", "CHALLENGER_BETTER", "CHALLENGER_BETTER"]);
+  assert.equal(out.decision.decision, "PASS");
+  assert.equal(seen.filter((x) => x.startsWith("VALIDATION")).length, 2, "the newest fold was not run a second time");
+  const already = runRollingResearchExperiment(portsFor(setup(3 * 360 + 40), () => "CHALLENGER_BETTER"), spec, 3, { status: "COMPLETED", validation: { result: "CHALLENGER_BETTER" }, holdout: null, holdoutNote: "HOLDOUT_ALREADY_USED" });
+  assert.equal(already.folds[2].outcome, "INSUFFICIENT");
+});

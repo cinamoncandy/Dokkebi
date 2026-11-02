@@ -1,0 +1,24 @@
+id: WO-RESEARCH-20261101-ROLLING-HOLDOUT-SHADOW
+title: "Rolling K-of-N holdout: orchestrator SHADOW mode (default OFF) with a separate summary"
+status: READY_FOR_REVIEW
+created: 2026-11-01
+trigger: "Host diagnosis on 2026-10-31 (e1fd3ea93): candidateFunnel DISCOVERY_ONLY_REJECTED, 18 experiments, 15 discovery passes, 0 holdout passes, overfit 100%. The owner approved N = 3, K = 2, SHADOW first, one rolling check per candidate per day, a separate rolling session per variant and the 33-day history (docs/DESIGN_ROLLING_HOLDOUT_WIRING.md)."
+change:
+  - "apps/cloud/src/researchExperimentOrchestrator.ts: option rollingHoldout { mode: OFF | SHADOW } (absent = OFF). In SHADOW, after the real experiment found validation favourable, shadowRolling checks the same challenger on the K-of-N folds in its own research session <variant>_rolling (own maxExperiments, never the real session). Every rolling call is wrapped: a failure only increments summary.errors. rollingHoldout() returns a separate display summary (fixed codes and integers), not the capped counts."
+  - "isRollingRecord: evaluation records of a *_rolling session are removed from the FAIL_* / REPEAT_* failure recomputation so the real counters cannot move."
+  - "apps/cloud/src/researchExperimentRunner.ts: runRollingResearchExperiment gains an optional newestOutcome. The real experiment already claimed the newest fold's holdout, so its outcome is classified for that fold and only the older folds are run."
+rules:
+  - "OFF (the default) changes nothing: the existing orchestrator tests pass unchanged; no rolling session, no summary."
+  - "SHADOW does not touch counts, HOLDOUT_* counters, the meta-learning input, the real sessions or candidate registration (the composition's registerCandidate only logs)."
+  - "A fold that could not be evaluated is INSUFFICIENT, never a pass; a rolling PASS needs at least 2 of exactly 3 fold passes."
+not_changed:
+  - "No pass rule, threshold, daily budget, holdout claim rule, risk limit or authority. No /health field and no backfill change yet: with the current 12-day backfill every SHADOW check is refused with ROLLING_INSUFFICIENT_HISTORY_FOLD_0 (a fixed code) until the owner-approved longer backfill is added."
+safety:
+  paper_only: true
+  liveAuthority: NONE
+  productionMutationAllowed: false
+  aiAuthority: ZERO_AUTHORITY
+validation:
+  - "tsc clean; research-experiment-orchestrator (16: off by default, SHADOW leaves real sessions and published counts identical to a run without SHADOW, a rolling failure never reaches the real flow, short history refuses with a fixed code, rolling records are excluded from failure counters), research-rolling-runner (7), pipeline, composition and all research-* and cloud-runtime-* tests (644) pass; cloud-unreached-baseline 3/3."
+unverified: "The summary is not on /health or the diagnosis readout yet; the mode is not enabled on the host (no environment or owner-config key exists yet); the 33-day backfill and its load."
+next: "Stage 3: enable the mode from the owner research config (deploy/oracle/research-experiments.json, applied at start) and publish the summary on /health and in the diagnosis learning readout. Stage 4: the fold-aware backfill target."
