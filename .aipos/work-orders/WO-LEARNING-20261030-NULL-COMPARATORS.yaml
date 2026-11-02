@@ -1,6 +1,6 @@
 id: WO-LEARNING-20261030-NULL-COMPARATORS
 title: "Null comparators beside the baseline shadow: buy-and-hold and fixed-seed random entry, so edge can be measured"
-status: LOCAL_VALIDATED_PENDING_REVIEW_CI
+status: COMPLETED
 owner: nusa-development
 repository: cinamoncandy/NUSA
 base_branch: main

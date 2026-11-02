@@ -72,55 +72,6 @@ async function withStubbedGithubFetch<T>(run: () => Promise<T>): Promise<T> {
   }
 }
 
-async function withStubbedFailureAndJevFetch<T>(run: () => Promise<T>): Promise<T> {
-  const original = globalThis.fetch;
-  globalThis.fetch = (async (url: string) => {
-    const value = String(url);
-    if (value.includes("/commits/")) return new Response(JSON.stringify({ sha: HEAD }), { status: 200 });
-    if (value.includes("/branches/main")) return new Response(JSON.stringify({ commit: { sha: HEAD } }), { status: 200 });
-    if (value.includes("/jobs?")) {
-      return new Response(JSON.stringify({
-        total_count: 1,
-        jobs: [{
-          run_id: request.workflowRunId,
-          name: "validation",
-          conclusion: "failure",
-          steps: [{ name: "Typecheck", conclusion: "failure" }],
-        }],
-      }), { status: 200 });
-    }
-    if (value.includes("/actions/runs/")) {
-      return new Response(JSON.stringify({
-        id: request.workflowRunId,
-        workflow_id: 311000286,
-        path: ".github/workflows/ci.yml",
-        name: "CI",
-        head_sha: HEAD,
-        head_branch: "main",
-        repository: { full_name: request.repository },
-        event: "push",
-        status: "completed",
-        conclusion: "failure",
-      }), { status: 200 });
-    }
-    if (value === "https://jev.invalid/classify") {
-      return new Response(JSON.stringify({
-        rootCause: "INFRA",
-        safeToAutofix: "NO",
-        severity: 2,
-        requiredModel: "HUMAN",
-        confidence: 0.97,
-      }), { status: 200 });
-    }
-    throw new Error(`unexpected fetch ${value}`);
-  }) as typeof fetch;
-  try {
-    return await run();
-  } finally {
-    globalThis.fetch = original;
-  }
-}
-
 function baseEnv(coordinator: ExecutionCoordinatorNamespace): WorkerEnv {
   return {
     NUSA_AUTOPILOT_ZERO_CREDIT_MODE: "false",
@@ -132,37 +83,50 @@ function baseEnv(coordinator: ExecutionCoordinatorNamespace): WorkerEnv {
 }
 
 describe("/coding/propose bounded Jev admission", () => {
-  it("returns a successful no-action abstention and spends no Workers AI coding call", async () => {
-    await withStubbedFailureAndJevFetch(async () => {
-      const coordinator = memoryNamespace();
-      let aiCalls = 0;
-      const failureRequest = {
-        ...request,
-        reason: `gha:${request.workflowRunId}:${HEAD}:failure`,
-      };
-      const env = {
-        ...baseEnv(coordinator),
-        AI: { async run() { aiCalls += 1; return { response: "{}" }; } },
-        NUSA_JEV_SHADOW_ENABLED: "true",
-        NUSA_JEV_BOUNDED_ROUTING_ENABLED: "true",
-        NUSA_JEV_API_KEY: ["unit", "jev", "credential"].join("-"),
-        NUSA_JEV_ENDPOINT: "https://jev.invalid/classify",
-      } as unknown as WorkerEnv;
+  it("rejects workflow-failure proposal without a verified causal admission", async () => {
+    const coordinator = memoryNamespace();
+    let aiCalls = 0;
+    const failureRequest = { ...request, reason: `gha:${request.workflowRunId}:${HEAD}:failure` };
+    const env = {
+      ...baseEnv(coordinator),
+      AI: { async run() { aiCalls += 1; return { response: "{}" }; } },
+      NUSA_JEV_SHADOW_ENABLED: "true",
+      NUSA_JEV_BOUNDED_ROUTING_ENABLED: "true",
+      NUSA_JEV_API_KEY: ["unit", "jev", "credential"].join("-"),
+      NUSA_JEV_ENDPOINT: "https://jev.invalid/classify",
+    } as unknown as WorkerEnv;
 
-      const response = await handleCodingProposal(proposalRequestFor(failureRequest), env);
-      const body = await response.json() as {
-        accepted: boolean;
-        status: string;
-        reason: string;
-        aiAuthority: string;
-      };
-      assert.equal(response.status, 200);
-      assert.equal(body.accepted, true);
-      assert.equal(body.status, "JEV_ROUTING_ABSTAINED");
-      assert.equal(body.reason, "NON_CODE_AUTOFIX_FORBIDDEN");
-      assert.equal(body.aiAuthority, "ZERO_AUTHORITY");
-      assert.equal(aiCalls, 0);
-    });
+    const response = await handleCodingProposal(proposalRequestFor(failureRequest), env);
+    const body = await response.json() as { accepted: boolean; status: string; error: string; aiAuthority: string };
+    assert.equal(response.status, 409);
+    assert.equal(body.accepted, false);
+    assert.equal(body.status, "CODING_PROPOSAL_FAILED_CLOSED");
+    assert.equal(body.error, "CAUSAL_ACTIONABILITY_UNVERIFIED");
+    assert.equal(body.aiAuthority, "ZERO_AUTHORITY");
+    assert.equal(aiCalls, 0);
+  });
+});
+
+describe("workflow-failure publish admission", () => {
+  it("rejects static-token publication before GitHub lookup or mutation", async () => {
+    const env = baseEnv(memoryNamespace());
+    let githubCalls = 0;
+    const original = globalThis.fetch;
+    globalThis.fetch = (async () => { githubCalls += 1; throw new Error("GitHub lookup must not run"); }) as typeof fetch;
+    try {
+      const response = await handleCodingPublish(new Request("https://worker.example.test/coding/publish", {
+        method: "POST",
+        headers: { authorization: "Bearer coding-token", "content-type": "application/json" },
+        body: JSON.stringify({ request: { ...request, reason: `gha:${request.workflowRunId}:${HEAD}:failure` }, validatedFiles: [{ path: "apps/autopilot/src/dispatchPlanner.ts", content: "export const x = 1;" }] }),
+      }), env);
+      const body = await response.json() as { accepted: boolean; error: string };
+      assert.equal(response.status, 409);
+      assert.equal(body.accepted, false);
+      assert.equal(body.error, "CAUSAL_ACTIONABILITY_UNVERIFIED");
+      assert.equal(githubCalls, 0);
+    } finally {
+      globalThis.fetch = original;
+    }
   });
 });
 

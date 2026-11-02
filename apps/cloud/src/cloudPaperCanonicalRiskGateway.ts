@@ -7,8 +7,8 @@ import { paperTradingDayKey, paperTradingDayStartedAt } from "./paperTradingDay"
 import { evaluatePreTradeRisk, type IndependentRiskLimits, type RiskIdentityState } from "./independentRiskGateway";
 import { RUNTIME_EXCHANGE_CAPABILITIES } from "./runtimeExchangeCapabilities";
 import type { PaperAccountState } from "./paperTradingExecutionLoop";
+import { AccountScopedRiskPersistence, SessionPeakStore, resolveRiskAccountId } from "./cloudPaperRiskAccountScope";
 
-const ACCOUNT_ID = "paper-default";
 const MANUAL_APPROVAL_TTL_MS = 60_000;
 
 /** Owner-approved Cloud spot PAPER policy; only the consecutive-loss veto is disabled. */
@@ -212,6 +212,8 @@ export interface CloudPaperCanonicalRiskGatewayOptions {
   readonly initialCapital: number;
   readonly sourceCommitSha: string;
   readonly limits?: IndependentRiskLimits;
+  /** The real PAPER account id the risk rows belong to; defaults to the id derived from the initial capital. */
+  readonly accountId?: string;
 }
 
 /**
@@ -224,7 +226,11 @@ export class CloudPaperCanonicalRiskGateway implements CloudPaperRiskGate {
   private readonly canonical: CanonicalRiskSafetyGate;
   private readonly limits: IndependentRiskLimits;
   private readonly fingerprints: Readonly<{ strategy: string; config: string; runtime: string; riskPolicy: string }>;
+  private readonly accountId: string;
+  private readonly peakStore: SessionPeakStore;
   private peakEquity: number;
+  private persistedPeak = Number.NaN;
+  private peakVerified = false;
   private lastLossSession: CloudPaperLossSessionSnapshot | null = null;
 
   public constructor(private readonly options: CloudPaperCanonicalRiskGatewayOptions) {
@@ -232,15 +238,28 @@ export class CloudPaperCanonicalRiskGateway implements CloudPaperRiskGate {
     if (!options.sourceCommitSha.trim()) throw new Error("cloud PAPER source commit is required");
     this.limits = Object.freeze({ ...(options.limits ?? CLOUD_PAPER_RISK_LIMITS) });
     validateLimits(this.limits);
+    this.accountId = resolveRiskAccountId(options.initialCapital, options.accountId);
     this.persistence = new SqliteRiskSafetyPersistence(options.database);
-    this.canonical = new CanonicalRiskSafetyGate(this.persistence);
+    this.canonical = new CanonicalRiskSafetyGate(new AccountScopedRiskPersistence(this.persistence, this.accountId));
+    this.peakStore = new SessionPeakStore(this.persistence, this.accountId, options.initialCapital);
     this.peakEquity = options.initialCapital;
+    this.restorePeak();
     this.fingerprints = Object.freeze({
       strategy: hash("cloud-paper-cio-v1"),
       config: hash({ initialCapital: options.initialCapital }),
       runtime: hash(options.sourceCommitSha.trim()),
       riskPolicy: hash(this.limits)
     });
+  }
+
+  /** Restores the persisted drawdown peak. Unreadable or invalid means unknown: evaluations halt until a valid peak is read. */
+  private restorePeak(): void {
+    try {
+      const stored = this.peakStore.read();
+      if (stored.status === "INVALID") { this.peakVerified = false; return; }
+      if (stored.status === "OK") { this.peakEquity = Math.max(this.peakEquity, stored.peak); this.persistedPeak = stored.peak; }
+      this.peakVerified = true;
+    } catch { this.peakVerified = false; }
   }
 
   /** The loss-limit counts from the latest evaluation, or null before any. Display only; never used for a decision. */
@@ -252,6 +271,8 @@ export class CloudPaperCanonicalRiskGateway implements CloudPaperRiskGate {
     const persistent = databaseHealthy(this.options.database);
     const reconciled = stateHealthy(input.state);
     if (!reconciled) return Object.freeze({ status: "HALT", reasonCodes: Object.freeze(["RECONCILIATION_FAILED"]) });
+    if (!this.peakVerified) this.restorePeak();
+    if (!this.peakVerified) return Object.freeze({ status: "HALT", reasonCodes: Object.freeze(["PERSISTENCE_UNHEALTHY"]) });
     const payloadFingerprint = input.payloadFingerprintSha256 ?? hash({
       path: input.path,
       commandId: input.commandId,
@@ -281,6 +302,10 @@ export class CloudPaperCanonicalRiskGateway implements CloudPaperRiskGate {
     }
     const currentEquity = input.state.cash + input.state.positions.reduce((sum, item) => sum + item.quantity * (item.market === input.market ? input.price : item.markPrice), 0);
     this.peakEquity = Math.max(this.peakEquity, currentEquity);
+    if (!(this.peakEquity <= this.persistedPeak)) {
+      try { this.peakStore.write(this.peakEquity, input.now); this.persistedPeak = this.peakEquity; }
+      catch { return Object.freeze({ status: "HALT", reasonCodes: Object.freeze(["PERSISTENCE_UNHEALTHY"]) }); }
+    }
     const identity: RiskIdentityState = Object.freeze({
       strategyFingerprint: this.fingerprints.strategy,
       configFingerprint: this.fingerprints.config,
@@ -324,7 +349,7 @@ export class CloudPaperCanonicalRiskGateway implements CloudPaperRiskGate {
     if (!approvedBy || !strategyId) return Object.freeze({ status: "HALT", reasonCodes: Object.freeze(["APPROVAL_MISSING"]) });
     let approvalId: string | undefined;
     {
-      approvalId = `cloud-paper-${hash({ account: ACCOUNT_ID, commandId: input.commandId, approvedBy, strategyId, market: input.market, side: input.side, policy: this.fingerprints.riskPolicy }).slice(0, 32)}`;
+      approvalId = `cloud-paper-${hash({ account: this.accountId, commandId: input.commandId, approvedBy, strategyId, market: input.market, side: input.side, policy: this.fingerprints.riskPolicy }).slice(0, 32)}`;
       try {
         this.canonical.saveApproval({
           approvalId,
@@ -342,7 +367,7 @@ export class CloudPaperCanonicalRiskGateway implements CloudPaperRiskGate {
     }
 
     const canonical = this.canonical.evaluate({
-      accountId: ACCOUNT_ID,
+      accountId: this.accountId,
       requestId: `${input.path}:${input.commandId}`,
       boundary: input.path,
       mode: "PAPER",
@@ -361,7 +386,7 @@ export class CloudPaperCanonicalRiskGateway implements CloudPaperRiskGate {
       persistenceHealthy: persistent,
       maxDailyLoss: this.limits.maxDailyLoss,
       maxOpenOrders: this.limits.maxOpenOrders,
-      idempotency: { accountId: ACCOUNT_ID, commandId: input.commandId, signalId: input.signalId, clientOrderId: input.clientOrderId, payloadFingerprint, createdAtMs: input.now }
+      idempotency: { accountId: this.accountId, commandId: input.commandId, signalId: input.signalId, clientOrderId: input.clientOrderId, payloadFingerprint, createdAtMs: input.now }
     });
     if (approvalId !== undefined) {
       try { this.canonical.revokeApproval(approvalId, "single-use manual approval evaluated"); } catch { return Object.freeze({ status: "HALT", reasonCodes: Object.freeze(["PERSISTENCE_UNHEALTHY"]) }); }

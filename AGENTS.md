@@ -27,7 +27,7 @@ pre-Audit review rather than independent Audit or Release approval.
 Before planning, editing, or generating code:
 
 1. Read `.aipos/aipos.yaml`.
-2. Read `.aipos/state.yaml`.
+2. Read `.aipos/CURRENT_TRUTH.md` (generated one-page summary; `pnpm run aipos:truth` refreshes it), then `.aipos/state.yaml`.
 3. Follow the recovery protocol and active work order referenced there.
 4. Read `.aipos/architecture.md`, `.aipos/context.md`, and relevant decisions.
 5. Verify changes with the commands recorded in the work order.

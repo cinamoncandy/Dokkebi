@@ -4,8 +4,19 @@ import { describe, it } from "node:test";
 import os from "node:os";
 import path from "node:path";
 import { spawnSync } from "node:child_process";
-import { buildDeterministicCodingPatch, countChangedPatchLines, MAX_CODING_CHANGED_LINES, validateCodingProposal, CodingRunnerEvidenceError, executeCodingRunner, validateCodingRunnerRequest, verifyCodingRunnerRequestAgainstGitHub, type CodingRuntime, type WorkersAiBinding } from "./codingRunner";
+import { buildDeterministicCodingPatch, countChangedPatchLines, MAX_CODING_CHANGED_LINES, validateCodingProposal, CodingRunnerEvidenceError, executeCodingRunner, isWorkflowFailureCodingReason, validateCodingRunnerRequest, verifyCodingRunnerRequestAgainstGitHub, type CodingRuntime, type WorkersAiBinding } from "./codingRunner";
 import { classifyCodingRunnerFailure } from "./codingRunnerFailureClass";
+
+describe("workflow-failure reason detection", () => {
+  it("recognizes both canonical failure reason forms without classifying issue work", () => {
+    const sha = "a".repeat(40);
+    assert.equal(isWorkflowFailureCodingReason(`gha:123:${sha}:failure`), true);
+    assert.equal(isWorkflowFailureCodingReason(`evolve:discovery:gha:CI:${sha}:timed_out`), true);
+    assert.equal(isWorkflowFailureCodingReason("evolve:discovery:github-issue-2118"), false);
+    assert.equal(isWorkflowFailureCodingReason(`gha:123:${sha}:success`), false);
+    assert.equal(isWorkflowFailureCodingReason("generic CI failure"), false);
+  });
+});
 
 const request = {
   kind: "REPOSITORY_AUTOPILOT" as const,

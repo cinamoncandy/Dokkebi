@@ -53,6 +53,27 @@ test("abstains when no discovery evidence exists", () => {
   assert.equal(result.reason, "no-eligible-opportunity");
 });
 
+test("binds the selected workflow opportunity to the exact cited run and SHA", () => {
+  const base = baseInput();
+  const matching = signal("workflow-matching", { source: "github-actions", reference: `workflow:${base.workflowRunId}@${base.headSha}` });
+  assert.equal(prepareDiscoveredCodingRequest({ ...base, signals: [matching] }).status, "READY");
+  for (const reference of [`workflow:${base.workflowRunId + 1}@${base.headSha}`, `workflow:${base.workflowRunId}@${"a".repeat(40)}`, "workflow:invalid"]) {
+    const result = prepareDiscoveredCodingRequest({ ...base, signals: [{ ...matching, reference }] });
+    assert.equal(result.status, "ABSTAINED");
+    assert.equal(result.reason, "selected-workflow-source-mismatch");
+    assert.equal(result.request, null);
+  }
+});
+
+test("checks the ranked workflow opportunity rather than assuming the first signal was selected", () => {
+  const base = baseInput();
+  const matching = signal("workflow-first", { source: "github-actions", reference: `workflow:${base.workflowRunId}@${base.headSha}`, impact: 0.1 });
+  const preferredMismatch = signal("workflow-preferred", { source: "github-actions", reference: `workflow:${base.workflowRunId + 1}@${base.headSha}`, impact: 1 });
+  const result = prepareDiscoveredCodingRequest({ ...base, signals: [matching, preferredMismatch] });
+  assert.equal(result.status, "ABSTAINED");
+  assert.equal(result.reason, "selected-workflow-source-mismatch");
+});
+
 test("rejects stale discovery evidence and does not prepare coding work", () => {
   const result = prepareDiscoveredCodingRequest({
     ...baseInput(),
