@@ -238,7 +238,7 @@ export class ResearchExperimentOrchestrator {
    * `<variant>_rolling` session. Nothing here feeds the real counters, the holdout counters, the meta-learning input or any candidate
    * registration; every failure is swallowed and counted. The real flow has already finished when this runs.
    */
-  private shadowRolling(variant: ResearchVariant, market: string, outcome: ExperimentOutcome, nowMs: number, spec: ExperimentSpec): void {
+  private shadowRolling(variant: ResearchVariant, outcome: ExperimentOutcome, nowMs: number, spec: ExperimentSpec): void {
     if (this.options.rollingHoldout?.mode !== "SHADOW") return;
     if (outcome.status !== "COMPLETED" || outcome.validation.result !== "CHALLENGER_BETTER") return;
     try {
@@ -246,7 +246,13 @@ export class ResearchExperimentOrchestrator {
       const rollingSessionId = researchSessionIdFor(nowMs, rollingVariantId);
       let session = this.options.sessions.load(rollingSessionId);
       if (session == null) {
-        const plan = planResearchSession({ nowMs, sessions: this.options.sessions.list(), dailyBudget: Math.min(this.options.dailyBudgetPerVariant * ROLLING_BUDGET_FACTOR, MAX_DAILY_RESEARCH_EXPERIMENTS), recoveryReady: this.recoveryReady, variantId: rollingVariantId });
+        const dailyBudget = Math.min(this.options.dailyBudgetPerVariant * ROLLING_BUDGET_FACTOR, MAX_DAILY_RESEARCH_EXPERIMENTS);
+        let plan = planResearchSession({ nowMs, sessions: this.options.sessions.list(), dailyBudget, recoveryReady: this.recoveryReady, variantId: rollingVariantId });
+        // Like the real flow: an earlier day's rolling session of this variant is stopped, or it would block every later day.
+        if (plan.action === "NONE" && plan.reason === "PREVIOUS_SESSION_STILL_RUNNING") {
+          for (const old of this.options.sessions.list().filter((item) => item.state === "RUNNING" && item.sessionId.endsWith(`-${rollingVariantId}`) && item.sessionId !== rollingSessionId)) variant.runtime.stop(old.sessionId);
+          plan = planResearchSession({ nowMs, sessions: this.options.sessions.list(), dailyBudget, recoveryReady: this.recoveryReady, variantId: rollingVariantId });
+        }
         if (plan.action !== "START") { this.rollingRefused(`PLAN_${plan.reason}`); return; }
         variant.runtime.startSession({
           sessionId: plan.sessionId,
@@ -274,7 +280,6 @@ export class ResearchExperimentOrchestrator {
     } catch {
       this.rollingState.errors += 1;
     }
-    void market;
   }
 
   /**
@@ -430,7 +435,7 @@ export class ResearchExperimentOrchestrator {
           };
           const outcome = runResearchExperiment(this.portsFor(variant), spec);
           experiments.push({ variantId: variant.variantId, market, outcome });
-          this.shadowRolling(variant, market, outcome, nowMs, spec);
+          this.shadowRolling(variant, outcome, nowMs, spec);
           session = this.options.sessions.load(sessionId) ?? session;
           yield;
           if (session.state !== "RUNNING") break;

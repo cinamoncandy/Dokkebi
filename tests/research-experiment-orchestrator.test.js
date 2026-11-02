@@ -291,3 +291,23 @@ test("rolling session records are left out of the failure counters", () => {
   assert.equal(isRollingRecord({ provenance: { sessionId: "research-2026-11-01-sma_5_12" } }), false);
   assert.equal(isRollingRecord({}), false);
 });
+
+test("SHADOW keeps working on the next day: yesterday's rolling session is stopped, not left to block today's", () => {
+  const state = { now: T_END };
+  const s = build(fresh(), state, { rollingHoldout: { mode: "SHADOW" } }); seed(s, 3 * 360 + 60);
+  try {
+    scripted(s, () => "CHALLENGER_BETTER");
+    s.orchestrator.recover(); s.orchestrator.tick();
+    const day1 = s.orchestrator.rollingHoldout();
+    assert.equal(day1.candidatesChecked, 2);
+    // Next trading day: new candles, a new session per variant, and the old rolling sessions are still RUNNING.
+    state.now = T_END + DAY;
+    seed(s, 3 * 360 + 60, T_END + DAY);
+    s.orchestrator.tick();
+    const day2 = s.orchestrator.rollingHoldout();
+    assert.ok(day2.candidatesChecked > day1.candidatesChecked, `day two was checked: ${JSON.stringify(day2)}`);
+    assert.equal(day2.refused.PLAN_PREVIOUS_SESSION_STILL_RUNNING, undefined, "no stale rolling session blocks the plan");
+    const running = s.sessions.list().filter((x) => x.sessionId.endsWith("_rolling") && x.state === "RUNNING").map((x) => x.sessionId);
+    assert.ok(running.every((id) => id.includes(dayKey(T_END + DAY))), "only today's rolling sessions are RUNNING");
+  } finally { s.db.close(); }
+});
