@@ -23,6 +23,14 @@ export interface LearningLoopVerdict {
    */
   readonly cycleWaitingFor: "NONE" | "NO_DEPLOYABLE_CANDIDATE" | "EVALUATION_WINDOW" | "UNKNOWN";
   /**
+   * Why the open PAPER learning period has not closed, from the rollover step alone (fixed codes): REALIZED_TRADE means no trade has been
+   * realized since the period opened (the scheduler needs a canonical account update and a realized fill, and never synthesizes one), for
+   * example while the baseline strategy holds a position; EVALUATION_WINDOW and KST_DAY_ROLLOVER are ordinary waits; NONE when it does not apply.
+   */
+  readonly periodWaitingFor: "NONE" | "REALIZED_TRADE" | "EVALUATION_WINDOW" | "KST_DAY_ROLLOVER" | "UNKNOWN";
+  /** The open period's observation counts (integers from the closed-learning evidence), so "no fills" can be told from "waiting" and from "blocked". */
+  readonly openPeriod: Readonly<{ startedAt: number | null; observations: number | null; filled: number | null; wait: number | null; blocked: number | null; rejected: number | null; failed: number | null; duplicate: number | null }>;
+  /**
    * Where Research candidates stop, from the meta-learning counters only (integers, no candidate text): NO_EXPERIMENTS = none run yet,
    * NO_DISCOVERY = experiments ran but nothing passed discovery (data or signal), DISCOVERY_ONLY_REJECTED = something passed
    * discovery but nothing passed the independent holdout (overfit), HOLDOUT_PASSED = at least one candidate passed. Display only.
@@ -83,6 +91,17 @@ export function learningLoopVerdict(runtime: Source, pipeline: LearningPipelineP
     : discoveryPasses > 0 ? "DISCOVERY_ONLY_REJECTED"
     : experiments > 0 ? "NO_DISCOVERY" : "NO_EXPERIMENTS";
 
+  const periodWaitingFor: LearningLoopVerdict["periodWaitingFor"] = rollover === undefined ? "UNKNOWN"
+    : rollover === "WAITING_FOR_CANONICAL_BOUNDARY" || rollover === "WAITING_FOR_REALIZED_FILL" ? "REALIZED_TRADE"
+    : rollover === "WAITING_FOR_EVALUATION_WINDOW" ? "EVALUATION_WINDOW"
+    : rollover === "WAITING_FOR_KST_DAY_ROLLOVER" ? "KST_DAY_ROLLOVER" : "NONE";
+  const evidence = record(loop?.evidence);
+  const count = (key: string): number | null => int(evidence?.[key]) ?? null;
+  const openPeriod = Object.freeze({
+    startedAt: count("openPeriodStartAt"), observations: count("openObservations"), filled: count("openFilledObservations"), wait: count("openWaitObservations"),
+    blocked: count("openBlockedObservations"), rejected: count("openRejectedObservations"), failed: count("openFailedObservations"), duplicate: count("openDuplicateObservations"),
+  });
+
   let verdict: LearningLoopVerdictLabel;
   if (failedNow) verdict = "FAILED";
   else if (firstStage === "NONE" && cycleEvaluated === true && cycleRecorded === true) verdict = "LOOP_VERIFIED";
@@ -96,6 +115,8 @@ export function learningLoopVerdict(runtime: Source, pipeline: LearningPipelineP
     firstBrokenTransition: firstStage,
     firstBrokenCode: firstCode,
     cycleWaitingFor,
+    periodWaitingFor,
+    openPeriod,
     candidateFunnel: Object.freeze({ stage: funnelStage, experiments: experiments ?? null, discoveryPasses: discoveryPasses ?? null, holdoutPasses: holdoutPasses ?? null }),
     criteria: Object.freeze({ tradingChain: tradingState, researchInputs: researchState, cycleEvaluated, cycleRecorded, survivesRestart: recordedAtBoot !== undefined && recordedAtBoot > 0 ? "OBSERVED" as const : "NOT_OBSERVED" as const }),
   });
