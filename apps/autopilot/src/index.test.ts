@@ -657,7 +657,7 @@ describe("NUSA autopilot GitHub webhook", () => {
       name: "must-not-run",
       async execute() { runtimeCalls += 1; throw new Error("workflow failure reason was not gated"); },
     };
-    const failureRequest = { ...codingRequest, reason: `gha:${codingRequest.workflowRunId}:${codingRequest.headSha}:failure` };
+    const failureRequest = { ...codingRequest, workflowRunAttempt: 1, reason: `gha:${codingRequest.workflowRunId}:${codingRequest.headSha}:failure` };
     const request = () => new Request("https://example.test/coding/execute", {
       method: "POST",
       headers: { authorization: "Bearer runner-token", "content-type": "application/json" },

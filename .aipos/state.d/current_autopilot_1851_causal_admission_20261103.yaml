@@ -1,0 +1,55 @@
+current_autopilot_1851_causal_admission_20261103:
+  work_order: WO-AUTOPILOT-20261030-1851-CAUSAL-ADMISSION
+  issue: 1851
+  verified_at_utc: "2026-11-03T01:43:00Z"
+  status: LOCAL_UNCOMMITTED_COMMIT_GATE_NOT_MET
+  repository: cinamoncandy/NUSA
+  protected_main: 0e213243ac5b63e7fe900666b0055da9ca96de18
+  branch: codex/1851-causal-admission-20261103
+  local_wip_head: 0e213243ac5b63e7fe900666b0055da9ca96de18
+  worktree: "nusa-1851-causal-admission (isolated local checkout)"
+  ownership:
+    canonical_issue: 1851
+    current_work_order: WO-AUTOPILOT-20261030-1851-CAUSAL-ADMISSION
+    prior_pr_1854: CLOSED_DO_NOT_REVIVE
+    active_implementation_pr: NONE_FOUND
+    duplicate_wip_created: false
+  implementation:
+    status: LOCAL_UNCOMMITTED
+    source_and_publisher_identity_binding: IMPLEMENTED_LOCALLY
+    causal_receipt_and_proposal_binding: IMPLEMENTED_LOCALLY
+    server_recomputes_allowed_patch_from_trusted_source: IMPLEMENTED_LOCALLY
+    generic_workflow_failure_admission: FAIL_CLOSED_BEFORE_LEASE_OR_DISPATCH
+    issue_backlog_route: PRESERVED_SEPARATE
+    real_protected_main_attestation: NOT_OBSERVED
+    positive_causal_receipt: NOT_ISSUED
+    code_actionable: NOT_ISSUED
+  validation:
+    full_isolated_suite: "PASS_1326_OF_1326_ON_0e6161a7_PLUS_WIP; HISTORICAL_AFTER_MAIN_ADVANCED"
+    latest_main_delta_tests: PASS_61_OF_61_ON_0e213243
+    typecheck: PASS_ON_0e213243
+    build: PASS_ON_0e213243
+    validate_full: PASS_ON_0e213243
+    lint_scripts: PASS_0_ERRORS_47_WARNINGS_ON_0e213243
+    aipos_work_order_provenance: PASS_ON_0e213243
+    diff_check: PASS_ON_0e213243
+    security_gate: "FAIL_AUDIT_JSON_INCOMPLETE_AFTER_THREE_BOUNDED_ATTEMPTS; NO_OVERRIDE"
+    exact_head_ci: NOT_STARTED_NO_COMMIT
+    independent_review: NOT_STARTED
+  governance:
+    commit_gate: NOT_MET
+    l1: PARTIAL
+    l2: HOLD
+    learning_loop_verified: false
+    performance_improvement: UNPROVEN
+    pr_2976: BLOCKED_INDEPENDENT_IDENTITY
+    pr_2976_source_or_review_churn: NONE
+  preservation:
+    stashes:
+      - "605506ab219835df51c7fef03d3a3398b3879b5e"
+      - "0c43ec3b25ab406f707fe420ee4350bc410009da"
+    test_runner_deleted_tracked_diagnostic: RESTORED_FROM_MAIN
+    additional_failure_diagnostics: PRESERVED_IN_WORKTREE_AND_STASHES
+    unrelated_security_gate_parser_patch: EXCLUDED_FROM_THIS_WIP
+  next: "Keep local WIP. Resolve security:gate AUDIT_JSON_INCOMPLETE only through its existing canonical WIP and explicit owner GO; rerun gates before any commit. Do not issue a positive causal receipt or CODE_ACTIONABLE without genuine post-inclusion protected-main evidence."
+  safety: PAPER_ONLY_LIVE_NONE_PRODUCTION_MUTATION_FALSE_REAL_ORDER_FALSE_REAL_TRANSFER_FALSE_AI_ZERO_AUTHORITY

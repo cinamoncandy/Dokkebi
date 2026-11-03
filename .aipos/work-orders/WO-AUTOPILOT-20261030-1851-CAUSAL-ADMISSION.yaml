@@ -265,3 +265,213 @@ bootstrap_staged_inclusion_20261031:
   commit_status: SUCCESSOR_SHA_CREATED; REMOTE_CI_PENDING
   next: "Push the local successor branch and open the canonical draft PR for exact-head CI/companions, then obtain governed independent review. Positive causal attestation and CODE_ACTIONABLE remain closed until post-inclusion real evidence passes."
   safety: PAPER_ONLY_LIVE_NONE_PRODUCTION_MUTATION_FALSE_REAL_ORDER_FALSE_REAL_TRANSFER_FALSE_AI_ZERO_AUTHORITY
+
+continuation_20261103_current_main_reconvergence:
+  verified_at_utc: "2026-11-03T01:43:00Z"
+  protected_main: 0e213243ac5b63e7fe900666b0055da9ca96de18
+  branch: codex/1851-causal-admission-20261103
+  local_head: 0e213243ac5b63e7fe900666b0055da9ca96de18
+  worktree: "nusa-1851-causal-admission (isolated local checkout)"
+  ownership:
+    canonical_issue: 1851
+    work_order: WO-AUTOPILOT-20261030-1851-CAUSAL-ADMISSION
+    closed_prior_pr: "1854_CLOSED_DO_NOT_REVIVE"
+    active_implementation_pr: NONE
+    duplicate_wip_created: false
+  implementation:
+    status: LOCAL_UNCOMMITTED_CAUSAL_ADMISSION_WIP
+    summary: "Wires source/publisher OIDC and run identity checks, server-side causal admission, proposal receipt binding, single-file repair patch validation, and fail-closed execute/propose/publish routes through the existing coordinator/runner. Generic workflow failure is not causal proof; the existing issue/backlog path remains separate."
+    real_protected_main_attestation: NOT_OBSERVED
+    positive_causal_receipt: NOT_ISSUED
+    code_actionable: NOT_ISSUED
+  validation:
+    full_isolated_suite: "PASS_1326_OF_1326_ON_0e6161a7_PLUS_WIP; HISTORICAL_AFTER_MAIN_ADVANCED"
+    latest_main_delta_tests: "PASS_61_OF_61_ON_0e213243"
+    latest_main_typecheck: PASS
+    latest_main_build: PASS
+    latest_main_validate_full: PASS
+    latest_main_script_lint: "PASS_0_ERRORS_47_WARNINGS"
+    latest_main_work_order_provenance: PASS
+    latest_main_diff_check: PASS
+    security_gate: "FAIL_AUDIT_JSON_INCOMPLETE_AFTER_THREE_BOUNDED_ATTEMPTS; NO_OVERRIDE"
+    exact_head_ci: NOT_STARTED_NO_COMMIT
+    independent_review: NOT_STARTED
+  governance:
+    commit_gate: NOT_MET
+    l1: PARTIAL
+    l2: HOLD
+    learning_loop_verified: false
+    performance_improvement: UNPROVEN
+    separate_track_2976: "BLOCKED_INDEPENDENT_IDENTITY; P1 successor disposition remains pending; no source churn or duplicate review requested"
+  preservation:
+    stashes:
+      - "605506ab219835df51c7fef03d3a3398b3879b5e"
+      - "0c43ec3b25ab406f707fe420ee4350bc410009da"
+    diagnostic_copies: "Preserved in the worktree and both listed stashes; unrelated security-gate parser experiment remains excluded from this WIP."
+  next: "Keep this branch local and uncommitted. Resolve the security:gate AUDIT_JSON_INCOMPLETE blocker only under its own existing canonical WIP and explicit owner GO, then rerun the required local gates. Do not issue a positive causal receipt or CODE_ACTIONABLE without genuine post-inclusion protected-main evidence."
+  safety: PAPER_ONLY_LIVE_NONE_PRODUCTION_MUTATION_FALSE_REAL_ORDER_FALSE_REAL_TRANSFER_FALSE_AI_ZERO_AUTHORITY
+
+security_parser_evidence_followup_20261103:
+  observed_at_utc: "2026-11-03T01:46:16Z"
+  worktree_access: AVAILABLE
+  protected_main: 0e213243ac5b63e7fe900666b0055da9ca96de18
+  historical_security_worktree:
+    branch: codex/audit-json-output-hardening
+    head: b445bb328f0c70eaa140c80c6cba9ace04c62a76
+    status: CLEAN_HISTORICAL_NO_PARSER_DIFF
+    behind_origin_main: 3492
+    remote_branch_found: false
+    open_issue_or_pr_found: false
+  available_audit_report:
+    date: 2026-11-03
+    vulnerability_scan: PASS
+    audit_shape_mismatch: NO
+    limitation: "This report is not stdout/stderr or exit evidence from the three failed security:gate attempts."
+  parser_reproduction:
+    method: "Read-only in-memory invocation of the current main parseJsonObject function; no source/test files changed."
+    valid_json_with_quoted_open_brace: "Rejected with AUDIT_JSON_INCOMPLETE."
+    valid_json_with_quoted_close_brace: "Rejected by JSON.parse as an unterminated string."
+    conclusion: "The brace-counting defect is reproducible for valid JSON inputs, but the three historical gate failures remain causally unproven because their raw outputs are unavailable."
+  decision: "Do not change the parser or loosen the gate until the actual failed-run evidence and canonical owner path are established."
+  next: "Recover the three original failure outputs/exit codes and compare them with the reproduced parser cases; then route any confirmed fix through its canonical security work order."
+  safety: PAPER_ONLY_LIVE_NONE_PRODUCTION_MUTATION_FALSE_REAL_ORDER_FALSE_REAL_TRANSFER_FALSE_AI_ZERO_AUTHORITY
+
+security_gate_codex_history_recovery_20261103:
+  observed_at_utc: "2026-11-03T02:18:15Z"
+  source: "Local Codex thread history; prior implementation turn 01a19eae-73e5-7821-bd38-6614e0cf111d"
+  recovered_gate_failures:
+    - "corepack pnpm run security:gate exited 1; output: [security-gate] dependency audit unavailable after 3 bounded attempts: AUDIT_JSON_INCOMPLETE; pnpm lifecycle exit 1."
+    - "A later security:gate invocation passed and printed status PASS, rawHighCritical=0, mitigated=[], unmitigated=[], backports=PASS, secrets=0, failures=[]."
+    - "A subsequent security:gate invocation again exited 1 after 3 bounded attempts with AUDIT_JSON_INCOMPLETE."
+  direct_audit_snapshot_between_attempts:
+    exit_code: 1
+    stdout_bytes: 16624
+    stderr_bytes: 0
+    json_parse: VALID
+    vulnerabilities: "info=0, low=3, moderate=9, high=0, critical=0"
+    advisory_count: 12
+    raw_stdout_preserved: false
+  remaining_evidence_gap: "The failing gate output is recovered, but the nested pnpm audit stdout/stderr for each failed attempt is not. The successful direct audit snapshot is not interchangeable with those failed inputs."
+  conclusion: "Observed intermittent fail/pass/fail behavior is consistent with variable audit output or execution conditions; it does not identify which. The brace parser remains a reproducible defect for selected valid JSON strings but is not yet the proven cause of either failure."
+  decision: "Do not patch or relax the parser based on this correlation. Obtain raw input/output from the failing nested audit attempts or capture an authorized bounded reproduction with separate stdout/stderr preservation."
+  safety: PAPER_ONLY_LIVE_NONE_PRODUCTION_MUTATION_FALSE_REAL_ORDER_FALSE_REAL_TRANSFER_FALSE_AI_ZERO_AUTHORITY
+
+current_main_full_suite_and_security_recheck_20261103:
+  observed_at_utc: "2026-11-03T02:18:15Z"
+  protected_main: 0e213243ac5b63e7fe900666b0055da9ca96de18
+  local_head: 0e213243ac5b63e7fe900666b0055da9ca96de18
+  full_isolated_suite: PASS_1326_OF_1326_ON_CURRENT_MAIN_PLUS_WIP
+  execution_environment: "pnpm test passed after adding installed Git for Windows bash.exe to PATH; initial unadjusted Windows attempt stopped at spawnSync bash ENOENT before the suite completed."
+  captured_current_security_runs:
+    direct_audit:
+      exit_code: 1
+      stdout_bytes: 16624
+      stdout_sha256: 41cf3f9b19cc1e707f74a89875964c65dcfd7e1cf1f718e50bf840e3c25dd289
+      json: VALID
+      current_parser: PASS
+    immediately_following_security_gate: "FAIL after 3 bounded attempts with AUDIT_JSON_INCOMPLETE; outer stdout/stderr preserved in local TEMP evidence directory."
+    subsequent_instrumented_security_gate: "PASS; rawHighCritical=0, mitigated=[], unmitigated=[], backports=PASS, secrets=0; one nested audit output captured and matches the direct-audit 16,624-byte SHA above; JSON valid and current parser PASS."
+    second_instrumented_security_gate: PASS
+  inner_failure_evidence: "The nested stdout/stderr from failed attempts was not captured; successful input is preserved under TEMP/nusa-security-audit-evidence-20261103."
+  root_cause: UNPROVEN_INTERMITTENT_GATE_FAIL_PASS
+  commit_gate: NOT_MET_PENDING_FAILURE_ROOT_CAUSE_AND_REQUIRED_FINAL_GATE_RECONCILIATION
+  next: "Do not patch parser from the successful-input reproduction. Preserve current-main full-suite PASS, recover or capture an actual failing nested audit input before root-cause attribution, then rerun the required local gates."
+  safety: PAPER_ONLY_LIVE_NONE_PRODUCTION_MUTATION_FALSE_REAL_ORDER_FALSE_REAL_TRANSFER_FALSE_AI_ZERO_AUTHORITY
+
+bounded_security_observation_20261103_0237z:
+  observed_at_utc: "2026-11-03T02:37:56Z"
+  protected_main_and_wip_head: 0e213243ac5b63e7fe900666b0055da9ca96de18
+  bootstrap_attempt:
+    outcome: "PRELOAD_PATH_PARSE_FAILURE_BEFORE_SECURITY_GATE"
+    detail: "Initial NODE_OPTIONS preload used Windows backslashes; Node parsed the path incorrectly and exited before pnpm/security:gate ran. Do not classify this as a repository gate failure."
+    correction: "Use slash-form preload path in NODE_OPTIONS."
+  corrected_bounded_gate:
+    gate: PASS
+    audit_attempts: 1
+    started_at_utc: "2026-11-03T02:37:56.042Z"
+    ended_at_utc: "2026-11-03T02:37:56.723Z"
+    elapsed_ms: 681
+    child_exit_code: 1
+    child_signal: NONE
+    child_timed_out: false
+    child_exec_error_code: NONE
+    stdout_bytes: 16624
+    stderr_bytes: 0
+    stdout_json: VALID
+    parser: PASS
+    stdout_sha256: "41cf3f9b19cc1e707f74a89875964c65dcfd7e1cf1f718e50bf840e3c25dd289"
+    stderr_class: EMPTY
+    capture_path: "TEMP/nusa-security-capture-20261103T023736Z"
+  classification: "Successful-path audit evidence only; not the missing input from a failing security-gate attempt. The current main/WIP SHA stayed aligned."
+  root_cause: UNPROVEN
+  commit_gate: NOT_MET
+  l1: PARTIAL
+  l2: HOLD
+  safety: PAPER_ONLY_LIVE_NONE_PRODUCTION_MUTATION_FALSE_REAL_ORDER_FALSE_REAL_TRANSFER_FALSE_AI_ZERO_AUTHORITY
+
+bounded_security_observation_outcome_20261103_0254z:
+  observed_at_utc: "2026-11-03T02:54:05Z"
+  protected_main_and_wip_head: 0e213243ac5b63e7fe900666b0055da9ca96de18
+  authorized_observation_limit: 5
+  normal_gate_runs: 5
+  gate_results: [PASS, PASS, PASS, PASS, PASS]
+  bootstrap_failures_excluded_from_gate_count: 1
+  child_audit_attempts_per_gate: 1
+  child_audit_common_evidence:
+    exit_code: 1
+    signal: NONE
+    timeout: false
+    exec_error_code: NONE
+    stdout_bytes: 16624
+    stderr_bytes: 0
+    stdout_json: VALID
+    current_parser: PASS
+    stdout_sha256: "41cf3f9b19cc1e707f74a89875964c65dcfd7e1cf1f718e50bf840e3c25dd289"
+    elapsed_ms_by_run: [677, 650, 739, 776, 653]
+    raw_evidence_directories:
+      - "TEMP/nusa-security-bounded-20261103T025342Z"
+      - "TEMP/nusa-security-bounded-20261103T025348Z"
+      - "TEMP/nusa-security-bounded-20261103T025352Z"
+      - "TEMP/nusa-security-bounded-20261103T025356Z"
+      - "TEMP/nusa-security-bounded-20261103T025400Z"
+  outcome:
+    current_failure: NOT_REPRODUCED_IN_BOUNDED_OBSERVATION
+    historical_audit_json_incomplete_root_cause: UNRESOLVED
+    root_cause_resolved: false
+  commit_gate_rejudication:
+    governing_requirement: "WO acceptance requires relevant security gates PASS before commit/PR; five bounded current-main security:gate invocations PASS. The later bootstrap_staged_inclusion governance order permits Gate A fail-closed staged inclusion before genuine positive protected-main attestation. No current canonical policy explicitly makes proof of a historical intermittent parser root cause a commit prerequisite."
+    related_timeout_runbook_scope: "docs/operations/ci-audit-timeout-triage.md covers AUDIT_UNAVAILABLE:timeout and is not used to classify AUDIT_JSON_INCOMPLETE."
+    result: MET_FOR_GATE_A_FAIL_CLOSED_STAGED_INCLUSION
+    limitations: "This is only a local implementation commit gate. It is not exact-head CI, independent review, Formal Validator, Audit, Release, merge approval, L1 completion, positive causal evidence, or CODE_ACTIONABLE."
+  next: "Proceed through the existing #1851 WIP publication path: create the local implementation commit after preserving unrelated diagnostics, push only the existing canonical branch, then fresh-check PR inventory before deciding whether one Draft PR is needed."
+  l1: PARTIAL
+  l2: HOLD
+  safety: PAPER_ONLY_LIVE_NONE_PRODUCTION_MUTATION_FALSE_REAL_ORDER_FALSE_REAL_TRANSFER_FALSE_AI_ZERO_AUTHORITY
+
+failure_capture_instrumentation_check_20261103:
+  observed_at_utc: "2026-11-03T02:35:55Z"
+  protected_main_and_wip_head: 0e213243ac5b63e7fe900666b0055da9ca96de18
+  instrumentation:
+    implementation: "Temporary NODE_OPTIONS preload wraps only the existing child_process.execFileSync audit command. It calls the original with the same arguments/options, writes the returned/thrown stdout/stderr and timing/exit metadata to TEMP, then returns/rethrows unchanged. No repository source, retry policy, timeout, threshold, or parser behavior changed."
+    capture_path: "TEMP/nusa-security-capture-20261103T023551Z"
+    verified_interception: true
+  bounded_gate_run:
+    gate: PASS
+    audit_attempts: 1
+    started_at_utc: "2026-11-03T02:35:54.440Z"
+    ended_at_utc: "2026-11-03T02:35:55.344Z"
+    elapsed_ms: 904
+    child_exit_code: 1
+    child_signal: NONE
+    child_timed_out: false
+    child_exec_error_code: NONE
+    stdout_bytes: 16624
+    stderr_bytes: 0
+    stdout_json: VALID
+    parser: PASS
+    stderr_class: EMPTY
+  classification: "Captured successful gate input, not a failure input. It demonstrates the instrumentation preserves the normal child result and records the expected nonzero pnpm audit exit separately from the security-gate decision."
+  root_cause: UNPROVEN
+  commit_gate: NOT_MET
+  next: "Retain the temporary capture mechanism for the next bounded gate observation. If it fails, stop and classify the captured child evidence; do not change parser based on this passing input."
+  safety: PAPER_ONLY_LIVE_NONE_PRODUCTION_MUTATION_FALSE_REAL_ORDER_FALSE_REAL_TRANSFER_FALSE_AI_ZERO_AUTHORITY
