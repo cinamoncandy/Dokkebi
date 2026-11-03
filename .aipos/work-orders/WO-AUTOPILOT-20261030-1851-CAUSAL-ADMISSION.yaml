@@ -679,12 +679,18 @@ formal_validator_p1_repair_20261103T0630Z:
     git_diff_check: PASS
   current_remote_state:
     pr_2994: OPEN_DRAFT_MERGEABLE
-    remote_head: 51e2ab49d4a44d8a32cfa37f8561d81dd19aa792
-    exact_head_ci_before_repair: SIX_SUCCESS_HISTORICAL_FOR_REPAIR
-    fresh_exact_head_review_for_repair: NOT_STARTED
-    old_p2_threads: UNRESOLVED_NON_OUTDATED; AUTHOR_MUST_NOT_RESOLVE
+    remote_head: e4512211b66463337978da28641056e9275c0374
+    base_and_protected_main: 3046600b093f8f07a26ba11df3fc48043ae00830
+    exact_head_ci: SIX_SUCCESS
+    fresh_exact_head_review: COMPLETED_NO_FINDINGS
+    formal_validator: HOLD_P0_0_P1_0_P2_1
+    formal_hold_findings:
+      stale_handoff_provenance: NEEDS_SUPERSEDING_CHECKPOINT
+      missing_required_merge_context: nusa/release-authorized
+      context_ordering: "Published by Release after successful Audit; not an Audit prerequisite."
+    old_p2_threads: UNRESOLVED_NON_OUTDATED; REVIEWER_DISPOSITIONED_AS_FIXED; AUTHOR_MUST_NOT_RESOLVE
   commit_gate: MET_FOR_SUCCESSOR_PUBLICATION_TO_EXISTING_DRAFT_PR
-  next: "Publish this validated successor non-force to the existing #2994 branch; then await exact-head CI and fresh independent review."
+  next: "Publish the evidence-only provenance correction non-force to the existing #2994 branch; rerun exact-head CI and obtain one fresh independent review, then request fresh Formal Validator adjudication. Audit requires explicit Formal ACCEPTED."
   l1: PARTIAL
   l2: HOLD
   topology_deploy_db_backup: HOLD_UNCHANGED
