@@ -87,6 +87,7 @@ export function planAutopilotExecution(dispatch: AutopilotDispatchPlan): Autopil
     }
 
     const conclusion = failureConclusion(dispatch.reason);
+    const attemptSuffix = workflowRunAttempt > 1 ? `:${workflowRunAttempt}` : "";
     return freeze({
       kind: "REPOSITORY_AUTOPILOT",
       repository: dispatch.repository,
@@ -95,8 +96,8 @@ export function planAutopilotExecution(dispatch: AutopilotDispatchPlan): Autopil
       workflowRunId,
       workflowRunAttempt,
       reason: `gha:${workflowRunId}:${headSha.toLowerCase()}:${conclusion}`,
-      executionId: `ci-failure:${workflowRunId}`,
-      dedupeKey: `ci-failure:${workflowRunId}:${headSha.toLowerCase()}`,
+      executionId: `ci-failure:${workflowRunId}${attemptSuffix}`,
+      dedupeKey: `ci-failure:${workflowRunId}${attemptSuffix}:${headSha.toLowerCase()}`,
       mutationAllowed: false,
     });
   }

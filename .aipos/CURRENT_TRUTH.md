@@ -7,20 +7,20 @@ Everything below is what the repository's records *claim*. Re-verify on GitHub b
 
 ## Newest handoff
 
-[`.aipos/handoffs/2026-11-01-main-handoff.md`](handoffs/2026-11-01-main-handoff.md) — CORE handoff — 2026-11-01
+[`.aipos/handoffs/2026-11-03-1851-causal-admission.md`](handoffs/2026-11-03-1851-causal-admission.md) — CORE handoff — 2026-11-03 — #1851 causal admission
 
-> Scope: canonical implementation inventory and continuation of the owner-approved, `authority_impact: none` AIPOS work order `WO-OPS-20261030-AIPOS-STATUS-ARCHIVE-TRUTH` in PR #2940. Safety remains PAPER_ONLY; `liveAuthority=NONE`; `productionMutationAllowed=false`; `realOrderAuthority=false`; `realTransferAuthority=false`; `aiAuthority=ZERO_AUTHORITY`.
+> ## Scope and owner
 
 ## Work orders
 
-522 total: 493 in `.aipos/work-orders/`, 29 closed and merged in `.aipos/work-orders/archive/`.
-Of the 493 active files, 96 carry a closed status that has not been archived (merge not proven, or the path is still referenced) and 397 are open or unclassified.
+524 total: 495 in `.aipos/work-orders/`, 29 closed and merged in `.aipos/work-orders/archive/`.
+Of the 495 active files, 96 carry a closed status that has not been archived (merge not proven, or the path is still referenced) and 399 are open or unclassified.
 
 Most common statuses among the open files (new orders use only `READY_FOR_REVIEW`, `IN_PROGRESS`, `BLOCKED`, `COMPLETED`, `SUPERSEDED`, `ABANDONED`):
 
 | Status | Files |
 |---|---|
-| READY_FOR_REVIEW | 221 |
+| READY_FOR_REVIEW | 223 |
 | IN_PROGRESS | 34 |
 | LOCAL_VALIDATED_PENDING_CI | 20 |
 | VERIFYING | 14 |

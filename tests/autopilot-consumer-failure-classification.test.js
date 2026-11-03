@@ -37,7 +37,7 @@ test('autopilot consumer has no undefined runtime identifiers', () => {
 test('autopilot consumer timestamps execution and reports exhausted remediation as failure', () => {
   assert.match(
     source,
-    /async function main\(\) \{\s*const startedAt = Date\.now\(\);\s*let request;\s*try \{\s*request = readDispatchRequest\(\);/s,
+    /async function main\(\) \{\s*const startedAt = Date\.now\(\);\s*let request;\s*(?:let [^;]+;\s*)*try \{\s*(?:const dispatch = readDispatchRequest\(\);|request = readDispatchRequest\(\);)/s,
   );
   assert.match(source, /attemptRecord\(\{[\s\S]*?startedAt,[\s\S]*?decision: "FAILED_CLOSED"/);
   const request = {

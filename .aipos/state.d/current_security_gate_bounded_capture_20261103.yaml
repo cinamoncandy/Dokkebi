@@ -1,0 +1,29 @@
+current_security_gate_bounded_capture_20261103:
+  observed_at_utc: "2026-11-03T02:37:56Z"
+  work_order: WO-AUTOPILOT-20261030-1851-CAUSAL-ADMISSION
+  protected_main_and_wip_head: 0e213243ac5b63e7fe900666b0055da9ca96de18
+  bootstrap_error:
+    gate_executed: false
+    classification: NODE_OPTIONS_PRELOAD_PATH_PARSE_FAILURE
+    security_gate_failure: false
+  corrected_observation:
+    gate: PASS
+    audit_attempts: 1
+    audit_exit_code: 1
+    elapsed_ms: 681
+    signal: NONE
+    timeout: false
+    exec_error_code: NONE
+    stdout_bytes: 16624
+    stderr_bytes: 0
+    stdout_json: VALID
+    parser: PASS
+    stdout_sha256: "41cf3f9b19cc1e707f74a89875964c65dcfd7e1cf1f718e50bf840e3c25dd289"
+    stderr_class: EMPTY
+    raw_streams_and_metadata: "TEMP/nusa-security-capture-20261103T023736Z"
+  classification: SUCCESSFUL_GATE_INPUT_ONLY_NOT_FAILURE_ROOT_CAUSE
+  root_cause: UNPROVEN
+  commit_gate: NOT_MET
+  l1: PARTIAL
+  l2: HOLD
+  safety: PAPER_ONLY_LIVE_NONE_PRODUCTION_MUTATION_FALSE_REAL_ORDER_FALSE_REAL_TRANSFER_FALSE_AI_ZERO_AUTHORITY
