@@ -233,3 +233,15 @@ test("boot-configured cap chunks SELL without a per-call cap and can be cleared"
     assert.equal(run(), 0.5);
   } finally { configurePaperExitOrderNotionalCap(undefined); }
 });
+
+test("chunked SELL never exceeds the cap and leaves a sellable remainder", () => {
+  const portfolio = Object.freeze({ allocations: Object.freeze([]), deployedCapital: 0, cashCapital: 10_000_000, reservedCapital: 0, grossShare: 0, futuresShare: 0, decidedAt: 1_000 });
+  const run = (qty, price, cap) => buildPaperExecutionIntent({ now: 1_100, market: "KRW-BTC", referencePrice: price, portfolio, decision: decision("SELL", 0),
+    state: state({ cash: 5_000_000, equity: 10_000_000, positions: Object.freeze([Object.freeze({ market: "KRW-BTC", quantity: qty, averageEntryPrice: price, realizedPnL: 0, unrealizedPnL: 0, markPrice: price })]) }), investmentPercent: 100, maxOrderNotional: cap }).quantity;
+  // 22,000 KRW position, 20,000 cap: first chunk leaves >= 5,000 KRW, not 2,000
+  const q = run(0.22, 100_000, 20_000);
+  assert.ok(q * 100_000 <= 20_000 && (0.22 - q) * 100_000 >= 5_000 - 1e-6);
+  // float overshoot case from review
+  const o = run(300_000, 0.0912, 20_000);
+  assert.ok(o * 0.0912 <= 20_000);
+});

@@ -158,7 +158,15 @@ export function buildPaperExecutionIntent(input: PaperExecutionIntentInput): Pap
     if (cap !== undefined && Number.isFinite(cap) && cap > 0 && quantity * input.referencePrice > cap) {
       // Round down so the capped order can never exceed the cap; the strategy keeps emitting SELL for the remainder.
       const chunk = Math.floor((cap / input.referencePrice) * 1e8) / 1e8;
-      if (chunk > 0 && chunk < quantity) quantity = round8(chunk);
+      let sized = round8(chunk);
+      // Keep the leftover at or above the exchange minimum so the last piece is still a sellable order (KRW markets).
+      if (market.startsWith("KRW-")) {
+        const minRemainder = round8((UPBIT_KRW_MINIMUM_ORDER_KRW * MINIMUM_ORDER_HEADROOM_RATIO) / input.referencePrice);
+        if ((quantity - sized) * input.referencePrice < UPBIT_KRW_MINIMUM_ORDER_KRW) sized = round8(Math.min(sized, quantity - minRemainder));
+      }
+      // round8 can land a hair above the cap; step down until the order notional is within it.
+      while (sized > 0 && sized * input.referencePrice > cap) sized = round8(sized - 1e-8);
+      if (sized > 0 && sized < quantity) quantity = sized;
     }
   }
 
