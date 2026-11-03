@@ -86,6 +86,23 @@ describe("PaperRealizedPeriodProducer", () => {
     } finally { state.db.close(); }
   });
 
+  it("reserves slots so several FILLED observations still fit after sampled non-fill observations saturate, and the total cap holds", () => {
+    const state = producer();
+    try {
+      const plan = state.producer.openPeriod(openPeriod());
+      let id = 0;
+      const next = (status: "WAIT" | "FILLED") => state.producer.observeExecution({ observationId: `obs-${id++}`, observedAt: plan.periodStartAt + 1 + id, status });
+      const size = () => state.producer.listOpenPeriods()[0]!.observationIds.length;
+      for (let i = 0; i < 400_000 && size() < 1_008; i += 1) next("WAIT");
+      assert.equal(size(), 1_008); // non-fill sampling stops 16 short of the cap
+      for (let i = 0; i < 100_000; i += 1) next("WAIT");
+      assert.equal(size(), 1_008);
+      for (let i = 0; i < 16; i += 1) assert.equal(next("FILLED"), "RECORDED");
+      assert.equal(size(), 1_024);
+      assert.equal(codeOf(() => next("FILLED")), "OBSERVATION_LIMIT"); // total cap unchanged
+    } finally { state.db.close(); }
+  });
+
   it("appends exactly one canonical #885 envelope and replays it after restart", () => {
     const state = producer();
     try {
