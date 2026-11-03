@@ -36,6 +36,8 @@
     "aipos:conformance": "node scripts/validate-aipos-cross-ai-conformance.js",
     "aipos:provenance": "node scripts/validate-aipos-work-order-provenance.js",
     "aipos:index": "node scripts/aipos-work-order-index.js",
+    "aipos:archive": "node scripts/aipos-archive-work-orders.js",
+    "aipos:truth": "node scripts/generate-aipos-current-truth.js",
     "aipos:state-add": "node scripts/aipos-state-insert.js",
     "aipos:yaml": "node scripts/validate-aipos-yaml.js",
     "capability:check": "node scripts/validate-capability-registry.js",

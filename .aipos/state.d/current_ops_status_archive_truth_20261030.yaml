@@ -1,0 +1,7 @@
+current_ops_status_archive_truth_20261030:
+  work_order: WO-OPS-20261030-AIPOS-STATUS-ARCHIVE-TRUTH
+  status: IN_PROGRESS
+  branch: claude/aipos-status-archive-truth
+  validation: "Current-main non-force merge and generated truth refresh locally verified; focused AIPOS tests 13/13; Windows autocrlf checkout simulation preserves LF; validate:full, security, typecheck, build, full pnpm test (1323 isolated test files) PASS; lint 0 errors / 47 baseline warnings. Exact-head CI 41277077623 failed only because Windows checkout converted generated CURRENT_TRUTH to CRLF; the explicit eol=lf repair is locally validated and ready for same-PR successor."
+  next: "Push the locally validated line-ending successor to the existing #2940 branch; verify fresh exact-head CI/companions, then obtain one independent review. No merge/release implied."
+  safety: PAPER_ONLY_LIVE_NONE_PRODUCTION_MUTATION_FALSE_AI_ZERO_AUTHORITY

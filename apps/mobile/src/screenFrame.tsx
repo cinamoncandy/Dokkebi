@@ -4,6 +4,8 @@ import { useTheme } from "./ThemeProvider";
 import { visualSystem } from "./visualSystem";
 import { readableFont } from "./designSystem";
 import { MotionReveal } from "./components";
+import { AiShell } from "./aiKit";
+import { plainScreenChip } from "./stageTraceModel";
 
 export function ScreenFrame({ children, testID, refreshControl }: Readonly<{
   children: React.ReactNode;
@@ -12,12 +14,12 @@ export function ScreenFrame({ children, testID, refreshControl }: Readonly<{
 }>) {
   const { theme } = useTheme();
   const ui = visualSystem(theme);
-  return <ScrollView
-    style={{ backgroundColor: ui.color.canvas }}
+  return <AiShell chip={plainScreenChip("MORE")}><ScrollView
+    style={{ backgroundColor: "transparent" }}
     contentContainerStyle={[styles.screen, { paddingHorizontal: ui.space.screenX, gap: ui.space.section }]}
     refreshControl={refreshControl}
     testID={testID}
-  >{React.Children.toArray(children).map((child, index) => <MotionReveal key={React.isValidElement(child) && child.key != null ? child.key : index} index={index}>{child}</MotionReveal>)}</ScrollView>;
+  >{React.Children.toArray(children).map((child, index) => <MotionReveal key={React.isValidElement(child) && child.key != null ? child.key : index} index={index}>{child}</MotionReveal>)}</ScrollView></AiShell>;
 }
 
 export function ScreenTitle({ title, detail }: Readonly<{ title: string; detail?: string }>) {

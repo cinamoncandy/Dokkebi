@@ -6,8 +6,8 @@ import { AuthContext, useAuth, type AuthStatus } from "./src/authContext";
 // Screen presenters come only from the presentation boundary (docs/UI_ARCHITECTURE.md).
 import {
   FuturesView, HomeView, LiveReadinessMonitorView, MoreDetailView, MoreMenuView, NotificationView, NusaButton, NusaCard, OrderHistoryView,
-  EventBanner, PaperShadowMonitorView, PerformanceView, PortfolioView, PrimaryNavigation, SafetyLine, SettingsView, StatusChip, StrategiesView, TabTransition, ThemeProvider, useTheme, WaveMark,
-  type HomeDestination, type ThemePreference, type TruthfulMoreDetail,
+  AiShell, EventBanner, PaperShadowMonitorView, PerformanceView, PortfolioView, PrimaryNavigation, SafetyLine, SettingsView, StatusChip, StrategiesView, TabTransition, ThemeProvider, useTheme, WaveMark,
+  plainScreenChip, type HomeDestination, type ThemePreference, type TruthfulMoreDetail,
 } from "./src/presentation";
 import { getHomeVisualProfile } from "./src/homeVisualProfile";
 import { WatchlistRepository } from "./src/watchlist";
@@ -98,12 +98,12 @@ function PersistedThemeBridge({ children }: Readonly<{ children: React.ReactNode
 
 function DashboardConnectionRequired({ reason, onGoSettings }: Readonly<{ reason: string; onGoSettings: () => void }>) {
   const { theme: appTheme } = useTheme();
-  return <View style={styles.connectionState} testID="dashboard-connection-required"><View style={styles.connectionStateInner}><NusaCard raised>
+  return <AiShell chip={plainScreenChip("PAPER")}><View style={styles.connectionState} testID="dashboard-connection-required"><View style={styles.connectionStateInner}><NusaCard raised>
     <View style={styles.cardHeader}><View><Text style={[styles.cardEyebrow, { color: appTheme.colors.warning }]}>PAPER CONNECTION</Text><Text style={[styles.cardTitle, { color: appTheme.colors.text }]}>PAPER 서버 연결 필요</Text></View><StatusChip label="연결 안 됨" tone="warning" /></View>
     <Text style={[styles.body, { color: appTheme.colors.textMuted }]}>{reason}</Text>
     <Text style={[styles.meta, { color: appTheme.colors.textMuted }]}>Settings에서 Cloud endpoint와 메모리 전용 세션 토큰을 검증한 뒤 PAPER 데이터와 운용 감독 기능을 사용할 수 있습니다.</Text>
     <NusaButton label="설정에서 연결" onPress={onGoSettings} testID="dashboard-open-settings" />
-  </NusaCard></View></View>;
+  </NusaCard></View></View></AiShell>;
 }
 
 export default function App() { return <SafeAreaProvider><ThemeProvider initialMode="system"><PersistedThemeBridge><AuthContextProvider><AuthenticatedApp /></AuthContextProvider></PersistedThemeBridge></ThemeProvider></SafeAreaProvider>; }

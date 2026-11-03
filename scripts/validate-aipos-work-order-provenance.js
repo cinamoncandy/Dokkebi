@@ -9,21 +9,22 @@
 // This deliberately enumerates every work order rather than special-casing the two known ids:
 // a third artifact reusing an existing number must fail here, not be discovered later the way
 // the WO-0063 collision was.
-const { existsSync, readFileSync, readdirSync } = require("node:fs");
+const { existsSync, readFileSync } = require("node:fs");
 const { join, normalize } = require("node:path");
 const { block, scalar } = require("./validate-aipos-drift.js");
+const { listWorkOrderEntries } = require("./lib/aipos-work-order-paths.js");
 
 const RECONCILIATION_PATH = ".aipos/evidence/WO-0071-work-order-id-provenance-reconciliation.json";
 const WORK_ORDER_DIR = ".aipos/work-orders";
 const STATE_PATH = ".aipos/state.yaml";
 
 function workOrderFiles(root) {
-  const directory = join(root, normalize(WORK_ORDER_DIR));
-  if (!existsSync(directory)) return [];
-  return readdirSync(directory)
-    .filter((name) => /\.ya?ml$/i.test(name))
-    .sort()
-    .map((name) => ({ name, path: `${WORK_ORDER_DIR}/${name}`, source: readFileSync(join(directory, name), "utf8") }));
+  // Archived (closed, merged) orders are still work orders: the id-collision check must see them.
+  return listWorkOrderEntries(root).map((entry) => ({
+    name: entry.name,
+    path: entry.path,
+    source: readFileSync(join(root, normalize(entry.path)), "utf8"),
+  }));
 }
 
 function validateStateBinding(root, reconciliation, failures) {

@@ -38,3 +38,18 @@ test("the loop line says a learning cycle needs a candidate that passed the hold
   assert.match(ran.loop, /3번 평가했어요/);
   assert.equal(buildLearningFunnel({ configurations: 0, discoveryPasses: 0, holdoutPasses: 0, cyclesEvaluated: 0, evaluatedAt: 1 }), null);
 });
+
+test("the verdict line reads the server's fixed labels in plain Korean and shows nothing for anything else", () => {
+  const base = { configurations: 453, discoveryPasses: 15, holdoutPasses: 0, cyclesEvaluated: 0, evaluatedAt: 1 };
+  const partial = buildLearningFunnel({ ...base, loopVerdict: { verdict: "PARTIAL", firstBrokenTransition: "CANDLES", firstBrokenCode: "CANDLES_STALE", cycleWaitingFor: "NO_DEPLOYABLE_CANDIDATE" } })!;
+  assert.equal(partial.verdictLine, "모의 거래는 끝까지 돌고 있어요. 캔들 기록 단계가 아직 안 닫혔어요: 캔들이 오래됐어요");
+  assert.match(buildLearningFunnel({ ...base, loopVerdict: { verdict: "BLOCKED", firstBrokenTransition: "ORDER", firstBrokenCode: "ORDER_INTENT_FAILING", cycleWaitingFor: "UNKNOWN" } })!.verdictLine!, /주문 단계에서 막혀 있어요: 주문 직전에 계속 막혀요/);
+  assert.match(buildLearningFunnel({ ...base, loopVerdict: { verdict: "LOOP_VERIFIED", firstBrokenTransition: "NONE", firstBrokenCode: "PASS", cycleWaitingFor: "NONE" } })!.verdictLine!, /끝까지 돌았어요/);
+  assert.match(buildLearningFunnel({ ...base, loopVerdict: { verdict: "FAILED", firstBrokenTransition: "NONE", firstBrokenCode: "PASS", cycleWaitingFor: "UNKNOWN" } })!.verdictLine!, /지금 오류가 있어요/);
+  assert.match(buildLearningFunnel({ ...base, loopVerdict: { verdict: "UNKNOWN", firstBrokenTransition: "NONE", firstBrokenCode: "PASS", cycleWaitingFor: "UNKNOWN" } })!.verdictLine!, /판정하지 못했어요/);
+  for (const bad of [undefined, null, [], "PARTIAL", { verdict: "GREAT", firstBrokenTransition: "X", firstBrokenCode: "Y", cycleWaitingFor: "NONE" }, { verdict: "PARTIAL", firstBrokenTransition: "CANDLES", firstBrokenCode: "CANDLES_STALE", cycleWaitingFor: "made up" }, { verdict: "PARTIAL", firstBrokenTransition: 3, firstBrokenCode: "X", cycleWaitingFor: "NONE" }]) {
+    assert.equal(buildLearningFunnel({ ...base, loopVerdict: bad })!.verdictLine, null, JSON.stringify(bad));
+  }
+  const unknownStage = buildLearningFunnel({ ...base, loopVerdict: { verdict: "PARTIAL", firstBrokenTransition: "SOMETHING_NEW", firstBrokenCode: "SOMETHING_NEW_CODE", cycleWaitingFor: "NONE" } })!;
+  assert.match(unknownStage.verdictLine!, /연구나 학습 쪽은 아직 안 닫혔어요/, "an unknown stage never produces made-up wording");
+});

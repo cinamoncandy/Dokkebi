@@ -20,5 +20,6 @@ safety:
   aiAuthority: ZERO_AUTHORITY
 validation:
   - "tsc clean; learningLoopVerdict.test (6 behaviour tests incl. the owner's 2026-10-31 state reading PARTIAL / CANDLES_STALE / NO_DEPLOYABLE_CANDIDATE); learning-pipeline-stage/alarm, health-export, cloud-runtime-liveness-health, cloud-runtime-bootstrap, learning-loop-contract tests pass."
-unverified: "The output on the real host /health. The app does not show the verdict yet (the app heartbeat is a separate projection)."
+app_display_20261031: "The same verdict (fixed labels and codes only) is nested as loopVerdict in the heartbeat learningFunnel object (runtime.ts, assigned from the same liveness snapshot the dashboard server uses; contract type PersonalPaperLearningLoopVerdict). The 학습 funnel shows it as one plain Korean sentence (learningFunnelModel.verdictLine): unknown labels or codes show nothing, an unknown stage never produces made-up wording, and FAILED is the only label that says there is an error."
+unverified: "The output on the real host /health and in the app on a device."
 next: "CI and the release path; after deploy read /health learningLoopVerdict on the host. A later step can show it in the app and compare it across restarts to observe persistence."

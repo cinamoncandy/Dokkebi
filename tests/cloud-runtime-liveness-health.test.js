@@ -157,7 +157,9 @@ test("the published evidence carries no financial or credential data", async () 
 test("the runtime publishes exactly the fields the contract allows", () => {
   const fs = require("node:fs");
   const runtime = fs.readFileSync("apps/cloud/src/runtime.ts", "utf8");
-  const start = runtime.indexOf("runtimeLiveness: () =>");
+  // The snapshot function may also be assigned to a local for the app heartbeat: `runtimeLiveness: (livenessSnapshotForApp = () => ...)`.
+  const found = /runtimeLiveness: (?:\(livenessSnapshotForApp = )?\(\) =>/.exec(runtime);
+  const start = found == null ? -1 : found.index;
   assert.ok(start > 0, "the runtime must wire its heartbeat into the server");
   const block = runtime.slice(start, runtime.indexOf("}),", start));
   for (const banned of ["price", "balance", "capital", "position", "token", "secret"]) {
@@ -174,7 +176,7 @@ test("/health publishes only the allowlisted liveness fields, whatever the sourc
     const body = JSON.parse(res.body);
     assert.deepEqual(Object.keys(body.runtime).sort(), Object.keys(LIVENESS).sort(), "no field beyond the contract may reach the public route");
     assert.equal(body.runtime.lastError, "LIVENESS_ERROR_UNCLASSIFIED", "a free-text error is replaced, never published");
-    assert.doesNotMatch(res.body, /leak-sentinel-7f3|acct-123|1000000|invalid key/);
+    assert.doesNotMatch(res.body, /leak-sentinel-7f3|acct-123|(?<![0-9])1000000(?![0-9])|invalid key/);
   }, 41887);
 });
 
@@ -501,7 +503,7 @@ test("the PAPER ledger identity publishes only a 64-hex fingerprint and non-nega
   await withServer({ runtimeLiveness: () => ({ ...LIVENESS, paperLedger: { ...good, cash: 8399 } }) }, async (handle) => {
     const res = await request(handle.port, "/health");
     assert.deepEqual(JSON.parse(res.body).runtime.paperLedger, good);
-    assert.doesNotMatch(res.body, /8399|"cash"/);
+    assert.doesNotMatch(res.body, /(?<![0-9])8399(?![0-9])|"cash"/);
   }, 41878);
   for (const bad of [{ ...good, ledgerFingerprintSha256: "short" }, { ...good, fillCount: -1 }, { ...good, lastFillAt: 1.5 }]) {
     await withServer({ runtimeLiveness: () => ({ ...LIVENESS, paperLedger: bad }) }, async (handle) => {
@@ -601,4 +603,16 @@ test("/health publishes the public futures collector counters as non-negative in
   await withServer({ runtimeLiveness: () => ({ ...LIVENESS, futuresCollector: { ...good, rounds: -1 } }) }, async (handle) => {
     assert.equal(JSON.parse((await request(handle.port, "/health")).body).runtime.futuresCollector, undefined);
   }, 42391);
+});
+
+test("/health publishes the open period's observation status counts as non-negative integers only", async () => {
+  const loop = { cyclesEvaluated: 0, deployments: 0, ticks: 1, lastTickAt: 1_900, bootstrap: "RESEARCH_NOT_DEPLOYABLE", rollover: "WAITING_FOR_CANONICAL_BOUNDARY", evidence: { openObservations: 12, openFilledObservations: 0, openWaitObservations: 9, openBlockedObservations: 2, openRejectedObservations: 1, openFailedObservations: -1, openDuplicateObservations: "3" } };
+  await withServer({ runtimeLiveness: () => ({ ...LIVENESS, closedLearningLoop: loop }) }, async (handle) => {
+    const evidence = JSON.parse((await request(handle.port, "/health")).body).runtime.closedLearningLoop.evidence;
+    assert.equal(evidence.openWaitObservations, 9);
+    assert.equal(evidence.openBlockedObservations, 2);
+    assert.equal(evidence.openRejectedObservations, 1);
+    assert.equal(evidence.openFailedObservations, undefined, "a negative count is withdrawn");
+    assert.equal(evidence.openDuplicateObservations, undefined, "a non-integer is withdrawn");
+  }, 41897);
 });
