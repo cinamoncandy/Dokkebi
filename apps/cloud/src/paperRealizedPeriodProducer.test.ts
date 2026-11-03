@@ -90,16 +90,22 @@ describe("PaperRealizedPeriodProducer", () => {
     const state = producer();
     try {
       const plan = state.producer.openPeriod(openPeriod());
-      let id = 0;
-      const next = (status: "WAIT" | "FILLED") => state.producer.observeExecution({ observationId: `obs-${id++}`, observedAt: plan.periodStartAt + 1 + id, status });
+      // Same sampling hash as the producer: only ids with hash % 64 === 0 are persisted as non-fill, so pick those directly.
+      const sampled = (id: string): boolean => { let hash = 0; for (const char of id) hash = (hash * 31 + char.charCodeAt(0)) >>> 0; return hash % 64 === 0; };
       const size = () => state.producer.listOpenPeriods()[0]!.observationIds.length;
-      for (let i = 0; i < 400_000 && size() < 1_008; i += 1) next("WAIT");
-      assert.equal(size(), 1_008); // non-fill sampling stops 16 short of the cap
-      for (let i = 0; i < 100_000; i += 1) next("WAIT");
+      let n = 0;
+      let at = 1;
+      const observe = (id: string, status: "WAIT" | "FILLED") => state.producer.observeExecution({ observationId: id, observedAt: plan.periodStartAt + (at += 1), status });
+      const nextSampled = (): string => { for (;;) { const id = `obs-${n++}`; if (sampled(id)) return id; } };
+      const nextUnsampled = (): string => { for (;;) { const id = `obs-${n++}`; if (!sampled(id)) return id; } };
+      observe(nextSampled(), "WAIT"); // the first observation of a period is always kept
+      while (size() < 1_008) observe(nextSampled(), "WAIT");
       assert.equal(size(), 1_008);
-      for (let i = 0; i < 16; i += 1) assert.equal(next("FILLED"), "RECORDED");
+      assert.equal(observe(nextSampled(), "WAIT"), "RECORDED"); // sampled non-fill beyond the reserve is dropped, not stored
+      assert.equal(size(), 1_008); // non-fill sampling stops 16 short of the cap
+      for (let i = 0; i < 16; i += 1) assert.equal(observe(nextUnsampled(), "FILLED"), "RECORDED");
       assert.equal(size(), 1_024);
-      assert.equal(codeOf(() => next("FILLED")), "OBSERVATION_LIMIT"); // total cap unchanged
+      assert.equal(codeOf(() => observe(nextUnsampled(), "FILLED")), "OBSERVATION_LIMIT"); // total cap unchanged
     } finally { state.db.close(); }
   });
 
