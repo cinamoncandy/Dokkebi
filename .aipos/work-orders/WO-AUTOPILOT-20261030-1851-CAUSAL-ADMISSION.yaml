@@ -36,6 +36,39 @@ acceptance:
 next: "Complete claimed-generation retry and receipt deduplication, connect a trusted source-run-bound causal producer/verifier and authenticated capability delivery, then gate all failure-based admission and publish paths without widening authority."
 safety: PAPER_ONLY_LIVE_NONE_PRODUCTION_MUTATION_FALSE_REAL_ORDER_FALSE_REAL_TRANSFER_FALSE_AI_ZERO_AUTHORITY
 
+continuation_20261103_isolated_positive_verification_lane:
+  supersedes: "Prior checkpoints describing PR #2992 as the current open implementation PR; #2992 merged as protected main 7e702eaf078d56614cff9e4f4325d08419e19185."
+  current_main: 7e702eaf078d56614cff9e4f4325d08419e19185
+  current_pr:
+    number: 2994
+    state: OPEN_DRAFT_MERGEABLE
+    base: 7e702eaf078d56614cff9e4f4325d08419e19185
+    published_head: 621047f95b49db03f9f633e19d8929869e38945c
+    local_changes: UNCOMMITTED_SUCCESSOR_WORK
+  scope:
+    - "Add a protected-main-only, manual isolated verification workflow. The intentional allowlist mismatch is produced by mutating a compiled copy of the repository policy in runner TEMP; checked-out source remains unchanged."
+    - "Sign the exact isolated observation with GitHub/Sigstore using a workflow identity and predicate type distinct from production causal attestations."
+    - "After source-run completion, a read-only workflow_run consumer verifies exact signer, predicate, repository, workflow, ref, SHA, run and attempt; it then classifies only the isolated domain."
+    - "Exercise the existing CodingRunner through a deterministic proposal adapter and no-op sandbox adapter, with in-memory ExecutionCoordinator lease/completion and completed-key replay rejection. No external AI provider, publisher, repository mutation, or production coordinator is called."
+  validation_so_far:
+    focused_tests: PASS_11_OF_11
+    typescript_compile: PASS
+    isolated_fixture_smoke: PASS_OBSERVED_MISMATCH_ON_TEMP_COPY
+    action_pin_and_input_validation: PASS
+    aipos_yaml: PASS
+    full_suite_and_remaining_gates: NOT_RUN
+  evidence_limits:
+    signed_github_attestation: NOT_YET_PRODUCED
+    cryptographic_positive_verification: PENDING_POST_GOVERNED_INCLUSION
+    isolated_code_actionable: PENDING_POST_GOVERNED_INCLUSION
+    production_causal_receipt: ABSENT
+    production_code_actionable: NOT_ISSUED
+    codingrunner_positive_e2e: PENDING_POST_GOVERNED_INCLUSION
+    l1: PARTIAL
+    l2: HOLD
+  next: "Finish all local gates on the uncommitted #2994 successor; if they pass, commit and non-force-push only the existing canonical PR branch. Then reverify current main/head, exact-head CI and obtain fresh independent review before separate Formal Validator, Audit and Release gates. Do not make the PR ready or merge while post-merge automation can invoke deployment."
+  safety: PAPER_ONLY_LIVE_NONE_PRODUCTION_MUTATION_FALSE_REAL_ORDER_FALSE_REAL_TRANSFER_FALSE_AI_ZERO_AUTHORITY
+
 continuation_20261031:
   observed_main: 1a8bb3b261f8e4ac242499a93287da6c370ed4b3
   status: LOCAL_PROTOTYPE_NOT_COMMIT_READY

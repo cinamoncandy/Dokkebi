@@ -1,0 +1,52 @@
+current_autopilot_1851_isolated_positive_lane_20261103:
+  observed_at_utc: "2026-11-03T04:58:56Z"
+  work_order: WO-AUTOPILOT-20261030-1851-CAUSAL-ADMISSION
+  issue: 1851
+  protected_main: 7e702eaf078d56614cff9e4f4325d08419e19185
+  pr:
+    number: 2994
+    state: OPEN_DRAFT_MERGEABLE
+    published_head: 621047f95b49db03f9f633e19d8929869e38945c
+    base: 7e702eaf078d56614cff9e4f4325d08419e19185
+  local_successor_changes: UNCOMMITTED_VALIDATED_PENDING_PUBLICATION
+  implementation:
+    signer_identity: "Separate .github/workflows/causal-verification.yml@refs/heads/main identity."
+    predicate_type: "https://github.com/cinamoncandy/NUSA/attestations/isolated-causal-verification/v1"
+    fixture: "Surgically mutate only a compiled copy in runner TEMP; assert canonical CI failure predicate true on source and false in the fixture."
+    consumer: "workflow_run on successful exact source run; exact GitHub API run identity plus Sigstore cryptographic verification, then isolated classification."
+    codingrunner: "Existing CodingRunner with deterministic proposal adapter, no-op sandbox adapter, in-memory ExecutionCoordinator, completion replay rejection; no publisher/provider/runtime mutation."
+  local_validation:
+    focused_tests: PASS_11_OF_11_AFTER_FINAL_SOURCE_EDIT
+    typescript_compile_and_typecheck: PASS
+    fixture_smoke: PASS_OBSERVED_MISMATCH_ON_TEMP_COPY
+    action_pin_validation: PASS
+    action_input_validation: PASS
+    full_suite: PASS_1327_ISOLATED_TEST_FILES
+    validate_full: PASS
+    security_gate: PASS
+    lint: PASS_ZERO_ERRORS_47_WARNINGS
+    authority_map: PASS_41_WORKFLOWS
+    aipos_yaml_and_work_order_provenance: PASS_566_FILES
+    diff_check: PASS
+    first_full_suite_attempt: "Failed before code assertions because the new producer id-token:write permission was absent from the authority map; declared that workflow authority, then targeted authority-map tests passed 11/11 and the full suite passed 1327/1327."
+    final_full_suite_retries: "Two later attempts stopped for environment/bootstrap reasons before completion (Git Bash missing from PATH; then duplicate AIPOS state key). Both causes were corrected; final pnpm test completed PASS_1327_ISOLATED_TEST_FILES with Git Bash on PATH and strict YAML validation passing."
+  pending:
+    exact_head_ci: PENDING_PUBLICATION
+    independent_review: REQUIRED_FOR_SUCCESSOR
+    formal_validator: NOT_STARTED
+    audit: NOT_STARTED
+    release: NOT_AUTHORIZED
+    signed_positive_bundle: REQUIRES_GOVERNED_INCLUSION_AND_POST_MERGE_WORKFLOW_RUN
+    production_causal_receipt: ABSENT
+    production_code_actionable: NOT_ISSUED
+    production_codingrunner_e2e: ABSENT
+  status:
+    l1: PARTIAL
+    l2: HOLD
+    commit_gate: MET_FOR_EXISTING_DRAFT_PR_PUBLICATION
+    liveAuthority: NONE
+    productionMutationAllowed: false
+    realOrderAuthority: false
+    realTransferAuthority: false
+    aiAuthority: ZERO_AUTHORITY
+  safety: PAPER_ONLY_LIVE_NONE_PRODUCTION_MUTATION_FALSE_REAL_ORDER_FALSE_REAL_TRANSFER_FALSE_AI_ZERO_AUTHORITY
