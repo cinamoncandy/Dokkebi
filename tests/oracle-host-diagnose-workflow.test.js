@@ -135,12 +135,15 @@ test("the learning readout reads the saved /health file, keeps only booleans, nu
   try {
     const out = JSON.parse(run(JSON.stringify({
       learningLoopVerdict: { verdict: "PARTIAL", candidateFunnel: { stage: "NO_DISCOVERY", experiments: 9 } },
-      runtime: { lastPaperFillAt: 1700, paperFillCount: 2, lastPaperDecisionOutcome: "HOLD", sourceCommitSha: "a".repeat(40), lastError: "free text here", paperLedger: { fillCount: 4, ledgerFingerprintSha256: "b".repeat(64) }, dataIntegrity: { status: "WARN", candleStaleSeries: 1, candleMaxLatestAgeMs: 3_500_000 }, orderBookCoverage: { market: "KRW-BTC", ratio: 0.6, meetsStudyBar: false }, closedLearningLoop: { cycleId: "closed-learning:abc", note: "secret text", cyclesEvaluated: 0 } },
+      runtime: { paperFunnel: { since: 5, counts: { "DECISION:PASS:BUY": 7, "ORDER_INTENT:FAIL": 5, "ORDER_INTENT:FAIL:ALLOCATION_ZERO": 4, "free text": 9, "RISK:FAIL:x": 1 } }, lastPaperFillAt: 1700, paperFillCount: 2, lastPaperDecisionOutcome: "HOLD", sourceCommitSha: "a".repeat(40), lastError: "free text here", paperLedger: { fillCount: 4, ledgerFingerprintSha256: "b".repeat(64) }, dataIntegrity: { status: "WARN", candleStaleSeries: 1, candleMaxLatestAgeMs: 3_500_000 }, orderBookCoverage: { market: "KRW-BTC", ratio: 0.6, meetsStudyBar: false }, closedLearningLoop: { cycleId: "closed-learning:abc", note: "secret text", cyclesEvaluated: 0 } },
     })));
     assert.equal(out.learningLoopVerdict.candidateFunnel.stage, "NO_DISCOVERY");
     assert.deepEqual(out.orderBookCoverage, { ratio: 0.6, meetsStudyBar: false }, "the market name is dropped");
     assert.deepEqual(out.runtimeScalars, { lastPaperFillAt: 1700, paperFillCount: 2, lastPaperDecisionOutcome: "HOLD" }, "top-level runtime numbers and fixed codes only: the commit hash and free text are dropped");
     assert.deepEqual(out.paperLedger, { fillCount: 4 }, "a lower-case hash is dropped");
+    assert.deepEqual(out.paperFunnel, { "DECISION:PASS:BUY": 7, "ORDER_INTENT:FAIL": 5, "ORDER_INTENT:FAIL:ALLOCATION_ZERO": 4 }, "only coded keys survive (the 48-character reason limit is /health's own rule)");
+    assert.equal(JSON.parse(run(JSON.stringify({ runtime: { lastPaperDecisionOutcome: "BLOCKED:PAPER_EXECUTION_INTENT_MINIMUM_ORDER_EXCEEDS_CASH" } }))).lastPaperDecisionOutcome, "BLOCKED:PAPER_EXECUTION_INTENT_MINIMUM_ORDER_EXCEEDS_CASH", "a coded decision outcome is read");
+    assert.equal(run(JSON.stringify({ runtime: { lastPaperDecisionOutcome: "balance is 9,999 KRW" } })), "LEARNING_READOUT_EMPTY", "free text is dropped");
     assert.deepEqual(out.dataIntegrity, { status: "WARN", candleStaleSeries: 1, candleMaxLatestAgeMs: 3_500_000 });
     assert.deepEqual(out.closedLearningLoop, { cyclesEvaluated: 0 }, "identifiers and free text are dropped");
     assert.equal(run("{bad"), "LEARNING_READOUT_UNAVAILABLE");
