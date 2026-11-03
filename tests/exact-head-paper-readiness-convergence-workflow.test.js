@@ -40,7 +40,7 @@ function sourceRun(overrides = {}) {
 function sourceArtifact(overrides = {}) {
   return {
     id: 13210682112,
-    name: `wo-0059-actual-paper-runtime-evidence-${TARGET_SHA}`,
+    name: `wo-0059-actual-paper-runtime-evidence-${TARGET_SHA}-attempt-${SOURCE_RUN_ATTEMPT}`,
     digest: `sha256:${"a".repeat(64)}`,
     expired: false,
     workflow_run: {
@@ -70,7 +70,7 @@ function artifactExpectation(overrides = {}) {
     sourceRunId: SOURCE_RUN_ID,
     repositoryId: REPOSITORY_ID,
     targetSha: TARGET_SHA,
-    artifactName: `wo-0059-actual-paper-runtime-evidence-${TARGET_SHA}`,
+    artifactName: `wo-0059-actual-paper-runtime-evidence-${TARGET_SHA}-attempt-${SOURCE_RUN_ATTEMPT}`,
     ...overrides,
   };
 }
@@ -131,6 +131,7 @@ test("artifact metadata must bind one unexpired digest to the exact source run, 
   const cases = [
     ["ARTIFACT_EXPIRED_OR_UNKNOWN", { expired: true }],
     ["ARTIFACT_NAME_MISMATCH", { name: "other-artifact" }],
+    ["ARTIFACT_NAME_MISMATCH", { name: `wo-0059-actual-paper-runtime-evidence-${TARGET_SHA}-attempt-2` }],
     ["ARTIFACT_DIGEST_INVALID", { digest: "sha256:not-a-digest" }],
     ["ARTIFACT_RUN_ID_MISMATCH", { workflow_run: { id: 1, head_sha: TARGET_SHA, repository_id: REPOSITORY_ID, head_repository_id: REPOSITORY_ID } }],
     ["ARTIFACT_HEAD_SHA_MISMATCH", { workflow_run: { id: Number(SOURCE_RUN_ID), head_sha: "1111111111111111111111111111111111111111", repository_id: REPOSITORY_ID, head_repository_id: REPOSITORY_ID } }],
@@ -178,6 +179,11 @@ test("actual workflow issues only a main token-run callback using a job-scoped a
   assert.match(script, /GITHUB_RUN_ID/);
   assert.match(script, /GITHUB_RUN_ATTEMPT/);
   assert.match(script, /GITHUB_SHA/);
+  const actualPaper = workflow.jobs["actual-paper-runtime"];
+  const legacyArtifact = actualPaper.steps.find((step) => step.name === "Upload legacy-name Actual PAPER runtime evidence");
+  const attemptArtifact = actualPaper.steps.find((step) => step.name === "Upload attempt-scoped Actual PAPER runtime evidence");
+  assert.match(legacyArtifact.with.name, /wo-0059-actual-paper-runtime-evidence-\$\{\{ github\.event\.pull_request\.head\.sha \|\| github\.sha \}\}/);
+  assert.match(attemptArtifact.with.name, /github\.run_attempt/);
 });
 
 test("convergence accepts exact run inputs, waits boundedly, and suppresses callback redispatch", () => {
@@ -197,6 +203,7 @@ test("convergence accepts exact run inputs, waits boundedly, and suppresses call
   assert.match(resolveSource, /EVENT_TRIGGERING_ACTOR/);
   assert.match(resolveSource, /certified_count/);
   assert.match(resolveSource, /source_run_attempt/);
+  assert.match(resolveSource, /evidence-\$target_sha-attempt-\$source_run_attempt/);
 
   const certify = steps.find((step) => step.id === "certify").run;
   assert.match(certify, /INPUT_SOURCE_RUN_ID/);

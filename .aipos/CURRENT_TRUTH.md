@@ -9,7 +9,7 @@ Everything below is what the repository's records *claim*. Re-verify on GitHub b
 
 [`.aipos/handoffs/2026-11-03-paper-readiness-convergence.md`](handoffs/2026-11-03-paper-readiness-convergence.md) — PAPER readiness convergence handoff — 2026-11-03
 
-> ## Objective and finding
+> ## Objective
 
 ## Work orders
 

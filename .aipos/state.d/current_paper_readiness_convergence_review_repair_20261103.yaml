@@ -1,0 +1,43 @@
+current_paper_readiness_convergence_review_repair_20261103:
+  work_order: WO-OPS-20261103-PAPER-READINESS-CONVERGENCE
+  status: IN_PROGRESS
+  observed_at: "2026-11-03T13:47:37Z"
+  branch: wo-ops-20261103-paper-readiness-convergence
+  pull_request: 2996
+  predecessor_head: e2e435895ee83bf964752e74142be170093f7f97
+  base_commit: efa8e295e7a468d7cb1652fb3924f30c83c3e5f7
+  independent_review:
+    status: COMPLETED_WITH_FINDING
+    review_id: 5752749994
+    comment_id: 4455112716
+    thread_id: PRRT_kwDOTUbne86zIsla
+    p0: 0
+    p1: 1
+    p2: 0
+    finding: >-
+      Same-name source artifacts retained across workflow reruns can make the
+      callback reject the artifact set as ambiguous instead of selecting the
+      exact source run attempt.
+  local_repair:
+    status: IMPLEMENTED_UNCOMMITTED
+    behavior: >-
+      Producer uploads an attempt-scoped artifact alongside the legacy
+      SHA-scoped artifact; callback lookup uses the exact run attempt name,
+      while the legacy artifact remains for pre-inclusion deterministic Audit.
+    focused_readiness: PASS_22_OF_22
+    full_suite: PASS_1327_ISOLATED_TEST_FILES
+    preflight: PASS
+    build: PASS
+    typecheck: PASS
+    validate_full: PASS
+    security_gate: PASS
+    lint: PASS_0_ERRORS_47_BASELINE_WARNINGS
+    workflow_action_pins: PASS
+    workflow_authority_map: PASS
+    aipos_yaml_and_provenance: PASS
+    diff_check: PASS
+  next: >-
+    Fresh-check main and PR head, commit/push the repair on the existing PR
+    branch, preserve the review thread unresolved, then obtain successor exact-
+    head CI and a new independent review.
+  safety: PAPER_ONLY_LIVE_NONE_PRODUCTION_MUTATION_FALSE_REAL_ORDER_FALSE_REAL_TRANSFER_FALSE_AI_ZERO_AUTHORITY

@@ -56,11 +56,19 @@ jobs:
         run: node scripts/actual-paper-runtime-e2e.js --working-dir "${{ runner.temp }}/nusa-wo-0059" --output artifacts/operational-evidence/actual-paper-runtime-e2e.json
       - name: Classify autonomous PAPER completion without manufacturing a signal
         run: node scripts/classify-actual-paper-runtime-readiness.js artifacts/operational-evidence/actual-paper-runtime-e2e.json
-      - name: Upload actual PAPER runtime evidence
+      - name: Upload legacy-name Actual PAPER runtime evidence
         if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: wo-0059-actual-paper-runtime-evidence-${{ github.event.pull_request.head.sha || github.sha }}
+          path: artifacts/operational-evidence/actual-paper-runtime-e2e.json
+          if-no-files-found: error
+          retention-days: 14
+      - name: Upload attempt-scoped Actual PAPER runtime evidence
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: wo-0059-actual-paper-runtime-evidence-${{ github.event.pull_request.head.sha || github.sha }}-attempt-${{ github.run_attempt }}
           path: artifacts/operational-evidence/actual-paper-runtime-e2e.json
           if-no-files-found: error
           retention-days: 14

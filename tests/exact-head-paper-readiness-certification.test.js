@@ -72,7 +72,7 @@ function context(overrides = {}) {
     sourceRunAttempt: "1",
     sourceRunHeadSha: SHA,
     artifactId: "9999970869",
-    artifactName: `wo-0059-actual-paper-runtime-evidence-${SHA}`,
+    artifactName: `wo-0059-actual-paper-runtime-evidence-${SHA}-attempt-1`,
     artifactDigest: "sha256:918f7e4e307a78e8a998663485d1d5c319834886292c1696a4725d33d4ce527e",
     certifiedAt: "2026-09-07T00:20:00.000Z",
     ...overrides,
@@ -161,6 +161,10 @@ test("artifact identity is exact-head bound", () => {
     () => certifyExactHeadPaperReadiness(completeEvidence(), context({ artifactName: "wo-0059-actual-paper-runtime-evidence-stale" })),
     /ARTIFACT_NAME_MISMATCH/,
   );
+  assert.throws(
+    () => certifyExactHeadPaperReadiness(completeEvidence(), context({ artifactName: `wo-0059-actual-paper-runtime-evidence-${SHA}-attempt-2` })),
+    /ARTIFACT_NAME_MISMATCH/,
+  );
 });
 
 test("producer evidence and readiness receipt bind the exact workflow run attempt", () => {
@@ -169,7 +173,10 @@ test("producer evidence and readiness receipt bind the exact workflow run attemp
   assert.equal(receipt.source.run_attempt, 1);
 
   assert.throws(
-    () => certifyExactHeadPaperReadiness(completeEvidence(), context({ sourceRunAttempt: "2" })),
+    () => certifyExactHeadPaperReadiness(completeEvidence(), context({
+      sourceRunAttempt: "2",
+      artifactName: `wo-0059-actual-paper-runtime-evidence-${SHA}-attempt-2`,
+    })),
     /EVIDENCE_SOURCE_RUN_ATTEMPT_MISMATCH/,
   );
   assert.throws(

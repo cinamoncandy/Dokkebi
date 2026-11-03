@@ -28,10 +28,10 @@ function certifyExactHeadPaperReadiness(evidence, context) {
   requireCondition(evidence.evidence_type === "nusa.actual-paper-runtime-e2e", "EVIDENCE_TYPE_MISMATCH");
   requireCondition(evidence.result === "PASS", "EVIDENCE_RESULT_NOT_PASS");
 
-  const expectedArtifactName = `wo-0059-actual-paper-runtime-evidence-${targetSha}`;
-  requireCondition(context.artifactName === expectedArtifactName, "ARTIFACT_NAME_MISMATCH");
   requireCondition(Number.isSafeInteger(Number(context.sourceRunId)) && Number(context.sourceRunId) > 0, "SOURCE_RUN_ID_INVALID");
   requireCondition(Number.isSafeInteger(Number(context.sourceRunAttempt)) && Number(context.sourceRunAttempt) > 0, "SOURCE_RUN_ATTEMPT_INVALID");
+  const expectedArtifactName = `wo-0059-actual-paper-runtime-evidence-${targetSha}-attempt-${Number(context.sourceRunAttempt)}`;
+  requireCondition(context.artifactName === expectedArtifactName, "ARTIFACT_NAME_MISMATCH");
   requireCondition(Number.isSafeInteger(Number(context.artifactId)) && Number(context.artifactId) > 0, "ARTIFACT_ID_INVALID");
   requireCondition(/^sha256:[a-f0-9]{64}$/i.test(String(context.artifactDigest || "")), "ARTIFACT_DIGEST_INVALID");
   requireCondition(Number(evidence?.workflow_run?.id) === Number(context.sourceRunId), "EVIDENCE_SOURCE_RUN_ID_MISMATCH");

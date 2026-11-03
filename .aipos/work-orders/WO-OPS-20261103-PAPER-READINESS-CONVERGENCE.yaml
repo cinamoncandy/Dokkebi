@@ -17,8 +17,8 @@ finding: >-
   INCOMPLETE_NO_AUTONOMOUS_ORDER_FILL_PNL but misses the immediate convergence
   evaluation for the newly dispatched run.
 first_broken_transition: >-
-  GITHUB_TOKEN workflow_dispatch Actual PAPER run completed -> exact-source
-  readiness convergence is dispatched and consumes that run's artifact
+  Actual PAPER workflow run attempt N completed -> convergence selects the
+  evidence artifact produced by that same exact run attempt
 root_cause: CONFIRMED
 scope:
   - Reuse the existing Exact-Head PAPER Readiness Convergence workflow as the single consumer.
@@ -26,6 +26,7 @@ scope:
   - Have only the canonical main-branch, token-dispatched Actual PAPER workflow invoke the existing convergence workflow using its GITHUB_TOKEN.
   - Keep callback credentials job-scoped to actions:write and contents:read; do not add PATs or repository secrets.
   - Bound source completion waiting and verify workflow name/path, dispatch event, main branch, exact current-main SHA, success conclusion, run identity, and artifact digest before classification.
+  - Publish a run-attempt-scoped evidence artifact for the callback while preserving the legacy SHA-scoped artifact name used by the existing deterministic Audit before this PR is included.
   - Suppress recursive Actual PAPER dispatch from a callback evaluation; incomplete evidence remains pending and emits no readiness receipt.
   - Preserve existing exact-head classifier, PAPER_ONLY and ZERO_AUTHORITY boundaries.
 exclusions:
@@ -38,6 +39,7 @@ acceptance:
   - Callback evaluations never dispatch another Actual PAPER run, including artifact-unavailable and semantically incomplete cases.
   - Complete eligible evidence may produce only the existing exact-head readiness receipt; incomplete autonomous order/fill/PnL evidence remains non-certifying and produces no receipt.
   - Duplicate callback delivery is harmless: certification remains idempotent for the exact main SHA and cannot issue duplicate authoritative readiness receipts.
+  - A source-workflow rerun cannot make the callback select an earlier attempt's same-name artifact; lookup and certification are bound to the exact run attempt.
   - Existing push, schedule, manual-dispatch, workflow_run, semantic classifier, and fail-closed contracts remain intact.
   - No LIVE, real-order, transfer, production-mutation, or AI execution authority is added.
 verification_commands:
@@ -52,17 +54,32 @@ verification_commands:
   - node scripts/validate-workflow-authority-map.js
   - node scripts/validate-aipos-work-order-provenance.js
   - git diff --check
-validation: >-
-  On exact base efa8e295e7a468d7cb1652fb3924f30c83c3e5f7, focused readiness
-  tests PASS 22/22 and `corepack pnpm run test` PASS (1,327 isolated test files).
-  `corepack pnpm run typecheck`, `validate:full`, and `security:gate` PASS.
-  Candidate lint is 0 errors/47 warnings; a clean detached worktree at the same
-  base also reports 0/47, so no warning was added. Workflow YAML and embedded
-  shell parse, action pins, authority map, AIPOS YAML/provenance/current truth,
-  and `git diff --check` PASS. No Actual PAPER workflow was manually dispatched;
-  no autonomous order/fill/PnL, readiness receipt, or runtime acceptance is
-  claimed. Generated security/audit reports remain untracked and excluded from
-  the candidate; the test harness scratch diagnostic is restored.
+prior_exact_head:
+  sha: e2e435895ee83bf964752e74142be170093f7f97
+  ci_run: 41640586170
+  review_id: 5752749994
+  review_finding: "P1: retained same-name artifacts from earlier run attempts could make an exact-source callback remain READINESS_PENDING."
+current_local_validation:
+  focused_readiness_tests: PASS_22_OF_22
+  full_suite: PASS_1327_ISOLATED_TEST_FILES
+  preflight: PASS
+  build: PASS
+  typecheck: PASS
+  validate_full: PASS
+  security_gate: PASS
+  lint: PASS_0_ERRORS_47_BASELINE_WARNINGS
+  workflow_action_pins: PASS
+  workflow_authority_map: PASS
+  aipos_yaml_and_provenance: PASS
+  diff_check: PASS
+  notes: >-
+    The source workflow now uploads both its legacy SHA-scoped artifact (for
+    pre-inclusion deterministic Audit compatibility) and an attempt-scoped
+    artifact. The callback only selects the attempt-scoped name. Exact-head
+    CI/review for the successor SHA are pending. No Actual PAPER workflow was
+    manually dispatched and no autonomous order/fill/PnL, readiness receipt,
+    runtime acceptance, release, or deployment is claimed. Generated security
+    reports remain untracked and excluded from the candidate.
 safety:
   mode: PAPER_ONLY
   liveAuthority: NONE
@@ -72,9 +89,10 @@ safety:
   aiAuthority: ZERO_AUTHORITY
   fail_closed: true
 next: >-
-  Fresh-fetch protected main and the existing branch, confirm no competing
-  same-work-order PR exists, and review any new main delta. Then commit this
-  validated change set on the existing work-order branch and publish one Draft
-  PR. Verify exact-head CI and required companions, then obtain fresh
-  independent review. Never manually dispatch the Actual PAPER workflow or
-  claim readiness complete without genuine autonomous order/fill/PnL evidence.
+  Fresh-check protected main and the existing branch, inspect any new main
+  delta, then commit and push the attempt-binding repair on the existing PR
+  branch. Keep the PR Draft, leave the P1 thread unresolved, and provide the
+  successor SHA and focused/full validation evidence in the thread. Wait for
+  fresh exact-head CI/companions and a fresh independent review before any
+  governance gate. Never manually dispatch the Actual PAPER workflow or claim
+  readiness complete without genuine autonomous order/fill/PnL evidence.

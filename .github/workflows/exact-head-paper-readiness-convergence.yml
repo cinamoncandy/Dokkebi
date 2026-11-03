@@ -184,7 +184,7 @@ jobs:
             mark_ineligible "source run identity validation failed"
           fi
 
-          artifact_name="wo-0059-actual-paper-runtime-evidence-$target_sha"
+          artifact_name="wo-0059-actual-paper-runtime-evidence-$target_sha-attempt-$source_run_attempt"
           artifact=""
           for poll in $(seq 1 6); do
             artifacts="$(gh api "repos/$GITHUB_REPOSITORY/actions/runs/$source_run_id/artifacts?per_page=100")"
