@@ -1,0 +1,22 @@
+id: WO-OPS-20261102-GAPFILL-TIMINGS
+title: "Measure the hourly gap-fill run's three parts to find what blocks the event loop (display only)"
+status: READY_FOR_REVIEW
+created: 2026-11-02
+trigger: "The 2026-11-02 host diagnosis showed eventLoopMaxStallMs 4469 and 52 stalls in ~49 hours, the latest exactly two hours after the last recorded gap-fill run (same minute and second), i.e. about one stall per hourly run. A local benchmark of the manifest build alone took ~1.0 s for 12 days of candles (hash 0.12 s, read 0.23 s), so the manifest build does not explain 4.5 s by itself and the cause is not known."
+change:
+  - "apps/cloud/src/researchExperimentComposition.ts: each hourly gap-fill run measures, with performance.now(), the fill (network wait, parse, append), the synchronous store.read of the target span and the synchronous manifest build, summed over the markets."
+  - "apps/cloud/src/researchExperimentOrchestrator.ts: recordGapFill takes the three timings and keeps timingsMs { last and max of fill, read, materialize } as whole milliseconds; invalid values count as 0; a run without timings or a deferral keeps the previous ones."
+  - "apps/cloud/src/server.ts: /health researchGapFill.timingsMs is published only as those six non-negative integers, otherwise withdrawn whole. The diagnosis learning readout already carries researchGapFill."
+rules:
+  - "Display only: nothing here changes what the gap fill reads, writes, hashes or schedules, the dataset manifest, an experiment input, a threshold, the 30 s writer lease or any authority."
+not_changed:
+  - "tests/research-gap-fill-health.test.js: its source-shape pattern now also accepts the third argument of recordGapFill (the same call, one more argument)."
+safety:
+  paper_only: true
+  liveAuthority: NONE
+  productionMutationAllowed: false
+  aiAuthority: ZERO_AUTHORITY
+validation:
+  - "tsc clean; orchestrator timing test, /health timing test and 966 research-*, cloud-*, oracle-* and closed-learning-* tests pass; AIPOS validators pass."
+unverified: "The real values on the host (needs a server release and one hourly run). Which part, if any, accounts for the 4.5 s stalls."
+next: "After a release read researchGapFill.timingsMs in the diagnosis learning readout next to eventLoopMaxStallMs; fix only the part that is measured to block (for example chunking the synchronous read or build). Do not change the manifest or the lease on a guess."

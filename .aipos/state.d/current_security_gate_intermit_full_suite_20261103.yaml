@@ -1,0 +1,20 @@
+current_security_gate_intermit_full_suite_20261103:
+  work_order: WO-AUTOPILOT-20261030-1851-CAUSAL-ADMISSION
+  observed_at_utc: "2026-11-03T02:18:15Z"
+  protected_main_and_wip_head: 0e213243ac5b63e7fe900666b0055da9ca96de18
+  full_isolated_suite: PASS_1326_OF_1326_CURRENT_MAIN_PLUS_WIP
+  first_windows_attempt: "STOPPED_BEFORE_SUITE_BASH_ENOENT"
+  successful_environment_adjustment: "Installed Git for Windows bin added to PATH"
+  security_gate_sequence:
+    - "Prior history: FAIL after 3 attempts; PASS; later FAIL after 3 attempts."
+    - "Fresh direct audit: exit 1, 16624 bytes, JSON valid, current parser PASS, SHA256 41cf3f9b19cc1e707f74a89875964c65dcfd7e1cf1f718e50bf840e3c25dd289."
+    - "Fresh uninstrumented gate: FAIL after 3 bounded attempts with AUDIT_JSON_INCOMPLETE."
+    - "Instrumented gate PASS: captured nested input matches the direct audit hash; valid JSON and current parser PASS."
+    - "Second instrumented gate PASS."
+  failed_nested_audit_raw_output: NOT_CAPTURED
+  root_cause: UNPROVEN_INTERMITTENT_FAIL_PASS
+  parser_source_changed: false
+  commit_gate: NOT_MET
+  l1: PARTIAL
+  l2: HOLD
+  safety: PAPER_ONLY_LIVE_NONE_PRODUCTION_MUTATION_FALSE_REAL_ORDER_FALSE_TRANSFER_FALSE_AI_ZERO_AUTHORITY

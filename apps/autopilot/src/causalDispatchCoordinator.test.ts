@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { ExecutionCoordinator } from "./executionCoordinator";
 import type { SourceExecutionIdentity, VerifiedCodingPublisherIdentity } from "./githubActionsOidc";
+import type { CausalAdmissionReceipt } from "./causalRegressionAdmission";
 
 class MemoryStorage {
   private readonly values = new Map<string, unknown>();
@@ -121,4 +122,60 @@ test("a claimed generation is not silently replaced by a retry", async () => {
   assert.equal((await post("/release", { dedupeKey: execution.dedupeKey, executionId: execution.executionId, now: 130 })).status, 200);
   assert.equal((await post("/acquire", { ...execution, now: 140, leaseExpiresAt: 240 })).status, 201);
   assert.equal((await post("/causal-dispatch/register", { ...registration, capabilityDigest: "b".repeat(64), now: 145, expiresAt: 230 })).status, 409);
+});
+
+test("causal admission is consumed atomically by exactly one lease handoff", async () => {
+  const storage = new MemoryStorage();
+  const coordinator = new ExecutionCoordinator({ storage });
+  const post = (path: string, body: unknown) => coordinator.fetch(new Request(`https://coordinator${path}`, {
+    method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body),
+  }));
+  const admission: CausalAdmissionReceipt = {
+    schemaVersion: 1,
+    decision: "CODE_ACTIONABLE",
+    classification: "REPOSITORY_CODE_REGRESSION",
+    contractId: "REPAIRABLE_WORKFLOW_POLICY_V1",
+    caseId: "main-ci-failure",
+    sourceConclusion: "failure",
+    source,
+    sourceRunAttempt: source.runAttempt,
+    statementDigest: "b".repeat(64),
+    producerJobId: 11,
+    attestationJobId: 12,
+    producerArtifactId: 13,
+    producerArtifactDigest: `sha256:${"c".repeat(64)}`,
+    producerArtifactName: `nusa-causal-attestation-${source.runAttempt}`,
+    implementationFingerprint: "d".repeat(64),
+    verifiedAt: 100,
+    expiresAt: 180,
+    replayKeySha256: "e".repeat(64),
+  };
+  const execution = { dedupeKey: "causal:456", executionId: "exec:456", headSha: source.sha, now: 100, leaseExpiresAt: 200 };
+  const registration = { dedupeKey: execution.dedupeKey, executionId: execution.executionId, source, capabilityDigest: digest, now: 110, expiresAt: 190, causalAdmission: admission };
+  const claim = { dedupeKey: execution.dedupeKey, executionId: execution.executionId, source, publisher, capabilityDigest: digest, now: 120, causalAdmission: admission };
+  assert.equal((await post("/acquire", execution)).status, 201);
+  assert.equal((await post("/causal-dispatch/register", registration)).status, 201);
+  assert.equal((await post("/causal-dispatch/claim", claim)).status, 201);
+
+  const handoff = {
+    dedupeKey: execution.dedupeKey,
+    executionId: execution.executionId,
+    now: 130,
+    leaseExpiresAt: 230,
+    headSha: source.sha,
+    causalAdmissionHandoff: { source, publisher, capabilityDigest: digest },
+  };
+  const wrongPublisher = await post("/handoff-or-acquire", {
+    ...handoff,
+    causalAdmissionHandoff: { ...handoff.causalAdmissionHandoff, publisher: { ...publisher, runId: "790" } },
+  });
+  assert.equal(wrongPublisher.status, 409);
+
+  const consumed = await post("/handoff-or-acquire", handoff);
+  assert.equal(consumed.status, 201);
+  assert.equal((await consumed.json() as { causalAdmissionConsumed?: boolean }).causalAdmissionConsumed, true);
+  assert.equal((await post("/handoff-or-acquire", { ...handoff, now: 131 })).status, 409);
+
+  const history = await storage.get<{ entries: Array<{ binding: { causalAdmissionConsumedAt?: number | null } }> }>("causal-dispatch-bindings");
+  assert.equal(history?.entries[0]?.binding.causalAdmissionConsumedAt, 130);
 });

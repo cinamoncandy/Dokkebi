@@ -69,6 +69,15 @@ describe("GitHub Actions OIDC", () => {
   });
   it("requires exact protected producer jobs and one fresh same-run attestation artifact", async () => {
     const source = { repository, workflowPath: ".github/workflows/ci.yml", sha: "a".repeat(40), runId: "456", runAttempt: "1" };
+    const fingerprintPaths = [
+      ".github/workflows/ci.yml",
+      "scripts/causal-regression-observe.js",
+      "apps/autopilot/src/causalRegressionContract.ts",
+      "pnpm-lock.yaml",
+      "apps/autopilot/src/repairableWorkflowRun.ts",
+    ];
+    const fingerprintBytes = new TextEncoder().encode("fixture source fingerprint\n");
+    const fingerprintBase64 = btoa(Array.from(fingerprintBytes, (byte) => String.fromCharCode(byte)).join(""));
     const job = (name: string, conclusion: string, overrides: Record<string, unknown> = {}) => ({
       id: name === "causal-regression-contract" ? 1 : 2, run_id: 456, run_attempt: 1, head_sha: source.sha,
       name, status: "completed", conclusion, ...overrides,
@@ -78,8 +87,21 @@ describe("GitHub Actions OIDC", () => {
       workflow_run: { id: 456, head_sha: source.sha }, ...overrides,
     });
     const evidenceFetch = (jobs: readonly unknown[], artifacts: readonly unknown[]) => async (input: string) => {
+      const sourceRunPath = `/actions/runs/${source.runId}/attempts/${source.runAttempt}`;
+      if (input.split("?")[0]?.endsWith(sourceRunPath)) return {
+        ok: true, status: 200, json: async () => ({
+          id: Number(source.runId), run_attempt: Number(source.runAttempt), repository: { full_name: source.repository },
+          path: source.workflowPath, head_sha: source.sha, head_branch: "main", event: "push", status: "completed", conclusion: "failure",
+        }),
+      };
       if (input.includes("/jobs?")) return { ok: true, status: 200, json: async () => ({ total_count: jobs.length, jobs }) };
       if (input.includes("/artifacts?")) return { ok: true, status: 200, json: async () => ({ total_count: artifacts.length, artifacts }) };
+      if (input.includes("/contents/")) {
+        const path = decodeURIComponent(new URL(input).pathname.split("/contents/")[1] ?? "");
+        if (fingerprintPaths.includes(path)) return { ok: true, status: 200, json: async () => ({
+          type: "file", path, encoding: "base64", size: fingerprintBytes.byteLength, content: fingerprintBase64,
+        }) };
+      }
       return { ok: false, status: 404, json: async () => ({}) };
     };
     const validJobs = [job("causal-regression-contract", "failure"), job("attest-causal-regression", "success")];

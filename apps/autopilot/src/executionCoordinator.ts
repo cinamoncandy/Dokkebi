@@ -2,7 +2,8 @@ import { validatePersistedEvolutionLearningMemory, type EvolutionLearningMemoryS
 import { validatePersistedCodingExecutionEvidence, type CodingExecutionEvidence } from "./codingExecutionEvidence";
 import { validateAutopilotExecutionTelemetry, type AutopilotExecutionTelemetry } from "./executionTelemetry";
 import type { ExecutionHold, HoldClearance } from "./autonomousExecutionState";
-import { claimCausalDispatchBinding, createCausalDispatchBinding, verifyClaimedCausalDispatchBinding, type CausalDispatchBinding } from "./causalDispatchBinding";
+import { claimCausalDispatchBinding, consumeClaimedCausalDispatchAdmissionBinding, createCausalDispatchBinding, verifyClaimedCausalDispatchBinding, type CausalDispatchBinding } from "./causalDispatchBinding";
+import { hasValidCausalAdmissionReceiptStructure, type CausalAdmissionReceipt } from "./causalRegressionAdmission";
 import type { SourceExecutionIdentity, VerifiedCodingPublisherIdentity } from "./githubActionsOidc";
 
 interface DurableObjectStorageLike {
@@ -74,6 +75,14 @@ export interface PersistentExecutionAcquireRequest {
   headSha?: string;
   /** Optional ceiling on fresh acquisitions of the same dedupe identity (1-10); absent means unbounded. */
   maxAcquisitions?: number;
+  /** Internal server-authenticated proof required to consume causal workflow-failure admission. */
+  causalAdmissionHandoff?: CausalAdmissionHandoff;
+}
+
+export interface CausalAdmissionHandoff {
+  readonly source: SourceExecutionIdentity;
+  readonly publisher: VerifiedCodingPublisherIdentity;
+  readonly capabilityDigest: string;
 }
 
 /** Internal-only: source is GitHub-verified before registration; digest commits a secret capability. */
@@ -84,6 +93,7 @@ export interface CausalDispatchRegistration {
   readonly capabilityDigest: string;
   readonly now: number;
   readonly expiresAt: number;
+  readonly causalAdmission?: CausalAdmissionReceipt | null;
 }
 
 /** Internal-only: publisher OIDC and both GitHub run identities must be verified before claim. */
@@ -94,6 +104,8 @@ export interface CausalDispatchClaim {
   readonly publisher: VerifiedCodingPublisherIdentity;
   readonly capabilityDigest: string;
   readonly now: number;
+  /** Recomputed by the Worker from the signed bundle; null for provenance-only claims. */
+  readonly causalAdmission?: CausalAdmissionReceipt | null;
 }
 
 interface CausalDispatchHistory {
@@ -107,10 +119,18 @@ function readCausalDispatchHistory(value: unknown): CausalDispatchHistory | null
   if (history.schemaVersion !== 1 || !Array.isArray(history.entries) || history.entries.length > 3) return null;
   let previous = 0;
   for (const entry of history.entries) {
+    const rawBinding = entry?.binding as CausalDispatchBinding | undefined;
+    const admission = rawBinding?.causalAdmission ?? null;
+    const consumedAt = rawBinding?.causalAdmissionConsumedAt ?? null;
     if (!entry || !Number.isSafeInteger(entry.generation) || entry.generation <= previous || entry.generation > 3
       || !entry.binding || !Number.isSafeInteger(entry.binding.expiresAt)
       || !createCausalDispatchBinding(entry.binding.source, entry.binding.capabilityDigest, entry.binding.expiresAt - 1, entry.binding.expiresAt)
-      || (entry.binding.publisher !== null && (typeof entry.binding.publisher !== "object" || Array.isArray(entry.binding.publisher)))) return null;
+      || (admission !== null && (!hasValidCausalAdmissionReceiptStructure(admission, entry.binding.source)
+        || admission.expiresAt > entry.binding.expiresAt))
+      || (entry.binding.publisher !== null && (typeof entry.binding.publisher !== "object" || Array.isArray(entry.binding.publisher)))
+      || (consumedAt !== null && (!Number.isSafeInteger(consumedAt) || Number(consumedAt) < 0
+        || Number(consumedAt) >= entry.binding.expiresAt || admission === null || entry.binding.publisher === null
+        || Number(consumedAt) < admission.verifiedAt || Number(consumedAt) >= admission.expiresAt))) return null;
     previous = entry.generation;
   }
   return history;
@@ -337,7 +357,25 @@ function validAcquire(value: unknown): value is PersistentExecutionAcquireReques
     && (candidate.taskId === undefined || (typeof candidate.taskId === "string" && SAFE_LIFECYCLE_ID.test(candidate.taskId)))
     && (candidate.provider === undefined || (typeof candidate.provider === "string" && SAFE_LIFECYCLE_ID.test(candidate.provider)))
     && (candidate.headSha === undefined || (typeof candidate.headSha === "string" && SHA40.test(candidate.headSha)))
-    && (candidate.maxAcquisitions === undefined || (Number.isSafeInteger(candidate.maxAcquisitions) && Number(candidate.maxAcquisitions) >= 1 && Number(candidate.maxAcquisitions) <= 10));
+    && (candidate.maxAcquisitions === undefined || (Number.isSafeInteger(candidate.maxAcquisitions) && Number(candidate.maxAcquisitions) >= 1 && Number(candidate.maxAcquisitions) <= 10))
+    && (candidate.causalAdmissionHandoff === undefined || validCausalAdmissionHandoff(candidate.causalAdmissionHandoff));
+}
+
+function validCausalAdmissionHandoff(value: unknown): value is CausalAdmissionHandoff {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return false;
+  const handoff = value as Partial<CausalAdmissionHandoff>;
+  const source = handoff.source as Partial<SourceExecutionIdentity> | undefined;
+  const publisher = handoff.publisher as Partial<VerifiedCodingPublisherIdentity> | undefined;
+  return Boolean(source && typeof source.repository === "string" && REPOSITORY.test(source.repository)
+    && source.workflowPath === ".github/workflows/ci.yml" && typeof source.sha === "string" && SHA40.test(source.sha)
+    && typeof source.runId === "string" && /^[1-9][0-9]{0,19}$/.test(source.runId)
+    && typeof source.runAttempt === "string" && /^[1-9][0-9]{0,9}$/.test(source.runAttempt)
+    && typeof handoff.capabilityDigest === "string" && /^[a-f0-9]{64}$/.test(handoff.capabilityDigest)
+    && publisher && publisher.repository === source.repository && typeof publisher.workflowRef === "string"
+    && publisher.workflowRef === `${publisher.repository}/.github/workflows/autopilot-execution-consumer.yml@refs/heads/main`
+    && publisher.ref === "refs/heads/main" && publisher.sha === source.sha && typeof publisher.runId === "string"
+    && /^[1-9][0-9]{0,19}$/.test(publisher.runId) && typeof publisher.runAttempt === "string"
+    && /^[1-9][0-9]{0,9}$/.test(publisher.runAttempt) && publisher.event === "repository_dispatch");
 }
 
 function validScheduledReceipt(value: unknown): value is ScheduledRuntimeReceipt {
@@ -513,7 +551,7 @@ export class ExecutionCoordinator {
     if (!value || typeof value !== "object" || Array.isArray(value)) return json({ error: "CAUSAL_DISPATCH_REQUEST_INVALID" }, 400);
     const request = value as CausalDispatchRegistration;
     if (!validText(request.dedupeKey) || !validText(request.executionId)) return json({ error: "CAUSAL_DISPATCH_REQUEST_INVALID" }, 400);
-    const pending = createCausalDispatchBinding(request.source, request.capabilityDigest, request.now, request.expiresAt);
+    const pending = createCausalDispatchBinding(request.source, request.capabilityDigest, request.now, request.expiresAt, request.causalAdmission);
     if (!pending) return json({ error: "CAUSAL_DISPATCH_REQUEST_INVALID" }, 400);
     return this.mutateExecutionAtomically(async (storage) => {
       const execution = await storage.get<ExecutionRecord>("execution");
@@ -527,7 +565,8 @@ export class ExecutionCoordinator {
       const stored = await storage.get<unknown>("causal-dispatch-bindings");
       const history = stored === undefined ? { schemaVersion: 1 as const, entries: [] } : readCausalDispatchHistory(stored);
       if (!history) return json({ registered: false, reason: "CAUSAL_DISPATCH_STATE_INVALID" }, 409);
-      if (history.entries.some((entry) => entry.generation >= generation || entry.binding.publisher !== null)) {
+      if (history.entries.some((entry) => entry.generation >= generation || entry.binding.publisher !== null
+        || (pending.causalAdmission != null && entry.binding.causalAdmission?.replayKeySha256 === pending.causalAdmission.replayKeySha256))) {
         return json({ registered: false, reason: "CAUSAL_DISPATCH_ALREADY_REGISTERED" }, 409);
       }
       await storage.put("causal-dispatch-bindings", { schemaVersion: 1, entries: [...history.entries, { generation, binding: pending }] });
@@ -549,10 +588,10 @@ export class ExecutionCoordinator {
         || !validSafeTimestamp(request.now) || execution.leaseExpiresAt <= request.now) {
         return json({ claimed: false, reason: "CAUSAL_DISPATCH_EXECUTION_MISMATCH" }, 409);
       }
-      const claimed = claimCausalDispatchBinding(binding, request.publisher, request.source, request.capabilityDigest, request.now);
+       const claimed = claimCausalDispatchBinding(binding, request.publisher, request.source, request.capabilityDigest, request.now, request.causalAdmission ?? null);
       if (!claimed) return json({ claimed: false, reason: "CAUSAL_DISPATCH_BINDING_REJECTED" }, 409);
       await storage.put("causal-dispatch-bindings", { schemaVersion: 1, entries: history!.entries.map((entry) => entry.generation === generation ? { generation, binding: claimed } : entry) });
-      return json({ claimed: true }, 201);
+       return json({ claimed: true, causalAdmissionGranted: claimed.causalAdmission !== null }, 201);
     });
   }
 
@@ -571,7 +610,7 @@ export class ExecutionCoordinator {
         || !verifyClaimedCausalDispatchBinding(binding, request.publisher, request.source, request.capabilityDigest, request.now)) {
         return json({ verified: false, reason: "CAUSAL_DISPATCH_BINDING_REJECTED" }, 409);
       }
-      return json({ verified: true }, 200);
+      return json({ verified: true, causalAdmissionGranted: binding.causalAdmission != null }, 200);
     });
   }
 
@@ -631,6 +670,27 @@ export class ExecutionCoordinator {
     const request = value;
     return this.mutateExecutionAtomically(async (storage) => {
       const current = await storage.get<ExecutionRecord>("execution");
+      if (request.causalAdmissionHandoff) {
+        const proof = request.causalAdmissionHandoff;
+        const history = readCausalDispatchHistory(await storage.get<unknown>("causal-dispatch-bindings"));
+        const generation = current?.acquisitionCount ?? 1;
+        const binding = history?.entries.find((entry) => entry.generation === generation)?.binding;
+        if (!current || !binding || current.dedupeKey !== request.dedupeKey || current.executionId !== request.executionId
+          || current.state !== "LEASED" || current.leaseExpiresAt <= request.now || current.headSha !== proof.source.sha
+          || binding.source.runId !== proof.source.runId || binding.source.runAttempt !== proof.source.runAttempt
+          || binding.source.sha !== request.headSha || binding.publisher === null) {
+          return json({ acquired: false, reason: "CAUSAL_ADMISSION_EXECUTION_MISMATCH" }, 409);
+        }
+        if (current.stop && validPersistentExecutionStop(current.stop) && request.now < current.stop.nextRetryAt) {
+          return json({ acquired: false, reason: "WAITING_RATE_LIMIT", nextRetryAt: current.stop.nextRetryAt, record: current }, 409);
+        }
+        const consumed = consumeClaimedCausalDispatchAdmissionBinding(binding, proof.publisher, proof.source, proof.capabilityDigest, request.now);
+        if (!consumed) return json({ acquired: false, reason: "CAUSAL_ADMISSION_REJECTED" }, 409);
+        const record: ExecutionRecord = Object.freeze({ ...current, state: "HANDED_OFF", updatedAt: request.now });
+        await storage.put("causal-dispatch-bindings", { schemaVersion: 1, entries: history!.entries.map((entry) => entry.generation === generation ? { generation, binding: consumed } : entry) });
+        await storage.put("execution", record);
+        return json({ acquired: true, handoff: true, record, causalAdmissionConsumed: true }, 201);
+      }
       if (current?.dedupeKey === request.dedupeKey) {
         if (current.state === "DISPATCHED") return json({ acquired: false, reason: "ALREADY_DISPATCHED", record: current }, 409);
         if (current.state === "COMPLETED") return json({ acquired: false, reason: "ALREADY_COMPLETED", record: current }, 409);
@@ -1237,24 +1297,25 @@ export async function registerCausalDispatchBinding(namespace: ExecutionCoordina
   return true;
 }
 
-export async function claimRegisteredCausalDispatch(namespace: ExecutionCoordinatorNamespace, input: CausalDispatchClaim): Promise<boolean> {
+export async function claimRegisteredCausalDispatch(namespace: ExecutionCoordinatorNamespace, input: CausalDispatchClaim): Promise<{ claimed: boolean; causalAdmissionGranted: boolean }> {
   const stub = namespace.get(namespace.idFromName(input.dedupeKey));
   const response = await stub.fetch("https://execution-coordinator/causal-dispatch/claim", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(input) });
-  if (response.status === 409) return false;
+  if (response.status === 409) return { claimed: false, causalAdmissionGranted: false };
   if (response.status !== 201) throw new Error("CAUSAL_DISPATCH_CLAIM_FAILED");
-  const body = await response.json() as { claimed?: unknown };
+  const body = await response.json() as { claimed?: unknown; causalAdmissionGranted?: unknown };
   if (body.claimed !== true) throw new Error("CAUSAL_DISPATCH_CLAIM_FAILED");
-  return true;
+  if (typeof body.causalAdmissionGranted !== "boolean") throw new Error("CAUSAL_DISPATCH_CLAIM_FAILED");
+  return { claimed: true, causalAdmissionGranted: body.causalAdmissionGranted };
 }
 
-export async function verifyRegisteredCausalDispatch(namespace: ExecutionCoordinatorNamespace, input: CausalDispatchClaim): Promise<boolean> {
+export async function verifyRegisteredCausalDispatch(namespace: ExecutionCoordinatorNamespace, input: CausalDispatchClaim): Promise<{ verified: boolean; causalAdmissionGranted: boolean }> {
   const stub = namespace.get(namespace.idFromName(input.dedupeKey));
   const response = await stub.fetch("https://execution-coordinator/causal-dispatch/verify", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(input) });
-  if (response.status === 409) return false;
+  if (response.status === 409) return { verified: false, causalAdmissionGranted: false };
   if (response.status !== 200) throw new Error("CAUSAL_DISPATCH_VERIFICATION_FAILED");
-  const body = await response.json() as { verified?: unknown };
-  if (body.verified !== true) throw new Error("CAUSAL_DISPATCH_VERIFICATION_FAILED");
-  return true;
+  const body = await response.json() as { verified?: unknown; causalAdmissionGranted?: unknown };
+  if (body.verified !== true || typeof body.causalAdmissionGranted !== "boolean") throw new Error("CAUSAL_DISPATCH_VERIFICATION_FAILED");
+  return { verified: true, causalAdmissionGranted: body.causalAdmissionGranted };
 }
 
 export async function acquirePersistentExecution(namespace: ExecutionCoordinatorNamespace, input: PersistentExecutionAcquireRequest): Promise<{ acquired: boolean; reason?: string; nextRetryAt?: number }> {

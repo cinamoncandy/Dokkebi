@@ -131,10 +131,12 @@ const FORBIDDEN_KEY = /(authorization|bearer|token|secret|password|api[_-]?key|a
 const OBSERVATION_STATUSES = new Set<PaperRuntimeObservation["status"]>(["FILLED", "WAIT", "BLOCKED", "REJECTED", "FAILED", "DUPLICATE"]);
 const MAXIMUM_OBSERVATIONS = 1_024;
 const NON_FILL_SAMPLE_INTERVAL = 64;
+/** Slots only a FILLED observation may use, so the fill that closes a period is never rejected by sampled non-fill observations. The total cap is unchanged. */
+const FILL_RESERVED_OBSERVATIONS = 16;
 function shouldPersistObservation(observation: PaperRuntimeObservation, existingCount: number): boolean {
   if (observation.status === "FILLED") return true;
   if (existingCount === 0) return true;
-  if (existingCount >= MAXIMUM_OBSERVATIONS - 1) return false;
+  if (existingCount >= MAXIMUM_OBSERVATIONS - FILL_RESERVED_OBSERVATIONS) return false;
   let hash = 0;
   for (const char of observation.observationId) hash = (hash * 31 + char.charCodeAt(0)) >>> 0;
   return hash % NON_FILL_SAMPLE_INTERVAL === 0;

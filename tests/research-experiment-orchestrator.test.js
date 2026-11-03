@@ -214,3 +214,18 @@ test("ordinary outcome count keys are capped at 30 so the derived FAIL_ and REPE
   assert.equal(counts.FAIL_INJECTED, undefined, "derived keys are never written by the ordinary path");
   assert.equal(counts["bad key"], undefined);
 });
+
+test("the gap-fill summary keeps the last and the largest timings of its three parts, whole milliseconds only", () => {
+  const s = build(fresh());
+  try {
+    s.orchestrator.recordGapFill([{ status: "FILLED" }], 1_000, { fillMs: 120.4, readMs: 230.6, materializeMs: 986.2 });
+    s.orchestrator.recordGapFill([{ status: "NO_GAPS" }], 2_000, { fillMs: 80, readMs: 410, materializeMs: 700 });
+    s.orchestrator.recordGapFill([{ status: "NO_GAPS" }], 3_000, { fillMs: Number.NaN, readMs: -5, materializeMs: 1 });
+    const t = s.orchestrator.gapFill().timingsMs;
+    assert.deepEqual(t, { lastFillMs: 0, lastReadMs: 0, lastMaterializeMs: 1, maxFillMs: 120, maxReadMs: 410, maxMaterializeMs: 986 }, "invalid values count as 0 and never poison the maximum");
+    s.orchestrator.recordGapFill([{ status: "NO_GAPS" }], 4_000);
+    assert.deepEqual(s.orchestrator.gapFill().timingsMs, t, "a run without timings keeps the previous ones");
+    s.orchestrator.noteGapFillDeferred();
+    assert.deepEqual(s.orchestrator.gapFill().timingsMs, t, "a deferral keeps them too");
+  } finally { s.db.close(); }
+});
