@@ -1,0 +1,45 @@
+current_autopilot_1851_formal_p1_repair_20261103:
+  observed_at_utc: "2026-11-03T06:30:32Z"
+  work_order: WO-AUTOPILOT-20261030-1851-CAUSAL-ADMISSION
+  pull_request: 2994
+  previous_published_head: 51e2ab49d4a44d8a32cfa37f8561d81dd19aa792
+  previous_base: 7e702eaf078d56614cff9e4f4325d08419e19185
+  current_protected_main: 3046600b093f8f07a26ba11df3fc48043ae00830
+  local_successor_merge_commit: 3b7b9224511d5e252b99073fa9c96092e6855b2b
+  independent_formal_validator:
+    verdict: REJECTED
+    p0: 0
+    p1: 1
+    p2: 0
+    finding: "attestations and artifact-metadata write scopes were tracked but not classified as mutation scopes; PR-controlled code could bypass the authority guard."
+    github_receipt: NOT_PUBLISHED
+  repair:
+    files: [scripts/validate-workflow-authority-map.js, tests/workflow-authority-map.test.js]
+    scope: "Add both write scopes to MUTATION_SCOPES and regression cases for PR-controlled execution."
+    focused_tests: PASS_13_OF_13
+    full_suite_after_main_merge: PASS_1327_ISOLATED_TEST_FILES
+    preflight: PASS_568_AIPOS_YAML_FILES
+  local_validation_after_main_merge:
+    focused_authority_map_regression: PASS_13_OF_13
+    full_isolated_suite: PASS_1327_TEST_FILES
+    typecheck: PASS
+    validate_full: PASS
+    security_gate: PASS
+    lint: PASS_0_ERRORS_47_WARNINGS
+    workflow_action_pins_inputs: PASS
+    workflow_authority_map: PASS_41_WORKFLOWS
+    aipos_yaml: PASS_568_FILES
+    aipos_provenance: PASS
+    diff_check: PASS
+  remote_pr: OPEN_DRAFT_MERGEABLE_AT_PRIOR_HEAD
+  prior_exact_head_ci: HISTORICAL_AFTER_LOCAL_REPAIR
+  fresh_review_for_repair: PENDING
+  unresolved_p2_threads: [PRRT_kwDOTUbne86y_bHe, PRRT_kwDOTUbne86y_bHi]
+  commit_gate: MET_FOR_SUCCESSOR_PUBLICATION_TO_EXISTING_DRAFT_PR
+  l1: PARTIAL
+  l2: HOLD
+  topology: HOLD
+  deployment_authority: HOLD
+  db_state: HOLD
+  backup_recovery: HOLD
+  safety: PAPER_ONLY_LIVE_NONE_PRODUCTION_MUTATION_FALSE_REAL_ORDER_FALSE_REAL_TRANSFER_FALSE_AI_ZERO_AUTHORITY

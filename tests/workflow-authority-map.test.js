@@ -84,6 +84,20 @@ test("running PR-controlled code while holding a mutation token fails", () => {
   rmSync(root, { recursive: true, force: true });
 });
 
+test("attestation and artifact-metadata write authority reject PR-controlled code", () => {
+  for (const scope of ["attestations", "artifact-metadata"]) {
+    const workflow = [
+      "name: Risky", "on:", "  pull_request_target:", "jobs:", "  risky:", "    permissions:", `      ${scope}: write`,
+      "    steps:", "      - uses: actions/checkout@aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "        with:", "          ref: ${{ github.event.pull_request.head.sha }}", "      - run: npm test", ""
+    ].join("\n");
+    const root = sandbox({ "risky.yml": workflow }, { jobs: { "risky.yml:risky": { write: [scope], secrets: false, environment: null } }, acknowledgedDebt: {} });
+    const result = validateWorkflowAuthorityMap(root);
+    assert.ok(result.failures.includes(`PR_CODE_EXECUTION_WITH_WRITE_AUTHORITY:risky.yml:risky:${scope}`), JSON.stringify(result.failures));
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
 test("id-token alone does not make a PR job dangerous, because it mutates nothing", () => {
   const workflow = [
     "name: Oidc", "on:", "  pull_request_target:", "jobs:", "  bridge:", "    permissions:", "      id-token: write",

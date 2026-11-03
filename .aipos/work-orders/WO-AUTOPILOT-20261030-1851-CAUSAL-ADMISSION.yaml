@@ -33,7 +33,7 @@ acceptance:
   - Unknown, malformed, unavailable or mismatched provenance fails closed; static token alone never grants causal authority.
   - A deterministic repository-owned regression producer and verifier provide a positive path through existing CodingRunner without using generic CI failure as proof.
   - Relevant adversarial, scheduled and CodingRunner regressions, build, typecheck, lint and security gates pass before a commit or PR.
-next: "Complete claimed-generation retry and receipt deduplication, connect a trusted source-run-bound causal producer/verifier and authenticated capability delivery, then gate all failure-based admission and publish paths without widening authority."
+next: "Publish the locally repaired, current-main-aligned successor to the existing Draft #2994 non-force after local gates pass; then obtain exact-head CI and fresh independent review before retrying Formal Validator."
 safety: PAPER_ONLY_LIVE_NONE_PRODUCTION_MUTATION_FALSE_REAL_ORDER_FALSE_REAL_TRANSFER_FALSE_AI_ZERO_AUTHORITY
 
 continuation_20261103_isolated_positive_verification_lane:
@@ -634,4 +634,58 @@ post_publication_review_20261103T0532Z:
   l1: PARTIAL
   l2: HOLD
   commit_gate: MET_FOR_SUCCESSOR_PUBLICATION_TO_EXISTING_DRAFT_PR
+  safety: PAPER_ONLY_LIVE_NONE_PRODUCTION_MUTATION_FALSE_REAL_ORDER_FALSE_REAL_TRANSFER_FALSE_AI_ZERO_AUTHORITY
+
+formal_validator_p1_repair_20261103T0630Z:
+  supersedes_previous_successor_gate_snapshot: true
+  observed_at_utc: "2026-11-03T06:30:32Z"
+  repository: cinamoncandy/NUSA
+  pull_request: 2994
+  published_head_before_repair: 51e2ab49d4a44d8a32cfa37f8561d81dd19aa792
+  prior_base: 7e702eaf078d56614cff9e4f4325d08419e19185
+  current_protected_main: 3046600b093f8f07a26ba11df3fc48043ae00830
+  current_main_alignment:
+    result: MERGED_LOCALLY_NON_FORCE
+    merge_commit: 3b7b9224511d5e252b99073fa9c96092e6855b2b
+    note: "Main's PAPER SELL sizing changes overlap apps/cloud/src/runtime.ts and paperExecutionIntent.ts; clean merge-tree verified before merge. Full suite was rerun after this merge."
+  independent_formal_validator:
+    reviewed_head: 51e2ab49d4a44d8a32cfa37f8561d81dd19aa792
+    verdict: REJECTED
+    p0: 0
+    p1: 1
+    p2: 0
+    finding: "scripts/validate-workflow-authority-map.js tracks attestations and artifact-metadata in TRACKED_SCOPES, but MUTATION_SCOPES omitted them. PR-controlled code with those write scopes could bypass PR_CODE_EXECUTION_WITH_WRITE_AUTHORITY."
+    canonical_receipt: NOT_PUBLISHED_TO_GITHUB
+  minimal_local_repair:
+    files:
+      - scripts/validate-workflow-authority-map.js
+      - tests/workflow-authority-map.test.js
+    change: "Classify attestations and artifact-metadata writes as mutation authority; add pull_request_target regression coverage for both scopes."
+    focused_pre_merge: PASS_13_OF_13
+    full_suite_after_current_main_merge: PASS_1327_ISOLATED_TEST_FILES
+    preflight_after_merge: PASS_NODE_PORTABILITY_ANDROID_CONTRACT_AIPOS_YAML_568_FILES
+  local_validation_after_main_merge:
+    isolated_test_files: PASS_1327
+    focused_authority_map_regression: PASS_13_OF_13
+    typecheck: PASS
+    validate_full: PASS
+    security_gate: PASS
+    lint: PASS_0_ERRORS_47_WARNINGS
+    workflow_action_pins: PASS
+    workflow_action_inputs: PASS
+    workflow_authority_map: PASS_41_WORKFLOWS
+    aipos_yaml: PASS_568_FILES
+    aipos_provenance: PASS
+    git_diff_check: PASS
+  current_remote_state:
+    pr_2994: OPEN_DRAFT_MERGEABLE
+    remote_head: 51e2ab49d4a44d8a32cfa37f8561d81dd19aa792
+    exact_head_ci_before_repair: SIX_SUCCESS_HISTORICAL_FOR_REPAIR
+    fresh_exact_head_review_for_repair: NOT_STARTED
+    old_p2_threads: UNRESOLVED_NON_OUTDATED; AUTHOR_MUST_NOT_RESOLVE
+  commit_gate: MET_FOR_SUCCESSOR_PUBLICATION_TO_EXISTING_DRAFT_PR
+  next: "Publish this validated successor non-force to the existing #2994 branch; then await exact-head CI and fresh independent review."
+  l1: PARTIAL
+  l2: HOLD
+  topology_deploy_db_backup: HOLD_UNCHANGED
   safety: PAPER_ONLY_LIVE_NONE_PRODUCTION_MUTATION_FALSE_REAL_ORDER_FALSE_REAL_TRANSFER_FALSE_AI_ZERO_AUTHORITY
