@@ -1,0 +1,26 @@
+id: WO-CLOUD-20261103-PERIOD-FILL-SLOTS
+title: "Reserve observation slots for FILLED so a period can always record the fill that closes it"
+status: READY_FOR_REVIEW
+owner: nusa-development
+repository: cinamoncandy/NUSA
+base_branch: main
+implementation_branch: claude/period-fill-slots
+authority_impact: none
+objective: "Sampled non-fill observations could fill a PAPER period to 1,023 of 1,024 slots, leaving room for one FILLED; a second FILLED (now possible because SELL exits are chunked) was rejected with OBSERVATION_LIMIT. Non-fill sampling now stops 16 slots before the cap so FILLED always fits. The total cap stays 1,024."
+scope:
+  - "apps/cloud/src/paperRealizedPeriodProducer.ts: FILL_RESERVED_OBSERVATIONS = 16; shouldPersistObservation stops non-fill persistence at MAXIMUM_OBSERVATIONS - 16."
+  - "apps/cloud/src/paperRealizedPeriodProducer.test.ts: saturate with WAIT, then 16 FILLED are recorded, the 17th is rejected."
+exclusions:
+  - "No change to the 1,024 total cap, the 64 sampling interval, any threshold, risk limit, capital, evidence content or pin; no synthetic observation; no deploy."
+safety:
+  paper_only: true
+  liveAuthority: NONE
+  productionMutationAllowed: false
+  aiAuthority: ZERO_AUTHORITY
+  fail_closed: "Over the total cap the producer still throws OBSERVATION_LIMIT."
+verification_commands:
+  - node_modules/.bin/tsc -p tsconfig.json
+  - node -r ./tests/register-dist.cjs --test dist/apps/cloud/src/paperRealizedPeriodProducer.test.js tests/cloud-runtime-paper-period-wiring.test.js
+  - node scripts/validate-aipos-yaml.js
+review: "Draft PR; a separate non-author session reviews it under docs/GRILL_ME_PROTOCOL.md."
+residual: "Effect on the live server is verified only after an owner-approved release. Periods already holding 1,009+ non-fill observations before this change are unaffected."
