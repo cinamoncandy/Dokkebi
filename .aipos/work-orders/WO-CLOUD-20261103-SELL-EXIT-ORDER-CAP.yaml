@@ -9,8 +9,8 @@ authority_impact: none
 objective: "A held position larger than maxOrderNotional (20,000 KRW at 100,000 capital) can never exit: the SELL quantity is the whole position and the risk gate rejects it with MAX_ORDER_NOTIONAL, so learning periods never close. Size each SELL to min(position, maxOrderNotional / price) so the exit leaves in capped orders."
 scope:
   - "apps/cloud/src/paperExecutionIntent.ts: optional maxOrderNotional input; SELL quantity rounded down to the cap when the whole position would exceed it. Never raises a quantity; absent or invalid cap keeps the previous behaviour."
-  - "apps/cloud/src/cloudPaperExecutionBoundary.ts: optional maxOrderNotional option passed to the builder."
-  - "apps/cloud/src/runtime.ts: pass cloudPaperRiskLimitsForCapital(capital).maxOrderNotional, the same object the gateway enforces."
+  - "cloudPaperExecutionBoundary.ts is qualification-pinned and is NOT touched; the cap reaches SELL sizing through configurePaperExitOrderNotionalCap() in paperExecutionIntent.ts."
+  - "apps/cloud/src/runtime.ts: one boot call configurePaperExitOrderNotionalCap(cloudPaperRiskLimitsForCapital(capital).maxOrderNotional), the object the gateway enforces."
   - "tests/paper-execution-intent.test.js: chunk, within-cap, no-cap and invalid-cap cases."
 exclusions:
   - "No risk limit, threshold, capital or Audit/Release rule changed; the gateway check at independentRiskGateway.ts is untouched and still decides every order."

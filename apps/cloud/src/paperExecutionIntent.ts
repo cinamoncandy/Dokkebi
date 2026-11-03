@@ -74,6 +74,16 @@ export interface PaperExecutionIntentInput {
   readonly maxOrderNotional?: number;
 }
 
+let configuredMaxOrderNotional: number | undefined;
+/**
+ * Boot-time wiring of the risk gate's enforced `maxOrderNotional` (the same scaled limits object the gateway enforces).
+ * The execution boundary is a qualification-pinned module, so the cap reaches the SELL sizing through this module instead.
+ * It only ever shrinks a SELL quantity; it is not a risk limit and the gateway still decides every order.
+ */
+export function configurePaperExitOrderNotionalCap(maxOrderNotional: number | undefined): void {
+  configuredMaxOrderNotional = maxOrderNotional !== undefined && Number.isFinite(maxOrderNotional) && maxOrderNotional > 0 ? maxOrderNotional : undefined;
+}
+
 const payload = (intent: Omit<PaperExecutionIntent, "intentFingerprintSha256">): Omit<PaperExecutionIntent, "intentFingerprintSha256"> => intent;
 
 function requireFinitePositive(value: number, field: string): void {
@@ -144,7 +154,7 @@ export function buildPaperExecutionIntent(input: PaperExecutionIntentInput): Pap
     const position = input.state.positions.find((item) => item.market === market);
     quantity = round8(position?.quantity ?? 0);
     if (quantity <= 0) throw new Error("PAPER_EXECUTION_INTENT_POSITION_REQUIRED");
-    const cap = input.maxOrderNotional;
+    const cap = input.maxOrderNotional ?? configuredMaxOrderNotional;
     if (cap !== undefined && Number.isFinite(cap) && cap > 0 && quantity * input.referencePrice > cap) {
       // Round down so the capped order can never exceed the cap; the strategy keeps emitting SELL for the remainder.
       const chunk = Math.floor((cap / input.referencePrice) * 1e8) / 1e8;

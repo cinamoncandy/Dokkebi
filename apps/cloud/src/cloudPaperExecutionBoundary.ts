@@ -17,8 +17,6 @@ export interface CloudPaperExecutionBoundaryOptions {
   readonly riskGate: CloudPaperRiskGate;
   readonly readP0State: () => Readonly<{ openP0: boolean }>;
   readonly maximumMarketAgeMs?: number;
-  /** The risk gate's enforced `maxOrderNotional`; SELL exits are chunked to it. Not a limit of its own. */
-  readonly maxOrderNotional?: number;
 }
 
 export type PaperManualOrderAllocationContext = PaperManualOrderContext & { readonly investmentPercent?: number };
@@ -258,7 +256,6 @@ export class CloudPaperExecutionBoundary {
         decision,
         state,
         investmentPercent,
-        maxOrderNotional: this.options.maxOrderNotional,
       });
     } catch (error) {
       const reason = error instanceof Error ? error.message : "PAPER_EXECUTION_INTENT_INVALID";
