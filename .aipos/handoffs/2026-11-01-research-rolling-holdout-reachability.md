@@ -37,3 +37,9 @@ Commit the validated repair to the same `claude/rolling-holdout` branch, set PR 
 ## Safety and scope
 
 `PAPER_ONLY`; `liveAuthority=NONE`; `productionMutationAllowed=false`; `realOrderAuthority=false`; `realTransferAuthority=false`; `aiAuthority=ZERO_AUTHORITY`. No code path issues `CODE_ACTIONABLE`, and no runtime producer/orchestrator wiring was added.
+
+## Update 2026-11-03 (after the independent review)
+- The "protected main observed" value above is historical; main has moved on and this PR is behind it. Sync by merging main when the formal gates run.
+- A non-author validator review of the previous head found no P0/P1 and four P2. This follow-up addresses the code ones: `runRollingResearchExperiment` now refuses any fold count other than 3 (`ROLLING_UNSUPPORTED_FOLD_COUNT`) so K=2 cannot become an easier bar, and the tests cover the PASS/FAIL/INSUFFICIENT_EVIDENCE boundaries and NaN, fractional and out-of-range fold counts.
+- Still open for the wiring design (#2974): pin discovery data to end before fold 0's train start, so no fold's holdout overlaps discovery.
+- Status spellings in the work order and `state.d` are legacy values frozen by the status baseline and are intentionally left unchanged.

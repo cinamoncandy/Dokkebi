@@ -180,6 +180,8 @@ const refuseRolling = (reason: string): RollingExperimentOutcome => Object.freez
  * deliberately not called by the orchestrator, scheduler, ledger, backfill, or /health.
  */
 export function runRollingResearchExperiment(ports: ExperimentRunnerPorts, spec: ExperimentSpec, folds: number = ROLLING_FOLDS): RollingExperimentOutcome {
+  // K stays 2, so only N=3 keeps "2 of 3" as strict as designed; any other N would be an easier bar and is refused.
+  if (folds !== ROLLING_FOLDS) return refuseRolling("ROLLING_UNSUPPORTED_FOLD_COUNT");
   try {
     const need = requiredHistoryMs(spec.windows, folds);
     const rows = ports.candles.read(spec.market, spec.intervalMs, spec.endCloseMs - need + spec.intervalMs, spec.endCloseMs);

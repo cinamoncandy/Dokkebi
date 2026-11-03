@@ -87,3 +87,14 @@ test("a failing port is reported as a refusal, never a pass", () => {
   assert.equal(out.refusal, "ROLLING_RUN_FAILED");
   assert.equal(out.decision.decision, "INSUFFICIENT_EVIDENCE");
 });
+
+test("only three folds are supported: any other fold count is refused before reading or running anything", () => {
+  const s = setup(3 * 360 + 40);
+  const seen = [];
+  for (const folds of [2, 4, 6, Number.NaN]) {
+    const out = runRollingResearchExperiment({ ...portsFor(s, () => "CHALLENGER_BETTER", seen), candles: { read: () => { throw new Error("must not read"); } } }, spec, folds);
+    assert.equal(out.refusal, "ROLLING_UNSUPPORTED_FOLD_COUNT");
+    assert.equal(out.decision.decision, "INSUFFICIENT_EVIDENCE");
+  }
+  assert.deepEqual(seen, []);
+});
