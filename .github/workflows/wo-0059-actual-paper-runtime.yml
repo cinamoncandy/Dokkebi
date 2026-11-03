@@ -64,3 +64,35 @@ jobs:
           path: artifacts/operational-evidence/actual-paper-runtime-e2e.json
           if-no-files-found: error
           retention-days: 14
+
+  dispatch-readiness-convergence:
+    needs: actual-paper-runtime
+    if: always() && github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main' && github.actor == 'github-actions[bot]' && github.triggering_actor == 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    permissions:
+      actions: write
+      contents: read
+    env:
+      GH_TOKEN: ${{ github.token }}
+      CALLBACK_ACTOR: ${{ github.actor }}
+      CALLBACK_TRIGGERING_ACTOR: ${{ github.triggering_actor }}
+    steps:
+      - name: Dispatch one exact-source convergence evaluation
+        run: |
+          set -euo pipefail
+          test "$GITHUB_REF" = "refs/heads/main"
+          test "$CALLBACK_ACTOR" = "github-actions[bot]"
+          test "$CALLBACK_TRIGGERING_ACTOR" = "github-actions[bot]"
+          [[ "$GITHUB_SHA" =~ ^[a-fA-F0-9]{40}$ ]]
+          [[ "$GITHUB_RUN_ID" =~ ^[1-9][0-9]*$ ]]
+          [[ "$GITHUB_RUN_ATTEMPT" =~ ^[1-9][0-9]*$ ]]
+          payload="$(jq -n \
+            --arg sha "$GITHUB_SHA" \
+            --arg run_id "$GITHUB_RUN_ID" \
+            --arg run_attempt "$GITHUB_RUN_ATTEMPT" \
+            '{ref:"main",inputs:{target_sha:$sha,source_run_id:$run_id,source_run_attempt:$run_attempt}}')"
+          gh api --method POST \
+            "repos/$GITHUB_REPOSITORY/actions/workflows/exact-head-paper-readiness-convergence.yml/dispatches" \
+            --input - <<<"$payload"
+          echo "Dispatched exact-main readiness evaluation for source run $GITHUB_RUN_ID attempt $GITHUB_RUN_ATTEMPT at $GITHUB_SHA"

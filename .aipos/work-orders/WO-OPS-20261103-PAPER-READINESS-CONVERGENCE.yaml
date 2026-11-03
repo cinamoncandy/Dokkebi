@@ -1,0 +1,80 @@
+id: WO-OPS-20261103-PAPER-READINESS-CONVERGENCE
+title: "Converge token-dispatched Actual PAPER evidence exactly once"
+status: IN_PROGRESS
+priority: P1
+owner: nusa-server-automation
+repository: cinamoncandy/NUSA
+base_branch: main
+base_commit: efa8e295e7a468d7cb1652fb3924f30c83c3e5f7
+implementation_branch: wo-ops-20261103-paper-readiness-convergence
+authority_impact: workflow-control
+finding: >-
+  The scheduled exact-head readiness controller starts the existing Actual PAPER
+  workflow through GITHUB_TOKEN workflow_dispatch. The dispatch is accepted and
+  the Actual PAPER run completes, but its completion does not create the
+  configured workflow_run subscriber execution. Push-originated Actual PAPER
+  runs do create that subscriber, so the fail-closed classifier sees
+  INCOMPLETE_NO_AUTONOMOUS_ORDER_FILL_PNL but misses the immediate convergence
+  evaluation for the newly dispatched run.
+first_broken_transition: >-
+  GITHUB_TOKEN workflow_dispatch Actual PAPER run completed -> exact-source
+  readiness convergence is dispatched and consumes that run's artifact
+root_cause: CONFIRMED
+scope:
+  - Reuse the existing Exact-Head PAPER Readiness Convergence workflow as the single consumer.
+  - Add an optional exact source_run_id input and independently fetch/check that run by ID.
+  - Have only the canonical main-branch, token-dispatched Actual PAPER workflow invoke the existing convergence workflow using its GITHUB_TOKEN.
+  - Keep callback credentials job-scoped to actions:write and contents:read; do not add PATs or repository secrets.
+  - Bound source completion waiting and verify workflow name/path, dispatch event, main branch, exact current-main SHA, success conclusion, run identity, and artifact digest before classification.
+  - Suppress recursive Actual PAPER dispatch from a callback evaluation; incomplete evidence remains pending and emits no readiness receipt.
+  - Preserve existing exact-head classifier, PAPER_ONLY and ZERO_AUTHORITY boundaries.
+exclusions:
+  - No changes to PR #2994, its branch, threads, or exact head 185fc1200a88b7cd5e7448bef040464982051e3b.
+  - No manual Actual PAPER run, production deployment/restart, database mutation, synthetic order/fill/PnL, or fake readiness receipt.
+  - No new scheduler/control plane, PAT, threshold/gate relaxation, or protected-main change.
+acceptance:
+  - Token-dispatched canonical Actual PAPER completion dispatches one bounded evaluation to the existing convergence workflow with exact target SHA and source run ID.
+  - The consumer waits only a bounded period for that exact run and rejects malformed IDs, wrong workflow/path/event/branch/actor/SHA, non-completed or failed runs, missing/stale artifacts, and API errors.
+  - Callback evaluations never dispatch another Actual PAPER run, including artifact-unavailable and semantically incomplete cases.
+  - Complete eligible evidence may produce only the existing exact-head readiness receipt; incomplete autonomous order/fill/PnL evidence remains non-certifying and produces no receipt.
+  - Duplicate callback delivery is harmless: certification remains idempotent for the exact main SHA and cannot issue duplicate authoritative readiness receipts.
+  - Existing push, schedule, manual-dispatch, workflow_run, semantic classifier, and fail-closed contracts remain intact.
+  - No LIVE, real-order, transfer, production-mutation, or AI execution authority is added.
+verification_commands:
+  - node --test tests/exact-head-paper-readiness-convergence-workflow.test.js tests/actual-paper-runtime-readiness-classification.test.js tests/exact-head-paper-readiness-certification.test.js
+  - pnpm run preflight
+  - pnpm run build
+  - pnpm run typecheck
+  - pnpm run validate:full
+  - pnpm run security:gate
+  - pnpm run lint
+  - node scripts/validate-workflow-action-pins.js
+  - node scripts/validate-workflow-authority-map.js
+  - node scripts/validate-aipos-work-order-provenance.js
+  - git diff --check
+validation: >-
+  On exact base efa8e295e7a468d7cb1652fb3924f30c83c3e5f7, focused readiness
+  tests PASS 22/22 and `corepack pnpm run test` PASS (1,327 isolated test files).
+  `corepack pnpm run typecheck`, `validate:full`, and `security:gate` PASS.
+  Candidate lint is 0 errors/47 warnings; a clean detached worktree at the same
+  base also reports 0/47, so no warning was added. Workflow YAML and embedded
+  shell parse, action pins, authority map, AIPOS YAML/provenance/current truth,
+  and `git diff --check` PASS. No Actual PAPER workflow was manually dispatched;
+  no autonomous order/fill/PnL, readiness receipt, or runtime acceptance is
+  claimed. Generated security/audit reports remain untracked and excluded from
+  the candidate; the test harness scratch diagnostic is restored.
+safety:
+  mode: PAPER_ONLY
+  liveAuthority: NONE
+  productionMutationAllowed: false
+  realOrderAuthority: false
+  realTransferAuthority: false
+  aiAuthority: ZERO_AUTHORITY
+  fail_closed: true
+next: >-
+  Fresh-fetch protected main and the existing branch, confirm no competing
+  same-work-order PR exists, and review any new main delta. Then commit this
+  validated change set on the existing work-order branch and publish one Draft
+  PR. Verify exact-head CI and required companions, then obtain fresh
+  independent review. Never manually dispatch the Actual PAPER workflow or
+  claim readiness complete without genuine autonomous order/fill/PnL evidence.

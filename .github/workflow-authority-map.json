@@ -307,6 +307,13 @@
       "secrets": false,
       "environment": null
     },
+    "wo-0059-actual-paper-runtime.yml:dispatch-readiness-convergence": {
+      "write": [
+        "actions"
+      ],
+      "secrets": false,
+      "environment": null
+    },
     "autopilot-cloudflare-credential-preflight.yml:blocker": {
       "write": [
         "issues"
