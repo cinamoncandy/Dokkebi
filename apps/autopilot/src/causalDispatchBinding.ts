@@ -1,4 +1,5 @@
 import type { SourceExecutionIdentity, VerifiedCodingPublisherIdentity } from "./githubActionsOidc";
+import { isValidCausalAdmissionReceipt, type CausalAdmissionReceipt } from "./causalRegressionAdmission";
 
 /** Internal coordinator value. Creation requires an independently verified source run. */
 export interface CausalDispatchBinding {
@@ -6,6 +7,10 @@ export interface CausalDispatchBinding {
   readonly capabilityDigest: string;
   readonly expiresAt: number;
   readonly publisher: VerifiedCodingPublisherIdentity | null;
+  /** Null for provenance-only bindings; populated only by verified causal producer evidence. */
+  readonly causalAdmission?: CausalAdmissionReceipt | null;
+  /** Atomic one-time handoff marker; retries cannot reuse an admitted receipt after consumption. */
+  readonly causalAdmissionConsumedAt?: number | null;
 }
 
 const SHA40 = /^[0-9a-f]{40}$/;
@@ -48,11 +53,37 @@ function sameDigest(left: string, right: string): boolean {
 }
 
 /** Construct only after source-run verification and generation of a random capability. */
-export function createCausalDispatchBinding(source: SourceExecutionIdentity, capabilityDigest: string, now: number, expiresAt: number): CausalDispatchBinding | null {
+export function createCausalDispatchBinding(
+  source: SourceExecutionIdentity,
+  capabilityDigest: string,
+  now: number,
+  expiresAt: number,
+  causalAdmission?: CausalAdmissionReceipt | null,
+): CausalDispatchBinding | null {
   if (!source || !validSource(source) || typeof capabilityDigest !== "string" || !SHA256.test(capabilityDigest)
     || !Number.isSafeInteger(now) || now < 0 || !Number.isSafeInteger(expiresAt)
-    || expiresAt <= now || expiresAt - now > 30 * 60 * 1000) return null;
-  return Object.freeze({ source: Object.freeze({ ...source }), capabilityDigest, expiresAt, publisher: null });
+    || expiresAt <= now || expiresAt - now > 30 * 60 * 1000
+    || (causalAdmission !== undefined && causalAdmission !== null
+      && (!isValidCausalAdmissionReceipt(causalAdmission, source, now) || causalAdmission.expiresAt > expiresAt))) return null;
+  return Object.freeze({ source: Object.freeze({ ...source }), capabilityDigest, expiresAt, publisher: null,
+    causalAdmission: causalAdmission ?? null, causalAdmissionConsumedAt: null });
+}
+
+function sameCausalAdmission(left: CausalAdmissionReceipt | null | undefined, right: CausalAdmissionReceipt | null | undefined): boolean {
+  if (left == null || right == null) return left == null && right == null;
+  return left.schemaVersion === 1 && right.schemaVersion === 1
+    && left.decision === "CODE_ACTIONABLE" && right.decision === "CODE_ACTIONABLE"
+    && left.classification === "REPOSITORY_CODE_REGRESSION" && right.classification === "REPOSITORY_CODE_REGRESSION"
+    && left.contractId === right.contractId && left.caseId === right.caseId
+    && left.sourceConclusion === right.sourceConclusion && sameSource(left.source, right.source)
+    && left.sourceRunAttempt === right.sourceRunAttempt && left.statementDigest === right.statementDigest
+    && left.producerJobId === right.producerJobId && left.attestationJobId === right.attestationJobId
+    && left.producerArtifactId === right.producerArtifactId
+    && left.producerArtifactDigest === right.producerArtifactDigest
+    && left.producerArtifactName === right.producerArtifactName
+    && left.implementationFingerprint === right.implementationFingerprint
+    && left.verifiedAt === right.verifiedAt && left.expiresAt === right.expiresAt
+    && left.replayKeySha256 === right.replayKeySha256;
 }
 
 /**
@@ -68,13 +99,16 @@ export function claimCausalDispatchBinding(
   requestedSource: SourceExecutionIdentity,
   capabilityDigest: string,
   now: number,
+  causalAdmission?: CausalAdmissionReceipt | null,
 ): CausalDispatchBinding | null {
   if (!binding || !binding.source || !publisher || !requestedSource
     || !validSource(binding.source) || !validSource(requestedSource)
     || !Number.isSafeInteger(binding.expiresAt) || !Number.isSafeInteger(now)
     || now < 0 || now >= binding.expiresAt || binding.publisher !== null
     || !sameDigest(binding.capabilityDigest, capabilityDigest)
-    || !sameSource(binding.source, requestedSource)) return null;
+    || !sameSource(binding.source, requestedSource)
+    || !sameCausalAdmission(binding.causalAdmission, causalAdmission)
+    || (binding.causalAdmissionConsumedAt !== undefined && binding.causalAdmissionConsumedAt !== null)) return null;
 
   if (publisher.repository !== binding.source.repository || publisher.sha !== binding.source.sha
     || publisher.ref !== "refs/heads/main" || publisher.event !== "repository_dispatch"
@@ -87,6 +121,8 @@ export function claimCausalDispatchBinding(
     capabilityDigest: binding.capabilityDigest,
     expiresAt: binding.expiresAt,
     publisher: Object.freeze({ ...publisher }),
+    causalAdmission: binding.causalAdmission ?? null,
+    causalAdmissionConsumedAt: null,
   });
 }
 
@@ -99,9 +135,35 @@ export function verifyClaimedCausalDispatchBinding(
   now: number,
 ): boolean {
   const claimed = binding?.publisher;
-  if (!claimed || !publisher || claimed.repository !== publisher.repository
+  if (!binding || !claimed || !publisher || !validSource(binding.source) || !validSource(requestedSource)
+    || !Number.isSafeInteger(binding.expiresAt) || !Number.isSafeInteger(now) || now < 0 || now >= binding.expiresAt
+    || claimed.repository !== publisher.repository
     || claimed.workflowRef !== publisher.workflowRef || claimed.ref !== publisher.ref
     || claimed.sha !== publisher.sha || claimed.runId !== publisher.runId
-    || claimed.runAttempt !== publisher.runAttempt || claimed.event !== publisher.event) return false;
-  return claimCausalDispatchBinding({ ...binding, publisher: null }, publisher, requestedSource, capabilityDigest, now) !== null;
+    || claimed.runAttempt !== publisher.runAttempt || claimed.event !== publisher.event
+    || !sameDigest(binding.capabilityDigest, capabilityDigest) || !sameSource(binding.source, requestedSource)
+    || (binding.causalAdmissionConsumedAt !== undefined && binding.causalAdmissionConsumedAt !== null
+      && (!Number.isSafeInteger(binding.causalAdmissionConsumedAt) || binding.causalAdmissionConsumedAt < 0))) return false;
+  if (binding.causalAdmissionConsumedAt != null
+    || (binding.causalAdmission != null && !isValidCausalAdmissionReceipt(binding.causalAdmission, binding.source, now))) return false;
+  return publisher.repository === binding.source.repository && publisher.sha === binding.source.sha
+    && publisher.ref === "refs/heads/main" && publisher.event === "repository_dispatch"
+    && publisher.workflowRef === `${publisher.repository}/${PUBLISHER_WORKFLOW}@refs/heads/main`
+    && typeof publisher.runId === "string" && RUN.test(publisher.runId)
+    && typeof publisher.runAttempt === "string" && ATTEMPT.test(publisher.runAttempt);
+}
+
+/** Called inside the execution coordinator transaction that changes LEASED to HANDED_OFF. */
+export function consumeClaimedCausalDispatchAdmissionBinding(
+  binding: CausalDispatchBinding,
+  publisher: VerifiedCodingPublisherIdentity,
+  requestedSource: SourceExecutionIdentity,
+  capabilityDigest: string,
+  now: number,
+): CausalDispatchBinding | null {
+  if (!binding?.causalAdmission || binding.causalAdmissionConsumedAt != null
+    || !verifyClaimedCausalDispatchBinding(binding, publisher, requestedSource, capabilityDigest, now)
+    || !isValidCausalAdmissionReceipt(binding.causalAdmission, binding.source, now)
+    || now >= binding.expiresAt) return null;
+  return Object.freeze({ ...binding, causalAdmissionConsumedAt: now });
 }

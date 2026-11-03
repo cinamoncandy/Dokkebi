@@ -75,6 +75,24 @@ export function createGithubSignature(secret, body) {
   return `sha256=${crypto.createHmac("sha256", secret).update(body).digest("hex")}`;
 }
 
+export function readCausalAttestationBundle(bundlePath, eventPayload, repository) {
+  if (typeof bundlePath !== "string" || !bundlePath.trim() || !fs.existsSync(bundlePath)) return null;
+  const raw = fs.readFileSync(bundlePath);
+  if (raw.byteLength < 1 || raw.byteLength > 512 * 1024) throw new Error("CAUSAL_ATTESTATION_BUNDLE_SIZE_INVALID");
+  let bundle;
+  try { bundle = JSON.parse(raw.toString("utf8")); } catch { throw new Error("CAUSAL_ATTESTATION_BUNDLE_INVALID"); }
+  const run = object(eventPayload?.workflow_run);
+  if (!object(bundle) || !run || eventPayload?.repository?.full_name !== repository
+    || run.name !== "CI" || run.event !== "push" || run.head_branch !== "main"
+    || !["failure", "timed_out"].includes(run.conclusion)
+    || !/^[1-9][0-9]{0,19}$/.test(String(run.id ?? ""))
+    || !/^[1-9][0-9]{0,9}$/.test(String(run.run_attempt ?? ""))
+    || !/^[a-f0-9]{40}$/.test(String(run.head_sha ?? ""))) {
+    throw new Error("CAUSAL_ATTESTATION_SOURCE_INVALID");
+  }
+  return bundle;
+}
+
 export async function requestGithubActionsOidcToken({
   requestUrl,
   requestToken,
@@ -198,6 +216,7 @@ export async function dispatchGithubEvent({
   repository,
   runId,
   runAttempt,
+  causalAttestationBundle,
   webhookUrl = DEFAULT_WEBHOOK_URL,
   fetchImpl = fetch,
   retryDelayMs = 200,
@@ -207,6 +226,19 @@ export async function dispatchGithubEvent({
   if (!normalizedEvent) throw new Error("GITHUB_EVENT_UNSUPPORTED");
   if (!(body instanceof Uint8Array)) throw new Error("GITHUB_EVENT_BODY_INVALID");
   const deliveryId = createDeliveryId({ repository, event: normalizedEvent, runId, runAttempt });
+  let deliveryBody = body;
+  if (causalAttestationBundle !== undefined && causalAttestationBundle !== null) {
+    let eventPayload;
+    try { eventPayload = object(JSON.parse(Buffer.from(body).toString("utf8"))); } catch { eventPayload = null; }
+    if (!eventPayload || normalizedEvent !== "workflow_run") throw new Error("CAUSAL_ATTESTATION_EVENT_INVALID");
+    const run = object(eventPayload.workflow_run);
+    if (!run || eventPayload.repository?.full_name !== repository || run.name !== "CI" || run.event !== "push"
+      || run.head_branch !== "main" || !["failure", "timed_out"].includes(run.conclusion)) {
+      throw new Error("CAUSAL_ATTESTATION_SOURCE_INVALID");
+    }
+    deliveryBody = Buffer.from(JSON.stringify({ ...eventPayload, nusa_causal_attestation_bundle: causalAttestationBundle }), "utf8");
+    if (deliveryBody.byteLength > 768 * 1024) throw new Error("CAUSAL_ATTESTATION_EVENT_SIZE_INVALID");
+  }
   const hasOidc = typeof oidcToken === "string" && oidcToken.trim().length > 0;
   const hasSecret = typeof secret === "string" && secret.trim().length > 0;
   if (!hasOidc && !hasSecret) throw new Error("WEBHOOK_AUTH_REQUIRED");
@@ -215,7 +247,7 @@ export async function dispatchGithubEvent({
   const authentication = hasOidc ? "OIDC" : "HMAC";
   const authHeaders = hasOidc
     ? { authorization: `Bearer ${oidcToken.trim()}` }
-    : { "x-hub-signature-256": createGithubSignature(secret, body) };
+    : { "x-hub-signature-256": createGithubSignature(secret, deliveryBody) };
   let attempts = 0;
   let response;
   for (; attempts < MAX_ATTEMPTS; attempts += 1) {
@@ -231,7 +263,7 @@ export async function dispatchGithubEvent({
           "user-agent": "nusa-github-event-bridge",
           ...authHeaders,
         },
-        body,
+          body: deliveryBody,
         signal: controller.signal,
       });
     } catch (error) {
@@ -321,6 +353,12 @@ async function main() {
   const bodyPath = process.env.GITHUB_EVENT_PATH;
   if (!bodyPath) throw new Error("GITHUB_EVENT_PATH_REQUIRED");
   const body = fs.readFileSync(bodyPath);
+  const eventPayload = JSON.parse(body.toString("utf8"));
+  const causalAttestationBundle = readCausalAttestationBundle(
+    process.env.NUSA_CAUSAL_ATTESTATION_PATH,
+    eventPayload,
+    process.env.GITHUB_REPOSITORY,
+  );
   const oidcToken = await requestGithubActionsOidcToken({
     requestUrl: process.env.ACTIONS_ID_TOKEN_REQUEST_URL,
     requestToken: process.env.ACTIONS_ID_TOKEN_REQUEST_TOKEN,
@@ -333,6 +371,7 @@ async function main() {
     repository: process.env.GITHUB_REPOSITORY,
     runId: process.env.GITHUB_RUN_ID,
     runAttempt: process.env.GITHUB_RUN_ATTEMPT,
+    causalAttestationBundle,
     webhookUrl: process.env.NUSA_AUTOPILOT_WEBHOOK_URL || DEFAULT_WEBHOOK_URL,
   });
   writeSummary(result);

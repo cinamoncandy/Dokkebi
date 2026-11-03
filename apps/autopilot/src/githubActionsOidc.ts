@@ -56,6 +56,23 @@ export interface SourceExecutionIdentity {
   readonly runAttempt: string;
 }
 
+export interface VerifiedCodingSourceRun {
+  readonly source: SourceExecutionIdentity;
+  readonly conclusion: "failure" | "timed_out";
+  readonly status: "completed";
+  readonly branch: "main";
+  readonly event: "push";
+}
+
+export interface VerifiedCausalProducerEvidence {
+  readonly source: SourceExecutionIdentity;
+  readonly sourceConclusion: "failure" | "timed_out";
+  readonly producerJobId: number;
+  readonly attestationJobId: number;
+  readonly artifact: Readonly<{ id: number; name: string; digest: string; sizeInBytes: number }>;
+  readonly fingerprints: Readonly<Record<"workflow" | "producer" | "contract" | "lockfile" | "implementation", string>>;
+}
+
 interface JsonWebKeySet {
   readonly keys?: unknown;
 }
@@ -252,10 +269,9 @@ export async function verifyGithubCodingSourceRun(
   allowedRepository: string,
   token: string,
   fetchImpl: FetchImpl = fetch as unknown as FetchImpl,
-): Promise<void> {
+): Promise<VerifiedCodingSourceRun> {
   if (!token.trim() || source.repository !== allowedRepository
     || !/^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+$/.test(source.repository)
-    || source.workflowPath !== ".github/workflows/ci.yml"
     || source.workflowPath !== ".github/workflows/ci.yml"
     || !/^[a-f0-9]{40}$/.test(source.sha)
     || !/^[1-9][0-9]{0,19}$/.test(source.runId)
@@ -275,15 +291,61 @@ export async function verifyGithubCodingSourceRun(
     || run.status !== "completed" || (run.conclusion !== "failure" && run.conclusion !== "timed_out")) {
     throw new Error("CODING_SOURCE_RUN_MISMATCH");
   }
+  return Object.freeze({
+    source: Object.freeze({ ...source }),
+    conclusion: run.conclusion,
+    status: "completed",
+    branch: "main",
+    event: "push",
+  });
 }
 
-/** Cross-checks the protected producer jobs and same-run signed artifact through GitHub's API. */
+const CAUSAL_FINGERPRINT_PATHS = Object.freeze({
+  workflow: ".github/workflows/ci.yml",
+  producer: "scripts/causal-regression-observe.js",
+  contract: "apps/autopilot/src/causalRegressionContract.ts",
+  lockfile: "pnpm-lock.yaml",
+  implementation: "apps/autopilot/src/repairableWorkflowRun.ts",
+});
+
+async function readGithubFileSha256(
+  repository: string,
+  sha: string,
+  path: string,
+  token: string,
+  fetchImpl: FetchImpl,
+): Promise<string> {
+  const encodedPath = path.split("/").map(encodeURIComponent).join("/");
+  let response: JsonResponse;
+  try {
+    response = await fetchImpl(`https://api.github.com/repos/${repository}/contents/${encodedPath}?ref=${sha}`, {
+      headers: { accept: "application/vnd.github+json", authorization: `Bearer ${token}`, "user-agent": "nusa-autopilot-worker", "x-github-api-version": "2022-11-28" },
+    });
+  } catch { throw new Error("CODING_CAUSAL_PRODUCER_SOURCE_UNAVAILABLE"); }
+  if (!response.ok) throw new Error("CODING_CAUSAL_PRODUCER_SOURCE_UNAVAILABLE");
+  let file: Record<string, unknown> | null;
+  try { file = object(await response.json()); } catch { throw new Error("CODING_CAUSAL_PRODUCER_SOURCE_INVALID"); }
+  if (!file || file.type !== "file" || file.path !== path || file.encoding !== "base64"
+    || !Number.isSafeInteger(file.size) || Number(file.size) < 1 || Number(file.size) > 1_000_000
+    || typeof file.content !== "string" || file.content.length > 1_400_000
+    || !/^[A-Za-z0-9+/=\s]+$/.test(file.content)) throw new Error("CODING_CAUSAL_PRODUCER_SOURCE_INVALID");
+  let bytes: Uint8Array;
+  try {
+    const binary = atob(file.content.replace(/\s/g, ""));
+    bytes = Uint8Array.from(binary, (character) => character.charCodeAt(0));
+  } catch { throw new Error("CODING_CAUSAL_PRODUCER_SOURCE_INVALID"); }
+  if (bytes.byteLength !== Number(file.size)) throw new Error("CODING_CAUSAL_PRODUCER_SOURCE_INVALID");
+  const digest = await crypto.subtle.digest("SHA-256", toArrayBuffer(bytes));
+  return Array.from(new Uint8Array(digest), (byte) => byte.toString(16).padStart(2, "0")).join("");
+}
+
+/** Cross-checks the protected source, producer jobs, artifact, and exact source-file fingerprints through GitHub's API. */
 export async function verifyGithubCausalProducerEvidence(
   source: SourceExecutionIdentity,
   allowedRepository: string,
   token: string,
   fetchImpl: FetchImpl = fetch as unknown as FetchImpl,
-): Promise<void> {
+): Promise<VerifiedCausalProducerEvidence> {
   if (!token.trim() || source.repository !== allowedRepository
     || !/^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+$/.test(source.repository)
     || !/^[a-f0-9]{40}$/.test(source.sha)
@@ -308,8 +370,13 @@ export async function verifyGithubCausalProducerEvidence(
   const matchesJob = (name: string, conclusion: string) => jobs.filter((job) => job?.name === name
     && String(job.run_id) === source.runId && String(job.run_attempt) === source.runAttempt
     && job.head_sha === source.sha && job.status === "completed" && job.conclusion === conclusion);
-  if (matchesJob("causal-regression-contract", "failure").length !== 1
-    || matchesJob("attest-causal-regression", "success").length !== 1) throw new Error("CODING_CAUSAL_PRODUCER_JOBS_MISMATCH");
+  const producerJobs = matchesJob("causal-regression-contract", "failure");
+  const attestationJobs = matchesJob("attest-causal-regression", "success");
+  if (producerJobs.length !== 1 || attestationJobs.length !== 1
+    || !Number.isSafeInteger(producerJobs[0]?.id) || Number(producerJobs[0]?.id) <= 0
+    || !Number.isSafeInteger(attestationJobs[0]?.id) || Number(attestationJobs[0]?.id) <= 0) {
+    throw new Error("CODING_CAUSAL_PRODUCER_JOBS_MISMATCH");
+  }
 
   let artifactsResponse: JsonResponse;
   try {
@@ -330,6 +397,31 @@ export async function verifyGithubCausalProducerEvidence(
     && artifact.size_in_bytes > 0 && artifact.size_in_bytes <= 2 * 1024 * 1024
     && typeof artifact.digest === "string" && /^sha256:[a-f0-9]{64}$/.test(artifact.digest));
   if (matchingArtifacts.length !== 1) throw new Error("CODING_CAUSAL_PRODUCER_ARTIFACT_MISMATCH");
+
+  const [sourceRun, fingerprintValues] = await Promise.all([
+    verifyGithubCodingSourceRun(source, allowedRepository, token, fetchImpl),
+    Promise.all(Object.values(CAUSAL_FINGERPRINT_PATHS).map((path) => readGithubFileSha256(source.repository, source.sha, path, token, fetchImpl))),
+  ]);
+  const fingerprints = Object.freeze({
+    workflow: fingerprintValues[0]!,
+    producer: fingerprintValues[1]!,
+    contract: fingerprintValues[2]!,
+    lockfile: fingerprintValues[3]!,
+    implementation: fingerprintValues[4]!,
+  });
+  return Object.freeze({
+    source: Object.freeze({ ...source }),
+    sourceConclusion: sourceRun.conclusion,
+    producerJobId: Number(producerJobs[0]!.id),
+    attestationJobId: Number(attestationJobs[0]!.id),
+    artifact: Object.freeze({
+      id: Number(matchingArtifacts[0]!.id),
+      name: expectedName,
+      digest: String(matchingArtifacts[0]!.digest),
+      sizeInBytes: Number(matchingArtifacts[0]!.size_in_bytes),
+    }),
+    fingerprints,
+  });
 }
 
 export async function verifyGithubEventBridgeOidcToken(
