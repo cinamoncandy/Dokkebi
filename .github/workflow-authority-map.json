@@ -121,7 +121,16 @@
     },
     "causal-verification.yml:verify-causal-positive": {
       "write": [
+        "artifact-metadata",
+        "attestations",
         "id-token"
+      ],
+      "secrets": false,
+      "environment": null
+    },
+    "causal-verification-consumer.yml:verify-and-exercise-bounded-runner": {
+      "write": [
+        "checks"
       ],
       "secrets": false,
       "environment": null

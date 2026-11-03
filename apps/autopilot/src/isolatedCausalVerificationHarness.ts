@@ -50,10 +50,12 @@ export interface IsolatedCausalVerificationRunResult {
   readonly sourceSha: string;
   readonly sourceRunId: string;
   readonly sourceRunAttempt: string;
+  readonly durableReplayGuard: "GITHUB_CHECK_RUN_CLAIMED";
+  readonly sourceCheckRunId: number;
   readonly codingRunnerStatus: "EXECUTION_ACCEPTED";
   readonly proposalAdapterCalls: 1;
   readonly sandboxExecutions: 1;
-  readonly dedupe: "REPLAY_REJECTED";
+  readonly dedupe: "REPLAY_REJECTED_WITHIN_SINGLE_HARNESS";
   readonly mutationAllowed: false;
   readonly liveAuthority: "NONE";
   readonly productionMutationAllowed: false;
@@ -63,8 +65,9 @@ export interface IsolatedCausalVerificationRunResult {
 /**
  * Verifies an isolated Sigstore proof, then drives the existing CodingRunner and execution
  * coordinator with local deterministic adapters. The returned CODE_ACTIONABLE decision is
- * domain-separated from production admission; no provider, publisher, repository write, or
- * production coordinator is used by this harness.
+ * domain-separated from production admission; no external provider, publisher, repository-content
+ * write, or production coordinator is used. The consumer separately claims a durable GitHub check
+ * run before invoking this process-local execution harness.
  */
 export async function runIsolatedCausalVerificationHarness(
   input: IsolatedCausalVerificationRunInput,
@@ -83,6 +86,9 @@ export async function executeVerifiedIsolatedCausalVerification(
   if (decision.sourceSha !== sourceRun.headSha || decision.sourceRunId !== String(sourceRun.id)
     || decision.sourceRunAttempt !== String(sourceRun.run_attempt)) throw new Error("ISOLATED_VERIFICATION_SOURCE_RUN_MISMATCH");
 
+  const sourceCheckRunId = await claimDurableIsolatedReplayGuard(verified, input.githubToken, input.fetchImpl ?? fetch);
+
+  try {
   const executionId = `isolated:${decision.sourceRunId}:${decision.sourceRunAttempt}:${decision.statementDigest}`;
   const dedupeKey = `isolated:${decision.sourceSha}:${decision.statementDigest}`;
   const coordinator = createHarnessCoordinator();
@@ -168,6 +174,8 @@ export async function executeVerifiedIsolatedCausalVerification(
     throw new Error("ISOLATED_CODING_RUNNER_REPLAY_NOT_REJECTED");
   }
 
+  await completeDurableIsolatedReplayGuard(sourceCheckRunId, "success", input.githubToken, input.fetchImpl ?? fetch);
+
   return Object.freeze({
     domain: decision.domain,
     decision: decision.decision,
@@ -175,12 +183,91 @@ export async function executeVerifiedIsolatedCausalVerification(
     sourceSha: decision.sourceSha,
     sourceRunId: decision.sourceRunId,
     sourceRunAttempt: decision.sourceRunAttempt,
+    durableReplayGuard: "GITHUB_CHECK_RUN_CLAIMED",
+    sourceCheckRunId,
     codingRunnerStatus: "EXECUTION_ACCEPTED",
     proposalAdapterCalls: 1,
     sandboxExecutions: 1,
-    dedupe: "REPLAY_REJECTED",
+    dedupe: "REPLAY_REJECTED_WITHIN_SINGLE_HARNESS",
     ...ZERO_AUTHORITY,
   });
+  } catch (error) {
+    await completeDurableIsolatedReplayGuard(sourceCheckRunId, "failure", input.githubToken, input.fetchImpl ?? fetch);
+    throw error;
+  }
+}
+
+const replayCheckName = (runId: string, runAttempt: string): string =>
+  `NUSA Isolated Causal Replay Guard ${runId}.${runAttempt}`;
+
+async function claimDurableIsolatedReplayGuard(
+  verified: VerifiedIsolatedCausalVerification,
+  token: string | undefined,
+  fetchImpl: typeof fetch,
+): Promise<number> {
+  const authorization = token?.trim();
+  if (!authorization) throw new Error("ISOLATED_REPLAY_GUARD_TOKEN_MISSING");
+  const name = replayCheckName(verified.source.runId, verified.source.runAttempt);
+  const headers = githubHeaders(authorization);
+  const lookup = await fetchImpl(`https://api.github.com/repos/${REPOSITORY}/commits/${verified.source.sha}/check-runs?check_name=${encodeURIComponent(name)}&per_page=100`, { headers });
+  if (!lookup.ok) throw new Error("ISOLATED_REPLAY_GUARD_LOOKUP_FAILED");
+  const lookupBody = await lookup.json() as { check_runs?: Array<{ name?: unknown }> };
+  if (!Array.isArray(lookupBody.check_runs)) throw new Error("ISOLATED_REPLAY_GUARD_LOOKUP_INVALID");
+  if (lookupBody.check_runs.some((check) => check.name === name)) throw new Error("ISOLATED_SOURCE_RUN_ALREADY_CLAIMED");
+
+  const response = await fetchImpl(`https://api.github.com/repos/${REPOSITORY}/check-runs`, {
+    method: "POST",
+    headers: { ...headers, "Content-Type": "application/json" },
+    body: JSON.stringify({
+      name,
+      head_sha: verified.source.sha,
+      external_id: `nusa-isolated-causal:${verified.source.runId}:${verified.source.runAttempt}`,
+      status: "in_progress",
+      started_at: new Date().toISOString(),
+      output: {
+        title: "Isolated causal source event claimed",
+        summary: "A durable, exact-source-run replay guard was claimed before the isolated CodingRunner exercise.",
+      },
+    }),
+  });
+  if (!response.ok) throw new Error("ISOLATED_REPLAY_GUARD_CLAIM_FAILED");
+  const body = await response.json() as { id?: unknown };
+  if (!Number.isSafeInteger(body.id) || Number(body.id) <= 0) throw new Error("ISOLATED_REPLAY_GUARD_CLAIM_INVALID");
+  return Number(body.id);
+}
+
+async function completeDurableIsolatedReplayGuard(
+  checkRunId: number,
+  conclusion: "success" | "failure",
+  token: string | undefined,
+  fetchImpl: typeof fetch,
+): Promise<void> {
+  const authorization = token?.trim();
+  if (!authorization) throw new Error("ISOLATED_REPLAY_GUARD_TOKEN_MISSING");
+  const response = await fetchImpl(`https://api.github.com/repos/${REPOSITORY}/check-runs/${checkRunId}`, {
+    method: "PATCH",
+    headers: { ...githubHeaders(authorization), "Content-Type": "application/json" },
+    body: JSON.stringify({
+      status: "completed",
+      conclusion,
+      completed_at: new Date().toISOString(),
+      output: {
+        title: conclusion === "success" ? "Isolated causal replay guard completed" : "Isolated causal replay guard failed closed",
+        summary: conclusion === "success"
+          ? "The exact signed source run was processed once; subsequent attempts for this run and attempt will be rejected."
+          : "The durable claim is retained; replay is blocked even though the bounded isolated execution did not complete successfully.",
+      },
+    }),
+  });
+  if (!response.ok) throw new Error("ISOLATED_REPLAY_GUARD_COMPLETION_FAILED");
+}
+
+function githubHeaders(token: string): HeadersInit {
+  return {
+    Accept: "application/vnd.github+json",
+    "X-GitHub-Api-Version": "2022-11-28",
+    Authorization: `Bearer ${token}`,
+  };
 }
 
 async function verifyCompletedIsolatedSourceRun(

@@ -588,3 +588,50 @@ post_merge_review_findings_20261103T0434Z:
   l1: PARTIAL
   l2: HOLD
   safety: PAPER_ONLY_LIVE_NONE_PRODUCTION_MUTATION_FALSE_REAL_ORDER_FALSE_REAL_TRANSFER_FALSE_AI_ZERO_AUTHORITY
+
+post_publication_review_20261103T0532Z:
+  supersedes_prior_local_validation_and_next_action_snapshots: true
+  repository: cinamoncandy/NUSA
+  protected_main: 7e702eaf078d56614cff9e4f4325d08419e19185
+  pull_request: 2994
+  reviewed_head: 7d15efc30ecc51b01ea59be6db091e4799df3d5c
+  base: 7e702eaf078d56614cff9e4f4325d08419e19185
+  exact_head_ci:
+    run_ids: [41583449185, 41583446233, 41583446276, 41583449022, 41583449040, 41583449061, 41583449070, 41583449291]
+    result: PASS_OR_INTENTIONAL_SKIP_ALL
+  independent_review:
+    actor: chatgpt-codex-connector
+    review_id: 5747641795
+    summary_id: 6595655091
+    verdict: PASS_WITH_NOTES
+    p0: 0
+    p1: 0
+    p2: 2
+    findings:
+      - "The process-local in-memory coordinator did not prevent the same workflow_run source from executing again in a later consumer invocation while reporting replay rejection."
+      - "The workflow authority ratchet omitted attestations and artifact-metadata scopes, and the producer had those write permissions."
+  corrective_successor:
+    status: LOCALLY_VALIDATED_PENDING_PUBLICATION_TO_EXISTING_DRAFT_PR
+    changes:
+      - "Claim a uniquely named GitHub Check Run bound to exact source SHA/run/attempt before calling the isolated CodingRunner; workflow concurrency serializes repeated deliveries and later invocations fail closed when the claim exists. Retain the claim on failure so an uncertain execution cannot be repeated."
+      - "Track attestations and artifact-metadata permissions in the authority ratchet; add checks:write for the durable claim, record all three producer write scopes, and add regression coverage proving each is detected."
+    local_validation:
+      isolated_test_files: PASS_1327
+      validate_full: PASS
+      security_gate: PASS_ZERO_HIGH_CRITICAL_UNMITIGATED_OR_SECRETS
+      lint: PASS_ZERO_ERRORS_47_WARNINGS
+      preflight_and_aipos_yaml: PASS_567_FILES
+      workflow_authority_map: PASS_41_WORKFLOWS
+      workflow_action_pins: PASS
+      focused_harness_tests: PASS_11
+      authority_ratchet_regression_tests: PASS_12
+      typescript_typecheck: PASS
+      diff_check: PASS
+    exact_head_ci: PENDING_AFTER_PUBLICATION
+    fresh_review: REQUIRED_AFTER_CI
+  genuine_production_evidence: ABSENT
+  production_code_actionable: NOT_ISSUED
+  l1: PARTIAL
+  l2: HOLD
+  commit_gate: MET_FOR_SUCCESSOR_PUBLICATION_TO_EXISTING_DRAFT_PR
+  safety: PAPER_ONLY_LIVE_NONE_PRODUCTION_MUTATION_FALSE_REAL_ORDER_FALSE_REAL_TRANSFER_FALSE_AI_ZERO_AUTHORITY

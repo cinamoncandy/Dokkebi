@@ -44,15 +44,31 @@ function sourceRun(overrides: Record<string, unknown> = {}) {
   };
 }
 
-test("isolated CODE_ACTIONABLE proof executes the existing CodingRunner once and rejects replay", async () => {
-  const fetchImpl: typeof fetch = async (resource) => {
+test("isolated proof claims a durable source-run replay guard before one bounded CodingRunner execution", async () => {
+  let claimed = false;
+  let creates = 0;
+  let completions = 0;
+  const fetchImpl: typeof fetch = async (resource, init) => {
     const url = String(resource);
-    if (url.includes("/commits/")) return Response.json({ sha });
     if (url.includes(`/actions/runs/${runId}`)) return Response.json(sourceRun());
+    if (url.includes("/check-runs?") && (!init?.method || init.method === "GET")) {
+      return Response.json({ check_runs: claimed ? [{ name: `NUSA Isolated Causal Replay Guard ${runId}.${runAttempt}` }] : [] });
+    }
+    if (url.endsWith("/check-runs") && init?.method === "POST") {
+      creates += 1;
+      claimed = true;
+      return Response.json({ id: 876 });
+    }
+    if (url.endsWith("/check-runs/876") && init?.method === "PATCH") {
+      completions += 1;
+      return Response.json({ id: 876 });
+    }
+    if (url === `https://api.github.com/repos/cinamoncandy/NUSA/commits/${sha}`) return Response.json({ sha });
     throw new Error(`unexpected GitHub lookup: ${url}`);
   };
 
-  const result = await executeVerifiedIsolatedCausalVerification(verified, { fetchImpl });
+  const input = { githubToken: "synthetic-token", fetchImpl };
+  const result = await executeVerifiedIsolatedCausalVerification(verified, input);
   assert.deepEqual(result, {
     domain: "NUSA_ISOLATED_CAUSAL_VERIFICATION_V1",
     decision: "CODE_ACTIONABLE",
@@ -60,15 +76,23 @@ test("isolated CODE_ACTIONABLE proof executes the existing CodingRunner once and
     sourceSha: sha,
     sourceRunId: runId,
     sourceRunAttempt: runAttempt,
+    durableReplayGuard: "GITHUB_CHECK_RUN_CLAIMED",
+    sourceCheckRunId: 876,
     codingRunnerStatus: "EXECUTION_ACCEPTED",
     proposalAdapterCalls: 1,
     sandboxExecutions: 1,
-    dedupe: "REPLAY_REJECTED",
+    dedupe: "REPLAY_REJECTED_WITHIN_SINGLE_HARNESS",
     mutationAllowed: false,
     liveAuthority: "NONE",
     productionMutationAllowed: false,
     aiAuthority: "ZERO_AUTHORITY",
   });
+  await assert.rejects(
+    executeVerifiedIsolatedCausalVerification(verified, input),
+    { message: "ISOLATED_SOURCE_RUN_ALREADY_CLAIMED" },
+  );
+  assert.equal(creates, 1, "the exact source run has one durable claim across separate harness invocations");
+  assert.equal(completions, 1, "only the first invocation reaches execution and completes the claim");
 });
 
 test("isolated positive harness rejects a source run whose canonical workflow identity differs", async () => {

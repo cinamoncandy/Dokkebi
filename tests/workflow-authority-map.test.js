@@ -45,6 +45,18 @@ test("undeclared write authority fails, so a new privileged job cannot appear si
   rmSync(root, { recursive: true, force: true });
 });
 
+test("attestation, artifact metadata, and check-run write scopes are tracked by the ratchet", () => {
+  const root = sandbox({
+    "proof.yml": [
+      "name: Proof", "on:", "  workflow_run:", "jobs:", "  claim:", "    permissions:",
+      "      attestations: write", "      artifact-metadata: write", "      checks: write", "    steps:", "      - run: echo proof", ""
+    ].join("\n")
+  }, EMPTY_BASELINE);
+  const result = validateWorkflowAuthorityMap(root);
+  assert.ok(result.failures.includes("UNDECLARED_WRITE_AUTHORITY:proof.yml:claim:artifact-metadata,attestations,checks"), JSON.stringify(result.failures));
+  rmSync(root, { recursive: true, force: true });
+});
+
 test("widening an already declared job's authority fails", () => {
   const workflow = ["name: Widen", "on:", "  push:", "jobs:", "  grant:", "    permissions:", "      contents: write", "      actions: write", "    steps:", "      - run: echo hi", ""].join("\n");
   const root = sandbox({ "widen.yml": workflow }, { jobs: { "widen.yml:grant": { write: ["contents"], secrets: false, environment: null } }, acknowledgedDebt: {} });

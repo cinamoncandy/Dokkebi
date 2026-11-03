@@ -24,7 +24,7 @@ const BASELINE_PATH = ".github/workflow-authority-map.json";
  */
 
 const WRITE_LEVELS = new Set(["write"]);
-const TRACKED_SCOPES = ["contents", "actions", "issues", "pull-requests", "statuses", "id-token", "packages", "deployments", "security-events", "checks"];
+const TRACKED_SCOPES = ["contents", "actions", "issues", "pull-requests", "statuses", "id-token", "packages", "deployments", "security-events", "checks", "attestations", "artifact-metadata"];
 
 const CANONICAL_MERGE_WORKFLOW = "autopilot-deterministic-audit-release.yml";
 const MERGE_CALL = /gh\s+pr\s+merge|\/pulls\/[^\s"']*\/merge|pulls\/\$\{?[A-Za-z_]*\}?[^\s"']*\/merge|"[^"]*\/merge"/;
