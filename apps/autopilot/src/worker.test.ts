@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { describe, it } from "node:test";
+import { describe, it, mock } from "node:test";
 import { handleCodingProposal, handleCodingPublish, ExecutionCoordinator, type WorkerEnv } from "./worker";
 import { readCodingExecutionEvidence, readProviderCapacityWait, type ExecutionCoordinatorNamespace } from "./executionCoordinator";
 
@@ -166,6 +166,10 @@ describe("/coding/propose provider-capacity gating", () => {
   });
 
   it("records a daily-quota stop in the shared provider wait so a later distinct task also stops", async () => {
+    // The daily-quota wait ends at the next UTC midnight, so with the real clock this test failed in the last minute of every UTC day
+    // (the wait is then shorter than the 60 s it asserts). Pin the clock to mid-day; only Date is faked.
+    mock.timers.enable({ apis: ["Date"], now: Date.UTC(2026, 10, 2, 12, 0, 0) });
+    try {
     await withStubbedGithubFetch(async () => {
       const coordinator = memoryNamespace();
       let aiCalls = 0;
@@ -191,6 +195,7 @@ describe("/coding/propose provider-capacity gating", () => {
       assert.equal(second.status, 409);
       assert.equal(aiCalls, 1, "a second distinct task must not spend another real Workers AI call once the shared wait is recorded");
     });
+    } finally { mock.timers.reset(); }
   });
 
   it("fails closed without a provider call when the shared provider-wait state is unreadable", async () => {
