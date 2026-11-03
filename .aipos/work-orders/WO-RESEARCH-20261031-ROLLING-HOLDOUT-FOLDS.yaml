@@ -1,6 +1,6 @@
 id: WO-RESEARCH-20261031-ROLLING-HOLDOUT-FOLDS
 title: "K-of-N independent holdout folds: fold builder, decision rule and a per-fold runner composition (not wired)"
-status: LOCAL_VALIDATED_PENDING_EXACT_HEAD_CI
+status: READY_FOR_REVIEW
 created: 2026-10-31
 trigger: "Host diagnosis on 2026-10-31 (running e1fd3ea93): candidateFunnel DISCOVERY_ONLY_REJECTED with experiments 18, discoveryPasses 15, holdoutPasses 0, overfitRatePercent 100. The single most-recent holdout rejects every discovery winner, and one holdout is also easy to pass or fail by chance. The owner approved N = 3, K = 2 (docs/PROPOSAL_RESEARCH_ROLLING_HOLDOUT.md)."
 change:
