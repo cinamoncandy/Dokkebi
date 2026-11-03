@@ -475,3 +475,29 @@ failure_capture_instrumentation_check_20261103:
   commit_gate: NOT_MET
   next: "Retain the temporary capture mechanism for the next bounded gate observation. If it fails, stop and classify the captured child evidence; do not change parser based on this passing input."
   safety: PAPER_ONLY_LIVE_NONE_PRODUCTION_MUTATION_FALSE_REAL_ORDER_FALSE_REAL_TRANSFER_FALSE_AI_ZERO_AUTHORITY
+
+current_checkpoint_20261103T0404Z:
+  supersedes_prior_next_and_commit_gate_snapshots: true
+  repository: cinamoncandy/NUSA
+  protected_main: e85b2ea0042c4da4515063a2a498232ea19866c1
+  pull_request: 2992
+  pr_state: OPEN_DRAFT_MERGEABLE
+  pr_head: 8fdfe4bc6a0585f12e67ea82f9cd01f3d91d41ad
+  pr_base: e85b2ea0042c4da4515063a2a498232ea19866c1
+  exact_head_checks: "19 completed: 16 success, 3 intentional skips"
+  commit_gate: MET_FOR_GATE_A_FAIL_CLOSED_STAGED_INCLUSION
+  independent_pre_audit_review:
+    verdict: FAIL
+    p0: 0
+    p1: 1
+    p2: 0
+    finding: "AIPOS commit-gate and handoff snapshots contradict the latest publication state; earlier NOT_MET and no-PR claims are historical but not marked as such."
+    code_findings: "No additional code P0/P1 found in inspected paths; reviewer did not execute tests."
+    github_review_submitted: false
+  current_gate: "Append a superseding AIPOS checkpoint preserving historical entries; validate metadata; publish one successor on this existing PR. Prior exact-head CI/review evidence then becomes historical."
+  next: "After successor exact-head CI completes, obtain fresh independent review. Do not mark ready or advance to Formal Validator while P1 is open."
+  positive_causal_evidence: ABSENT
+  code_actionable: NOT_ISSUED
+  l1: PARTIAL
+  l2: HOLD
+  safety: PAPER_ONLY_LIVE_NONE_PRODUCTION_MUTATION_FALSE_REAL_ORDER_FALSE_REAL_TRANSFER_FALSE_AI_ZERO_AUTHORITY

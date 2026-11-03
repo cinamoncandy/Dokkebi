@@ -51,3 +51,15 @@ Fresh local HEAD and `git ls-remote origin refs/heads/main` matched `0e213243ac5
 Outcome: `AUDIT_JSON_INCOMPLETE=NOT_REPRODUCED_IN_BOUNDED_OBSERVATION`; historical root cause remains `UNRESOLVED`. No additional polling is authorized by this work order. The current #1851 work-order prerequisite that relevant security gates pass before commit is satisfied. The later `bootstrap_staged_inclusion_20261031` governance order explicitly allows fail-closed Gate A inclusion before genuine positive protected-main attestation; no current canonical policy explicitly requires reconstructing the historical intermittent parser failure as a separate commit prerequisite. The timeout-triage runbook is scoped to `AUDIT_UNAVAILABLE:timeout` and was not used to reclassify this JSON error. Therefore `COMMIT_GATE=MET_FOR_GATE_A_FAIL_CLOSED_STAGED_INCLUSION` only. This is not L1 completion, a positive causal receipt, `CODE_ACTIONABLE`, CI/review/Validator/Audit/Release acceptance, or merge authorization. Preserve all existing safety boundaries.
 
 Fresh GitHub inventory found #1851 still open, no open PR matching #1851, and the local canonical branch absent remotely; #1854 remains closed and is not revived. Next transition is a single local implementation commit on the existing WIP branch, then a non-force push of that branch and a fresh PR inventory before deciding whether one Draft PR is required. Exact-head CI and independent review remain pending.
+
+## Current exact-head checkpoint — 2026-11-03 04:04 UTC
+
+This section supersedes earlier “uncommitted/no PR” and `COMMIT_GATE=NOT_MET` snapshots above; those statements remain historical records of their observation times.
+
+- Protected `main` and PR #2992 base: `e85b2ea0042c4da4515063a2a498232ea19866c1`.
+- PR #2992 remains OPEN / Draft / mergeable at `8fdfe4bc6a0585f12e67ea82f9cd01f3d91d41ad`.
+- Exact-head checks: 19 completed, 16 success and 3 intentional skips. The PR body records local validation; it is not independent acceptance.
+- Latest security-gate adjudication makes `COMMIT_GATE=MET_FOR_GATE_A_FAIL_CLOSED_STAGED_INCLUSION` only. Historical `AUDIT_JSON_INCOMPLETE` root cause remains unresolved and was not reproduced in the bounded five-run observation.
+- A separate fresh read-only validator inspected the committed diff and relevant paths. Result: `FAIL`, P0=0, P1=1, P2=0. It found inconsistent AIPOS chronology: the Gate A commit-gate decision coexists with stale `NOT_MET`/capture-next text, while this handoff leads with pre-commit/no-PR claims. The reviewer reported no additional code P0/P1 in inspected paths, did not run tests, and did not submit a GitHub review.
+- Repair AIPOS by appending this superseding checkpoint; preserve earlier entries as historical. No application code change is indicated by this finding. After metadata validation, use only this existing branch/PR. The successor requires fresh exact-head CI and fresh independent review.
+- Genuine protected-main attestation, positive causal receipt, `CODE_ACTIONABLE`, and positive CodingRunner E2E remain absent. `L1=PARTIAL`, `L2=HOLD`; safety remains PAPER_ONLY and ZERO_AUTHORITY.
