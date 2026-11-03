@@ -7,6 +7,11 @@ const CAUSAL_ATTESTATION_PATH = path.join("artifacts", "autopilot-execution", "c
 /** One-shot provenance claim; it does not decide whether a failure is code-actionable. */
 async function claimCausalDispatch(event, environment = process.env, fetchImpl = fetch) {
   const payload = event && typeof event === "object" && !Array.isArray(event) ? event.client_payload : null;
+  const causalFailure = typeof payload?.reason === "string" && payload.reason.startsWith("gha:");
+  if (causalFailure) {
+    const match = /^gha:([1-9][0-9]{0,19}):([a-f0-9]{40}):(failure|timed_out)$/.exec(payload.reason);
+    if (!match || Number(match[1]) !== payload.workflow_run_id || match[2] !== payload.head_sha) throw new Error("CAUSAL_DISPATCH_SOURCE_IDENTITY_INVALID");
+  }
   if (payload && typeof payload === "object" && !Array.isArray(payload) && !Object.hasOwn(payload, "causal_dispatch_capability")) {
     if (typeof payload.reason === "string" && payload.reason.startsWith("gha:")) throw new Error("CAUSAL_DISPATCH_ATTESTATION_REQUIRED");
     return false;
@@ -46,7 +51,7 @@ async function claimCausalDispatch(event, environment = process.env, fetchImpl =
       if (!attestationBundle || typeof attestationBundle !== "object" || Array.isArray(attestationBundle)) throw new Error("invalid");
     }
   } catch { throw new Error("CAUSAL_DISPATCH_ATTESTATION_INVALID"); }
-  if (typeof payload.reason === "string" && payload.reason.startsWith("gha:") && !attestationBundle) {
+  if (causalFailure && !attestationBundle) {
     throw new Error("CAUSAL_DISPATCH_ATTESTATION_REQUIRED");
   }
   try {
@@ -55,11 +60,13 @@ async function claimCausalDispatch(event, environment = process.env, fetchImpl =
       body: JSON.stringify({
         dedupeKey: payload.dedupe_key, executionId: payload.execution_id, capability: payload.causal_dispatch_capability,
         source: { repository: payload.repository, workflowPath: ".github/workflows/ci.yml", sha: payload.head_sha, runId: String(payload.workflow_run_id), runAttempt: String(payload.causal_source_run_attempt) },
+        causalAdmissionRequired: causalFailure,
         ...(attestationBundle ? { attestationBundle } : {}),
       }),
     });
     const result = response.ok ? await response.json() : null;
     if (!response.ok || result?.claimed !== true || (attestationBundle && result.causalAttestationVerified !== true)
+      || (causalFailure && result?.causalAdmissionGranted !== true)
       || result.liveAuthority !== "NONE" || result.productionMutationAllowed !== false || result.aiAuthority !== "ZERO_AUTHORITY") throw new Error("rejected");
   } catch { throw new Error("CAUSAL_DISPATCH_CLAIM_REJECTED"); }
   return true;

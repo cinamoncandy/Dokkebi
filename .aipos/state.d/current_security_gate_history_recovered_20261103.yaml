@@ -1,0 +1,24 @@
+current_security_gate_history_recovered_20261103:
+  work_order: WO-AUTOPILOT-20261030-1851-CAUSAL-ADMISSION
+  observed_at_utc: "2026-11-03T02:18:15Z"
+  source_thread_turn: 01a19eae-73e5-7821-bd38-6614e0cf111d
+  gate_attempts:
+    first: "FAIL exit=1 after 3 bounded attempts; AUDIT_JSON_INCOMPLETE"
+    later: "PASS; rawHighCritical=0; mitigated=[]; unmitigated=[]; backports=PASS; secrets=0"
+    subsequent: "FAIL exit=1 after 3 bounded attempts; AUDIT_JSON_INCOMPLETE"
+  direct_audit_snapshot:
+    exit_code: 1
+    stdout_bytes: 16624
+    stderr_bytes: 0
+    json_valid: true
+    vulnerabilities: "info=0, low=3, moderate=9, high=0, critical=0"
+    advisory_count: 12
+    raw_stdout_preserved: false
+  interpretation: "Intermittent fail/pass/fail is observed. The direct audit snapshot and passing gate run are not the raw input to either failing parser invocation. Root cause remains unproven."
+  parser_synthetic_repro: "Valid quoted-open-brace JSON -> AUDIT_JSON_INCOMPLETE; valid quoted-close-brace JSON -> JSON parse error."
+  source_changed: false
+  security_gate_retried: false
+  commit_gate: NOT_MET
+  l1: PARTIAL
+  l2: HOLD
+  safety: PAPER_ONLY_LIVE_NONE_PRODUCTION_MUTATION_FALSE_REAL_ORDER_FALSE_REAL_TRANSFER_FALSE_AI_ZERO_AUTHORITY

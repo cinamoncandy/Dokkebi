@@ -7,9 +7,9 @@ Everything below is what the repository's records *claim*. Re-verify on GitHub b
 
 ## Newest handoff
 
-[`.aipos/handoffs/2026-11-01-main-handoff.md`](handoffs/2026-11-01-main-handoff.md) — CORE handoff — 2026-11-01
+[`.aipos/handoffs/2026-11-03-1851-causal-admission.md`](handoffs/2026-11-03-1851-causal-admission.md) — CORE handoff — 2026-11-03 — #1851 causal admission
 
-> Scope: canonical implementation inventory and continuation of the owner-approved, `authority_impact: none` AIPOS work order `WO-OPS-20261030-AIPOS-STATUS-ARCHIVE-TRUTH` in PR #2940. Safety remains PAPER_ONLY; `liveAuthority=NONE`; `productionMutationAllowed=false`; `realOrderAuthority=false`; `realTransferAuthority=false`; `aiAuthority=ZERO_AUTHORITY`.
+> ## Scope and owner
 
 ## Work orders
 
