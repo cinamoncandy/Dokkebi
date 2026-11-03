@@ -10,6 +10,16 @@ The WIP connects source/publisher OIDC and exact run identity checks to the exis
 
 These are local implementation claims backed by synthetic tests only. No real protected-main attestation, positive causal receipt, or `CODE_ACTIONABLE` decision has been observed or issued. The patch does not grant LIVE, order, transfer, or production mutation authority.
 
+## Superseding post-merge checkpoint — 2026-11-03
+
+PR #2992 was merged by the canonical release bot as `7e702eaf078d56614cff9e4f4325d08419e19185` from exact head `88f47919c5d6e01907aa0ae6c47f1b3e9841e537`; protected main and merge parents were freshly verified. Its exact-head Audit/Release workflow passed the audit and protected merge; its downstream dispatch recovery job was cancelled before dispatch. A separately triggered `workflow_run` automation by `nusa-release-authority[bot]` then completed Cloudflare Deploy run `41578010970` and Promote run `41578011053` successfully on exact main `7e702eaf...`; Runtime Proof run `41578120466` also succeeded. These runs were not manually dispatched by this session. No secrets or credential values were inspected. The separately queued Deploy trigger `41577340293` and Android release trigger `41577340243` were cancelled before their deployment/release steps.
+
+The fresh post-merge GitHub review on the merge commit reported two unresolved P1s: `PRRT_kwDOTUbne86y-md2` (claim must preserve stable registered causal evidence identity while validating receipt freshness) and `PRRT_kwDOTUbne86y-md5` (strict patch application must support valid untouched gaps between unified-diff hunks). Neither thread was resolved by the implementation author.
+
+Follow-up fixes are isolated in the local worktree `nusa-1851-postmerge-p1-20261103`, branch `codex/1851-postmerge-p1-20261103`, based exactly on protected main `7e702eaf...`. Focused tests passed 10/10; `pnpm test` passed all 1,326 isolated test files after adding Git for Windows bash directories to PATH; TypeScript compile and `pnpm run typecheck`, `validate:full`, lint (0 errors/47 warnings), `security:gate`, and `git diff --check` passed. The initial `pnpm test` attempt without Git Bash on PATH failed at `spawnSync bash ENOENT`, before the suite completed; it was rerun successfully with the environment path correction. No commit, branch push, or follow-up PR has been made yet.
+
+The changes fix those code defects only. They do not create genuine protected-main causal evidence, issue `CODE_ACTIONABLE`, complete L1, authorize release or deployment, or alter PAPER_ONLY / ZERO_AUTHORITY. The successor still needs durable AIPOS state, publication, exact-head CI, fresh non-author review, and separate governance gates. Existing review threads on merged PR #2992 remain as historical unresolved findings.
+
 ## Validation on current main
 
 - Full isolated suite: 1,326/1,326 on the prior base `0e6161a7…` plus WIP; historical after main advanced.

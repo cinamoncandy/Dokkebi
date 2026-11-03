@@ -501,3 +501,57 @@ current_checkpoint_20261103T0404Z:
   l1: PARTIAL
   l2: HOLD
   safety: PAPER_ONLY_LIVE_NONE_PRODUCTION_MUTATION_FALSE_REAL_ORDER_FALSE_REAL_TRANSFER_FALSE_AI_ZERO_AUTHORITY
+
+post_merge_review_findings_20261103T0434Z:
+  supersedes_prior_publication_and_next_action_snapshots: true
+  repository: cinamoncandy/NUSA
+  protected_main: 7e702eaf078d56614cff9e4f4325d08419e19185
+  merged_pr: 2992
+  merged_head: 88f47919c5d6e01907aa0ae6c47f1b3e9841e537
+  merge_commit: 7e702eaf078d56614cff9e4f4325d08419e19185
+  merge_path: "Canonical audit/release bot; release authorization published for exact PR head and protected merge verified."
+  post_merge_automation:
+    audit_release_run: 41577204554
+    audit: PASS
+    release_and_protected_merge: PASS
+    release_run_dispatch_recovery: CANCELLED_BEFORE_DOWNSTREAM_DISPATCH
+    cloudflare_deploy_run: 41577340293
+    cloudflare_deploy_result: CANCELLED_BEFORE_CREDENTIAL_OR_DEPLOY_STEPS
+    android_release_trigger_run: 41577340243
+    android_release_result: CANCELLED_BEFORE_CONVERGENCE_OR_RELEASE
+    separately_triggered_workflow_run_automation:
+      actor: nusa-release-authority[bot]
+      event: workflow_run
+      cloudflare_deploy_run: 41578010970
+      cloudflare_deploy: SUCCESS_EXACT_MAIN_7e702eaf078d56614cff9e4f4325d08419e19185
+      cloudflare_promote_run: 41578011053
+      cloudflare_promote: SUCCESS_EXACT_MAIN_7e702eaf078d56614cff9e4f4325d08419e19185
+      runtime_proof_run: 41578120466
+      runtime_proof: SUCCESS
+      initiation: "Independent workflow_run automation after protected main CI; not manually dispatched by this session."
+      credentials_or_runtime_values_inspected: false
+  independent_review:
+    target: 7e702eaf078d56614cff9e4f4325d08419e19185
+    findings:
+      - id: PRRT_kwDOTUbne86y-md2
+        priority: P1
+        resolved: false
+        summary: "Claim rebuilt causal admission timestamps, so exact receipt comparison rejected the registered receipt."
+      - id: PRRT_kwDOTUbne86y-md5
+        priority: P1
+        resolved: false
+        summary: "Patch applier rejected valid first/later hunks separated from the source cursor by unchanged lines."
+  follow_up:
+    branch: codex/1851-postmerge-p1-20261103
+    base: 7e702eaf078d56614cff9e4f4325d08419e19185
+    changes: "Compare immutable admission evidence while requiring both receipts valid at claim time; copy untouched patch gaps while rejecting overlaps and inconsistent output positions."
+    tests: "Focused 10/10 PASS; full isolated test suite PASS_1326_OF_1326; build compile PASS; pnpm run typecheck PASS; validate:full PASS; lint 0 errors/47 existing warnings; security:gate PASS; git diff --check PASS."
+    current_commit: NOT_CREATED
+    exact_head_ci: NOT_STARTED
+    fresh_non_author_review: REQUIRED_AFTER_PUBLICATION
+    formal_validator_audit_release: NOT_STARTED
+  positive_causal_evidence: ABSENT
+  code_actionable: NOT_ISSUED
+  l1: PARTIAL
+  l2: HOLD
+  safety: PAPER_ONLY_LIVE_NONE_PRODUCTION_MUTATION_FALSE_REAL_ORDER_FALSE_REAL_TRANSFER_FALSE_AI_ZERO_AUTHORITY
