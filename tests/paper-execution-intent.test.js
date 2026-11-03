@@ -204,3 +204,19 @@ test("SELL intent requires zero target allocation and exits the canonical curren
   assert.equal(intent.allocationCapital, 0);
   assert.equal(intent.allocationShare, 0);
 });
+
+test("SELL exit of a position above the order cap is chunked to the cap and never raises a quantity", () => {
+  const mk = (qty) => state({
+    cash: 5_000_000, equity: 10_000_000,
+    positions: Object.freeze([Object.freeze({ market: "KRW-BTC", quantity: qty, averageEntryPrice: 50_000_000, realizedPnL: 0, unrealizedPnL: 0, markPrice: 50_000_000 })]),
+  });
+  const portfolio = Object.freeze({ allocations: Object.freeze([]), deployedCapital: 0, cashCapital: 10_000_000, reservedCapital: 0, grossShare: 0, futuresShare: 0, decidedAt: 1_000 });
+  const build = (qty, maxOrderNotional) => buildPaperExecutionIntent({ now: 1_100, market: "KRW-BTC", referencePrice: 50_000_000, portfolio, decision: decision("SELL", 0), state: mk(qty), investmentPercent: 100, maxOrderNotional });
+  const capped = build(0.5, 20_000_000); // position 25,000,000 > cap 20,000,000
+  assert.equal(capped.quantity, 0.4);
+  assert.ok(capped.quantity * capped.referencePrice <= 20_000_000);
+  assert.equal(validatePaperExecutionIntent(capped).quantity, 0.4);
+  assert.equal(build(0.3, 20_000_000).quantity, 0.3); // within cap: unchanged
+  assert.equal(build(0.5, undefined).quantity, 0.5); // no cap given: previous behaviour
+  assert.equal(build(0.5, 0).quantity, 0.5); // invalid cap ignored
+});

@@ -1,0 +1,30 @@
+id: WO-CLOUD-20261103-SELL-EXIT-ORDER-CAP
+title: "Chunk PAPER SELL exits to the enforced per-order notional cap"
+status: READY_FOR_REVIEW
+owner: nusa-development
+repository: cinamoncandy/NUSA
+base_branch: main
+implementation_branch: claude/sell-chunk-to-order-cap
+authority_impact: none
+objective: "A held position larger than maxOrderNotional (20,000 KRW at 100,000 capital) can never exit: the SELL quantity is the whole position and the risk gate rejects it with MAX_ORDER_NOTIONAL, so learning periods never close. Size each SELL to min(position, maxOrderNotional / price) so the exit leaves in capped orders."
+scope:
+  - "apps/cloud/src/paperExecutionIntent.ts: optional maxOrderNotional input; SELL quantity rounded down to the cap when the whole position would exceed it. Never raises a quantity; absent or invalid cap keeps the previous behaviour."
+  - "apps/cloud/src/cloudPaperExecutionBoundary.ts: optional maxOrderNotional option passed to the builder."
+  - "apps/cloud/src/runtime.ts: pass cloudPaperRiskLimitsForCapital(capital).maxOrderNotional, the same object the gateway enforces."
+  - "tests/paper-execution-intent.test.js: chunk, within-cap, no-cap and invalid-cap cases."
+exclusions:
+  - "No risk limit, threshold, capital or Audit/Release rule changed; the gateway check at independentRiskGateway.ts is untouched and still decides every order."
+  - "BUY path and BUY fingerprints unchanged; no synthetic fill/PnL; no deploy in this change."
+safety:
+  paper_only: true
+  liveAuthority: NONE
+  productionMutationAllowed: false
+  aiAuthority: ZERO_AUTHORITY
+  fail_closed: "The capped order still goes through the full risk gate; any rejection still blocks it."
+verification_commands:
+  - node_modules/.bin/tsc -p tsconfig.json
+  - node -r ./tests/register-dist.cjs --test tests/paper-execution-intent.test.js tests/cloud-paper-execution-boundary.test.js
+  - node scripts/validate-platform-independent-tests.js
+  - node scripts/validate-aipos-yaml.js
+review: "Draft PR; a separate non-author session reviews it under docs/GRILL_ME_PROTOCOL.md."
+residual: "Effect on the live learning period is verified only after an owner-approved server release and diagnose read-back. Remaining-position sells repeat per strategy tick; same-side streak and per-minute order limits were not exercised here."

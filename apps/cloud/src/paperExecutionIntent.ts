@@ -66,6 +66,12 @@ export interface PaperExecutionIntentInput {
   readonly decision: CioDecision;
   readonly state: PaperAccountState;
   readonly investmentPercent: number;
+  /**
+   * The enforced per-order notional cap (the risk gate's own `maxOrderNotional`). When set, a SELL exit is sized to at most
+   * this notional per order, so a position larger than the cap leaves in several orders instead of being rejected whole.
+   * It never raises a quantity and is not a risk limit of its own; absent means the whole position (previous behaviour).
+   */
+  readonly maxOrderNotional?: number;
 }
 
 const payload = (intent: Omit<PaperExecutionIntent, "intentFingerprintSha256">): Omit<PaperExecutionIntent, "intentFingerprintSha256"> => intent;
@@ -138,6 +144,12 @@ export function buildPaperExecutionIntent(input: PaperExecutionIntentInput): Pap
     const position = input.state.positions.find((item) => item.market === market);
     quantity = round8(position?.quantity ?? 0);
     if (quantity <= 0) throw new Error("PAPER_EXECUTION_INTENT_POSITION_REQUIRED");
+    const cap = input.maxOrderNotional;
+    if (cap !== undefined && Number.isFinite(cap) && cap > 0 && quantity * input.referencePrice > cap) {
+      // Round down so the capped order can never exceed the cap; the strategy keeps emitting SELL for the remainder.
+      const chunk = Math.floor((cap / input.referencePrice) * 1e8) / 1e8;
+      if (chunk > 0 && chunk < quantity) quantity = round8(chunk);
+    }
   }
 
   requireFinitePositive(quantity, "quantity");

@@ -484,7 +484,7 @@ export function startCloudRuntime(
     : undefined;
   effectivePaperLoop = paperExecutionLoop ?? (config.paperInitialCapitalKrw === undefined || effectivePaperRepository === undefined ? undefined : new PaperTradingExecutionLoop({ initialCapital: config.paperInitialCapitalKrw, repository: effectivePaperRepository, readP0State: readPaperP0State }));
   const productionPaperBoundary = effectivePaperLoop != null && productionPaperRiskGate != null
-    ? new CloudPaperExecutionBoundary({ loop: effectivePaperLoop, riskGate: productionPaperRiskGate, readP0State: readPaperP0State })
+    ? new CloudPaperExecutionBoundary({ loop: effectivePaperLoop, riskGate: productionPaperRiskGate, readP0State: readPaperP0State, maxOrderNotional: config.paperInitialCapitalKrw === undefined ? undefined : cloudPaperRiskLimitsForCapital(config.paperInitialCapitalKrw).maxOrderNotional })
     : undefined;
   const operatorPrincipal = Object.freeze({ userId: "operator", scopes: Object.freeze(["dashboard:read"]) });
   const sourceCommit = env.NUSA_SOURCE_COMMIT?.trim() || env.GITHUB_SHA?.trim() || "";
