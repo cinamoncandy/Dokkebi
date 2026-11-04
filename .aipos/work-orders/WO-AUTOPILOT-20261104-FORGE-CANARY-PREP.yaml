@@ -1,0 +1,25 @@
+id: WO-AUTOPILOT-20261104-FORGE-CANARY-PREP
+title: "Prepare (not run) the controlled PAPER canary for the first genuine positive causal attestation"
+status: READY_FOR_REVIEW
+owner: nusa-development
+repository: cinamoncandy/NUSA
+base_branch: main
+implementation_branch: claude/forge-canary-prep
+authority_impact: none
+objective: "Owner decision 2026-11-04 chose the controlled PAPER canary preparation among the three options in docs/FORGE_STATUS_20261103.md. Write the preparation only: the design, mandatory conditions, explicit stop conditions, the pre-run approval checklist and the honest list of what is unverified. Nothing is run."
+scope:
+  - "docs/FORGE_CANARY_PREPARATION_20261104.md: the preparation document."
+exclusions:
+  - "The canary is NOT executed. No change to repairableWorkflowRun.ts, the contract, ci.yml, any workflow, any pin, any gate or any test; no main CI is made red by this change."
+  - "No duplicate implementation: the canonical work stays #1851 (ChatGPT) and its PRs (#2994). This only attaches the preparation record."
+  - "No synthetic evidence is used or accepted as the genuine positive attestation; the isolated harness in #2994 stays a chain check, not a positive proof."
+safety:
+  paper_only: true
+  liveAuthority: NONE
+  productionMutationAllowed: false
+  aiAuthority: ZERO_AUTHORITY
+  fail_closed: "Without a recorded canary result the positive attestation stays UNVERIFIED."
+verification_commands:
+  - node scripts/validate-aipos-yaml.js
+review: "Draft PR; a separate non-author session reviews it under docs/GRILL_ME_PROTOCOL.md. Execution needs a separate owner approval after the pre-run conditions in the document are met."
+residual: "Which existing tests fail for a minimal implementation change, how long main CI stays red, and the real Sigstore verification are not measured here."
