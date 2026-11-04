@@ -21,5 +21,5 @@ safety:
   fail_closed: "Without a recorded canary result the positive attestation stays UNVERIFIED."
 verification_commands:
   - node scripts/validate-aipos-yaml.js
-review: "Draft PR; a separate non-author session reviews it under docs/GRILL_ME_PROTOCOL.md. Execution needs a separate owner approval after the pre-run conditions in the document are met."
+review: "Draft PR; a separate non-author review of 2026-11-04 found no P0 and two P1 (deviation direction, Autopilot reaction to a red main); both are addressed in the revision. Execution needs a separate owner approval after the pre-run conditions in the document are met."
 residual: "Which existing tests fail for a minimal implementation change, how long main CI stays red, and the real Sigstore verification are not measured here."
