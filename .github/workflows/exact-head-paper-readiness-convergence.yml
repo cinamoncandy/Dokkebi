@@ -14,6 +14,14 @@ on:
         description: Optional protected-main SHA; blank means current main
         required: false
         type: string
+      source_run_id:
+        description: Exact Actual PAPER run ID for the token-dispatch callback path
+        required: false
+        type: string
+      source_run_attempt:
+        description: Exact Actual PAPER run attempt for the token-dispatch callback path
+        required: false
+        type: string
   schedule:
     - cron: "17 * * * *"
 
@@ -40,14 +48,27 @@ jobs:
         env:
           EVENT_NAME: ${{ github.event_name }}
           EVENT_SOURCE_RUN_ID: ${{ github.event.workflow_run.id }}
+          EVENT_SOURCE_RUN_ATTEMPT: ${{ github.event.workflow_run.run_attempt }}
           EVENT_SOURCE_HEAD_SHA: ${{ github.event.workflow_run.head_sha }}
           EVENT_SOURCE_CONCLUSION: ${{ github.event.workflow_run.conclusion }}
+          EVENT_ACTOR: ${{ github.actor }}
+          EVENT_TRIGGERING_ACTOR: ${{ github.triggering_actor }}
           INPUT_TARGET_SHA: ${{ inputs.target_sha }}
+          INPUT_SOURCE_RUN_ID: ${{ inputs.source_run_id }}
+          INPUT_SOURCE_RUN_ATTEMPT: ${{ inputs.source_run_attempt }}
         run: |
           set -euo pipefail
           current_main="$(gh api "repos/$GITHUB_REPOSITORY/branches/main" --jq '.commit.sha')"
           target_sha="$current_main"
           source_run_id=""
+          source_run_attempt=""
+          require_token_dispatch=false
+
+          mark_ineligible() {
+            echo "READINESS_PENDING $1"
+            echo "eligible=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          }
 
           dispatch_fresh_evidence() {
             local active_count
@@ -60,82 +81,144 @@ jobs:
             fi
           }
 
-          if [ "$EVENT_NAME" = "workflow_run" ]; then
-            if [ "$EVENT_SOURCE_CONCLUSION" != "success" ]; then
-              echo "READINESS_PENDING source workflow conclusion=$EVENT_SOURCE_CONCLUSION"
+          stop_if_already_certified() {
+            local certified_count
+            certified_count="$(gh api "repos/$GITHUB_REPOSITORY/actions/artifacts?name=exact-head-paper-readiness-$target_sha&per_page=100" --jq '[.artifacts[] | select(.expired == false and .name == "exact-head-paper-readiness-'"$target_sha"'")] | length')"
+            if [ "$certified_count" -gt 0 ]; then
+              echo "Exact-head PAPER readiness receipt already exists for $target_sha"
               echo "eligible=false" >> "$GITHUB_OUTPUT"
-              exit 0
+              return 1
             fi
+            return 0
+          }
+
+          if [ "$EVENT_NAME" = "workflow_run" ]; then
+            if [ "$EVENT_SOURCE_CONCLUSION" != "success" ]; then mark_ineligible "source workflow conclusion=$EVENT_SOURCE_CONCLUSION"; fi
             target_sha="$EVENT_SOURCE_HEAD_SHA"
             source_run_id="$EVENT_SOURCE_RUN_ID"
+            source_run_attempt="$EVENT_SOURCE_RUN_ATTEMPT"
             if [ "$target_sha" != "$current_main" ]; then
-              echo "NO_ACTION stale PAPER source head=$target_sha current_main=$current_main"
-              echo "eligible=false" >> "$GITHUB_OUTPUT"
-              exit 0
+              mark_ineligible "stale PAPER source head=$target_sha current_main=$current_main"
             fi
+            if ! stop_if_already_certified; then exit 0; fi
           else
             if [ "$EVENT_NAME" = "workflow_dispatch" ] && [ -n "$INPUT_TARGET_SHA" ]; then
               target_sha="${INPUT_TARGET_SHA,,}"
+              if ! [[ "$target_sha" =~ ^[a-f0-9]{40}$ ]]; then
+                echo "::error::Requested readiness SHA is malformed"
+                exit 1
+              fi
               if [ "$target_sha" != "$current_main" ]; then
                 echo "::error::Requested readiness SHA $target_sha is not current protected main $current_main"
                 exit 1
               fi
             fi
 
-            certified_count="$(gh api "repos/$GITHUB_REPOSITORY/actions/artifacts?name=exact-head-paper-readiness-$target_sha&per_page=100" --jq '[.artifacts[] | select(.expired == false and .name == "exact-head-paper-readiness-'"$target_sha"'")] | length')"
-            if [ "$certified_count" -gt 0 ]; then
-              echo "Exact-head PAPER readiness receipt already exists for $target_sha"
-              echo "eligible=false" >> "$GITHUB_OUTPUT"
-              exit 0
+            if [ -n "$INPUT_SOURCE_RUN_ID" ] || [ -n "$INPUT_SOURCE_RUN_ATTEMPT" ]; then
+              if [ "$EVENT_NAME" != "workflow_dispatch" ] || [ -z "$INPUT_SOURCE_RUN_ID" ] || [ -z "$INPUT_SOURCE_RUN_ATTEMPT" ]; then
+                mark_ineligible "source run ID and attempt must be supplied together on workflow_dispatch"
+              fi
+              if ! [[ "$INPUT_SOURCE_RUN_ID" =~ ^[1-9][0-9]*$ ]] || ! [[ "$INPUT_SOURCE_RUN_ATTEMPT" =~ ^[1-9][0-9]*$ ]]; then
+                mark_ineligible "source run ID or attempt is malformed"
+              fi
+              if [ "$EVENT_ACTOR" != "github-actions[bot]" ] || [ "$EVENT_TRIGGERING_ACTOR" != "github-actions[bot]" ]; then
+                mark_ineligible "source callback dispatcher identity is not the canonical Actions bot"
+              fi
+              source_run_id="$INPUT_SOURCE_RUN_ID"
+              source_run_attempt="$INPUT_SOURCE_RUN_ATTEMPT"
+              require_token_dispatch=true
             fi
 
-            runs="$(gh api "repos/$GITHUB_REPOSITORY/actions/runs?head_sha=$target_sha&per_page=100")"
-            source_run_id="$(jq -r '[.workflow_runs[] | select(.name == "Actual PAPER Public-Market Runtime Evidence" and .path == ".github/workflows/wo-0059-actual-paper-runtime.yml" and .head_sha == "'"$target_sha"'" and .status == "completed" and .conclusion == "success")] | sort_by(.created_at) | reverse | .[0].id // empty' <<<"$runs")"
+            if ! stop_if_already_certified; then exit 0; fi
+
             if [ -z "$source_run_id" ]; then
-              echo "READINESS_PENDING no successful exact-main Actual PAPER run for $target_sha"
-              dispatch_fresh_evidence
-              echo "eligible=false" >> "$GITHUB_OUTPUT"
-              exit 0
+              runs="$(gh api "repos/$GITHUB_REPOSITORY/actions/runs?head_sha=$target_sha&per_page=100")"
+              source_run_id="$(jq -r '[.workflow_runs[] | select(.name == "Actual PAPER Public-Market Runtime Evidence" and .path == ".github/workflows/wo-0059-actual-paper-runtime.yml" and .head_sha == "'"$target_sha"'" and .status == "completed" and .conclusion == "success" and (.head_branch == "main"))] | sort_by(.created_at) | reverse | .[0].id // empty' <<<"$runs")"
+              if [ -z "$source_run_id" ]; then
+                echo "READINESS_PENDING no successful exact-main Actual PAPER run for $target_sha"
+                dispatch_fresh_evidence
+                echo "eligible=false" >> "$GITHUB_OUTPUT"
+                exit 0
+              fi
             fi
           fi
 
-          source_run="$(gh api "repos/$GITHUB_REPOSITORY/actions/runs/$source_run_id")"
-          source_head="$(jq -r '.head_sha // empty' <<<"$source_run")"
-          source_name="$(jq -r '.name // empty' <<<"$source_run")"
-          source_path="$(jq -r '.path // empty' <<<"$source_run")"
-          source_status="$(jq -r '.status // empty' <<<"$source_run")"
-          source_conclusion="$(jq -r '.conclusion // empty' <<<"$source_run")"
-          test "$source_head" = "$target_sha"
-          test "$source_name" = "Actual PAPER Public-Market Runtime Evidence"
-          test "$source_path" = ".github/workflows/wo-0059-actual-paper-runtime.yml"
-          test "$source_status" = "completed"
-          test "$source_conclusion" = "success"
+          source_run=""
+          if [ "$require_token_dispatch" = true ]; then
+            for poll in $(seq 1 24); do
+              if ! source_run="$(gh api "repos/$GITHUB_REPOSITORY/actions/runs/$source_run_id")"; then
+                mark_ineligible "source run API lookup failed for run $source_run_id"
+              fi
+              observed_attempt="$(jq -r '.run_attempt // empty' <<<"$source_run")"
+              if [ "$observed_attempt" != "$source_run_attempt" ]; then
+                mark_ineligible "source run attempt changed while callback was pending"
+              fi
+              source_status="$(jq -r '.status // empty' <<<"$source_run")"
+              [ "$source_status" = "completed" ] && break
+              sleep 5
+            done
+            source_status="$(jq -r '.status // empty' <<<"$source_run")"
+            if [ "$source_status" != "completed" ]; then mark_ineligible "source run did not complete within the bounded 120-second wait"; fi
+            source_conclusion="$(jq -r '.conclusion // empty' <<<"$source_run")"
+            if [ "$source_conclusion" != "success" ]; then mark_ineligible "source run conclusion=$source_conclusion"; fi
+          else
+            if ! source_run="$(gh api "repos/$GITHUB_REPOSITORY/actions/runs/$source_run_id")"; then
+              mark_ineligible "source run API lookup failed for run $source_run_id"
+            fi
+            if [ -z "$source_run_attempt" ]; then source_run_attempt="$(jq -r '.run_attempt // empty' <<<"$source_run")"; fi
+          fi
 
-          artifact_name="wo-0059-actual-paper-runtime-evidence-$target_sha"
+          latest_main="$(gh api "repos/$GITHUB_REPOSITORY/branches/main" --jq '.commit.sha')"
+          if [ "$target_sha" != "$latest_main" ]; then
+            mark_ineligible "main advanced while source run was being resolved target=$target_sha current_main=$latest_main"
+          fi
+
+          if ! SOURCE_RUN_JSON="$source_run" \
+            EXPECTED_SOURCE_RUN_ID="$source_run_id" \
+            EXPECTED_SOURCE_RUN_ATTEMPT="$source_run_attempt" \
+            EXPECTED_TARGET_SHA="$target_sha" \
+            EXPECTED_CURRENT_MAIN_SHA="$latest_main" \
+            EXPECTED_REPOSITORY="$GITHUB_REPOSITORY" \
+            REQUIRE_TOKEN_DISPATCH="$require_token_dispatch" \
+            node scripts/validate-exact-head-paper-readiness-source.js run; then
+            mark_ineligible "source run identity validation failed"
+          fi
+
+          artifact_name="wo-0059-actual-paper-runtime-evidence-$target_sha-attempt-$source_run_attempt"
           artifact=""
           for poll in $(seq 1 6); do
             artifacts="$(gh api "repos/$GITHUB_REPOSITORY/actions/runs/$source_run_id/artifacts?per_page=100")"
-            artifact="$(jq -c --arg name "$artifact_name" '[.artifacts[] | select(.name == $name and .expired == false)][0] // empty' <<<"$artifacts")"
-            [ -n "$artifact" ] && break
+            artifact_candidates="$(jq -c --arg name "$artifact_name" --arg run_id "$source_run_id" --arg sha "$target_sha" '[.artifacts[] | select(.name == $name and .expired == false and (.workflow_run.id|tostring) == $run_id and (.workflow_run.head_sha|ascii_downcase) == ($sha|ascii_downcase))]' <<<"$artifacts")"
+            artifact_count="$(jq 'length' <<<"$artifact_candidates")"
+            [ "$artifact_count" -gt 0 ] && break
             sleep 5
           done
-          if [ -z "$artifact" ]; then
+          if [ "$artifact_count" -ne 1 ]; then
             echo "READINESS_PENDING exact-head evidence artifact not available for source run $source_run_id"
-            if [ "$EVENT_NAME" != "workflow_run" ]; then dispatch_fresh_evidence; fi
+            if [ "$EVENT_NAME" != "workflow_run" ] && [ -z "$INPUT_SOURCE_RUN_ID" ]; then dispatch_fresh_evidence; fi
             echo "eligible=false" >> "$GITHUB_OUTPUT"
             exit 0
           fi
+          artifact="$(jq -c '.[0]' <<<"$artifact_candidates")"
 
           artifact_id="$(jq -r '.id' <<<"$artifact")"
           artifact_digest="$(jq -r '.digest // empty' <<<"$artifact")"
-          artifact_run_head="$(jq -r '.workflow_run.head_sha // empty' <<<"$artifact")"
-          test "$artifact_run_head" = "$target_sha"
-          test "$artifact_digest" != ""
+          source_run_head_sha="$(jq -r '.head_sha // empty' <<<"$source_run")"
+          source_repository_id="$(jq -r '.repository.id // empty' <<<"$source_run")"
+          if ! SOURCE_ARTIFACT_JSON="$artifact" \
+            EXPECTED_SOURCE_RUN_ID="$source_run_id" \
+            EXPECTED_REPOSITORY_ID="$source_repository_id" \
+            EXPECTED_TARGET_SHA="$target_sha" \
+            EXPECTED_ARTIFACT_NAME="$artifact_name" \
+            node scripts/validate-exact-head-paper-readiness-source.js artifact; then
+            mark_ineligible "source artifact identity validation failed"
+          fi
 
           echo "eligible=true" >> "$GITHUB_OUTPUT"
           echo "target_sha=$target_sha" >> "$GITHUB_OUTPUT"
           echo "source_run_id=$source_run_id" >> "$GITHUB_OUTPUT"
-          echo "source_run_head_sha=$source_head" >> "$GITHUB_OUTPUT"
+          echo "source_run_attempt=$source_run_attempt" >> "$GITHUB_OUTPUT"
+          echo "source_run_head_sha=$source_run_head_sha" >> "$GITHUB_OUTPUT"
           echo "artifact_id=$artifact_id" >> "$GITHUB_OUTPUT"
           echo "artifact_name=$artifact_name" >> "$GITHUB_OUTPUT"
           echo "artifact_digest=$artifact_digest" >> "$GITHUB_OUTPUT"
@@ -145,8 +228,10 @@ jobs:
         if: steps.source.outputs.eligible == 'true'
         env:
           EVENT_NAME: ${{ github.event_name }}
+          INPUT_SOURCE_RUN_ID: ${{ inputs.source_run_id }}
           TARGET_SHA: ${{ steps.source.outputs.target_sha }}
           SOURCE_RUN_ID: ${{ steps.source.outputs.source_run_id }}
+          SOURCE_RUN_ATTEMPT: ${{ steps.source.outputs.source_run_attempt }}
           SOURCE_RUN_HEAD_SHA: ${{ steps.source.outputs.source_run_head_sha }}
           ARTIFACT_ID: ${{ steps.source.outputs.artifact_id }}
           ARTIFACT_NAME: ${{ steps.source.outputs.artifact_name }}
@@ -155,6 +240,7 @@ jobs:
           set -euo pipefail
           mkdir -p "$RUNNER_TEMP/exact-head-paper-source" artifacts/operational-evidence
           gh api "repos/$GITHUB_REPOSITORY/actions/artifacts/$ARTIFACT_ID/zip" > "$RUNNER_TEMP/source.zip"
+          node scripts/validate-exact-head-paper-readiness-source.js artifact-archive "$RUNNER_TEMP/source.zip" "$ARTIFACT_DIGEST"
           unzip -q "$RUNNER_TEMP/source.zip" -d "$RUNNER_TEMP/exact-head-paper-source"
           evidence_path="$(find "$RUNNER_TEMP/exact-head-paper-source" -type f -name 'actual-paper-runtime-e2e.json' -print -quit)"
           test -n "$evidence_path"
@@ -164,6 +250,7 @@ jobs:
             "$evidence_path" \
             "$TARGET_SHA" \
             "$SOURCE_RUN_ID" \
+            "$SOURCE_RUN_ATTEMPT" \
             "$SOURCE_RUN_HEAD_SHA" \
             "$ARTIFACT_ID" \
             "$ARTIFACT_NAME" \
@@ -178,7 +265,7 @@ jobs:
           else
             echo "certified=false" >> "$GITHUB_OUTPUT"
             echo "READINESS_PENDING exact-head workflow succeeded but semantic automatic order+fill+PnL proof is incomplete"
-            if [ "$EVENT_NAME" != "workflow_run" ]; then
+            if [ "$EVENT_NAME" != "workflow_run" ] && [ -z "$INPUT_SOURCE_RUN_ID" ]; then
               active_count="$(gh api "repos/$GITHUB_REPOSITORY/actions/runs?head_sha=$TARGET_SHA&per_page=100" --jq '[.workflow_runs[] | select(.name == "Actual PAPER Public-Market Runtime Evidence" and .path == ".github/workflows/wo-0059-actual-paper-runtime.yml" and (.status == "queued" or .status == "in_progress" or .status == "pending"))] | length')"
               if [ "$active_count" -eq 0 ]; then
                 gh api --method POST "repos/$GITHUB_REPOSITORY/actions/workflows/wo-0059-actual-paper-runtime.yml/dispatches" -f ref=main
@@ -187,8 +274,21 @@ jobs:
             fi
           fi
 
-      - name: Upload immutable exact-head PAPER readiness receipt
+      - name: Recheck protected main before readiness receipt upload
+        id: current-main
         if: steps.certify.outputs.certified == 'true'
+        env:
+          TARGET_SHA: ${{ steps.source.outputs.target_sha }}
+        run: |
+          set -euo pipefail
+          current_main="$(gh api "repos/$GITHUB_REPOSITORY/branches/main" --jq '.commit.sha')"
+          EXPECTED_TARGET_SHA="$TARGET_SHA" \
+            EXPECTED_CURRENT_MAIN_SHA="$current_main" \
+            node scripts/validate-exact-head-paper-readiness-source.js current-main
+          echo "matches=true" >> "$GITHUB_OUTPUT"
+
+      - name: Upload immutable exact-head PAPER readiness receipt
+        if: steps.certify.outputs.certified == 'true' && steps.current-main.outputs.matches == 'true'
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: exact-head-paper-readiness-${{ steps.source.outputs.target_sha }}

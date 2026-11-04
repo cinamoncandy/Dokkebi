@@ -56,7 +56,7 @@ jobs:
         run: node scripts/actual-paper-runtime-e2e.js --working-dir "${{ runner.temp }}/nusa-wo-0059" --output artifacts/operational-evidence/actual-paper-runtime-e2e.json
       - name: Classify autonomous PAPER completion without manufacturing a signal
         run: node scripts/classify-actual-paper-runtime-readiness.js artifacts/operational-evidence/actual-paper-runtime-e2e.json
-      - name: Upload actual PAPER runtime evidence
+      - name: Upload legacy-name Actual PAPER runtime evidence
         if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
@@ -64,3 +64,43 @@ jobs:
           path: artifacts/operational-evidence/actual-paper-runtime-e2e.json
           if-no-files-found: error
           retention-days: 14
+      - name: Upload attempt-scoped Actual PAPER runtime evidence
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: wo-0059-actual-paper-runtime-evidence-${{ github.event.pull_request.head.sha || github.sha }}-attempt-${{ github.run_attempt }}
+          path: artifacts/operational-evidence/actual-paper-runtime-e2e.json
+          if-no-files-found: error
+          retention-days: 14
+
+  dispatch-readiness-convergence:
+    needs: actual-paper-runtime
+    if: always() && github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main' && github.actor == 'github-actions[bot]' && github.triggering_actor == 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    permissions:
+      actions: write
+      contents: read
+    env:
+      GH_TOKEN: ${{ github.token }}
+      CALLBACK_ACTOR: ${{ github.actor }}
+      CALLBACK_TRIGGERING_ACTOR: ${{ github.triggering_actor }}
+    steps:
+      - name: Dispatch one exact-source convergence evaluation
+        run: |
+          set -euo pipefail
+          test "$GITHUB_REF" = "refs/heads/main"
+          test "$CALLBACK_ACTOR" = "github-actions[bot]"
+          test "$CALLBACK_TRIGGERING_ACTOR" = "github-actions[bot]"
+          [[ "$GITHUB_SHA" =~ ^[a-fA-F0-9]{40}$ ]]
+          [[ "$GITHUB_RUN_ID" =~ ^[1-9][0-9]*$ ]]
+          [[ "$GITHUB_RUN_ATTEMPT" =~ ^[1-9][0-9]*$ ]]
+          payload="$(jq -n \
+            --arg sha "$GITHUB_SHA" \
+            --arg run_id "$GITHUB_RUN_ID" \
+            --arg run_attempt "$GITHUB_RUN_ATTEMPT" \
+            '{ref:"main",inputs:{target_sha:$sha,source_run_id:$run_id,source_run_attempt:$run_attempt}}')"
+          gh api --method POST \
+            "repos/$GITHUB_REPOSITORY/actions/workflows/exact-head-paper-readiness-convergence.yml/dispatches" \
+            --input - <<<"$payload"
+          echo "Dispatched exact-main readiness evaluation for source run $GITHUB_RUN_ID attempt $GITHUB_RUN_ATTEMPT at $GITHUB_SHA"

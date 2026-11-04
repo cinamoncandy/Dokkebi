@@ -4,6 +4,7 @@ const { createServer } = require("node:net");
 const { dirname, resolve } = require("node:path");
 const { spawn, spawnSync } = require("node:child_process");
 const { DatabaseSync } = require("node:sqlite");
+const { readGitHubWorkflowRunIdentity } = require("./lib/exact-head-paper-readiness-source.js");
 const { PaperRuntimeProcessSupervisor } = require("./paper-runtime-supervisor.js");
 const { PRODUCTION_RUNTIME_ENTRYPOINT } = require("./start-cloud-runtime.js");
 
@@ -274,6 +275,7 @@ async function run(options = {}) {
   void idempotencyKey;
   const port = await availablePort();
   const sourceCommit = gitRevision(root);
+  const workflowRunIdentity = readGitHubWorkflowRunIdentity();
   const researchReplaySnapshotPath = resolve(workingDir, "research-replay-snapshots.json");
   const qualifiedArtifactPath = resolve(workingDir, "qualified-paper-challengers.json");
   const { env: cleanBaseEnv, removed: scrubbedPrivateKeys } = scrubPrivateExchangeEnv(process.env);
@@ -399,6 +401,7 @@ async function run(options = {}) {
       evidence_type: "nusa.actual-paper-runtime-e2e",
       result: "PASS",
       source_commit: gitRevision(root),
+      workflow_run: workflowRunIdentity,
       started_at: startedAt,
       completed_at: new Date().toISOString(),
       authority: { mode: "PAPER_ONLY", liveAuthority: "NONE", productionMutationAllowed: false, aiAuthority: "ZERO_AUTHORITY" },
@@ -448,4 +451,4 @@ if (require.main === module) {
   });
 }
 
-module.exports = { availablePort, buildBoundPaperChaosRestartEvidence, canonical, paperChaosStateFromSnapshot, readPersistedPaperLearningIds, run, scrubPrivateExchangeEnv, sha256, snapshotObservedAt, summarizeSnapshot };
+module.exports = { availablePort, buildBoundPaperChaosRestartEvidence, canonical, paperChaosStateFromSnapshot, readGitHubWorkflowRunIdentity, readPersistedPaperLearningIds, run, scrubPrivateExchangeEnv, sha256, snapshotObservedAt, summarizeSnapshot };
