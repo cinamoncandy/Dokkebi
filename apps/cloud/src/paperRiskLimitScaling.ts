@@ -5,7 +5,8 @@ import { CLOUD_PAPER_RISK_LIMITS } from "./cloudPaperCanonicalRiskGateway";
  * The canonical Cloud PAPER risk limits are fixed KRW amounts (CLOUD_PAPER_RISK_LIMITS). With a KRW 100,000 account a
  * KRW 2,000,000 order cap and a KRW 1,000,000 daily-loss cap never bind. Owner decision 2026-10-28: scale the KRW limits
  * with the PAPER initial capital. Every limit becomes min(fixed limit, ratio x capital), so this can only tighten a
- * limit, never loosen one; counts, ratios and the loss-limit policy are passed through unchanged.
+ * limit, never loosen one; counts, ratios and the loss-limit policy are passed through unchanged. Owner decision 2026-11-04 raised the
+ * daily buy and sell ratios from 1 to 3; they are still capped by min(fixed limit, ratio x capital), so they stay below the fixed canonical limit.
  */
 export const PAPER_RISK_CAPITAL_RATIOS = Object.freeze({
   maxOrderNotional: 0.2,
