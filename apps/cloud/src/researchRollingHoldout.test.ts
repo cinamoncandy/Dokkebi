@@ -52,6 +52,28 @@ describe("K-of-N decision", () => {
       if (d.decision === "PASS") assert.ok([a, b, c].filter((x) => x === "CHALLENGER_BETTER").length >= ROLLING_FOLDS_REQUIRED);
     }
   });
+  it("covers every PASS / FAIL / INSUFFICIENT_EVIDENCE boundary for N=3, K=2", () => {
+    const d = (...o: FoldOutcome[]) => decideRollingHoldout(o).decision;
+    assert.equal(d("CHALLENGER_BETTER", "CHALLENGER_BETTER", "CHALLENGER_BETTER"), "PASS");
+    assert.equal(d("CHALLENGER_BETTER", "CHALLENGER_BETTER", "INSUFFICIENT"), "PASS");
+    assert.equal(d("CHALLENGER_BETTER", "INSUFFICIENT", "INSUFFICIENT"), "INSUFFICIENT_EVIDENCE");
+    assert.equal(d("INSUFFICIENT", "INSUFFICIENT", "INSUFFICIENT"), "INSUFFICIENT_EVIDENCE");
+    assert.equal(d("CHALLENGER_BETTER", "NOT_BETTER", "NOT_BETTER"), "FAIL");
+    assert.equal(d("NOT_BETTER", "INSUFFICIENT", "NOT_BETTER"), "FAIL");
+  });
+  it("other fold counts, K below 2, K above N and non-integer values never pass", () => {
+    assert.equal(decideRollingHoldout(["CHALLENGER_BETTER", "CHALLENGER_BETTER"], 2, 2).decision, "PASS", "the pure rule itself is generic in N; the runner only allows N=3");
+    assert.equal(decideRollingHoldout(["CHALLENGER_BETTER", "CHALLENGER_BETTER", "CHALLENGER_BETTER"], 4, 3).decision, "INSUFFICIENT_EVIDENCE");
+    assert.equal(decideRollingHoldout(["CHALLENGER_BETTER", "CHALLENGER_BETTER", "CHALLENGER_BETTER"], 2.5, 3).decision, "INSUFFICIENT_EVIDENCE");
+    assert.equal(decideRollingHoldout(["CHALLENGER_BETTER", "CHALLENGER_BETTER", "CHALLENGER_BETTER"], 2, Number.NaN).decision, "INSUFFICIENT_EVIDENCE");
+  });
+  it("buildRollingFolds refuses a NaN, fractional, too small or too large fold count", () => {
+    for (const folds of [Number.NaN, 2.5, 1, 7, -3]) {
+      const r = buildRollingFolds({ candles: candles(END - requiredHistoryMs(config), END), endCloseMs: END, config, folds });
+      assert.equal(r.status, "REFUSED");
+      if (r.status === "REFUSED") assert.equal(r.reason, "INVALID_FOLD_COUNT");
+    }
+  });
   it("wrong counts and bad values are INSUFFICIENT_EVIDENCE, never a pass", () => {
     assert.equal(decideRollingHoldout(["CHALLENGER_BETTER", "CHALLENGER_BETTER"]).decision, "INSUFFICIENT_EVIDENCE");
     assert.equal(decideRollingHoldout(["CHALLENGER_BETTER", "CHALLENGER_BETTER", "CHALLENGER_BETTER", "CHALLENGER_BETTER"]).decision, "INSUFFICIENT_EVIDENCE");

@@ -604,3 +604,30 @@ test("/health publishes the public futures collector counters as non-negative in
     assert.equal(JSON.parse((await request(handle.port, "/health")).body).runtime.futuresCollector, undefined);
   }, 42391);
 });
+
+test("/health publishes the open period's observation status counts as non-negative integers only", async () => {
+  const loop = { cyclesEvaluated: 0, deployments: 0, ticks: 1, lastTickAt: 1_900, bootstrap: "RESEARCH_NOT_DEPLOYABLE", rollover: "WAITING_FOR_CANONICAL_BOUNDARY", evidence: { openObservations: 12, openFilledObservations: 0, openWaitObservations: 9, openBlockedObservations: 2, openRejectedObservations: 1, openFailedObservations: -1, openDuplicateObservations: "3" } };
+  await withServer({ runtimeLiveness: () => ({ ...LIVENESS, closedLearningLoop: loop }) }, async (handle) => {
+    const evidence = JSON.parse((await request(handle.port, "/health")).body).runtime.closedLearningLoop.evidence;
+    assert.equal(evidence.openWaitObservations, 9);
+    assert.equal(evidence.openBlockedObservations, 2);
+    assert.equal(evidence.openRejectedObservations, 1);
+    assert.equal(evidence.openFailedObservations, undefined, "a negative count is withdrawn");
+    assert.equal(evidence.openDuplicateObservations, undefined, "a non-integer is withdrawn");
+  }, 41897);
+});
+
+test("/health publishes the gap-fill timings only as six non-negative integers", async () => {
+  const gap = (timingsMs) => ({ runs: 3, deferred: 0, counts: { FILLED: 3 }, lastRunAt: 1_900, timingsMs });
+  const good = { lastFillMs: 120, lastReadMs: 230, lastMaterializeMs: 986, maxFillMs: 300, maxReadMs: 410, maxMaterializeMs: 1_200 };
+  await withServer({ runtimeLiveness: () => ({ ...LIVENESS, researchGapFill: gap({ ...good, extra: 5 }) }) }, async (handle) => {
+    assert.deepEqual(JSON.parse((await request(handle.port, "/health")).body).runtime.researchGapFill.timingsMs, good, "an extra key is dropped");
+  }, 41865);
+  for (const [index, bad] of [{ ...good, maxReadMs: -1 }, { ...good, lastFillMs: 1.5 }, { lastFillMs: 1 }, "x"].entries()) {
+    await withServer({ runtimeLiveness: () => ({ ...LIVENESS, researchGapFill: gap(bad) }) }, async (handle) => {
+      const published = JSON.parse((await request(handle.port, "/health")).body).runtime.researchGapFill;
+      assert.equal(published.timingsMs, undefined, "an invalid set is withdrawn whole");
+      assert.equal(published.runs, 3);
+    }, 41866 + index);
+  }
+});

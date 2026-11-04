@@ -947,6 +947,116 @@ test("stops on provider capacity and preserves provider retry metadata", async (
   });
 });
 
+test("causal dispatch capability is sent only as a Worker header on propose and publish", async () => {
+  await withOidcEnvironment(async () => {
+    const capability = "c".repeat(64);
+    const target = "apps/autopilot/src/repairableWorkflowRun.ts";
+    const causalRequest = {
+      ...request,
+      workflowRunAttempt: 2,
+      reason: `gha:${request.workflowRunId}:${request.headSha}:failure`,
+    };
+    const apiCalls = [];
+    const result = await executeGithubActionsRunner(
+      causalRequest,
+      "https://runner.example.test/coding/execute",
+      async (url, init = {}) => {
+        const value = String(url);
+        if (value.startsWith("https://oidc.example.test/token")) return oidcSuccess();
+        const headers = init.headers || {};
+        assert.equal(headers["x-nusa-causal-dispatch-capability"], capability);
+        assert.equal(headers.authorization, "Bearer oidc-test-value");
+        const body = JSON.parse(String(init.body));
+        assert.equal(JSON.stringify(body).includes(capability), false);
+        apiCalls.push(new URL(value).pathname);
+        if (value.endsWith("/coding/propose")) {
+          assert.equal(body.workflowRunAttempt, 2);
+          assert.equal(body.reason, causalRequest.reason);
+          return response(200, {
+            status: "PROPOSAL_READY",
+            patch: "causal-single-file-patch",
+            causalRepairTarget: target,
+            causalProposalReceipt: "nusa-causal-proposal-v1." + "p".repeat(32) + "." + "s".repeat(32),
+            headSha: causalRequest.headSha,
+            workflowRunId: causalRequest.workflowRunId,
+          });
+        }
+        if (value.endsWith("/coding/publish")) {
+          assert.deepEqual(body.validatedFiles.map((file) => file.path), [target]);
+          assert.equal(body.patch, "causal-single-file-patch");
+          assert.match(body.causalProposalReceipt, /^nusa-causal-proposal-v1\./);
+          return response(200, { status: "EXECUTION_ACCEPTED", proposalValidated: true, commitSha: "d".repeat(40), pullRequestNumber: 89 });
+        }
+        throw new Error(`unexpected URL ${value}`);
+      },
+      {
+        causalDispatchCapability: capability,
+        initialProposalContext: () => ({ path: target, startLine: 1, content: "export const repairable = true;\n" }),
+        validatePatch: () => [{ path: target, content: "export const repairable = false;\n" }],
+      },
+    );
+    assert.equal(result.status, "DISPATCHED");
+    assert.deepEqual(apiCalls, ["/coding/propose", "/coding/publish"]);
+  });
+});
+
+test("causal publish refuses a proposal response without the server-bound patch receipt", async () => {
+  await withOidcEnvironment(async () => {
+    const capability = "c".repeat(64);
+    const causalRequest = {
+      ...request,
+      workflowRunAttempt: 1,
+      reason: "gha:" + request.workflowRunId + ":" + request.headSha + ":failure",
+    };
+    let publishCalls = 0;
+    await assert.rejects(
+      () => executeGithubActionsRunner(
+        causalRequest,
+        "https://runner.example.test/coding/execute",
+        async (url) => {
+          const value = String(url);
+          if (value.startsWith("https://oidc.example.test/token")) return oidcSuccess();
+          if (value.endsWith("/coding/propose")) return response(200, {
+            status: "PROPOSAL_READY",
+            patch: "causal-patch-without-server-receipt",
+            causalRepairTarget: "apps/autopilot/src/repairableWorkflowRun.ts",
+            headSha: causalRequest.headSha,
+            workflowRunId: causalRequest.workflowRunId,
+          });
+          if (value.endsWith("/coding/publish")) publishCalls += 1;
+          throw new Error("publish must not be reached");
+        },
+        {
+          causalDispatchCapability: capability,
+          initialProposalContext: () => ({ path: "apps/autopilot/src/repairableWorkflowRun.ts", startLine: 1, content: "export const repairable = true;\n" }),
+          validatePatch: () => [{ path: "apps/autopilot/src/repairableWorkflowRun.ts", content: "export const repairable = false;\n" }],
+        },
+      ),
+      /CAUSAL_PROPOSAL_RECEIPT_REQUIRED/,
+    );
+    assert.equal(publishCalls, 0);
+  });
+});
+
+test("causal dispatch fails closed before network access when capability is absent", async () => {
+  await withOidcEnvironment(async () => {
+    const causalRequest = {
+      ...request,
+      workflowRunAttempt: 1,
+      reason: `gha:${request.workflowRunId}:${request.headSha}:timed_out`,
+    };
+    let calls = 0;
+    await assert.rejects(
+      () => executeGithubActionsRunner(causalRequest, "https://runner.example.test/coding/execute", async () => {
+        calls += 1;
+        return oidcSuccess();
+      }),
+      /CAUSAL_DISPATCH_ADMISSION_REQUIRED/,
+    );
+    assert.equal(calls, 0);
+  });
+});
+
 test("allows only this workflow's generated artifacts before patch validation", () => {
   assert.doesNotThrow(() => assertGithubRunnerWorkspaceClean([
     "?? artifacts/autopilot-execution/repository-dispatch.json",
@@ -1370,10 +1480,48 @@ test("normalizes a UTF-8 BOM and rejects malformed dispatch events with bounded 
       dedupe_key: request.dedupeKey,
     } })}`);
     process.env.GITHUB_EVENT_PATH = eventPath;
-    assert.equal(readDispatchRequest().headSha, request.headSha);
+    const dispatch = readDispatchRequest();
+    assert.equal(dispatch.request.headSha, request.headSha);
+    assert.equal(dispatch.causalDispatchCapability, null);
 
     fs.writeFileSync(eventPath, "not-json");
     assert.throws(() => readDispatchRequest(), /GITHUB_EVENT_JSON_INVALID/);
+  } finally {
+    if (previousEventPath === undefined) delete process.env.GITHUB_EVENT_PATH;
+    else process.env.GITHUB_EVENT_PATH = previousEventPath;
+    fs.rmSync(eventPath, { force: true });
+  }
+});
+
+test("separates a causal dispatch capability from the coding request and rejects missing capability", () => {
+  const eventPath = path.join(os.tmpdir(), `nusa-autopilot-causal-event-${process.pid}-${Date.now()}.json`);
+  const previousEventPath = process.env.GITHUB_EVENT_PATH;
+  const capability = "e".repeat(64);
+  const payload = {
+    kind: "REPOSITORY_AUTOPILOT",
+    repository: request.repository,
+    head_sha: request.headSha,
+    workflow_run_id: request.workflowRunId,
+    causal_source_run_attempt: 3,
+    reason: `gha:${request.workflowRunId}:${request.headSha}:failure`,
+    execution_id: request.executionId,
+    dedupe_key: request.dedupeKey,
+    causal_dispatch_capability: capability,
+  };
+  try {
+    process.env.GITHUB_EVENT_PATH = eventPath;
+    fs.writeFileSync(eventPath, JSON.stringify({ client_payload: payload }));
+    const dispatch = readDispatchRequest();
+    assert.equal(dispatch.request.workflowRunAttempt, 3);
+    assert.equal(dispatch.causalDispatchCapability, capability);
+    assert.equal(Object.hasOwn(dispatch.request, "causalDispatchCapability"), false);
+    assert.equal(JSON.stringify(dispatch.request).includes(capability), false);
+
+    fs.writeFileSync(eventPath, JSON.stringify({ client_payload: { ...payload, causal_dispatch_capability: undefined } }));
+    assert.throws(() => readDispatchRequest(), /CAUSAL_DISPATCH_SOURCE_IDENTITY_INVALID/);
+
+    fs.writeFileSync(eventPath, JSON.stringify({ client_payload: { ...payload, reason: "continue-from:ci_succeeded" } }));
+    assert.throws(() => readDispatchRequest(), /CAUSAL_DISPATCH_CAPABILITY_UNEXPECTED/);
   } finally {
     if (previousEventPath === undefined) delete process.env.GITHUB_EVENT_PATH;
     else process.env.GITHUB_EVENT_PATH = previousEventPath;

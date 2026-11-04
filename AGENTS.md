@@ -27,7 +27,7 @@ pre-Audit review rather than independent Audit or Release approval.
 Before planning, editing, or generating code:
 
 1. Read `.aipos/aipos.yaml`.
-2. Read `.aipos/state.yaml`.
+2. Read `.aipos/CURRENT_TRUTH.md` (generated one-page summary; `pnpm run aipos:truth` refreshes it), then `.aipos/state.yaml`.
 3. Follow the recovery protocol and active work order referenced there.
 4. Read `.aipos/architecture.md`, `.aipos/context.md`, and relevant decisions.
 5. Verify changes with the commands recorded in the work order.
@@ -108,6 +108,9 @@ Before changing code:
 - Do not add dependencies without a clear need and license review.
 - Do not claim tests passed unless they were actually run or CI confirms them.
 - Update AIPOS state whenever architecture, scope, current work, or next work changes.
+- Put new production code in a module that an existing production, product or LIVE-boundary entry already reaches, or wire it in the same change. `tests/cloud-unreached-baseline.test.js` fails an unreachable module; never weaken the baseline or exempt the file (PR #2973 lost a CI run to this).
+- In tests that assert a response body or log text does not contain a sentinel, match short numeric sentinels only as standalone numbers (for example `(?<![0-9])1234(?![0-9])`). `/health` and logs carry real-clock unix-ms values that contain short digit runs by chance (PR #2964, #2969).
+- Prefer asserting behaviour over matching the exact shape of a source line. A source-text test must find its anchor in every shape the code legitimately takes, or a harmless refactor fails CI (PR #2960).
 
 ## Operating roles (accepted 2026-10-14)
 

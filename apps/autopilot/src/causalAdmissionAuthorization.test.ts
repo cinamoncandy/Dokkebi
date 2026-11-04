@@ -64,23 +64,23 @@ test("signed canonical publisher and independently verified source bind exactly 
   const { context, token } = await fixture();
   const capability = await prepareCausalDispatch(context, now + 120_000);
   assert.ok(capability);
-  assert.equal(await verifyClaimedCausalDispatch(context, token, capability), false);
-  assert.equal(await claimVerifiedCausalDispatch(context, token, capability), true);
-  assert.equal(await claimVerifiedCausalDispatch(context, token, capability), false);
-  assert.equal(await verifyClaimedCausalDispatch(context, token, capability), true);
-  assert.equal(await verifyClaimedCausalDispatch(context, "static-bearer-token", capability), false);
+  assert.equal((await verifyClaimedCausalDispatch(context, token, capability)).verified, false);
+  assert.equal((await claimVerifiedCausalDispatch(context, token, capability)).claimed, true);
+  assert.equal((await claimVerifiedCausalDispatch(context, token, capability)).claimed, false);
+  assert.equal((await verifyClaimedCausalDispatch(context, token, capability)).verified, true);
+  assert.equal((await verifyClaimedCausalDispatch(context, "static-bearer-token", capability)).verified, false);
 });
 
 test("static token, source substitution, wrong publisher and unavailable GitHub fail closed", async () => {
   const { context, token } = await fixture();
   const capability = await prepareCausalDispatch(context, now + 120_000);
   assert.ok(capability);
-  assert.equal(await claimVerifiedCausalDispatch(context, "static-bearer-token", capability), false);
-  assert.equal(await claimVerifiedCausalDispatch({ ...context, source: { ...source, runId: "457" } }, token, capability), false);
-  assert.equal(await claimVerifiedCausalDispatch({ ...context, fetchImpl: async () => { throw new Error("offline"); } }, token, capability), false);
+  assert.equal((await claimVerifiedCausalDispatch(context, "static-bearer-token", capability)).claimed, false);
+  assert.equal((await claimVerifiedCausalDispatch({ ...context, source: { ...source, runId: "457" } }, token, capability)).claimed, false);
+  assert.equal((await claimVerifiedCausalDispatch({ ...context, fetchImpl: async () => { throw new Error("offline"); } }, token, capability)).claimed, false);
   const wrongPublisher = await fixture({ repository: "other/NUSA" });
-  assert.equal(await claimVerifiedCausalDispatch(context, wrongPublisher.token, capability), false);
-  assert.equal(await claimVerifiedCausalDispatch(context, token, capability), true);
+  assert.equal((await claimVerifiedCausalDispatch(context, wrongPublisher.token, capability)).claimed, false);
+  assert.equal((await claimVerifiedCausalDispatch(context, token, capability)).claimed, true);
 });
 
 test("worker claim route verifies signed publisher and source without granting coding authority", async () => {
@@ -125,7 +125,7 @@ test("server-bound dispatch reaches the signed consumer claim without granting c
   const { context, token, dispatched } = await fixture();
   const result = await dispatchWithCausalBinding(context, {
     kind: "REPOSITORY_AUTOPILOT", repository, headSha: sha, workflowRunId: 456,
-    executionId: context.executionId, dedupeKey: context.dedupeKey, reason: `gha:456:${sha}:failure`, mutationAllowed: false,
+    workflowRunAttempt: 1, executionId: context.executionId, dedupeKey: context.dedupeKey, reason: `gha:456:${sha}:failure`, mutationAllowed: false,
   }, now + 120_000);
   assert.equal(result?.status, "DISPATCHED");
   assert.equal(dispatched.length, 1);
@@ -144,7 +144,7 @@ test("server-bound dispatch reaches the signed consumer claim without granting c
 
 test("dispatch cannot register a source for a different execution, repository, SHA or run", async () => {
   const { context, dispatched } = await fixture();
-  const request = { kind: "REPOSITORY_AUTOPILOT" as const, repository, headSha: sha, workflowRunId: 456, executionId: context.executionId, dedupeKey: context.dedupeKey, reason: `gha:456:${sha}:failure`, mutationAllowed: false as const };
+  const request = { kind: "REPOSITORY_AUTOPILOT" as const, repository, headSha: sha, workflowRunId: 456, workflowRunAttempt: 1, executionId: context.executionId, dedupeKey: context.dedupeKey, reason: `gha:456:${sha}:failure`, mutationAllowed: false as const };
   for (const override of [
     { repository: "other/NUSA" }, { headSha: "b".repeat(40) }, { workflowRunId: 457 },
     { executionId: "exec:other" }, { dedupeKey: "causal:other" },

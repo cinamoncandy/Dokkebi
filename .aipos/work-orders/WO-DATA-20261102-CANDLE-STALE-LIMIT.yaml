@@ -1,0 +1,22 @@
+id: WO-DATA-20261102-CANDLE-STALE-LIMIT
+title: "Data-integrity probe: a 1-minute series is stale after two hourly gap-fill cycles, not ten minutes"
+status: READY_FOR_REVIEW
+created: 2026-11-02
+trigger: "The 2026-11-02 host diagnosis showed learningLoopVerdict firstBrokenTransition CANDLES / CANDLES_STALE while the data was healthy: dataIntegrity candleMaxLatestAgeMs 3,389,891 (56.5 minutes), candleMissing7d 0, no misaligned, invalid or future rows, researchGapFill 48 of 48 FILLED. The probe flagged any 1-minute series older than 10 minutes, a limit from when live collection wrote the series head; the REST gap fill, now the only writer, runs hourly, so the flag was almost always on and occupied the first-broken slot of the verdict."
+change:
+  - "scripts/run-data-integrity-probe.js: STALE_SERIES_AFTER_MS = 2 hours (two gap-fill cycles) replaces the 10-minute limit for candleStaleSeries."
+  - "scripts/run-data-integrity-probe.test.js: a series 60 and 116 minutes old and exactly two hours old is not stale; two hours and a minute is stale and WARN; the other counts are unchanged."
+rules:
+  - "Display and evidence only: the probe changes no gate and no experiment input. A series that misses a whole fill (older than two hours) is still flagged, so a real gap-fill failure still shows as CANDLES_STALE."
+  - "candleMaxLatestAgeMs, candleMissing7d and every integrity FAIL condition (misaligned, invalid OHLC, future rows, crossed book) are unchanged."
+not_changed:
+  - "No pass rule, threshold of a study or gate, risk limit, budget, gap-fill schedule or authority. The learningPipelineStage rule (stale > 0 means CANDLES_STALE) is unchanged."
+safety:
+  paper_only: true
+  liveAuthority: NONE
+  productionMutationAllowed: false
+  aiAuthority: ZERO_AUTHORITY
+validation:
+  - "run-data-integrity-probe.test (8) and learning-pipeline-stage / cloud-runtime tests pass; AIPOS validators pass."
+unverified: "The value on the host: the probe runs inside the daily research service, so the new limit shows in /health dataIntegrity after the next release and the next daily probe."
+next: "After a server release, read candleStaleSeries and the learning verdict's first broken transition in the diagnosis learning readout."

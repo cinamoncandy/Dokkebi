@@ -311,3 +311,18 @@ test("SHADOW keeps working on the next day: yesterday's rolling session is stopp
     assert.ok(running.every((id) => id.includes(dayKey(T_END + DAY))), "only today's rolling sessions are RUNNING");
   } finally { s.db.close(); }
 });
+
+test("the gap-fill summary keeps the last and the largest timings of its three parts, whole milliseconds only", () => {
+  const s = build(fresh());
+  try {
+    s.orchestrator.recordGapFill([{ status: "FILLED" }], 1_000, { fillMs: 120.4, readMs: 230.6, materializeMs: 986.2 });
+    s.orchestrator.recordGapFill([{ status: "NO_GAPS" }], 2_000, { fillMs: 80, readMs: 410, materializeMs: 700 });
+    s.orchestrator.recordGapFill([{ status: "NO_GAPS" }], 3_000, { fillMs: Number.NaN, readMs: -5, materializeMs: 1 });
+    const t = s.orchestrator.gapFill().timingsMs;
+    assert.deepEqual(t, { lastFillMs: 0, lastReadMs: 0, lastMaterializeMs: 1, maxFillMs: 120, maxReadMs: 410, maxMaterializeMs: 986 }, "invalid values count as 0 and never poison the maximum");
+    s.orchestrator.recordGapFill([{ status: "NO_GAPS" }], 4_000);
+    assert.deepEqual(s.orchestrator.gapFill().timingsMs, t, "a run without timings keeps the previous ones");
+    s.orchestrator.noteGapFillDeferred();
+    assert.deepEqual(s.orchestrator.gapFill().timingsMs, t, "a deferral keeps them too");
+  } finally { s.db.close(); }
+});
