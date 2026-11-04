@@ -24,5 +24,7 @@ verification_commands:
   - node_modules/.bin/tsc -p tsconfig.json
   - node -r ./tests/register-dist.cjs --test tests/cloud-paper-risk-replay-ledger-precision.test.js tests/cloud-paper-daily-loss-streak.test.js tests/paper-risk-gate-live-state.test.js tests/cloud-paper-cancelled-fill-risk.test.js tests/paper-risk-limit-scaling.test.js
   - node scripts/validate-aipos-yaml.js
+owner_decision: "2026-11-05: RISK exact-source formal requalification START approved for PR #2999. This is not approval of a pin change, merge or release, and not a verification verdict."
+evidence: "docs/RISK_REQUALIFICATION_EVIDENCE_PR2999.md (11 tests: original fails 3 defect cases and passes the 8 fail-closed ones; fixed passes all 11). Pins are NOT moved; the proposal is recorded there and applies only after a successful independent formal verification."
 review: "Draft PR. A separate non-author /grill-me review, the formal requalification of the pinned risk module, an owner-approved release and a diagnose read-back are required."
 residual: "The server's actual fill history was not read; the cause is established from the symptoms (first halt right after two chunked SELL fills) and from reproduction with the real gateway, not from the server data. After the fix is released, a read-back must show the halt gone."
