@@ -1,0 +1,31 @@
+current_security_gate_parser_evidence_20261103:
+  work_order: WO-AUTOPILOT-20261030-1851-CAUSAL-ADMISSION
+  verified_at_utc: "2026-11-03T01:46:16Z"
+  protected_main: 0e213243ac5b63e7fe900666b0055da9ca96de18
+  security_gate_failures:
+    reported_count: 3
+    raw_stdout_stderr_available: false
+    exit_codes_available: false
+    raw_pnpm_audit_json_available: false
+  parser_wip:
+    local_branch: codex/audit-json-output-hardening
+    head: b445bb328f0c70eaa140c80c6cba9ace04c62a76
+    clean: true
+    commits_behind_main: 3492
+    parser_diff: NONE
+    remote_branch_issue_pr: NONE_FOUND
+  separate_audit_report:
+    dated: 2026-11-03
+    vulnerability_scan: PASS
+    audit_shape_mismatch: NO
+    proves_gate_attempt_stdout: false
+  synthetic_parser_reproduction:
+    valid_quoted_open_brace: AUDIT_JSON_INCOMPLETE
+    valid_quoted_close_brace: JSON_PARSE_UNTERMINATED_STRING
+    source_files_changed: false
+    actual_failure_root_cause: UNPROVEN
+  decision: NO_PARSER_CHANGE_UNTIL_ORIGINAL_FAILURE_EVIDENCE_AND_CANONICAL_OWNER_ARE_ESTABLISHED
+  commit_gate: NOT_MET
+  l1: PARTIAL
+  l2: HOLD
+  safety: PAPER_ONLY_LIVE_NONE_PRODUCTION_MUTATION_FALSE_REAL_ORDER_FALSE_AI_ZERO_AUTHORITY

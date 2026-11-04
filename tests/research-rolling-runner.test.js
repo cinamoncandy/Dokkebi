@@ -99,3 +99,14 @@ test("a newest-fold outcome the caller already has is classified instead of run 
   const already = runRollingResearchExperiment(portsFor(setup(3 * 360 + 40), () => "CHALLENGER_BETTER"), spec, 3, { status: "COMPLETED", validation: { result: "CHALLENGER_BETTER" }, holdout: null, holdoutNote: "HOLDOUT_ALREADY_USED" });
   assert.equal(already.folds[2].outcome, "INSUFFICIENT");
 });
+
+test("only three folds are supported: any other fold count is refused before reading or running anything", () => {
+  const s = setup(3 * 360 + 40);
+  const seen = [];
+  for (const folds of [2, 4, 6, Number.NaN]) {
+    const out = runRollingResearchExperiment({ ...portsFor(s, () => "CHALLENGER_BETTER", seen), candles: { read: () => { throw new Error("must not read"); } } }, spec, folds);
+    assert.equal(out.refusal, "ROLLING_UNSUPPORTED_FOLD_COUNT");
+    assert.equal(out.decision.decision, "INSUFFICIENT_EVIDENCE");
+  }
+  assert.deepEqual(seen, []);
+});

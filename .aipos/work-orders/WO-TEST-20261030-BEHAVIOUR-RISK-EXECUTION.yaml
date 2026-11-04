@@ -1,6 +1,6 @@
 id: WO-TEST-20261030-BEHAVIOUR-RISK-EXECUTION
 title: "Behavioural tests for the RISK and EXECUTION stages (add only; source-regex assertions stay)"
-status: LOCAL_VALIDATED_PENDING_REVIEW_CI
+status: COMPLETED
 owner: nusa-development
 repository: cinamoncandy/NUSA
 base_branch: main

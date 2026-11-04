@@ -60,6 +60,23 @@ describe("learning loop verdict", () => {
     assert.equal(stage(undefined).stage, "UNKNOWN");
   });
 
+  it("says why the open period has not closed: no realized trade (a held position) versus an ordinary wait, and carries the observation counts", () => {
+    const at = (rollover: string | undefined, evidence?: Record<string, unknown>) => {
+      const r = healthy(); const loop = r.closedLearningLoop as Record<string, unknown>;
+      if (rollover === undefined) delete loop.rollover; else loop.rollover = rollover;
+      if (evidence !== undefined) loop.evidence = evidence;
+      return verdict(r);
+    };
+    assert.equal(at("WAITING_FOR_CANONICAL_BOUNDARY").periodWaitingFor, "REALIZED_TRADE");
+    assert.equal(at("WAITING_FOR_REALIZED_FILL").periodWaitingFor, "REALIZED_TRADE");
+    assert.equal(at("WAITING_FOR_EVALUATION_WINDOW").periodWaitingFor, "EVALUATION_WINDOW");
+    assert.equal(at("WAITING_FOR_KST_DAY_ROLLOVER").periodWaitingFor, "KST_DAY_ROLLOVER");
+    assert.equal(at("CLOSED_AND_EVALUATED").periodWaitingFor, "NONE");
+    assert.equal(at(undefined).periodWaitingFor, "UNKNOWN", "a missing step is UNKNOWN, never an ordinary wait");
+    const v = at("WAITING_FOR_CANONICAL_BOUNDARY", { openPeriodStartAt: 1_793_464_093_493, openObservations: 990, openFilledObservations: 0, openWaitObservations: 985, openBlockedObservations: 5, openRejectedObservations: -1, openFailedObservations: "2" });
+    assert.deepEqual(v.openPeriod, { startedAt: 1_793_464_093_493, observations: 990, filled: 0, wait: 985, blocked: 5, rejected: null, failed: null, duplicate: null }, "invalid counts are null, never guessed");
+  });
+
   it("a sticky lastBlockedReason of TICK_ERROR is not a failure by itself; a current error class or ERROR rollover is", () => {
     const sticky = healthy(); (sticky.closedLearningLoop as Record<string, unknown>).lastBlockedReason = "TICK_ERROR";
     assert.equal(verdict(sticky).verdict, "LOOP_VERIFIED");

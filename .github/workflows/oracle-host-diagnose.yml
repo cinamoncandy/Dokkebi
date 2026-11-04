@@ -145,16 +145,26 @@ jobs:
           try {
             const h = JSON.parse(fs.readFileSync(process.argv[1], "utf8")), r = h.runtime && typeof h.runtime === "object" ? h.runtime : {};
             const out = {};
-            for (const [name, value] of [["learningLoopVerdict", h.learningLoopVerdict], ["learningPipeline", h.learningPipeline], ["orderBookCoverage", r.orderBookCoverage], ["researchGapFill", r.researchGapFill], ["researchRollingHoldout", r.researchRollingHoldout], ["closedLearningLoop", r.closedLearningLoop]]) {
+            for (const [name, value] of [["learningLoopVerdict", h.learningLoopVerdict], ["learningPipeline", h.learningPipeline], ["orderBookCoverage", r.orderBookCoverage], ["researchGapFill", r.researchGapFill], ["researchRollingHoldout", r.researchRollingHoldout], ["closedLearningLoop", r.closedLearningLoop], ["paperLedger", r.paperLedger], ["dataIntegrity", r.dataIntegrity], ["runtimeScalars", Object.fromEntries(Object.entries(r).filter(([k, x]) => /^[a-zA-Z0-9][a-zA-Z0-9_]{0,47}$/.test(k) && (typeof x === "boolean" || Number.isFinite(x) || (typeof x === "string" && /^[A-Z][A-Z0-9_]{0,47}$/.test(x)))))]]) {
               const v = keep(value, 0); if (v && Object.keys(v).length > 0) out[name] = v;
             }
+            // The decision funnel and the last decision outcome use coded keys with colons; the same patterns /health already enforces.
+            const funnel = r.paperFunnel && typeof r.paperFunnel === "object" && r.paperFunnel.counts && typeof r.paperFunnel.counts === "object" ? r.paperFunnel.counts : null;
+            if (funnel) {
+              const counts = {};
+              for (const [k, x] of Object.entries(funnel)) if (/^(OTHER|[A-Z][A-Z_]{1,23}:(PASS|SKIP|FAIL)(:[A-Z][A-Z0-9_]{1,47})?)$/.test(k) && Number.isSafeInteger(x) && x >= 0) counts[k] = x;
+              if (Object.keys(counts).length > 0) out.paperFunnel = counts;
+            }
+            if (typeof r.lastPaperDecisionOutcome === "string" && /^[A-Z]{3,12}:[A-Z0-9_.:+-]{1,100}$/.test(r.lastPaperDecisionOutcome)) out.lastPaperDecisionOutcome = r.lastPaperDecisionOutcome;
             console.log(Object.keys(out).length > 0 ? JSON.stringify(out) : "LEARNING_READOUT_EMPTY");
           } catch { console.log("LEARNING_READOUT_UNAVAILABLE"); }' "$HEALTH_PROBE_PATH")"
-          summary="${summary}"$'\n'"learning_readout=${readout}"
           errors="$(journalctl -u nusa --since "-90 minutes" --no-pager -o cat 2>&1 | grep -v "^\s*at " | tail -40 | cut -c1-300 | redact)"
           autopilot="$(journalctl -u nusa-autopilot --since "-90 minutes" --no-pager -o cat 2>&1 | grep -Ei "fail|error|blocked|stopped|ready" | tail -20 | cut -c1-300 | redact)"
           emit() { local body; body="$(printf '%s' "${2:0:3500}" | sed -e 's/%/%25/g' | awk '{printf "%s%%0A", $0}')"; echo "::warning title=$1::${body}"; }
           emit "diag-summary" "$summary"
+          # The learning readout has its own annotations (up to three of 3500 characters) so the summary above never cuts it off.
+          readout_line="learning_readout=${readout}"
+          for n in 1 2 3; do part="${readout_line:$(( (n-1)*3500 )):3500}"; [ -n "$part" ] && emit "diag-learning-$n" "$part"; done
           for n in 1 2 3 4 5; do part="${errors:$(( (n-1)*3500 )):3500}"; [ -n "$part" ] && emit "diag-nusa-log-$n" "$part"; done
           emit "diag-autopilot-log" "$autopilot"
       # Runs LAST: the 40 s du walk competes for I/O on the 1-vCPU host, and diagnosis 38673436344 saw the /health probe time out right after it.

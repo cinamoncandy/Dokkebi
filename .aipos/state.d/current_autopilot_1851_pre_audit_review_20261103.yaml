@@ -1,0 +1,25 @@
+current_autopilot_1851_pre_audit_review_20261103:
+  observed_at_utc: "2026-11-03T04:04:12Z"
+  work_order: WO-AUTOPILOT-20261030-1851-CAUSAL-ADMISSION
+  repository: cinamoncandy/NUSA
+  protected_main: e85b2ea0042c4da4515063a2a498232ea19866c1
+  pr: 2992
+  pr_state: OPEN_DRAFT_MERGEABLE
+  pr_head: 8fdfe4bc6a0585f12e67ea82f9cd01f3d91d41ad
+  pr_base: e85b2ea0042c4da4515063a2a498232ea19866c1
+  exact_head_checks: "19 completed; 16 success, 3 intentional skips"
+  independent_pre_audit_review:
+    verdict: FAIL
+    p0: 0
+    p1: 1
+    p2: 0
+    finding: "AIPOS chronology is contradictory: latest Gate A commit-gate MET conflicts with stale NOT_MET and pre-PR handoff text."
+    github_review_submitted: false
+    tests_executed_by_reviewer: false
+  commit_gate: MET_FOR_GATE_A_FAIL_CLOSED_STAGED_INCLUSION
+  next: "Append superseding AIPOS checkpoint, validate, then successor CI and fresh independent review. Keep PR Draft until P1 is adjudicated."
+  positive_causal_evidence: ABSENT
+  code_actionable: NOT_ISSUED
+  l1: PARTIAL
+  l2: HOLD
+  safety: PAPER_ONLY_LIVE_NONE_PRODUCTION_MUTATION_FALSE_REAL_ORDER_FALSE_TRANSFER_FALSE_AI_ZERO_AUTHORITY

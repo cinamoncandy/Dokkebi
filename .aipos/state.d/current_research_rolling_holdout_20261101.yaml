@@ -1,6 +1,6 @@
 current_research_rolling_holdout_20261101:
   work_order: WO-RESEARCH-20261031-ROLLING-HOLDOUT-FOLDS
-  status: LOCAL_VALIDATED_PENDING_EXACT_HEAD_CI
+  status: READY_FOR_REVIEW
   branch: claude/rolling-holdout
   pull_request: 2973
   pre_repair_head: e0b3f2766fcea8d835bb2e91a8d2b304a532e077
