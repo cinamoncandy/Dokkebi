@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { executeVerifiedIsolatedCausalVerification } from "./isolatedCausalVerificationHarness";
+import type { VerifiedIsolatedSourceRun } from "./githubActionsOidc";
 import type { VerifiedIsolatedCausalVerification } from "./sigstoreCausalAttestation";
 
 const sha = "a".repeat(40);
@@ -28,46 +29,57 @@ const verified: VerifiedIsolatedCausalVerification = Object.freeze({
   signerIdentity: Object.freeze({ subjectAlternativeName: workflowRef, issuer: "https://token.actions.githubusercontent.com" }),
 });
 
-function sourceRun(overrides: Record<string, unknown> = {}) {
-  return {
-    id: Number(runId),
-    run_attempt: Number(runAttempt),
-    path: ".github/workflows/causal-verification.yml",
-    name: "NUSA Isolated Causal Verification",
-    event: "workflow_dispatch",
-    head_sha: sha,
-    head_branch: "main",
-    status: "completed",
-    conclusion: "success",
-    repository: { full_name: "cinamoncandy/NUSA" },
-    ...overrides,
+const source: VerifiedIsolatedSourceRun = Object.freeze({
+  repository: "cinamoncandy/NUSA",
+  workflowPath: ".github/workflows/causal-verification.yml",
+  sha,
+  runId,
+  runAttempt,
+  status: "completed",
+  conclusion: "success",
+  event: "workflow_dispatch",
+  branch: "main",
+  jobId: 445566,
+});
+
+function githubFetch(): typeof fetch {
+  return async (resource) => {
+    const url = String(resource);
+    if (url === `https://api.github.com/repos/cinamoncandy/NUSA/commits/${sha}`) return Response.json({ sha });
+    if (url === `https://api.github.com/repos/cinamoncandy/NUSA/actions/runs/${runId}`) {
+      return Response.json({
+        id: Number(runId), head_sha: sha, head_branch: "main", status: "completed", conclusion: "success",
+        repository: { full_name: "cinamoncandy/NUSA" }, run_attempt: Number(runAttempt),
+      });
+    }
+    throw new Error(`unexpected GitHub lookup: ${url}`);
   };
 }
 
-test("isolated proof claims a durable source-run replay guard before one bounded CodingRunner execution", async () => {
-  let claimed = false;
-  let creates = 0;
-  let completions = 0;
-  const fetchImpl: typeof fetch = async (resource, init) => {
-    const url = String(resource);
-    if (url.includes(`/actions/runs/${runId}`)) return Response.json(sourceRun());
-    if (url.includes("/check-runs?") && (!init?.method || init.method === "GET")) {
-      return Response.json({ check_runs: claimed ? [{ name: `NUSA Isolated Causal Replay Guard ${runId}.${runAttempt}` }] : [] });
-    }
-    if (url.endsWith("/check-runs") && init?.method === "POST") {
-      creates += 1;
-      claimed = true;
-      return Response.json({ id: 876 });
-    }
-    if (url.endsWith("/check-runs/876") && init?.method === "PATCH") {
-      completions += 1;
-      return Response.json({ id: 876 });
-    }
-    if (url === `https://api.github.com/repos/cinamoncandy/NUSA/commits/${sha}`) return Response.json({ sha });
-    throw new Error(`unexpected GitHub lookup: ${url}`);
+function durableClaim() {
+  const consumed = new Set<string>();
+  let calls = 0;
+  return {
+    get calls() { return calls; },
+    async claim(evidence: VerifiedIsolatedCausalVerification) {
+      calls += 1;
+      const key = `${evidence.source.repository}:${evidence.source.runId}:${evidence.source.runAttempt}`;
+      const sourceIdentityDigest = "d".repeat(64);
+      if (consumed.has(key)) return { claimed: false, sourceIdentityDigest };
+      consumed.add(key);
+      return { claimed: true, sourceIdentityDigest };
+    },
   };
+}
 
-  const input = { githubToken: "synthetic-token", fetchImpl };
+test("verified source claims durable replay guard before one bounded CodingRunner execution", async () => {
+  const claims = durableClaim();
+  const input = {
+    githubToken: "synthetic-token",
+    fetchImpl: githubFetch(),
+    verifiedSourceRun: source,
+    claimAttempt: claims.claim,
+  };
   const result = await executeVerifiedIsolatedCausalVerification(verified, input);
   assert.deepEqual(result, {
     domain: "NUSA_ISOLATED_CAUSAL_VERIFICATION_V1",
@@ -76,8 +88,8 @@ test("isolated proof claims a durable source-run replay guard before one bounded
     sourceSha: sha,
     sourceRunId: runId,
     sourceRunAttempt: runAttempt,
-    durableReplayGuard: "GITHUB_CHECK_RUN_CLAIMED",
-    sourceCheckRunId: 876,
+    durableReplayGuard: "SQLITE_DURABLE_OBJECT_CLAIMED",
+    sourceIdentityDigest: "d".repeat(64),
     codingRunnerStatus: "EXECUTION_ACCEPTED",
     proposalAdapterCalls: 1,
     sandboxExecutions: 1,
@@ -91,32 +103,38 @@ test("isolated proof claims a durable source-run replay guard before one bounded
     executeVerifiedIsolatedCausalVerification(verified, input),
     { message: "ISOLATED_SOURCE_RUN_ALREADY_CLAIMED" },
   );
-  assert.equal(creates, 1, "the exact source run has one durable claim across separate harness invocations");
-  assert.equal(completions, 1, "only the first invocation reaches execution and completes the claim");
+  assert.equal(claims.calls, 3, "first claim, explicit replay check, and retried consumer all share the durable identity");
 });
 
-test("isolated positive harness rejects a source run whose canonical workflow identity differs", async () => {
-  const fetchImpl: typeof fetch = async (resource) => {
-    const url = String(resource);
-    if (url.includes("/commits/")) return Response.json({ sha });
-    if (url.includes(`/actions/runs/${runId}`)) return Response.json(sourceRun({ event: "push" }));
-    throw new Error(`unexpected GitHub lookup: ${url}`);
-  };
+test("source identity mismatch is rejected before the durable claim", async () => {
+  const claims = durableClaim();
   await assert.rejects(
-    executeVerifiedIsolatedCausalVerification(verified, { fetchImpl }),
-    { message: "ISOLATED_SOURCE_RUN_IDENTITY_INVALID" },
+    executeVerifiedIsolatedCausalVerification(verified, {
+      githubToken: "synthetic-token",
+      fetchImpl: githubFetch(),
+      verifiedSourceRun: Object.freeze({ ...source, event: "push" }) as unknown as VerifiedIsolatedSourceRun,
+      claimAttempt: claims.claim,
+    }),
+    { message: "ISOLATED_VERIFICATION_SOURCE_RUN_MISMATCH" },
   );
+  assert.equal(claims.calls, 0);
 });
 
-test("isolated positive harness rejects source SHA or workflow identity substitution", async () => {
+test("claim uncertainty fails before any CodingRunner request", async () => {
+  let runnerRequests = 0;
   const fetchImpl: typeof fetch = async (resource) => {
     const url = String(resource);
-    if (url.includes("/commits/")) return Response.json({ sha });
-    if (url.includes(`/actions/runs/${runId}`)) return Response.json(sourceRun({ head_sha: "d".repeat(40) }));
-    throw new Error(`unexpected GitHub lookup: ${url}`);
+    if (url.endsWith(`/commits/${sha}`) || url.includes("/actions/runs/")) runnerRequests += 1;
+    return githubFetch()(resource);
   };
   await assert.rejects(
-    executeVerifiedIsolatedCausalVerification(verified, { fetchImpl }),
-    { message: "ISOLATED_SOURCE_RUN_IDENTITY_INVALID" },
+    executeVerifiedIsolatedCausalVerification(verified, {
+      githubToken: "synthetic-token",
+      fetchImpl,
+      verifiedSourceRun: source,
+      claimAttempt: async () => { throw new Error("ISOLATED_CAUSAL_CLAIM_STORAGE_UNAVAILABLE"); },
+    }),
+    { message: "ISOLATED_CAUSAL_CLAIM_STORAGE_UNAVAILABLE" },
   );
+  assert.equal(runnerRequests, 0);
 });

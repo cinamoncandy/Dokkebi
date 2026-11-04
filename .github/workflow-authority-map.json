@@ -130,7 +130,7 @@
     },
     "causal-verification-consumer.yml:verify-and-exercise-bounded-runner": {
       "write": [
-        "checks"
+        "id-token"
       ],
       "secrets": false,
       "environment": null

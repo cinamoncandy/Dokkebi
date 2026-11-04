@@ -442,6 +442,59 @@ bounded_security_observation_20261103_0237z:
   l2: HOLD
   safety: PAPER_ONLY_LIVE_NONE_PRODUCTION_MUTATION_FALSE_REAL_ORDER_FALSE_REAL_TRANSFER_FALSE_AI_ZERO_AUTHORITY
 
+implementation_checkpoint_20261104T0340Z:
+  authorization: "OWNER work order 2026-11-04 authorizes scoped implementation and conditional publication to existing PR #2994; no merge or deployment authorization."
+  repository: cinamoncandy/NUSA
+  branch: codex/1851-postmerge-p1-20261103
+  local_head_before_publication: 185fc1200a88b7cd5e7448bef040464982051e3b
+  remote_pr:
+    number: 2994
+    state: OPEN_DRAFT_MERGEABLE
+    head: 185fc1200a88b7cd5e7448bef040464982051e3b
+    base: 3046600b093f8f07a26ba11df3fc48043ae00830
+    current_main: efa8e295e7a468d7cb1652fb3924f30c83c3e5f7
+    exact_head_checks: 16_SUCCESS_3_SKIPPED_HISTORICAL_FOR_LOCAL_SUCCESSOR
+    p2_threads: "PRRT_kwDOTUbne86y_bHe and PRRT_kwDOTUbne86y_bHi remain unresolved/non-outdated; author did not resolve them."
+    current_head_non_author_review: NONE
+  implementation:
+    status: LOCAL_UNCOMMITTED
+    atomic_claim: "Dedicated domain-separated permanent tombstone in existing SQLite-backed ExecutionCoordinator; server-derived identity, transaction required, fail closed on uncertain result; no TTL/release/takeover/delete."
+    oidc: "Dedicated audience, exact consumer workflow/ref/repository and workflow SHA, signed JWT/JWKS/time claims, API-bound consumer run and source producer job/attempt."
+    workflow: "Consumer uses job-scoped actions:read and id-token:write, does not checkout/execute source code, and does not request checks:write or contents:write."
+    failure_receipt: "Client writes sanitized FAIL_CLOSED_OR_UNKNOWN receipt for bootstrap/request/response failures; upload-artifact step runs with always(); claimOutcome remains UNKNOWN unless verified."
+    route: "POST /isolated/causal/verify-and-run is disabled unless NUSA_ISOLATED_CAUSAL_VERIFICATION_ENABLED=true; no deployment/config enablement performed."
+    coding_runner: "Runs internally after claim using deterministic in-memory AI adapter and no-op sandbox; not a production provider/sandbox run."
+  validation:
+    full_suite: PASS_1331_ISOLATED_TEST_FILES
+    focused_failure_receipt_test: PASS_1_OF_1
+    cloudflare_workerd_sqlite_do: "PASS local Wrangler 4.157.0: 32 concurrent requests yielded exactly one claim; duplicate rejected; claim persisted after Wrangler process restart with same local persistence directory."
+    worker_runtime_harness: "PASS local Workerd using synthetic in-memory verified manifest and mock GitHub reads; deterministic CodingRunner returned EXECUTION_ACCEPTED, 1 proposal, 1 no-op sandbox call, ZERO_AUTHORITY. This is not a genuine OIDC/Sigstore or deployed Worker run."
+    typecheck: PASS
+    validate_full: PASS
+    security_gate: PASS_0_UNMITIGATED_ADVISORIES_0_SECRETS
+    lint: PASS_0_ERRORS_47_WARNINGS
+    workflow_authority_map: PASS_41_WORKFLOWS
+    action_pins_and_inputs: PASS
+    aipos_yaml_and_provenance: PASS_BEFORE_THIS_ENTRY
+    diff_check: PASS_BEFORE_THIS_ENTRY
+  outstanding:
+    real_sigstore_bundle: SIGSTORE_REAL_BUNDLE_UNVERIFIED
+    cloudflare_deployed_worker_and_plan_limits: UNVERIFIED
+    existing_worker_github_token_nonsecret_scope_evidence: UNVERIFIED
+    actual_github_consumer_oidc_and_positive_e2e: NOT_RUN
+    exact_head_ci: NOT_STARTED_FOR_SUCCESSOR
+    independent_review: BLOCKED_INDEPENDENT_REVIEW_IDENTITY
+    formal_validator_audit_release_merge: NOT_STARTED_OR_NOT_AUTHORIZED
+  publication:
+    github_changes: NONE
+    commit_push: PENDING_FINAL_AIPOS_AND_DIFF_GATES
+    draft_state: MUST_REMAIN_DRAFT
+  governance:
+    commit_gate: NOT_MET_FOR_L1_COMPLETION
+    l1: PARTIAL
+    l2: HOLD
+    safety: PAPER_ONLY_LIVE_NONE_PRODUCTION_MUTATION_FALSE_REAL_ORDER_FALSE_REAL_TRANSFER_FALSE_AI_ZERO_AUTHORITY
+
 bounded_security_observation_outcome_20261103_0254z:
   observed_at_utc: "2026-11-03T02:54:05Z"
   protected_main_and_wip_head: 0e213243ac5b63e7fe900666b0055da9ca96de18
@@ -694,4 +747,150 @@ formal_validator_p1_repair_20261103T0630Z:
   l1: PARTIAL
   l2: HOLD
   topology_deploy_db_backup: HOLD_UNCHANGED
+  safety: PAPER_ONLY_LIVE_NONE_PRODUCTION_MUTATION_FALSE_REAL_ORDER_FALSE_REAL_TRANSFER_FALSE_AI_ZERO_AUTHORITY
+
+replay_concurrency_sigstore_20261104T0023Z:
+  supersedes_prior_replay_claim_and_sigstore_assumptions: true
+  observed_at_utc: "2026-11-04T00:23:34Z"
+  pull_request: 2994
+  remote_state:
+    state: OPEN_DRAFT_MERGEABLE
+    head: 185fc1200a88b7cd5e7448bef040464982051e3b
+    base: 3046600b093f8f07a26ba11df3fc48043ae00830
+    protected_main: efa8e295e7a468d7cb1652fb3924f30c83c3e5f7
+    checks: 16_SUCCESS_3_SKIPPED
+    p2_threads: UNRESOLVED_NON_OUTDATED
+  replay_claim:
+    implementation: "GET existing Check Runs then POST in-progress Check Run; API sequence is not atomic."
+    only_repository_execution_path: ".github/workflows/causal-verification-consumer.yml -> scripts/verify-isolated-causal-positive.js"
+    concurrency_group: 'nusa-isolated-causal-consumer-${{ github.event.workflow_run.id }}'
+    cancel_in_progress: false
+    platform_guard: "GitHub concurrency serializes consumer executions for the same source workflow_run.id; same-run duplicate deliveries do not overlap while all calls stay on this workflow path."
+    adversarial_mock: "Two simultaneous direct harness calls with both GETs returning empty and both POSTs succeeding each returned EXECUTION_ACCEPTED; this is mock evidence that the helper itself is not atomic, not evidence of Actions overlap."
+    remaining_uncertainty: "At-most-once across crash/restart depends on a later Check Run list query observing a prior claim. No atomic unique/CAS claim or live stale-read verification exists."
+    disposition: BLOCKED_ATOMIC_CLAIM
+  validation:
+    focused_harness_and_sigstore_tests: PASS_7_OF_7
+    aipos_yaml: PASS_569_FILES
+    aipos_work_order_provenance: PASS
+    git_diff_check: PASS
+    full_suite: NOT_RUN_NO_SOURCE_CHANGE
+  sigstore:
+    expected_oidc_issuer: https://token.actions.githubusercontent.com
+    expected_workflow_subject: cinamoncandy/NUSA/.github/workflows/causal-verification.yml@refs/heads/main
+    verifier_contract: "Pinned trusted-root digest, CT log/transparency/timestamp thresholds, exact issuer/SAN, predicate type, DSSE statement and payload digest."
+    real_bundle: SIGSTORE_REAL_BUNDLE_UNVERIFIED
+    reason: "The workflow is absent from protected main and no completed producer run or genuine bundle was found; no workflow was dispatched and no synthetic bundle was created."
+  source_change: NONE
+  github_mutation: NONE
+  publication: HOLD_PENDING_ATOMIC_CLAIM_CONTRACT
+  next: "Obtain an approved durable atomic claim primitive or an explicit owner decision that the serialized workflow plus durable Check Run visibility is the accepted at-most-once contract; do not claim production proof from mocks."
+  l1: PARTIAL
+  l2: HOLD
+  safety: PAPER_ONLY_LIVE_NONE_PRODUCTION_MUTATION_FALSE_REAL_ORDER_FALSE_REAL_TRANSFER_FALSE_AI_ZERO_AUTHORITY
+
+replay_claim_readonly_reassessment_20261104T0038Z:
+  supersedes_prior_claim_sufficiency_assumption: true
+  observed_at_utc: "2026-11-04T00:38:42Z"
+  pull_request: 2994
+  remote_state:
+    head: 185fc1200a88b7cd5e7448bef040464982051e3b
+    base: 3046600b093f8f07a26ba11df3fc48043ae00830
+    protected_main: efa8e295e7a468d7cb1652fb3924f30c83c3e5f7
+    main_ahead_commits: 3
+    main_delta_files:
+      - .aipos/CURRENT_TRUTH.md
+      - .aipos/work-orders/WO-CLOUD-20261103-PERIOD-FILL-SLOTS.yaml
+      - apps/cloud/src/paperRealizedPeriodProducer.ts
+      - apps/cloud/src/paperRealizedPeriodProducer.test.ts
+    direct_overlap_with_pr_files: NONE
+    exact_head_checks: 16_SUCCESS_3_SKIPPED
+    p2_threads: UNRESOLVED_NON_OUTDATED
+    submitted_reviews: HISTORICAL_BOT_ONLY
+  replay_claim:
+    check_run_post_atomicity: "Official REST create-check-run documentation specifies creation but no idempotency or uniqueness key; POST-after-GET remains non-atomic."
+    actions_concurrency: "Official Actions docs guarantee at most one running member per shared group; default behavior keeps one pending member and replaces an older pending member. Current consumer key uses source workflow_run.id, so duplicate deliveries for that source run serialize."
+    identity_boundary: "Different producer run IDs form different concurrency groups and different Check Run names; current implementation treats them as distinct source-run evidence. Owner must define whether identical semantic payloads produced under new run IDs count as replay."
+    helper_race: "Direct simultaneous helper calls with both lookups empty still admit two executions; this is outside the single serialized workflow entry path."
+    restart_visibility: "A restart after claim relies on later list-check-runs observing the prior record; no API linearizability/stale-read guarantee was established."
+    atomic_ref_candidate: "A deterministic unique Git ref could provide create-or-conflict semantics, but official endpoint requires Contents:write; this materially broadens the current checks:write permission and persists repository refs. Not authorized or implemented."
+    disposition: BLOCKED_ATOMIC_CLAIM
+  current_main_compatibility:
+    source_delta_assessment: "The three main commits affect generated AIPOS truth, a Cloud PAPER period work order, and PAPER realized-period sampling/tests. None touches #2994's Autopilot, Sigstore, workflow, authority-map, or harness paths. No direct semantic interaction identified; exact current-main integration validation remains outstanding."
+  sigstore:
+    real_bundle: SIGSTORE_REAL_BUNDLE_UNVERIFIED
+    producer_workflow_in_protected_main_or_real_run: NOT_FOUND
+  changes:
+    source: NONE
+    github: NONE
+    local_record_only: true
+  next: "Require an authorized atomic claim capability or owner-approved narrower at-most-once identity/operational contract, then minimally repair and validate the existing #2994 successor against current main."
+  l1: PARTIAL
+  l2: HOLD
+  safety: PAPER_ONLY_LIVE_NONE_PRODUCTION_MUTATION_FALSE_REAL_ORDER_FALSE_AI_ZERO_AUTHORITY
+
+replay_atomic_primitive_inventory_20261104T0047Z:
+  observed_at_utc: "2026-11-04T00:47:15Z"
+  scope: READ_ONLY_EXISTING_INFRASTRUCTURE_SEARCH
+  existing_candidate:
+    component: apps/autopilot/src/executionCoordinator.ts#ExecutionCoordinator
+    binding: apps/autopilot/wrangler.jsonc#NUSA_EXECUTION_COORDINATOR
+    storage_backend: SQLITE_DURABLE_OBJECT
+    atomic_path: "mutateExecutionAtomically calls Durable Object storage.transaction when available; the production SQLite-backed DO is single-instance serialized and storage is documented strongly consistent and durable."
+    claim_api: "acquirePersistentExecution routes to one DO selected by idFromName(dedupeKey); acquire persists a LEASED record and supports maxAcquisitions. With a unique isolated-domain key and maxAcquisitions=1, later attempts can fail closed after expiry rather than reacquire."
+    evidence: "Source/config only. No production binding invocation, live DB access, deployment, or runtime claim was performed."
+  integration_constraints:
+    existing_worker_binding: PRESENT
+    github_consumer_direct_binding_access: NONE
+    existing_http_claim_route: "POST /coding/causal/claim is for production causal-dispatch admission; it cannot be reused as-is for isolated verification without crossing domains."
+    proposed_boundary: "A dedicated domain-separated endpoint in the existing Worker could validate the exact GitHub OIDC workflow identity/source evidence and atomically acquire a permanent one-attempt record through NUSA_EXECUTION_COORDINATOR before the isolated harness."
+    permission_delta: "Would require narrowly scoped id-token:write on the consumer and an authenticated Worker route; does not require repository Contents:write or a new control-plane service."
+    failure_semantics: "Persist claim before runner; never release/take over after uncertain execution; timeout, response loss, crash, or downstream error leaves the key consumed. This is at-most-once with possible loss of liveness."
+    required_design_review: "NUSA Overall owner must approve domain boundary, OIDC claims, stable claim identity, record retention, and deployment side effects before implementation."
+  disposition: CANDIDATE_FOUND_PENDING_OWNER_DESIGN_APPROVAL
+  source_changes: NONE
+  github_mutations: NONE
+  runtime_or_production_calls: NONE
+  sigstore_real_bundle: SIGSTORE_REAL_BUNDLE_UNVERIFIED
+  l1: PARTIAL
+  l2: HOLD
+  safety: PAPER_ONLY_LIVE_NONE_PRODUCTION_MUTATION_FALSE_REAL_ORDER_FALSE_AI_ZERO_AUTHORITY
+
+implementation_checkpoint_20261104T0344Z:
+  status: IMPLEMENTED_LOCAL_VALIDATION_PASS_PUBLICATION_PENDING
+  repository: cinamoncandy/NUSA
+  issue: 1851
+  pull_request: 2994
+  branch: codex/1851-postmerge-p1-20261103
+  starting_head: 185fc1200a88b7cd5e7448bef040464982051e3b
+  starting_base: 3046600b093f8f07a26ba11df3fc48043ae00830
+  protected_main_at_start: efa8e295e7a468d7cb1652fb3924f30c83c3e5f7
+  implementation:
+    atomic_claim: "Domain-separated permanent record; SQLite transaction required; duplicate, unavailable storage, and uncertain outcome fail closed. No TTL/release/takeover/delete or lease fallback."
+    oidc: "Dedicated protected-main consumer policy; consumer and source run/attempt/job are independently bound through GitHub API before attestation verification."
+    workflow: "No source checkout/execution; actions:read and id-token:write only; sanitized receipt artifact uploads on failure."
+    worker_route: DEFAULT_DISABLED
+    authority: PAPER_ONLY_ZERO_AUTHORITY
+  integration:
+    local_workerd_sqlite_do: "PASS: 32 concurrent claims, exactly one success; duplicate rejected; consumed record survived Workerd restart with same local persistence."
+    local_worker_positive_harness: "PASS using synthetic verified evidence, mock GitHub, fake AI binding and no-op sandbox; not genuine identity/attestation or deployed runtime."
+  validation:
+    full_isolated_suite: PASS_1331_FILES
+    typecheck: PASS
+    validate_full_after_state_insert: PASS
+    security_gate: PASS
+    lint: PASS_0_ERRORS_47_WARNINGS
+    authority_map_action_pins_inputs: PASS
+    aipos_yaml_and_provenance: PASS
+    git_diff_check: PASS
+  outstanding:
+    sigstore_real_bundle: UNVERIFIED
+    deployed_worker_limits_and_existing_token_scope: UNVERIFIED
+    exact_successor_head_ci: NOT_STARTED
+    independent_review_and_p2_dispositions: PENDING
+    formal_validator_audit_release: SEPARATE_GATES
+    merge_or_deployment: NOT_AUTHORIZED
+  next: "Publish only the scoped successor to the existing Draft #2994 after final staged-diff review; then verify exact-head CI. Do not resolve threads, change Draft, merge, deploy, or claim L1 complete."
+  l1: PARTIAL
+  l2: HOLD
   safety: PAPER_ONLY_LIVE_NONE_PRODUCTION_MUTATION_FALSE_REAL_ORDER_FALSE_REAL_TRANSFER_FALSE_AI_ZERO_AUTHORITY
