@@ -12,6 +12,7 @@ import { createEventLoopStallMonitor } from "./eventLoopStallMonitor";
 import { PaperTradingExecutionLoop, SqliteCloudPaperAccountRepository, paperAccountIdForCapital, type PaperAccountRepository } from "./paperTradingExecutionLoop";
 import { CloudPaperCanonicalRiskGateway } from "./cloudPaperCanonicalRiskGateway";
 import { cloudPaperRiskLimitsForCapital } from "./paperRiskLimitScaling";
+import { configurePaperExitOrderNotionalCap } from "./paperExecutionIntent";
 import { attributeTodayLosses, type PaperLossAttribution } from "./paperLossAttribution";
 import { classifyPaperWait } from "./paperWaitReason";
 import { CloudPaperExecutionBoundary } from "./cloudPaperExecutionBoundary";
@@ -483,6 +484,7 @@ export function startCloudRuntime(
     : new InMemoryInvestmentAllocationSettingsRepository();
   const readPaperP0State = () => { if (effectiveP0Repository == null) throw new Error("P0 safety repository unavailable"); return effectiveP0Repository.readState(); };
   const readAiP0State = (): CloudRuntimeAiP0State => { if (effectiveP0Repository == null) return "UNAVAILABLE"; try { return effectiveP0Repository.readState().openP0 ? "OPEN" : "CLOSED"; } catch { return "UNVERIFIABLE"; } };
+  configurePaperExitOrderNotionalCap(config.paperInitialCapitalKrw === undefined ? undefined : cloudPaperRiskLimitsForCapital(config.paperInitialCapitalKrw).maxOrderNotional);
   const productionPaperRiskGate = config.paperInitialCapitalKrw !== undefined && durableRepository instanceof SqliteCloudDashboardSnapshotRepository
     ? new CloudPaperCanonicalRiskGateway({ database: durableRepository.database(), initialCapital: config.paperInitialCapitalKrw, limits: cloudPaperRiskLimitsForCapital(config.paperInitialCapitalKrw), accountId: paperAccountIdForCapital(config.paperInitialCapitalKrw), sourceCommitSha: env.NUSA_SOURCE_COMMIT?.trim() || env.GITHUB_SHA?.trim() || "local-paper-build" })
     : undefined;

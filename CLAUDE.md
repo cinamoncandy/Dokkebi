@@ -3,7 +3,7 @@
 This repository's rules for every agent are in [`AGENTS.md`](AGENTS.md). Read and follow it first; this file only adds
 Claude Code specifics and cannot override it.
 
-1. Start with the AIPOS recovery steps in `AGENTS.md` (`.aipos/aipos.yaml`, `.aipos/state.yaml` plus `.aipos/state.d/*.yaml`, the active work order).
+1. Start with the AIPOS recovery steps in `AGENTS.md` (`.aipos/aipos.yaml`, `.aipos/CURRENT_TRUTH.md`, `.aipos/state.yaml` plus `.aipos/state.d/*.yaml`, the active work order).
    The repository, not the conversation, is the source of truth.
 2. Read the most recent handoff in `.aipos/handoffs/` (`<date>-main-handoff.md`, newest date first) for the
    current state and the next safe actions. Re-verify it on GitHub before acting.

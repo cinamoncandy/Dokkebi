@@ -128,12 +128,21 @@ export function addOutcomeCount(counts: Record<string, number>, key: string): vo
 
 const GAP_FILL_CODE = /^[A-Z][A-Z0-9_]{1,47}$/;
 
+/** Wall-clock milliseconds of one hourly gap-fill run's three parts (integers; the read and the manifest build are synchronous on the event loop). */
+export interface GapFillTimingsMs { readonly fillMs: number; readonly readMs: number; readonly materializeMs: number }
+export interface GapFillTimingsSummaryMs {
+  readonly lastFillMs: number; readonly lastReadMs: number; readonly lastMaterializeMs: number;
+  readonly maxFillMs: number; readonly maxReadMs: number; readonly maxMaterializeMs: number;
+}
+
 export interface ResearchGapFillSummary {
   readonly lastRunAt?: number;
   readonly runs: number;
   readonly deferred: number;
   readonly counts: Readonly<Record<string, number>>;
   readonly lastErrorCode?: string;
+  /** Display only: how long the last hourly run spent in each part, and the largest seen since start, to find what blocks the event loop. */
+  readonly timingsMs?: GapFillTimingsSummaryMs;
 }
 
 export class ResearchExperimentOrchestrator {
@@ -286,7 +295,7 @@ export class ResearchExperimentOrchestrator {
    * Display only: the outcome of the hourly REST gap fill, the only writer of the candle series head. Fixed status and
    * error codes with integer counts; nothing from the request or the data is kept.
    */
-  public recordGapFill(results: readonly { readonly status: string; readonly errorCode?: string }[], at: number): void {
+  public recordGapFill(results: readonly { readonly status: string; readonly errorCode?: string }[], at: number, timings?: GapFillTimingsMs): void {
     const previous = this.gapFillSummary;
     const counts: Record<string, number> = { ...(previous?.counts ?? {}) };
     let lastErrorCode = previous?.lastErrorCode;
@@ -295,12 +304,20 @@ export class ResearchExperimentOrchestrator {
       counts[result.status] = (counts[result.status] ?? 0) + 1;
       if (result.errorCode !== undefined && GAP_FILL_CODE.test(result.errorCode)) lastErrorCode = result.errorCode;
     }
+    const whole = (value: number): number => (Number.isFinite(value) && value >= 0 ? Math.round(value) : 0);
+    const timingsMs: GapFillTimingsSummaryMs | undefined = timings === undefined ? previous?.timingsMs : Object.freeze({
+      lastFillMs: whole(timings.fillMs), lastReadMs: whole(timings.readMs), lastMaterializeMs: whole(timings.materializeMs),
+      maxFillMs: Math.max(previous?.timingsMs?.maxFillMs ?? 0, whole(timings.fillMs)),
+      maxReadMs: Math.max(previous?.timingsMs?.maxReadMs ?? 0, whole(timings.readMs)),
+      maxMaterializeMs: Math.max(previous?.timingsMs?.maxMaterializeMs ?? 0, whole(timings.materializeMs)),
+    });
     this.gapFillSummary = Object.freeze({
       lastRunAt: at,
       runs: (previous?.runs ?? 0) + 1,
       deferred: previous?.deferred ?? 0,
       counts: Object.freeze(counts),
       ...(lastErrorCode === undefined ? {} : { lastErrorCode }),
+      ...(timingsMs === undefined ? {} : { timingsMs }),
     });
   }
 

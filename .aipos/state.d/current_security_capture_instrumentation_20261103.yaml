@@ -1,0 +1,30 @@
+current_security_capture_instrumentation_20261103:
+  work_order: WO-AUTOPILOT-20261030-1851-CAUSAL-ADMISSION
+  verified_at_utc: "2026-11-03T02:35:55Z"
+  protected_main_and_wip_head: 0e213243ac5b63e7fe900666b0055da9ca96de18
+  gate_result: PASS
+  child_audit_attempts: 1
+  child_audit:
+    started_at_utc: "2026-11-03T02:35:54.440Z"
+    ended_at_utc: "2026-11-03T02:35:55.344Z"
+    elapsed_ms: 904
+    exit_code: 1
+    signal: NONE
+    timed_out: false
+    exec_error_code: NONE
+    stdout_bytes: 16624
+    stderr_bytes: 0
+    json_valid: true
+    current_parser: PASS
+  instrumentation:
+    type: TEMP_PASS_THROUGH_NODE_PRELOAD
+    original_arguments_and_result_preserved: true
+    source_or_policy_changed: false
+    attempt_metadata_and_raw_streams_saved: true
+    evidence_location: "TEMP/nusa-security-capture-20261103T023551Z"
+  failure_raw_input: NOT_YET_CAPTURED
+  root_cause: UNPROVEN
+  commit_gate: NOT_MET
+  l1: PARTIAL
+  l2: HOLD
+  safety: PAPER_ONLY_LIVE_NONE_PRODUCTION_MUTATION_FALSE_REAL_ORDER_FALSE_REAL_TRANSFER_FALSE_AI_ZERO_AUTHORITY

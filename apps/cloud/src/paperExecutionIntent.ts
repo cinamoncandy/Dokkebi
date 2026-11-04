@@ -66,6 +66,22 @@ export interface PaperExecutionIntentInput {
   readonly decision: CioDecision;
   readonly state: PaperAccountState;
   readonly investmentPercent: number;
+  /**
+   * The enforced per-order notional cap (the risk gate's own `maxOrderNotional`). When set, a SELL exit is sized to at most
+   * this notional per order, so a position larger than the cap leaves in several orders instead of being rejected whole.
+   * It never raises a quantity and is not a risk limit of its own; absent means the whole position (previous behaviour).
+   */
+  readonly maxOrderNotional?: number;
+}
+
+let configuredMaxOrderNotional: number | undefined;
+/**
+ * Boot-time wiring of the risk gate's enforced `maxOrderNotional` (the same scaled limits object the gateway enforces).
+ * The execution boundary is a qualification-pinned module, so the cap reaches the SELL sizing through this module instead.
+ * It only ever shrinks a SELL quantity; it is not a risk limit and the gateway still decides every order.
+ */
+export function configurePaperExitOrderNotionalCap(maxOrderNotional: number | undefined): void {
+  configuredMaxOrderNotional = maxOrderNotional !== undefined && Number.isFinite(maxOrderNotional) && maxOrderNotional > 0 ? maxOrderNotional : undefined;
 }
 
 const payload = (intent: Omit<PaperExecutionIntent, "intentFingerprintSha256">): Omit<PaperExecutionIntent, "intentFingerprintSha256"> => intent;
@@ -138,6 +154,20 @@ export function buildPaperExecutionIntent(input: PaperExecutionIntentInput): Pap
     const position = input.state.positions.find((item) => item.market === market);
     quantity = round8(position?.quantity ?? 0);
     if (quantity <= 0) throw new Error("PAPER_EXECUTION_INTENT_POSITION_REQUIRED");
+    const cap = input.maxOrderNotional ?? configuredMaxOrderNotional;
+    if (cap !== undefined && Number.isFinite(cap) && cap > 0 && quantity * input.referencePrice > cap) {
+      // Round down so the capped order can never exceed the cap; the strategy keeps emitting SELL for the remainder.
+      const chunk = Math.floor((cap / input.referencePrice) * 1e8) / 1e8;
+      let sized = round8(chunk);
+      // Keep the leftover at or above the exchange minimum so the last piece is still a sellable order (KRW markets).
+      if (market.startsWith("KRW-")) {
+        const minRemainder = round8((UPBIT_KRW_MINIMUM_ORDER_KRW * MINIMUM_ORDER_HEADROOM_RATIO) / input.referencePrice);
+        if ((quantity - sized) * input.referencePrice < UPBIT_KRW_MINIMUM_ORDER_KRW) sized = round8(Math.min(sized, quantity - minRemainder));
+      }
+      // round8 can land a hair above the cap; step down until the order notional is within it.
+      while (sized > 0 && sized * input.referencePrice > cap) sized = round8(sized - 1e-8);
+      if (sized > 0 && sized < quantity) quantity = sized;
+    }
   }
 
   requireFinitePositive(quantity, "quantity");

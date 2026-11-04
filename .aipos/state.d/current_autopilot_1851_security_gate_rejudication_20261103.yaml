@@ -1,0 +1,37 @@
+current_autopilot_1851_security_gate_rejudication_20261103:
+  observed_at_utc: "2026-11-03T02:54:05Z"
+  work_order: WO-AUTOPILOT-20261030-1851-CAUSAL-ADMISSION
+  protected_main_and_wip_base: 0e213243ac5b63e7fe900666b0055da9ca96de18
+  bounded_security_observation:
+    maximum_runs: 5
+    completed_runs: 5
+    gate_results: [PASS, PASS, PASS, PASS, PASS]
+    audit_attempt_count_each: 1
+    common_audit_stdout_sha256: "41cf3f9b19cc1e707f74a89875964c65dcfd7e1cf1f718e50bf840e3c25dd289"
+    audit_stdout_bytes: 16624
+    audit_stderr_bytes: 0
+    audit_json_valid: true
+    parser_result: PASS
+    elapsed_ms: [677, 650, 739, 776, 653]
+    raw_evidence: "Five TEMP/nusa-security-bounded-20261103T* directories; see work-order entry for exact names."
+  classification:
+    current_failure: NOT_REPRODUCED_IN_BOUNDED_OBSERVATION
+    historical_AUDIT_JSON_INCOMPLETE: UNRESOLVED
+    root_cause_resolved: false
+  policy_adjudication:
+    commit_gate: MET_FOR_GATE_A_FAIL_CLOSED_STAGED_INCLUSION
+    basis: "Current canonical work-order security gate prerequisite is met; the later bootstrap_staged_inclusion governance order authorizes fail-closed Gate A inclusion before positive protected-main attestation. No explicit current policy requires historical intermittent root-cause proof as an independent commit prerequisite."
+    excluded_claims: "Not L1 completion, exact-head CI, independent review, Formal Validator, Audit, Release, merge authorization, positive causal receipt or CODE_ACTIONABLE."
+  publication:
+    existing_worktree_branch: codex/1851-causal-admission-20261103
+    remote_branch_fresh_check: ABSENT
+    open_PR_search_for_1851: NONE_FOUND
+    prior_PR_1854: CLOSED_DO_NOT_REVIVE
+    next: LOCAL_COMMIT_THEN_NON_FORCE_PUSH_EXISTING_BRANCH_AND_RECHECK_CANONICAL_PR_INVENTORY
+  governance:
+    l1: PARTIAL
+    l2: HOLD
+    learning_loop_verified: false
+    performance_improvement: UNPROVEN
+    pr_2976: BLOCKED_INDEPENDENT_IDENTITY
+  safety: PAPER_ONLY_LIVE_NONE_PRODUCTION_MUTATION_FALSE_REAL_ORDER_FALSE_REAL_TRANSFER_FALSE_AI_ZERO_AUTHORITY

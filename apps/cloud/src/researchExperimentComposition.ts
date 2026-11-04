@@ -1,3 +1,4 @@
+import { performance } from "node:perf_hooks";
 import { SqliteCandidatePromotionRepository, SqliteResearchCandleStore, SqliteResearchDatasetManifestStore, SqliteResearchEvaluationLedger, SqliteResearchHoldoutLedger, SqliteResearchMemoryRepository, SqliteResearchSessionRepository, SqliteResearchPrecommitRepository, type SqliteDatabase } from "../../../packages/storage/src/index";
 import { BacktestResearchEvaluator, buildDonchianResearchStrategy, buildRsiResearchStrategy, buildSmaResearchStrategy } from "./backtestResearchEvaluator";
 import { ResearchAutomationRuntime } from "./researchAutomationRuntime";
@@ -307,17 +308,26 @@ export function composeResearchExperiments(input: {
     if (gapFilling || researchTickActive || stopped) return Object.freeze([]);
     gapFilling = true;
     const results: GapFillResult[] = [];
+    let fillMs = 0, readMs = 0, materializeMs = 0;
     try {
       for (const market of settings.markets) {
         if (stopped) break;
+        const fillStarted = performance.now();
         const result = await fillRecentGaps({ market, windowMs: targetSpanMs, nowMs: now(), store, fetchPage, sleep });
+        fillMs += performance.now() - fillStarted;
         results.push(result);
         if (result.status === "NO_GAPS" || result.status === "FILLED") {
           const firstClose = store.earliestCloseTime(market, M);
           const lastClose = store.latestCloseTime(market, M);
           if (firstClose != null && lastClose != null) {
             try {
-              materializeResearchDatasetManifest({ store: datasetManifests, candleStore: store, market, intervalMs: M, candles: store.read(market, M, Math.max(firstClose, lastClose - targetSpanMs + M), lastClose), source: `upbit-1m-closed:${market}:${M}`, createdAt: new Date(now()).toISOString(), sourceCommitSha: settings.sourceCommitSha });
+              const readStarted = performance.now();
+              const candles = store.read(market, M, Math.max(firstClose, lastClose - targetSpanMs + M), lastClose);
+              readMs += performance.now() - readStarted;
+              const materializeStarted = performance.now();
+              try {
+                materializeResearchDatasetManifest({ store: datasetManifests, candleStore: store, market, intervalMs: M, candles, source: `upbit-1m-closed:${market}:${M}`, createdAt: new Date(now()).toISOString(), sourceCommitSha: settings.sourceCommitSha });
+              } finally { materializeMs += performance.now() - materializeStarted; }
               log(`[research-manifest] ${market} materialized dataset manifest after gap fill`);
             } catch (error) { log(`[research-manifest] ${market} blocked after gap fill: ${error instanceof Error ? error.message : "unknown"}`); }
           }
@@ -329,7 +339,7 @@ export function composeResearchExperiments(input: {
       results.push({ market: "", status: "ERROR", missing: 0, recorded: 0, rejected: 0, pages: 0, errorCode: "GAP_FILL_FAILED" } as GapFillResult);
     } finally {
       gapFilling = false;
-      try { orchestrator.recordGapFill(results, now()); } catch { /* display only */ }
+      try { orchestrator.recordGapFill(results, now(), { fillMs, readMs, materializeMs }); } catch { /* display only */ }
     }
     return Object.freeze(results);
   };

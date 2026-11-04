@@ -1,8 +1,9 @@
 import { hashCausalDispatchCapability, newCausalDispatchCapability } from "./causalDispatchBinding";
 import { claimRegisteredCausalDispatch, registerCausalDispatchBinding, verifyRegisteredCausalDispatch, type ExecutionCoordinatorNamespace } from "./executionCoordinator";
-import { verifyGithubCodingPublisherIdentity, verifyGithubCodingPublisherRun, verifyGithubCodingSourceRun, type SourceExecutionIdentity } from "./githubActionsOidc";
+import { verifyGithubCodingPublisherIdentity, verifyGithubCodingPublisherRun, verifyGithubCodingSourceRun, type SourceExecutionIdentity, type VerifiedCodingPublisherIdentity } from "./githubActionsOidc";
 import { executeGithubDispatch, type GithubExecutorResult } from "./githubExecutor";
 import type { AutopilotExecutionRequest } from "./executionPlanner";
+import type { CausalAdmissionReceipt } from "./causalRegressionAdmission";
 
 type GithubFetch = NonNullable<Parameters<typeof verifyGithubCodingPublisherIdentity>[2]>;
 
@@ -15,6 +16,7 @@ export interface CausalDispatchContext {
   readonly source: SourceExecutionIdentity;
   readonly now: number;
   readonly fetchImpl?: GithubFetch;
+  readonly causalAdmission?: CausalAdmissionReceipt | null;
 }
 
 /** Dispatches a provenance-bound consumer; this operation never establishes causal content. */
@@ -22,7 +24,8 @@ export async function dispatchWithCausalBinding(context: CausalDispatchContext, 
   if (request.kind !== "REPOSITORY_AUTOPILOT" || request.repository !== context.allowedRepository
     || request.dedupeKey !== context.dedupeKey || request.executionId !== context.executionId
     || request.headSha !== context.source.sha || !Number.isSafeInteger(request.workflowRunId)
-    || String(request.workflowRunId) !== context.source.runId) return null;
+    || String(request.workflowRunId) !== context.source.runId
+    || request.workflowRunAttempt !== Number(context.source.runAttempt)) return null;
   const capability = await prepareCausalDispatch(context, expiresAt);
   if (!capability) return null;
   try {
@@ -42,7 +45,7 @@ export async function prepareCausalDispatch(context: CausalDispatchContext, expi
     const capabilityDigest = await hashCausalDispatchCapability(capability);
     const registered = await registerCausalDispatchBinding(context.coordinator, {
       dedupeKey: context.dedupeKey, executionId: context.executionId, source: context.source,
-      capabilityDigest, now: context.now, expiresAt,
+      capabilityDigest, now: context.now, expiresAt, causalAdmission: context.causalAdmission ?? null,
     });
     return registered ? capability : null;
   } catch {
@@ -51,7 +54,7 @@ export async function prepareCausalDispatch(context: CausalDispatchContext, expi
 }
 
 /** A successful result proves publisher/source provenance only, not a causal regression or coding permission. */
-export async function claimVerifiedCausalDispatch(context: CausalDispatchContext, oidcToken: string, capability: string): Promise<boolean> {
+export async function claimVerifiedCausalDispatch(context: CausalDispatchContext, oidcToken: string, capability: string): Promise<{ claimed: boolean; causalAdmissionGranted: boolean }> {
   try {
     const publisher = await verifyGithubCodingPublisherIdentity(oidcToken, context.allowedRepository, context.fetchImpl, Math.floor(context.now / 1000));
     await verifyGithubCodingPublisherRun(publisher, context.githubToken, context.fetchImpl);
@@ -59,25 +62,26 @@ export async function claimVerifiedCausalDispatch(context: CausalDispatchContext
     const capabilityDigest = await hashCausalDispatchCapability(capability);
     return await claimRegisteredCausalDispatch(context.coordinator, {
       dedupeKey: context.dedupeKey, executionId: context.executionId, source: context.source,
-      publisher, capabilityDigest, now: context.now,
+      publisher, capabilityDigest, now: context.now, causalAdmission: context.causalAdmission ?? null,
     });
   } catch {
-    return false;
+    return { claimed: false, causalAdmissionGranted: false };
   }
 }
 
 /** Re-validates the same bound run; still provides no causal-result or coding authority. */
-export async function verifyClaimedCausalDispatch(context: CausalDispatchContext, oidcToken: string, capability: string): Promise<boolean> {
+export async function verifyClaimedCausalDispatch(context: CausalDispatchContext, oidcToken: string, capability: string): Promise<{ verified: boolean; causalAdmissionGranted: boolean; publisher?: VerifiedCodingPublisherIdentity }> {
   try {
     const publisher = await verifyGithubCodingPublisherIdentity(oidcToken, context.allowedRepository, context.fetchImpl, Math.floor(context.now / 1000));
     await verifyGithubCodingPublisherRun(publisher, context.githubToken, context.fetchImpl);
     await verifyGithubCodingSourceRun(context.source, context.allowedRepository, context.githubToken, context.fetchImpl);
     const capabilityDigest = await hashCausalDispatchCapability(capability);
-    return await verifyRegisteredCausalDispatch(context.coordinator, {
+    const result = await verifyRegisteredCausalDispatch(context.coordinator, {
       dedupeKey: context.dedupeKey, executionId: context.executionId, source: context.source,
       publisher, capabilityDigest, now: context.now,
     });
+    return { ...result, ...(result.verified ? { publisher } : {}) };
   } catch {
-    return false;
+    return { verified: false, causalAdmissionGranted: false };
   }
 }
