@@ -12,8 +12,9 @@ export const PAPER_RISK_CAPITAL_RATIOS = Object.freeze({
   maxPositionNotional: 0.5,
   maxSymbolExposureNotional: 0.5,
   maxPortfolioExposureNotional: 1,
-  maxDailyBuyNotional: 1,
-  maxDailySellNotional: 1,
+  // Owner decision 2026-11-04: 3x capital per day (KRW 300,000 at KRW 100,000). Still below the fixed canonical KRW 2,000,000 limit.
+  maxDailyBuyNotional: 3,
+  maxDailySellNotional: 3,
   maxDailyLoss: 0.1,
 } as const);
 

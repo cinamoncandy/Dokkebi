@@ -1,0 +1,32 @@
+id: WO-CLOUD-20261104-DAILY-NOTIONAL-3X
+title: "Raise the PAPER daily buy and sell notional limits from 1x to 3x capital (owner decision)"
+status: READY_FOR_REVIEW
+owner: nusa-development
+repository: cinamoncandy/NUSA
+base_branch: main
+implementation_branch: claude/daily-notional-3x
+authority_impact: risk_limit_change_owner_approved
+objective: "With KRW 100,000 capital the daily buy and sell limits (1x = KRW 100,000) were used up within about 3h40m of each KST day; after that SELL and BUY were rejected until midnight (3,405+ MAX_DAILY_SELL_NOTIONAL rejections, one open position unable to exit, learning periods waiting for a realized trade). Owner decision on 2026-11-04 (message: '30만원'): daily buy and daily sell limits become KRW 300,000 (3x capital)."
+owner_decision:
+  date: "2026-11-04"
+  statement: "30만원 (daily buy and daily sell notional limit)"
+  asked_options: ["2x = KRW 200,000", "3x = KRW 300,000", "unchanged"]
+scope:
+  - "apps/cloud/src/paperRiskLimitScaling.ts: PAPER_RISK_CAPITAL_RATIOS maxDailyBuyNotional 1 -> 3 and maxDailySellNotional 1 -> 3."
+  - "tests/paper-risk-limit-scaling.test.js: expected values 300,000 and a check that they stay below the fixed canonical limits."
+exclusions:
+  - "The fixed canonical limits (maxDailyBuyNotional and maxDailySellNotional KRW 2,000,000) are unchanged, so the scaled limit stays tighter than the canonical one."
+  - "Not changed: maxOrderNotional (20%), maxPositionNotional (50%), maxSymbolExposure (50%), maxPortfolioExposure (100%), maxDailyLoss (10%), order-rate limits, same-side streak, consecutive-loss limit, capital (KRW 100,000), thresholds, Audit or Release rules, the qualification-pinned execution boundary."
+  - "No LIVE authority: PAPER only; the daily loss limit (KRW 10,000) and per-order, position and exposure caps still bound the risk of every order."
+safety:
+  paper_only: true
+  liveAuthority: NONE
+  productionMutationAllowed: false
+  aiAuthority: ZERO_AUTHORITY
+  fail_closed: "The gateway still rejects any order above the scaled limits; the fingerprint of the scaled limits changes, so closed-learning evidence names the new enforced policy."
+verification_commands:
+  - node_modules/.bin/tsc -p tsconfig.json
+  - node -r ./tests/register-dist.cjs --test tests/paper-risk-limit-scaling.test.js tests/paper-risk-gate-live-state.test.js tests/cloud-paper-daily-loss-streak.test.js tests/cloud-paper-cancelled-fill-risk.test.js dist/apps/cloud/src/cloudPaperCanonicalRiskGateway.requalification.test.js
+  - node scripts/validate-aipos-yaml.js
+review: "Draft PR; a separate non-author session reviews it under docs/GRILL_ME_PROTOCOL.md. Server effect needs an owner-approved oracle-paper-release run."
+residual: "Effect on the live server is verified only after the release (daily rejection counts, realized periods). Higher daily turnover also means more simulated fees; this change does not alter strategy behaviour."
