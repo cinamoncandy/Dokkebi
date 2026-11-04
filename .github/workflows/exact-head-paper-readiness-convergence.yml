@@ -274,8 +274,21 @@ jobs:
             fi
           fi
 
-      - name: Upload immutable exact-head PAPER readiness receipt
+      - name: Recheck protected main before readiness receipt upload
+        id: current-main
         if: steps.certify.outputs.certified == 'true'
+        env:
+          TARGET_SHA: ${{ steps.source.outputs.target_sha }}
+        run: |
+          set -euo pipefail
+          current_main="$(gh api "repos/$GITHUB_REPOSITORY/branches/main" --jq '.commit.sha')"
+          EXPECTED_TARGET_SHA="$TARGET_SHA" \
+            EXPECTED_CURRENT_MAIN_SHA="$current_main" \
+            node scripts/validate-exact-head-paper-readiness-source.js current-main
+          echo "matches=true" >> "$GITHUB_OUTPUT"
+
+      - name: Upload immutable exact-head PAPER readiness receipt
+        if: steps.certify.outputs.certified == 'true' && steps.current-main.outputs.matches == 'true'
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: exact-head-paper-readiness-${{ steps.source.outputs.target_sha }}

@@ -21,15 +21,22 @@ function validSha(value) {
   return typeof value === "string" && /^[a-f0-9]{40}$/i.test(value);
 }
 
+function validateCurrentMainSha(targetShaValue, currentMainShaValue) {
+  const targetSha = String(targetShaValue ?? "").toLowerCase();
+  const currentMainSha = String(currentMainShaValue ?? "").toLowerCase();
+  if (!validSha(targetSha)) reject("TARGET_SHA_INVALID");
+  if (!validSha(currentMainSha)) reject("CURRENT_MAIN_SHA_INVALID");
+  if (targetSha !== currentMainSha) reject("TARGET_NOT_CURRENT_MAIN");
+  return Object.freeze({ targetSha, currentMainSha });
+}
+
 function validateSourceRun(run, expected) {
   if (!run || typeof run !== "object" || Array.isArray(run)) reject("RUN_NOT_OBJECT");
   if (!expected || typeof expected !== "object") reject("EXPECTATION_NOT_OBJECT");
 
   const expectedRunId = positiveInteger(expected.sourceRunId, "EXPECTED_RUN_ID_INVALID");
   const expectedAttempt = positiveInteger(expected.sourceRunAttempt, "EXPECTED_RUN_ATTEMPT_INVALID");
-  const targetSha = String(expected.targetSha ?? "").toLowerCase();
-  const currentMainSha = String(expected.currentMainSha ?? "").toLowerCase();
-  if (!validSha(targetSha) || !validSha(currentMainSha) || targetSha !== currentMainSha) reject("TARGET_NOT_CURRENT_MAIN");
+  const { targetSha } = validateCurrentMainSha(expected.targetSha, expected.currentMainSha);
   if (Number(run.id) !== expectedRunId) reject("RUN_ID_MISMATCH");
   if (Number(run.run_attempt) !== expectedAttempt) reject("RUN_ATTEMPT_MISMATCH");
   if (run.name !== ACTUAL_PAPER_WORKFLOW_NAME) reject("WORKFLOW_NAME_MISMATCH");
@@ -99,6 +106,7 @@ module.exports = {
   READINESS_WORKFLOW_PATH,
   readGitHubWorkflowRunIdentity,
   validateArtifactArchiveDigest,
+  validateCurrentMainSha,
   validateSourceArtifact,
   validateSourceRun,
 };

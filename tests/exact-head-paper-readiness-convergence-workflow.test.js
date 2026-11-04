@@ -9,6 +9,7 @@ const {
   READINESS_WORKFLOW_PATH,
   readGitHubWorkflowRunIdentity,
   validateArtifactArchiveDigest,
+  validateCurrentMainSha,
   validateSourceArtifact,
   validateSourceRun,
 } = require("../scripts/lib/exact-head-paper-readiness-source.js");
@@ -83,6 +84,17 @@ test("canonical main Actual PAPER run can be verified as the exact token-dispatc
     repository: REPOSITORY,
     repositoryId: REPOSITORY_ID,
   });
+});
+
+test("a main advance after certification blocks readiness receipt issuance", () => {
+  assert.deepEqual(validateCurrentMainSha(TARGET_SHA, TARGET_SHA), {
+    targetSha: TARGET_SHA,
+    currentMainSha: TARGET_SHA,
+  });
+  assert.throws(
+    () => validateCurrentMainSha(TARGET_SHA, "2222222222222222222222222222222222222222"),
+    /TARGET_NOT_CURRENT_MAIN/,
+  );
 });
 
 test("source run rejects wrong run, attempt, workflow, repository, branch, SHA, event, actor, or completion", () => {
@@ -211,4 +223,14 @@ test("convergence accepts exact run inputs, waits boundedly, and suppresses call
   assert.match(certify, /-z "\$INPUT_SOURCE_RUN_ID"/);
   assert.equal((certify.match(/-z "\$INPUT_SOURCE_RUN_ID"/g) ?? []).length, 1);
   assert.match(resolveSource, /-z "\$INPUT_SOURCE_RUN_ID"/);
+
+  const recheckIndex = steps.findIndex((step) => step.id === "current-main");
+  const certifyIndex = steps.findIndex((step) => step.id === "certify");
+  const uploadIndex = steps.findIndex((step) => step.name === "Upload immutable exact-head PAPER readiness receipt");
+  assert.ok(recheckIndex > certifyIndex && recheckIndex < uploadIndex, "recheck protected main after certification and immediately before receipt upload");
+  const recheck = steps[recheckIndex];
+  assert.match(recheck.run, /repos\/\$GITHUB_REPOSITORY\/branches\/main/);
+  assert.match(recheck.run, /validate-exact-head-paper-readiness-source\.js current-main/);
+  assert.equal(recheck.if, "steps.certify.outputs.certified == 'true'");
+  assert.match(steps[uploadIndex].if, /steps\.current-main\.outputs\.matches == 'true'/);
 });

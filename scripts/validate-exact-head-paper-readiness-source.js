@@ -1,6 +1,7 @@
 const { readFileSync } = require("node:fs");
 const {
   validateArtifactArchiveDigest,
+  validateCurrentMainSha,
   validateSourceArtifact,
   validateSourceRun,
 } = require("./lib/exact-head-paper-readiness-source.js");
@@ -30,6 +31,12 @@ function main(argv = process.argv.slice(2), environment = process.env) {
     return verified;
   }
 
+  if (mode === "current-main") {
+    const verified = validateCurrentMainSha(environment.EXPECTED_TARGET_SHA, environment.EXPECTED_CURRENT_MAIN_SHA);
+    process.stdout.write(`CURRENT_MAIN_VERIFIED sha=${verified.currentMainSha}\n`);
+    return verified;
+  }
+
   if (mode === "artifact") {
     const verified = validateSourceArtifact(parseJsonEnvironment("SOURCE_ARTIFACT_JSON"), {
       sourceRunId: environment.EXPECTED_SOURCE_RUN_ID,
@@ -49,7 +56,7 @@ function main(argv = process.argv.slice(2), environment = process.env) {
     return digest;
   }
 
-  throw new Error("usage: node scripts/validate-exact-head-paper-readiness-source.js <run|artifact|artifact-archive>");
+  throw new Error("usage: node scripts/validate-exact-head-paper-readiness-source.js <run|current-main|artifact|artifact-archive>");
 }
 
 if (require.main === module) {
