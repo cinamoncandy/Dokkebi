@@ -50,7 +50,13 @@ Safety stays: PAPER_ONLY, liveAuthority=NONE, productionMutationAllowed=false, a
 ## 실행 전 승인 조건 (모두 아직 충족되지 않음)
 1. #2994(또는 후속)가 병합되어 소비 쪽 검증기가 main에 있다. **현재 미충족:** 초안이고 main보다 뒤처져 있으며, 열린 P2 리뷰 스레드 2건(`PRRT_kwDOTUbne86y_bHe`, `PRRT_kwDOTUbne86y_bHi`)의 공식 처리가 남아 있고, 적격 비작성자 검토자가 없어 `BLOCKED_VALIDATOR_INDEPENDENCE` 상태다.
 2. `R`이 준비되어 있고 `C`와 같은 시점에 검토되었다. **현재 미충족:** `R`은 만들어지지 않았다.
-3. 빨간 main에서 Gate A 거절과 재배정 재시도 동작을 확인했고, 창 동안 지켜볼 담당자가 이름으로 정해졌다. **현재 미충족.**
+3. 빨간 main에서 Gate A 거절과 재배정 재시도 동작을 확인했고, 창 동안 지켜볼 담당자가 이름으로 정해졌다. **현재 부분 충족:**
+   - **코드 수준 확인됨 (2026-11-05, main `185c52c22`, 읽기 전용):** 빨간 main `CI`(이름 `CI`, 실패, `main`, `push`)는 `scheduledRuntime.ts`가 복구 대상으로 집지만, 그 뒤 세 겹이 막는다.
+     (1) 스케줄러: `scheduledEvolutionCoding.ts`가 실패 신호가 있는 `REPOSITORY_AUTOPILOT` 요청을 `workflow-failure-causal-evidence-unverified`로 **중단(ABSTAINED)** 한다. 임대 획득과 코딩 배정 **이전**이다.
+     (2) 워커: `worker.ts`의 코딩 라우트는 워크플로 실패 사유(`isWorkflowFailureCodingReason`)에 인과 승인이 없으면 `409 CAUSAL_ACTIONABILITY_UNVERIFIED`로 거절한다.
+     (3) 러너: `codingRunner.ts`가 인과 출처 신원이 맞지 않으면 `CODING_RUNNER_CAUSAL_SOURCE_IDENTITY_INVALID`로 거절한다. 재시도 스크립트(`autopilot-dispatch-retry.js`)는 `CODING_PROPOSAL_FAILED_CLOSED`를 재시도하지 않는 "조치 없음" 코드로 다루고 시도 횟수는 실행당 3회로 제한된다.
+   - 이를 보호하는 테스트 130개가 통과했다(`causalAdmissionAuthorization`, `worker`, `scheduledEvolutionCoding`, `scheduledRuntime.failureRouting`, `codingRunner`, `repairableWorkflowRun`; main `185c52c22`를 빌드해 실행).
+   - **아직 미충족:** 실제 빨간 main에서의 **라이브 동작 확인**과, 창 동안 지켜볼 **담당자의 이름 지정**. 확인을 위해 Autopilot 게이트를 바꾸지 않는다. 카나리가 만든 진짜 증명서를 소비 검증기가 받아 승인하는 경로(#2994)가 열리면 그 승인은 그 정확한 실패 실행에 대한 것이므로, 창 동안 `CODE_ACTIONABLE` 소비를 막는 중단 조건 5번이 계속 유효하다.
 4. 이 준비서에 대한 독립 검토가 끝났다. (2026-11-04 비작성자 검토 완료, P1 2건을 이 개정에서 반영함.)
 5. 오너가 날짜와 시간대(한국시간), 중단 상한, 60분 중단 책임자를 정해 명시적으로 승인했다. **현재 미충족.**
 
