@@ -1,0 +1,42 @@
+current_ops_oracle_convergence_1816_20261105:
+  work_order: WO-OPS-20261105-ORACLE-CONVERGENCE-1816
+  issue: 1816
+  observed_at_utc: "2026-11-05T07:42:39Z"
+  status: IN_PROGRESS
+  repository: cinamoncandy/NUSA
+  protected_main: 185c52c22691a5a35b13fe024cb39d810719a833
+  branch: fix/oracle-convergence-host-evidence-1816
+  base_commit: 185c52c22691a5a35b13fe024cb39d810719a833
+  implementation:
+    watchdog_requires_latest_exact_main_oracle_release: true
+    watchdog_requires_later_read_only_host_diagnose: true
+    watchdog_dispatches_release_or_host_diagnose: false
+    receipt_uses_client_asserted_host_sha: false
+    source_release_provenance: UNKNOWN_UNTIL_RECONSTRUCTED
+  observed_evidence:
+    oracle_release_run: "41966440881 attempt 1 SUCCESS on 185c52c22691a5a35b13fe024cb39d810719a833"
+    release_artifact: "13387348034 sha256:248a777eaa072c9a3f4cd5760c9d28e53abbc5eb4a055d90c601ece05301946d"
+    host_diagnose_run: "41969155063 attempt 1 SUCCESS; observed_sha=185c52c22691a5a35b13fe024cb39d810719a833; observed_at=2026-11-05T04:39:33Z; runner_id=24"
+    old_convergence_run: "41958436826 failed before the later Release and Diagnose; historical only"
+    actual_evidence_evaluator: "PASS read-only against GitHub run/job/artifact/log data; not a canonical workflow receipt"
+  validation:
+    focused_tests: PASS_23_OF_23
+    workflow_yaml_and_bash_syntax: PASS
+    workflow_action_inputs: PASS
+    workflow_action_pins: PASS
+    workflow_authority_map: PASS_39_WORKFLOWS
+    typecheck: PASS
+    build: PASS
+    validate_full: PASS
+    full_suite: PASS_1328_FILES
+    security: PASS
+    lint: PASS_0_ERRORS_47_BASELINE_WARNINGS
+    exact_head_ci: PENDING
+    independent_review: PENDING
+  commit_gate: NOT_MET
+  canonical_receipt: NOT_PUBLISHED
+  oracle_release_or_host_operation_performed: false
+  l1: PARTIAL
+  l2: HOLD
+  safety: PAPER_ONLY_LIVE_NONE_PRODUCTION_MUTATION_FALSE_REAL_ORDER_FALSE_REAL_TRANSFER_FALSE_AI_ZERO_AUTHORITY_FAIL_CLOSED
+  next: "After final diff inspection, commit and publish the canonical Draft PR; await exact-head CI and independent review. Never dispatch a new Oracle Release from the watchdog."

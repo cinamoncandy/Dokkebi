@@ -52,7 +52,9 @@ jobs:
           }
 
           runs_for_main() {
-            gh api "repos/$GITHUB_REPOSITORY/actions/runs?head_sha=$MAIN_SHA&per_page=100"
+            gh api --paginate \
+              "repos/$GITHUB_REPOSITORY/actions/runs?head_sha=$MAIN_SHA&per_page=100" \
+              --jq '.workflow_runs[]' | jq -s '{workflow_runs: .}'
           }
 
           workflow_success() {
@@ -82,6 +84,50 @@ jobs:
                   (.conclusion == "failure" or .conclusion == "timed_out" or .conclusion == "cancelled"))] |
               length
             '
+          }
+
+          latest_oracle_release() {
+            printf '%s' "$RUNS_JSON" | jq -c --arg sha "$MAIN_SHA" '
+              [.workflow_runs[] |
+                select(.name == "Oracle PAPER Release" and
+                  .path == ".github/workflows/oracle-paper-release.yml" and
+                  .head_branch == "main" and .head_sha == $sha)] |
+              sort_by(.run_started_at // .created_at) | last // empty
+            '
+          }
+
+          oracle_release_success() {
+            local run
+            run="$(latest_oracle_release)"
+            [ -n "$run" ] || return 1
+            printf '%s' "$run" | jq -e '
+              .status == "completed" and .conclusion == "success" and
+              (.run_attempt | type) == "number" and .run_attempt >= 1
+            ' >/dev/null
+          }
+
+          latest_post_release_host_diagnose() {
+            local release
+            release="$(latest_oracle_release)"
+            [ -n "$release" ] || return 1
+            printf '%s' "$RUNS_JSON" | jq -c --arg sha "$MAIN_SHA" --arg release_done "$(printf '%s' "$release" | jq -r '.updated_at // empty')" '
+              [.workflow_runs[] |
+                select(.name == "Oracle Host Diagnose" and
+                  .path == ".github/workflows/oracle-host-diagnose.yml" and
+                  .head_branch == "main" and .head_sha == $sha and
+                  ((.run_started_at // .created_at) > $release_done))] |
+              sort_by(.run_started_at // .created_at) | last // empty
+            '
+          }
+
+          oracle_host_diagnose_success() {
+            local run
+            run="$(latest_post_release_host_diagnose)"
+            [ -n "$run" ] || return 1
+            printf '%s' "$run" | jq -e '
+              .status == "completed" and .conclusion == "success" and
+              (.run_attempt | type) == "number" and .run_attempt >= 1
+            ' >/dev/null
           }
 
           surface_incident() {
@@ -234,11 +280,45 @@ jobs:
             && workflow_success "Windows Desktop Stable Release" \
             && [ "$ANDROID_TARGET" = "$MAIN_SHA" ] \
             && [ "$WINDOWS_TARGET" = "$MAIN_SHA" ]; then
-            dispatch_bounded \
-              "Deployment Receipt" \
-              "Deployment Convergence Receipt" \
-              "deployment-convergence-receipt.yml" \
-              -f "inputs[source_sha]=$MAIN_SHA"
+            if ! oracle_release_success; then
+              LATEST_RELEASE="$(latest_oracle_release)"
+              if [ -n "$LATEST_RELEASE" ]; then
+                RELEASE_STATUS="$(printf '%s' "$LATEST_RELEASE" | jq -r '.status // "unknown"')"
+                RELEASE_CONCLUSION="$(printf '%s' "$LATEST_RELEASE" | jq -r '.conclusion // "none"')"
+                RELEASE_ID="$(printf '%s' "$LATEST_RELEASE" | jq -r '.id // "unknown"')"
+                RELEASE_ATTEMPT="$(printf '%s' "$LATEST_RELEASE" | jq -r '.run_attempt // "unknown"')"
+                echo "Convergence receipt waits for the latest exact-main Oracle PAPER Release to complete successfully (run $RELEASE_ID, attempt $RELEASE_ATTEMPT, status $RELEASE_STATUS, conclusion $RELEASE_CONCLUSION). No Release is dispatched by the watchdog."
+                if [ "$RELEASE_STATUS" = "completed" ]; then
+                  surface_incident "Oracle PAPER Release" "Latest exact-main run $RELEASE_ID attempt $RELEASE_ATTEMPT concluded $RELEASE_CONCLUSION. The watchdog will not dispatch a Release; use the existing governed manual Release path after investigation."
+                fi
+              else
+                echo "Convergence receipt waits for an exact-main Oracle PAPER Release. No Release is dispatched by the watchdog."
+                surface_incident "Oracle PAPER Release" "No exact-main Oracle PAPER Release is available for $MAIN_SHA. The watchdog does not dispatch a Release; use the existing governed manual Release path."
+              fi
+            elif ! oracle_host_diagnose_success; then
+              LATEST_DIAGNOSE="$(latest_post_release_host_diagnose || true)"
+              if [ -n "$LATEST_DIAGNOSE" ]; then
+                DIAGNOSE_STATUS="$(printf '%s' "$LATEST_DIAGNOSE" | jq -r '.status // "unknown"')"
+                DIAGNOSE_CONCLUSION="$(printf '%s' "$LATEST_DIAGNOSE" | jq -r '.conclusion // "none"')"
+                DIAGNOSE_ID="$(printf '%s' "$LATEST_DIAGNOSE" | jq -r '.id // "unknown"')"
+                DIAGNOSE_ATTEMPT="$(printf '%s' "$LATEST_DIAGNOSE" | jq -r '.run_attempt // "unknown"')"
+                echo "Convergence receipt waits for the latest post-Release Oracle Host Diagnose to complete successfully (run $DIAGNOSE_ID, attempt $DIAGNOSE_ATTEMPT, status $DIAGNOSE_STATUS, conclusion $DIAGNOSE_CONCLUSION). Host Diagnose remains read-only and manual."
+                if [ "$DIAGNOSE_STATUS" = "completed" ]; then
+                  surface_incident "Oracle Host Diagnose" "Post-Release read-only Host Diagnose run $DIAGNOSE_ID attempt $DIAGNOSE_ATTEMPT concluded $DIAGNOSE_CONCLUSION. Convergence remains fail-closed until fresh matching host evidence is available."
+                fi
+              else
+                echo "Convergence receipt waits for a fresh read-only Oracle Host Diagnose started after the successful Release. The watchdog does not access or mutate the host."
+                RELEASE_ID="$(latest_oracle_release | jq -r '.id // "unknown"')"
+                RELEASE_ATTEMPT="$(latest_oracle_release | jq -r '.run_attempt // "unknown"')"
+                surface_incident "Oracle Host Diagnose" "No successful post-Release read-only Host Diagnose is available after Oracle Release run $RELEASE_ID attempt $RELEASE_ATTEMPT. The watchdog does not dispatch or access the host."
+              fi
+            else
+              dispatch_bounded \
+                "Deployment Receipt" \
+                "Deployment Convergence Receipt" \
+                "deployment-convergence-receipt.yml" \
+                -f "inputs[source_sha]=$MAIN_SHA"
+            fi
           else
             echo "Convergence receipt waits for all exact-main runtime and stable distribution proofs."
           fi

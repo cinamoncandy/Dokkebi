@@ -25,11 +25,19 @@ jobs:
       convergence_status: ${{ steps.verify.outputs.convergence_status }}
       release_status: ${{ steps.verify.outputs.release_status }}
     steps:
+      - name: Checkout the exact workflow source SHA
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 1
+          persist-credentials: false
+
       - name: Verify exact-main runtime convergence and write receipt
         id: verify
         env:
           GH_TOKEN: ${{ github.token }}
           EXPECTED_SHA: ${{ inputs.source_sha }}
+          WORKFLOW_SHA: ${{ github.sha }}
         shell: bash
         run: |
           set -euo pipefail
@@ -37,6 +45,11 @@ jobs:
           printf '%s' "$EXPECTED_SHA" | grep -Eq '^[0-9a-fA-F]{40}$'
 
           CURRENT_MAIN="$(gh api "repos/$GITHUB_REPOSITORY/branches/main" --jq '.commit.sha')"
+
+          # This verifier reads the existing protected-main Release and read-only
+          # Host Diagnose runs. It never dispatches a Release or supplies a host SHA.
+          node scripts/deployment-convergence-oracle.js > "$RUNNER_TEMP/oracle-evidence.json"
+          ORACLE_CONVERGENCE_STATUS="$(jq -r '.oracle_convergence_status // "INCOMPLETE"' "$RUNNER_TEMP/oracle-evidence.json")"
 
           gh api --paginate \
             "repos/$GITHUB_REPOSITORY/actions/runs?head_sha=$EXPECTED_SHA&per_page=100" \
@@ -58,12 +71,12 @@ jobs:
           PROMOTE_RUN_ID="$(success_run_id "Autopilot Cloudflare Promote")"
           RUNTIME_PROOF_RUN_ID="$(success_run_id "Autopilot Cloudflare Runtime Proof")"
           PAPER_RUN_ID="$(success_run_id "Actual PAPER Public-Market Runtime Evidence")"
-          ORACLE_RUN_ID="$(success_run_id "Oracle PAPER Release")"
           ANDROID_RUN_ID="$(success_run_id "Android Stable Release")"
           WINDOWS_RUN_ID="$(success_run_id "Windows Desktop Stable Release")"
 
           ANDROID_TARGET="$(gh release view nusa-android --repo "$GITHUB_REPOSITORY" --json targetCommitish --jq '.targetCommitish' 2>/dev/null || true)"
           WINDOWS_TARGET="$(gh release view nusa-windows --repo "$GITHUB_REPOSITORY" --json targetCommitish --jq '.targetCommitish' 2>/dev/null || true)"
+          FINAL_MAIN="$(gh api "repos/$GITHUB_REPOSITORY/branches/main" --jq '.commit.sha' 2>/dev/null || true)"
 
           main_exact=false
           ci_ok=false
@@ -75,13 +88,13 @@ jobs:
           android_ok=false
           windows_ok=false
 
-          [ "$CURRENT_MAIN" = "$EXPECTED_SHA" ] && main_exact=true
+          [ "$CURRENT_MAIN" = "$EXPECTED_SHA" ] && [ "$FINAL_MAIN" = "$EXPECTED_SHA" ] && main_exact=true
           [ -n "$CI_RUN_ID" ] && ci_ok=true
           [ -n "$DEPLOY_RUN_ID" ] && deploy_ok=true
           [ -n "$PROMOTE_RUN_ID" ] && promote_ok=true
           [ -n "$RUNTIME_PROOF_RUN_ID" ] && runtime_proof_ok=true
           [ -n "$PAPER_RUN_ID" ] && paper_ok=true
-          [ -n "$ORACLE_RUN_ID" ] && oracle_ok=true
+          [ "$ORACLE_CONVERGENCE_STATUS" = "CONVERGED" ] && oracle_ok=true
           if [ -n "$ANDROID_RUN_ID" ] && [ "$ANDROID_TARGET" = "$EXPECTED_SHA" ]; then android_ok=true; fi
           if [ -n "$WINDOWS_RUN_ID" ] && [ "$WINDOWS_TARGET" = "$EXPECTED_SHA" ]; then windows_ok=true; fi
 
@@ -95,23 +108,24 @@ jobs:
           RELEASE_STATUS=RELEASE_PROVENANCE_UNKNOWN
 
           jq -n \
-            --arg schema_version "2" \
+            --arg schema_version "3" \
             --arg convergence_status "$CONVERGENCE_STATUS" \
             --arg release_status "$RELEASE_STATUS" \
             --arg repository "$GITHUB_REPOSITORY" \
             --arg source_sha "$EXPECTED_SHA" \
-            --arg observed_main_sha "$CURRENT_MAIN" \
+            --arg initial_main_sha "$CURRENT_MAIN" \
+            --arg observed_main_sha "$FINAL_MAIN" \
             --arg generated_at "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
             --arg ci_run_id "$CI_RUN_ID" \
             --arg deploy_run_id "$DEPLOY_RUN_ID" \
             --arg promote_run_id "$PROMOTE_RUN_ID" \
             --arg runtime_proof_run_id "$RUNTIME_PROOF_RUN_ID" \
             --arg paper_run_id "$PAPER_RUN_ID" \
-            --arg oracle_run_id "$ORACLE_RUN_ID" \
             --arg android_run_id "$ANDROID_RUN_ID" \
             --arg windows_run_id "$WINDOWS_RUN_ID" \
             --arg android_target "$ANDROID_TARGET" \
             --arg windows_target "$WINDOWS_TARGET" \
+            --slurpfile oracle "$RUNNER_TEMP/oracle-evidence.json" \
             --argjson main_exact "$main_exact" \
             --argjson ci_ok "$ci_ok" \
             --argjson deploy_ok "$deploy_ok" \
@@ -127,6 +141,7 @@ jobs:
               release_status: $release_status,
               repository: $repository,
               source_sha: $source_sha,
+              expected_main_sha: $source_sha,
               observed_main_sha: $observed_main_sha,
               generated_at: $generated_at,
               safety: {
@@ -135,21 +150,56 @@ jobs:
                 aiAuthority: "ZERO_AUTHORITY"
               },
               components: {
-                protected_main: { exact: $main_exact },
+                protected_main: { exact: $main_exact, before_sha: $initial_main_sha, after_sha: $observed_main_sha },
                 ci: { pass: $ci_ok, run_id: $ci_run_id },
                 cloudflare_deploy: { pass: $deploy_ok, run_id: $deploy_run_id },
                 cloudflare_promote: { pass: $promote_ok, run_id: $promote_run_id },
                 runtime_proof: { pass: $runtime_proof_ok, run_id: $runtime_proof_run_id },
                 actual_paper_runtime: { pass: $paper_ok, run_id: $paper_run_id },
-                oracle_paper_release: { pass: $oracle_ok, run_id: $oracle_run_id },
+                oracle_paper_release: {
+                  pass: $oracle_ok,
+                  convergence_status: ($oracle[0].oracle_convergence_status // "INCOMPLETE"),
+                  reason: ($oracle[0].oracle_convergence_reason // "UNKNOWN"),
+                  run_id: ($oracle[0].oracle_release_run_id // null),
+                  run_attempt: ($oracle[0].oracle_release_run_attempt // null),
+                  head_sha: ($oracle[0].oracle_release_head_sha // null),
+                  conclusion: ($oracle[0].oracle_release_conclusion // "UNKNOWN"),
+                  artifact_id: ($oracle[0].oracle_release_artifact_id // null),
+                  artifact_name: ($oracle[0].oracle_release_artifact_name // null),
+                  artifact_digest: ($oracle[0].oracle_release_artifact_digest // null),
+                  artifact_expired: ($oracle[0].oracle_release_artifact_expired // null),
+                  evidence_collection_error: ($oracle[0].oracle_evidence_collection_error // null)
+                },
+                oracle_host: {
+                  observed_sha: ($oracle[0].oracle_host_observed_sha // null),
+                  observed_at: ($oracle[0].oracle_host_observed_at // null),
+                  diagnose_run_id: ($oracle[0].oracle_host_diagnose_run_id // null),
+                  diagnose_attempt: ($oracle[0].oracle_host_diagnose_attempt // null),
+                  identity: ($oracle[0].oracle_host_identity // null)
+                },
                 android_stable: { pass: $android_ok, run_id: $android_run_id, target_sha: $android_target },
                 windows_stable: { pass: $windows_ok, run_id: $windows_run_id, target_sha: $windows_target }
               }
             }' > artifacts/deployment-convergence/receipt.json
 
+          jq \
+            '.oracle_convergence_status = (.components.oracle_paper_release.convergence_status // "INCOMPLETE") |
+             .oracle_release_run_id = .components.oracle_paper_release.run_id |
+             .oracle_release_run_attempt = .components.oracle_paper_release.run_attempt |
+             .oracle_release_head_sha = .components.oracle_paper_release.head_sha |
+             .oracle_release_conclusion = .components.oracle_paper_release.conclusion |
+             .oracle_host_observed_sha = .components.oracle_host.observed_sha |
+             .oracle_host_observed_at = .components.oracle_host.observed_at |
+             .oracle_host_diagnose_run_id = .components.oracle_host.diagnose_run_id |
+             .oracle_host_diagnose_attempt = .components.oracle_host.diagnose_attempt |
+             .oracle_host_identity = .components.oracle_host.identity' \
+            artifacts/deployment-convergence/receipt.json > "$RUNNER_TEMP/receipt.json"
+          mv "$RUNNER_TEMP/receipt.json" artifacts/deployment-convergence/receipt.json
+
           cat artifacts/deployment-convergence/receipt.json
           echo "convergence_status=$CONVERGENCE_STATUS" >> "$GITHUB_OUTPUT"
           echo "release_status=$RELEASE_STATUS" >> "$GITHUB_OUTPUT"
+          echo "oracle_convergence_status=$ORACLE_CONVERGENCE_STATUS" >> "$GITHUB_OUTPUT"
 
       - name: Upload machine-readable convergence receipt
         if: always()
