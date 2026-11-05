@@ -1,0 +1,30 @@
+id: WO-CLOUD-20261104-RISK-REPLAY-LEDGER-PRECISION
+title: "Risk gateway fill replay follows the ledger's 8-decimal rounding (fixes the INVALID_REQUEST halt after a chunked SELL exit)"
+status: READY_FOR_REVIEW
+owner: nusa-development
+repository: cinamoncandy/NUSA
+base_branch: main
+implementation_branch: claude/risk-replay-round8
+authority_impact: qualification_pinned_module_changed_requires_requalification
+objective: "Since release aaad8ffe4 (2026-11-04 16:05 KST) every BUY decision (7,379 by 23:32 KST) is HALTed as PAPER_RISK_HALT:INVALID_REQUEST. Cause: realizedLossState in cloudPaperCanonicalRiskGateway.ts replays all fills in raw floats and returns dailyRealizedPnL = NaN when a SELL exceeds the replayed position by more than Number.EPSILON. The ledger keeps quantities rounded to 8 decimals, so after a position is sold in several orders (the SELL chunking of #2993) the final chunk (the ledger remainder) can exceed the raw replayed remainder by up to one float ulp, which is far above Number.EPSILON for large quantities. Reproduced with the real gateway: 1,068 of 4,000 random chunked exits halt. The replay covers the whole history, so the halt does not clear at midnight."
+scope:
+  - "apps/cloud/src/cloudPaperCanonicalRiskGateway.ts: realizedLossState rounds the replayed quantity to 8 decimals on BUY and SELL, exactly like PaperTradingExecutionLoop (Number(value.toFixed(8)))."
+  - "tests/cloud-paper-risk-replay-ledger-precision.test.js: a reproduced failing case, a 300-case deterministic chunked-exit sample, a genuine oversell that must still HALT, and a whole-position sell that must stay ALLOW."
+exclusions:
+  - "No risk limit, threshold, capital or gate rule changes. The oversell check is kept (fail-closed): a sell larger than the held quantity at ledger precision still yields NaN and INVALID_REQUEST."
+  - "The qualification pins are NOT edited by this change: EXPECTED_RISK_BLOB in cloudPaperCanonicalRiskGateway.requalification.test.ts and the entry in moduleQualificationV1.ts name the old source blob b43962beb41a193eda30c8dc717f2cbcc8971edd. This module is pinned, so the change needs the formal requalification path before it can merge."
+  - "Recorded fills are not edited or deleted; the already-recorded history is simply replayed correctly."
+safety:
+  paper_only: true
+  liveAuthority: NONE
+  productionMutationAllowed: false
+  aiAuthority: ZERO_AUTHORITY
+  fail_closed: "A genuine oversell or any non-finite value still halts; only the float-versus-ledger rounding mismatch is removed."
+verification_commands:
+  - node_modules/.bin/tsc -p tsconfig.json
+  - node -r ./tests/register-dist.cjs --test tests/cloud-paper-risk-replay-ledger-precision.test.js tests/cloud-paper-daily-loss-streak.test.js tests/paper-risk-gate-live-state.test.js tests/cloud-paper-cancelled-fill-risk.test.js tests/paper-risk-limit-scaling.test.js
+  - node scripts/validate-aipos-yaml.js
+owner_decision: "2026-11-05: RISK exact-source formal requalification START approved for PR #2999. This is not approval of a pin change, merge or release, and not a verification verdict."
+evidence: "docs/RISK_REQUALIFICATION_EVIDENCE_PR2999.md (11 tests: original fails 3 defect cases and passes the 8 fail-closed ones; fixed passes all 11). Pins are NOT moved; the proposal is recorded there and applies only after a successful independent formal verification."
+review: "Draft PR. A separate non-author /grill-me review, the formal requalification of the pinned risk module, an owner-approved release and a diagnose read-back are required."
+residual: "The server's actual fill history was not read; the cause is established from the symptoms (first halt right after two chunked SELL fills) and from reproduction with the real gateway, not from the server data. After the fix is released, a read-back must show the halt gone."
