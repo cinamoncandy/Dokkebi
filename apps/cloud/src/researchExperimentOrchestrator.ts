@@ -112,11 +112,24 @@ export interface GapFillTimingsSummaryMs {
   readonly maxFillMs: number; readonly maxReadMs: number; readonly maxMaterializeMs: number;
 }
 
+export type ResearchGapFillMarketStatus = "NO_GAPS" | "FILLED" | "PARTIAL" | "RATE_LIMITED" | "ERROR";
+export interface ResearchGapFillMarketSummary {
+  readonly lastAttemptAt: number;
+  readonly status: ResearchGapFillMarketStatus;
+  readonly missing: number;
+  readonly recorded: number;
+  readonly rejected: number;
+  readonly pages: number;
+  readonly errorCode?: string;
+}
+
 export interface ResearchGapFillSummary {
   readonly lastRunAt?: number;
   readonly runs: number;
   readonly deferred: number;
   readonly counts: Readonly<Record<string, number>>;
+  /** Display only: the latest observed outcome per validated market code, with its own attempt time. */
+  readonly lastByMarket: Readonly<Record<string, ResearchGapFillMarketSummary>>;
   readonly lastErrorCode?: string;
   /** Display only: how long the last hourly run spent in each part, and the largest seen since start, to find what blocks the event loop. */
   readonly timingsMs?: GapFillTimingsSummaryMs;
@@ -202,16 +215,48 @@ export class ResearchExperimentOrchestrator {
 
   /**
    * Display only: the outcome of the hourly REST gap fill, the only writer of the candle series head. Fixed status and
-   * error codes with integer counts; nothing from the request or the data is kept.
+   * error codes with integer counts; per-market fields retain only the latest valid attempt and its bounded counters.
    */
-  public recordGapFill(results: readonly { readonly status: string; readonly errorCode?: string }[], at: number, timings?: GapFillTimingsMs): void {
+  public recordGapFill(results: readonly { readonly market: string; readonly status: string; readonly missing: number; readonly recorded: number; readonly rejected: number; readonly pages: number; readonly errorCode?: string }[], at: number, timings?: GapFillTimingsMs): void {
     const previous = this.gapFillSummary;
     const counts: Record<string, number> = { ...(previous?.counts ?? {}) };
     let lastErrorCode = previous?.lastErrorCode;
+    const lastByMarket: Record<string, ResearchGapFillMarketSummary> = { ...(previous?.lastByMarket ?? {}) };
+    const seenMarkets = new Set<string>();
+    const marketPattern = /^KRW-[A-Z0-9-]+$/;
+    const marketStatuses = new Set<ResearchGapFillMarketStatus>(["NO_GAPS", "FILLED", "PARTIAL", "RATE_LIMITED", "ERROR"]);
     for (const result of results) {
-      if (!GAP_FILL_CODE.test(result.status)) continue;
-      counts[result.status] = (counts[result.status] ?? 0) + 1;
-      if (result.errorCode !== undefined && GAP_FILL_CODE.test(result.errorCode)) lastErrorCode = result.errorCode;
+      if (result == null || typeof result !== "object") continue;
+      const validStatusCode = typeof result.status === "string" && GAP_FILL_CODE.test(result.status);
+      if (validStatusCode) {
+        counts[result.status] = (counts[result.status] ?? 0) + 1;
+        if (typeof result.errorCode === "string" && GAP_FILL_CODE.test(result.errorCode)) lastErrorCode = result.errorCode;
+      }
+      if (typeof result.market !== "string" || !marketPattern.test(result.market)) continue;
+      if (seenMarkets.has(result.market)) {
+        delete lastByMarket[result.market];
+        continue;
+      }
+      seenMarkets.add(result.market);
+      if (!validStatusCode || !marketStatuses.has(result.status as ResearchGapFillMarketStatus)
+        || ![result.missing, result.recorded, result.rejected, result.pages].every((value) => Number.isSafeInteger(value) && value >= 0)
+        || !Number.isSafeInteger(at) || at < 0) {
+        delete lastByMarket[result.market];
+        continue;
+      }
+      if (!(result.market in lastByMarket) && Object.keys(lastByMarket).length >= 20) {
+        const oldest = Object.entries(lastByMarket).sort(([leftMarket, left], [rightMarket, right]) => left.lastAttemptAt - right.lastAttemptAt || leftMarket.localeCompare(rightMarket))[0]?.[0];
+        if (oldest !== undefined) delete lastByMarket[oldest];
+      }
+      lastByMarket[result.market] = Object.freeze({
+        lastAttemptAt: at,
+        status: result.status as ResearchGapFillMarketStatus,
+        missing: result.missing,
+        recorded: result.recorded,
+        rejected: result.rejected,
+        pages: result.pages,
+        ...(result.errorCode !== undefined && GAP_FILL_CODE.test(result.errorCode) ? { errorCode: result.errorCode } : {}),
+      });
     }
     const whole = (value: number): number => (Number.isFinite(value) && value >= 0 ? Math.round(value) : 0);
     const timingsMs: GapFillTimingsSummaryMs | undefined = timings === undefined ? previous?.timingsMs : Object.freeze({
@@ -225,6 +270,7 @@ export class ResearchExperimentOrchestrator {
       runs: (previous?.runs ?? 0) + 1,
       deferred: previous?.deferred ?? 0,
       counts: Object.freeze(counts),
+      lastByMarket: Object.freeze(lastByMarket),
       ...(lastErrorCode === undefined ? {} : { lastErrorCode }),
       ...(timingsMs === undefined ? {} : { timingsMs }),
     });
@@ -233,7 +279,7 @@ export class ResearchExperimentOrchestrator {
   /** Display only: an hourly gap fill was postponed because a backfill, gap fill or research tick was still running. */
   public noteGapFillDeferred(): void {
     const previous = this.gapFillSummary;
-    this.gapFillSummary = Object.freeze({ ...(previous ?? { runs: 0, counts: Object.freeze({}) }), deferred: (previous?.deferred ?? 0) + 1 });
+    this.gapFillSummary = Object.freeze({ ...(previous ?? { runs: 0, counts: Object.freeze({}), lastByMarket: Object.freeze({}) }), deferred: (previous?.deferred ?? 0) + 1 });
   }
 
   public gapFill(): ResearchGapFillSummary | null {

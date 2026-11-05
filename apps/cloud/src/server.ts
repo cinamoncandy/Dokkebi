@@ -114,7 +114,7 @@ export interface CloudRuntimeLivenessSnapshot {
   readonly microstructureRecorder?: { readonly orderBookSamples: number; readonly tradeTicks: number; readonly writeFailures: number; readonly rejectedRows?: number; readonly lastRecordedAt?: number };
   readonly researchExperimentTicks?: { readonly lastTickAt: number; readonly lastStatus: string; readonly ticks: number; readonly sessionsStarted: number; readonly counts: Readonly<Record<string, number>> };
   /** Display-only outcome of the hourly REST gap fill (the candle series head writer): fixed codes and integers. */
-  readonly researchGapFill?: { readonly lastRunAt?: number; readonly runs: number; readonly deferred: number; readonly counts: Readonly<Record<string, number>>; readonly lastErrorCode?: string; readonly timingsMs?: Readonly<Record<string, number>> };
+  readonly researchGapFill?: { readonly lastRunAt?: number; readonly runs: number; readonly deferred: number; readonly counts: Readonly<Record<string, number>>; readonly lastByMarket?: Readonly<Record<string, { readonly lastAttemptAt: number; readonly status: string; readonly missing: number; readonly recorded: number; readonly rejected: number; readonly pages: number; readonly errorCode?: string }>>; readonly lastErrorCode?: string; readonly timingsMs?: Readonly<Record<string, number>> };
   /** The same research experiment summaries keyed by bar length ("1m", "15m", "60m", "240m"). */
   readonly researchExperimentTicksByInterval?: Readonly<Record<string, { readonly lastTickAt: number; readonly lastStatus: string; readonly ticks: number; readonly sessionsStarted: number; readonly counts: Readonly<Record<string, number>> }>>;
   /** Canonical PAPER ledger identity: a 64-hex fingerprint of ledger truth and integer counts/times only. */
@@ -395,7 +395,7 @@ function publicRuntimeLiveness(value: CloudRuntimeLivenessSnapshot): CloudRuntim
   };
   const ticksSummary = publicTicks(source.researchExperimentTicks as Record<string, unknown> | null | undefined);
   const experimentTicks = ticksSummary === undefined ? {} : { researchExperimentTicks: ticksSummary };
-  // Research gap fill: three integers, an optional timestamp, at most 12 code-keyed integer counts and one optional code.
+  // Research gap fill: aggregate fixed codes and timings plus bounded per-market fixed statuses/counters only.
   const rawGap = source.researchGapFill as Record<string, unknown> | null | undefined;
   let researchGapFill: { researchGapFill?: Record<string, unknown> } = {};
   if (rawGap != null && typeof rawGap === "object" && !Array.isArray(rawGap) && Number.isSafeInteger(rawGap.runs) && Number(rawGap.runs) >= 0 && Number.isSafeInteger(rawGap.deferred) && Number(rawGap.deferred) >= 0
@@ -410,8 +410,29 @@ function publicRuntimeLiveness(value: CloudRuntimeLivenessSnapshot): CloudRuntim
     const timingKeys = ["lastFillMs", "lastReadMs", "lastMaterializeMs", "maxFillMs", "maxReadMs", "maxMaterializeMs"] as const;
     const timingsMs = rawTimings != null && typeof rawTimings === "object" && !Array.isArray(rawTimings) && timingKeys.every((key) => Number.isSafeInteger(rawTimings[key]) && Number(rawTimings[key]) >= 0)
       ? { timingsMs: Object.fromEntries(timingKeys.map((key) => [key, Number(rawTimings[key])])) } : {};
+    const lastByMarket: Record<string, { lastAttemptAt: number; status: string; missing: number; recorded: number; rejected: number; pages: number; errorCode?: string }> = {};
+    const rawByMarket = rawGap.lastByMarket as Record<string, unknown> | null | undefined;
+    if (rawByMarket != null && typeof rawByMarket === "object" && !Array.isArray(rawByMarket)) {
+      for (const [market, rawResult] of Object.entries(rawByMarket)) {
+        if (Object.keys(lastByMarket).length >= 20) break;
+        if (!/^KRW-[A-Z0-9-]+$/.test(market) || rawResult == null || typeof rawResult !== "object" || Array.isArray(rawResult)) continue;
+        const result = rawResult as Record<string, unknown>;
+        if (!(["NO_GAPS", "FILLED", "PARTIAL", "RATE_LIMITED", "ERROR"].includes(String(result.status))
+          && Number.isSafeInteger(result.lastAttemptAt) && Number(result.lastAttemptAt) >= 0
+          && ["missing", "recorded", "rejected", "pages"].every((key) => Number.isSafeInteger(result[key]) && Number(result[key]) >= 0))) continue;
+        lastByMarket[market] = {
+          lastAttemptAt: Number(result.lastAttemptAt),
+          status: result.status as string,
+          missing: Number(result.missing),
+          recorded: Number(result.recorded),
+          rejected: Number(result.rejected),
+          pages: Number(result.pages),
+          ...(typeof result.errorCode === "string" && /^[A-Z][A-Z0-9_]{1,47}$/.test(result.errorCode) ? { errorCode: result.errorCode } : {}),
+        };
+      }
+    }
     researchGapFill = { researchGapFill: {
-      runs: Number(rawGap.runs), deferred: Number(rawGap.deferred), counts, ...timingsMs,
+      runs: Number(rawGap.runs), deferred: Number(rawGap.deferred), counts, lastByMarket, ...timingsMs,
       ...(Number.isSafeInteger(rawGap.lastRunAt) && Number(rawGap.lastRunAt) >= 0 ? { lastRunAt: Number(rawGap.lastRunAt) } : {}),
       ...(typeof rawGap.lastErrorCode === "string" && /^[A-Z][A-Z0-9_]{1,47}$/.test(rawGap.lastErrorCode) ? { lastErrorCode: rawGap.lastErrorCode } : {}),
     } };
