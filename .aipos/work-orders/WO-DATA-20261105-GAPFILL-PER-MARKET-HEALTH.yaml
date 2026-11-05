@@ -1,0 +1,47 @@
+id: WO-DATA-20261105-GAPFILL-PER-MARKET-HEALTH
+title: "Expose the latest bounded Research gap-fill outcome per market"
+status: IN_PROGRESS
+created: 2026-11-05
+owner: nusa-development
+repository: cinamoncandy/NUSA
+issue: 2815
+base_branch: main
+implementation_branch: WO-DATA-20261105-GAPFILL-PER-MARKET-HEALTH
+authority_impact: none
+trigger: "Issue #2815 comment 6460727724 identified that fillRecentGaps results are logged per market but /health only exposes aggregate status counts, preventing read-only diagnosis of RATE_LIMITED, ERROR, or skipped/deferred gap fills. Fresh main 185c52c22691a5a35b13fe024cb39d810719a833 still has only aggregate ResearchGapFillSummary and aggregate /health sanitation."
+objective: "Expose only the most recent actual gap-fill result for each bounded Research market through the existing /health researchGapFill projection so operators can see per-market fixed status, counters, and safe error code."
+scope:
+  - "researchExperimentOrchestrator.ts: retain a bounded latest-result map per market, with an explicit lastAttemptAt; each actual result updates only its market, a malformed/ambiguous latest result withdraws that market's stale row, and a deferred attempt preserves prior actual observations."
+  - "server.ts: independently sanitize at most 20 market entries, strict KRW market identifiers, fixed GapFillResult status codes, non-negative safe integer counters, and optional fixed uppercase error code. Exclude malformed entries and all raw text/unknown fields."
+  - "tests/research-gap-fill-health.test.js: cover current per-market outcomes and malformed, duplicate, unsafe, and secret-bearing input rejection at the public /health boundary."
+acceptance:
+  - "The existing single gap-fill scheduler, cadence, fetch/page bounds, candle writes, source receipts, manifest eligibility, experiment inputs, retries, and persistence semantics do not change."
+  - "Each market shows its latest valid actual attempt and timestamp; markets not attempted in a later partial run keep their own older timestamped result, while deferred attempts do not overwrite actual results."
+  - "Unknown status, invalid market, duplicate market in one result set, invalid counters, or malformed data do not produce a trusted per-market health row."
+  - "The public health response contains no raw exception/message/request or candle data."
+  - "The global research validity and sealed-dataset gates are unchanged; display data is not promoted to runtime acceptance or learning evidence."
+exclusions:
+  - "No database or host mutation, release, restart, deployment, data rewrite, synthetic candle, manifest/provenance change, readiness/risk/security/lease change, or authority change."
+  - "No modification to PR #3000 or the separate freshness-cadence PR #2975."
+safety:
+  paper_only: true
+  liveAuthority: NONE
+  productionMutationAllowed: false
+  realOrderAuthority: false
+  realTransferAuthority: false
+  aiAuthority: ZERO_AUTHORITY
+  fail_closed: true
+verification_commands:
+  - "node --test tests/research-gap-fill-health.test.js"
+  - "pnpm run preflight"
+  - "pnpm run build"
+  - "pnpm run typecheck"
+  - "pnpm run validate:full"
+  - "pnpm run security:gate"
+  - "pnpm run lint:scripts"
+  - "pnpm run test (full isolated repository suite)"
+  - "git diff --check"
+validation: "Focused per-market gap-fill health tests 6/6 PASS; pnpm install --frozen-lockfile left lockfile unchanged; preflight/AIPOS PASS (529 work orders, 569 YAML files); build PASS; typecheck PASS; validate:full PASS; security:gate PASS (0 high/critical findings, 0 secrets); lint:scripts PASS (0 errors, 47 baseline warnings); full pnpm test PASS (1327 isolated test files); generated isolated-test-failure.txt deletion restored; git diff --check PASS. Exact-head CI and independent Research/Data review remain pending."
+unverified: "Production /health values remain unverified until a governed release and read-only host observation; this PR only adds the bounded display path."
+next: "Open one Draft PR linked to #2815, then verify exact-head CI and obtain independent Research/Data review. Production /health values remain unverified until a governed release and read-only host observation."
+rollback: "Revert this isolated display-only change."
