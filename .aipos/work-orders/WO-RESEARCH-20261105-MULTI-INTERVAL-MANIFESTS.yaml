@@ -1,0 +1,55 @@
+id: WO-RESEARCH-20261105-MULTI-INTERVAL-MANIFESTS
+title: "Materialize verified manifests for configured Research intervals"
+status: IN_PROGRESS
+created: 2026-11-05
+owner: nusa-development
+repository: cinamoncandy/NUSA
+issue: 2815
+base_branch: main
+base_commit: 185c52c22691a5a35b13fe024cb39d810719a833
+implementation_branch: WO-RESEARCH-20261105-MULTI-INTERVAL-MANIFESTS
+authority_impact: none
+trigger: "Current researchExperimentComposition materializes only the 1m manifest after verified Upbit REST candle backfill/gap fill, while configured 15m/60m orchestrators resolve manifests by their own interval and therefore remain missing-manifest. Existing manifest materializer and AggregatedResearchCandleSource already enforce explicit OHLCV, complete contiguous 1m base coverage, raw-source receipts, and deterministic content identity."
+objective: "At existing successful base-candle materialization points, materialize a canonical manifest for each configured interval from verified 1m Upbit candles and the existing read-only AggregatedResearchCandleSource, without weakening any manifest or experiment gate."
+scope:
+  - "Reuse the existing SqliteResearchDatasetManifestStore, SqliteResearchCandleStore, AggregatedResearchCandleSource, and materializeResearchDatasetManifest."
+  - "For each configured interval, derive complete target candles from the same bounded 1m source window and use an interval-specific stable source identity."
+  - "Run the same helper only after COMPLETE backfill or NO_GAPS/FILLED gap-fill status; preserve per-interval fail-closed behavior and safe diagnostic logging."
+  - "Add production-shaped tests proving 1m/15m/60m manifests are generated from explicit Upbit OHLCV receipts on both success paths, and missing/incomplete source evidence still creates no manifest."
+  - "Keep all configured intervals, manifest IDs, candle contents, and source receipts deterministic for identical input."
+exclusions:
+  - "No ticker-derived candles, synthetic candles/volume/receipts, or closedCandleAggregator wiring into canonical OHLCV."
+  - "No change to manifest requirements, PIT/OOS, qualification, session acceptance, risk, writer lease, readiness, execution, LIVE, or AI authority."
+  - "No DB/history rewrite, deployment, restart, production mutation, or issue closure based on tests alone."
+  - "PR #3001 remains display-only; PR #3000 remains separate. PR #2975 cadence and #2979/#2980 rolling-holdout changes remain separately owned; this work must be integrated against fresh main after their status is rechecked, without taking over their scope."
+acceptance:
+  - "Configured 1m, 15m, and 60m orchestrators can resolve only manifests materialized from verified contiguous Upbit 1m OHLCV and complete source receipts."
+  - "An absent candle, absent volume, missing source receipt, mixed/malformed source material, content mismatch, or unsupported interval does not produce a manifest and does not start Research with fabricated evidence."
+  - "Identical source candles and provenance produce the same manifest identity; no manifest is treated as a session, qualification, PAPER, or learning-cycle receipt."
+  - "Actual market candle freshness, durable manifest presence, session creation, and learning remain UNVERIFIED until governed exact-main read-only runtime evidence exists."
+safety:
+  paper_only: true
+  liveAuthority: NONE
+  productionMutationAllowed: false
+  realOrderAuthority: false
+  realTransferAuthority: false
+  aiAuthority: ZERO_AUTHORITY
+  fail_closed: true
+verification_commands:
+  - "node --test tests/research-experiment-composition.test.js"
+  - "pnpm run preflight"
+  - "pnpm run build"
+  - "pnpm run typecheck"
+  - "pnpm run validate:full"
+  - "pnpm run security:gate"
+  - "pnpm run lint:scripts"
+  - "pnpm test"
+  - "git diff --check"
+validation: PENDING
+exact_head_ci: PENDING
+independent_research_data_review: PENDING
+formal_validator: PENDING
+audit: PENDING
+release_authorization: PENDING
+runtime_acceptance: PENDING
+next: "Implement and test locally, then compare fresh main and active same-file Research PRs before any publication."

@@ -7,21 +7,21 @@ Everything below is what the repository's records *claim*. Re-verify on GitHub b
 
 ## Newest handoff
 
-[`.aipos/handoffs/2026-11-03-1851-causal-admission.md`](handoffs/2026-11-03-1851-causal-admission.md) — CORE handoff — 2026-11-03 — #1851 causal admission
+[`.aipos/handoffs/2026-11-05-research-multi-interval-manifests.md`](handoffs/2026-11-05-research-multi-interval-manifests.md) — CORE handoff — 2026-11-05 — #2815 configured interval manifests
 
-> ## Scope and owner
+> ## Fresh ownership and source finding
 
 ## Work orders
 
-528 total: 499 in `.aipos/work-orders/`, 29 closed and merged in `.aipos/work-orders/archive/`.
-Of the 499 active files, 96 carry a closed status that has not been archived (merge not proven, or the path is still referenced) and 403 are open or unclassified.
+529 total: 500 in `.aipos/work-orders/`, 29 closed and merged in `.aipos/work-orders/archive/`.
+Of the 500 active files, 96 carry a closed status that has not been archived (merge not proven, or the path is still referenced) and 404 are open or unclassified.
 
 Most common statuses among the open files (new orders use only `READY_FOR_REVIEW`, `IN_PROGRESS`, `BLOCKED`, `COMPLETED`, `SUPERSEDED`, `ABANDONED`):
 
 | Status | Files |
 |---|---|
 | READY_FOR_REVIEW | 227 |
-| IN_PROGRESS | 34 |
+| IN_PROGRESS | 35 |
 | LOCAL_VALIDATED_PENDING_CI | 20 |
 | VERIFYING | 14 |
 | LOCAL_VALIDATED_PENDING_EXACT_HEAD_CI | 13 |
@@ -29,7 +29,7 @@ Most common statuses among the open files (new orders use only `READY_FOR_REVIEW
 | COMPLETED_NO_SURVIVOR | 6 |
 | LOCAL_VALIDATED_PENDING_REVIEW_CI | 6 |
 
-### In progress or blocked (41)
+### In progress or blocked (42)
 
 | Work order | Status | Title |
 |---|---|---|
@@ -70,11 +70,11 @@ Most common statuses among the open files (new orders use only `READY_FOR_REVIEW
 | `WO-RESEARCH-20261016-QUALIFICATION-IDENTITY` | IN_PROGRESS | Bind canonical qualification results to run and frozen policy identity |
 | `WO-RESEARCH-20261016-RUN-FINGERPRINT` | IN_PROGRESS | Verify existing Research run fingerprint at qualification boundary |
 | `WO-RESEARCH-20261021-ORDERBOOK-RETENTION` | IN_PROGRESS | Order-book retention is 14 days: the pre-registered studies lose their training data befo… |
+| `WO-RESEARCH-20261105-MULTI-INTERVAL-MANIFESTS` | IN_PROGRESS | Materialize verified manifests for configured Research intervals |
 | `WO-UI-20261006-CALM-REDESIGN` | IN_PROGRESS | Whole-app calm redesign: 지금 · 학습 · 안전 · 기록 |
 | `WO-UI-20261019-LEARNING-FUNNEL` | IN_PROGRESS | Learning screen redesign step 2: Research funnel (tested -> discovery -> holdout) |
-| `WO-UI-20261019-NOW-RISK-GATE` | IN_PROGRESS | Now screen redesign step 1: show where the flow stopped (risk gate motion) |
 
-…and 1 more. Full list: `node scripts/aipos-work-order-index.js`.
+…and 2 more. Full list: `node scripts/aipos-work-order-index.js`.
 
 ## Refresh
 
