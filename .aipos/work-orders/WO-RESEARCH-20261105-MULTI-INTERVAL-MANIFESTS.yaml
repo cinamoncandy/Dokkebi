@@ -8,6 +8,8 @@ issue: 2815
 base_branch: main
 base_commit: 185c52c22691a5a35b13fe024cb39d810719a833
 implementation_branch: WO-RESEARCH-20261105-MULTI-INTERVAL-MANIFESTS
+pull_request: 3002
+implementation_commit_before_aipos_handoff: 1ccd50f1e39900c679cceeee133ad1c4acd9aaef
 authority_impact: none
 trigger: "Current researchExperimentComposition materializes only the 1m manifest after verified Upbit REST candle backfill/gap fill, while configured 15m/60m orchestrators resolve manifests by their own interval and therefore remain missing-manifest. Existing manifest materializer and AggregatedResearchCandleSource already enforce explicit OHLCV, complete contiguous 1m base coverage, raw-source receipts, and deterministic content identity."
 objective: "At existing successful base-candle materialization points, materialize a canonical manifest for each configured interval from verified 1m Upbit candles and the existing read-only AggregatedResearchCandleSource, without weakening any manifest or experiment gate."
@@ -46,10 +48,10 @@ verification_commands:
   - "pnpm test"
   - "git diff --check"
 validation: "Local validation PASS on branch WO-RESEARCH-20261105-MULTI-INTERVAL-MANIFESTS after implementation: focused research-experiment-composition 15/15; full isolated suite 1327 test files PASS; preflight, build, typecheck, validate:full, security:gate, lint:scripts, AIPOS truth/index/YAML/provenance, and git diff --check PASS. Lint has 0 errors and 47 existing baseline warnings. exact-head CI, independent Research/Data review, Formal Validator, Audit, Release authorization, and runtime acceptance remain PENDING."
-exact_head_ci: PENDING
+exact_head_ci: "PENDING for the successor SHA created by this AIPOS handoff update. PR #3002 head 1ccd50f1e39900c679cceeee133ad1c4acd9aaef had exact-head CI and five companion workflows SUCCESS (CI run 42041990038; companions 42041989907, 42041989956, 42041990012, 42041989852, 42041990302). Those receipts are predecessor-only after the handoff commit."
 independent_research_data_review: PENDING
 formal_validator: PENDING
 audit: PENDING
 release_authorization: PENDING
 runtime_acceptance: PENDING
-next: "Fresh-check main and active same-file Research PRs; publish only this bounded manifest-materialization change as a Draft if ownership remains non-overlapping. Then obtain exact-head CI and independent Research/Data review. Runtime market freshness, durable manifests, Research sessions, and learning cycles remain unverified."
+next: "Refresh PR #3002 exact-head CI after the AIPOS handoff commit, then obtain independent Research/Data review. Runtime market freshness, durable manifests, Research sessions, and learning cycles remain unverified."

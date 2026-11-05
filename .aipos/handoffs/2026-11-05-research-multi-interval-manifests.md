@@ -30,4 +30,8 @@ No production data, database, runtime, manifest, Research session, candidate, PA
 
 ## Remaining acceptance
 
-The interval-manifest code is locally validated only. Recheck same-file PR state immediately before publication, then create a Draft PR for this bounded work if non-overlapping. Exact-head CI and fresh independent Research/Data review remain required. No Oracle runtime, actual candle advancement, manifest persistence on production, Research session, holdout, learning cycle, or #2815 completion is claimed.
+Draft PR #3002 was opened from implementation commit `1ccd50f1e39900c679cceeee133ad1c4acd9aaef`. Its exact-head CI run `42041990038` and all five companion workflows (`42041989907`, `42041989956`, `42041990012`, `42041989852`, `42041990302`) passed. The AIPOS handoff update creates a successor SHA, so these checks are predecessor-only; fresh exact-head CI is required again.
+
+PR #3002 has no submitted review or review request yet. An eligible non-author Research/Data reviewer is still required; this CORE author session will not claim independent disposition.
+
+No Oracle runtime, actual candle advancement, manifest persistence on production, Research session, holdout, learning cycle, or #2815 completion is claimed. After successor exact-head CI, obtain independent Research/Data review and then follow the separate Validator/Audit/Release gates.
