@@ -45,11 +45,11 @@ verification_commands:
   - "pnpm run lint:scripts"
   - "pnpm test"
   - "git diff --check"
-validation: PENDING
+validation: "Local validation PASS on branch WO-RESEARCH-20261105-MULTI-INTERVAL-MANIFESTS after implementation: focused research-experiment-composition 15/15; full isolated suite 1327 test files PASS; preflight, build, typecheck, validate:full, security:gate, lint:scripts, AIPOS truth/index/YAML/provenance, and git diff --check PASS. Lint has 0 errors and 47 existing baseline warnings. exact-head CI, independent Research/Data review, Formal Validator, Audit, Release authorization, and runtime acceptance remain PENDING."
 exact_head_ci: PENDING
 independent_research_data_review: PENDING
 formal_validator: PENDING
 audit: PENDING
 release_authorization: PENDING
 runtime_acceptance: PENDING
-next: "Implement and test locally, then compare fresh main and active same-file Research PRs before any publication."
+next: "Fresh-check main and active same-file Research PRs; publish only this bounded manifest-materialization change as a Draft if ownership remains non-overlapping. Then obtain exact-head CI and independent Research/Data review. Runtime market freshness, durable manifests, Research sessions, and learning cycles remain unverified."

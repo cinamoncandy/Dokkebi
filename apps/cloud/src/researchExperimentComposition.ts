@@ -266,6 +266,28 @@ export function composeResearchExperiments(input: {
   let researchTickActive = false;
   const w = settings.windows;
   const targetSpanMs = w.trainMs + w.validationMs + w.holdoutMs + DAY_MS;
+  const materializeConfiguredManifests = (market: string, firstClose: number, lastClose: number): void => {
+    const fromBaseClose = Math.max(firstClose, lastClose - targetSpanMs + M);
+    const createdAt = new Date(now()).toISOString();
+    for (const minutes of settings.intervalsMinutes) {
+      const intervalMs = minutes * M;
+      const intervalName = `${minutes}m`;
+      try {
+        const candles = bars.read(market, intervalMs, fromBaseClose, lastClose);
+        if (candles.length === 0) {
+          log(`[research-manifest] ${market}/${intervalName} blocked: no complete interval candles`);
+          continue;
+        }
+        const source = minutes === 1
+          ? `upbit-1m-closed:${market}:${M}`
+          : `upbit-1m-aggregated:${market}:${intervalMs}`;
+        materializeResearchDatasetManifest({ store: datasetManifests, candleStore: store, market, intervalMs, candles, source, createdAt, sourceCommitSha: settings.sourceCommitSha });
+        log(`[research-manifest] ${market}/${intervalName} materialized dataset manifest`);
+      } catch (error) {
+        log(`[research-manifest] ${market}/${intervalName} blocked: ${error instanceof Error ? error.message : "unknown"}`);
+      }
+    }
+  };
   const backfill = async (): Promise<readonly BackfillResult[]> => {
     if (backfilling || researchTickActive || stopped) return Object.freeze([]);
     backfilling = true;
@@ -278,12 +300,7 @@ export function composeResearchExperiments(input: {
         if (result.status === "COMPLETE") {
           const firstClose = store.earliestCloseTime(market, M);
           const lastClose = store.latestCloseTime(market, M);
-          if (firstClose != null && lastClose != null) {
-            try {
-              materializeResearchDatasetManifest({ store: datasetManifests, candleStore: store, market, intervalMs: M, candles: store.read(market, M, Math.max(firstClose, lastClose - targetSpanMs + M), lastClose), source: `upbit-1m-closed:${market}:${M}`, createdAt: new Date(now()).toISOString(), sourceCommitSha: settings.sourceCommitSha });
-              log(`[research-manifest] ${market} materialized dataset manifest`);
-            } catch (error) { log(`[research-manifest] ${market} blocked: ${error instanceof Error ? error.message : "unknown"}`); }
-          }
+          if (firstClose != null && lastClose != null) materializeConfiguredManifests(market, firstClose, lastClose);
         }
         log(`[research-backfill] ${market} ${result.status} recorded=${result.recorded} rejected=${result.rejected} pages=${result.pages}${result.errorCode === undefined ? "" : ` error=${result.errorCode}`}`);
       }
@@ -315,13 +332,12 @@ export function composeResearchExperiments(input: {
           if (firstClose != null && lastClose != null) {
             try {
               const readStarted = performance.now();
-              const candles = store.read(market, M, Math.max(firstClose, lastClose - targetSpanMs + M), lastClose);
+              const fromBaseClose = Math.max(firstClose, lastClose - targetSpanMs + M);
+              store.read(market, M, fromBaseClose, lastClose);
               readMs += performance.now() - readStarted;
               const materializeStarted = performance.now();
-              try {
-                materializeResearchDatasetManifest({ store: datasetManifests, candleStore: store, market, intervalMs: M, candles, source: `upbit-1m-closed:${market}:${M}`, createdAt: new Date(now()).toISOString(), sourceCommitSha: settings.sourceCommitSha });
-              } finally { materializeMs += performance.now() - materializeStarted; }
-              log(`[research-manifest] ${market} materialized dataset manifest after gap fill`);
+              try { materializeConfiguredManifests(market, firstClose, lastClose); }
+              finally { materializeMs += performance.now() - materializeStarted; }
             } catch (error) { log(`[research-manifest] ${market} blocked after gap fill: ${error instanceof Error ? error.message : "unknown"}`); }
           }
         }

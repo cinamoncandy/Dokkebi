@@ -175,6 +175,95 @@ test("backfill fills the research market from the public candle endpoint and sho
   } finally { composition.stop(); db.close(); }
 });
 
+test("verified base receipts materialize each configured interval manifest on backfill and gap-fill paths", async () => {
+  const db = open();
+  const store = new SqliteResearchCandleStore(db, 200_000);
+  const count = 4 * 24 * 60;
+  const candles = Array.from({ length: count }, (_, i) => {
+    const closeTimeMs = T_END - (count - 1 - i) * M;
+    const close = 100 + (i % 13) / 10;
+    return { closeTimeMs, open: close, high: close + 1, low: close - 1, close, volume: 2 };
+  });
+  for (let offset = 0; offset < candles.length; offset += 200) {
+    const page = candles.slice(offset, offset + 200);
+    store.appendWithMaterial("KRW-BTC", M, page, {
+      source: "UPBIT_PUBLIC_CANDLES",
+      sourceFingerprint: UPBIT_CANDLE_SOURCE_FINGERPRINT,
+      evidenceFingerprintSha256: (offset + 1).toString(16).padStart(64, "0"),
+      missingBuckets: 0,
+      incompleteBuckets: 0,
+      rejectedObservations: 0,
+    });
+  }
+  let now = T_END;
+  let fetchCalls = 0;
+  const lines = [];
+  const composition = composeResearchExperiments({
+    env: env({ NUSA_RESEARCH_MARKETS: "KRW-BTC", NUSA_RESEARCH_TRAIN_DAYS: "1", NUSA_RESEARCH_VALIDATION_DAYS: "1", NUSA_RESEARCH_HOLDOUT_DAYS: "1", NUSA_RESEARCH_INTERVAL_MINUTES: "1,15,60,240" }),
+    database: db,
+    now: () => now,
+    log: (line) => lines.push(line),
+    fetchImpl: async () => { fetchCalls += 1; throw new Error("complete verified source must not fetch"); },
+  });
+  try {
+    const [backfill] = await composition.backfill();
+    assert.equal(backfill.status, "COMPLETE");
+    assert.equal(fetchCalls, 0);
+    // The 240m window begins inside a 4-hour bar, so its partial leading bar is correctly omitted.
+    const expectedCounts = new Map([["1m", count], ["15m", count / 15], ["60m", count / 60], ["240m", count / 240 - 1]]);
+    const initial = new Map();
+    for (const [interval, candleCount] of expectedCounts) {
+      const manifest = composition.datasetManifests.latest("KRW-BTC", interval);
+      assert.ok(manifest, `${interval} manifest should be materialized from the verified 1m source`);
+      assert.equal(manifest.candleCount, candleCount, interval);
+      assert.equal(manifest.source, interval === "1m" ? `upbit-1m-closed:KRW-BTC:${M}` : `upbit-1m-aggregated:KRW-BTC:${Number.parseInt(interval, 10) * M}`);
+      initial.set(interval, manifest);
+    }
+
+    // A later successful no-op pass has the same source identity but a different observation time.
+    // It must preserve the immutable existing manifest instead of conflicting on createdAt.
+    now += 1_000;
+    assert.equal((await composition.backfill())[0].status, "COMPLETE");
+    assert.equal((await composition.fillGaps())[0].status, "NO_GAPS");
+    for (const [interval, prior] of initial) {
+      const replay = composition.datasetManifests.latest("KRW-BTC", interval);
+      assert.equal(replay.datasetId, prior.datasetId, interval);
+      assert.equal(replay.createdAt, prior.createdAt, interval);
+    }
+    assert.equal(fetchCalls, 0);
+    assert.ok(lines.some((line) => line === "[research-manifest] KRW-BTC/15m materialized dataset manifest"));
+    assert.ok(lines.some((line) => line === "[research-manifest] KRW-BTC/60m materialized dataset manifest"));
+    assert.ok(!lines.some((line) => /\[research-manifest\].*blocked/.test(line)), lines.join("\n"));
+  } finally { composition.stop(); db.close(); }
+});
+
+test("incomplete raw-source receipt coverage cannot materialize any configured interval manifest", async () => {
+  const db = open();
+  const store = new SqliteResearchCandleStore(db, 200_000);
+  const count = 4 * 24 * 60;
+  const candles = Array.from({ length: count }, (_, i) => {
+    const closeTimeMs = T_END - (count - 1 - i) * M;
+    const close = 100 + (i % 13) / 10;
+    return { closeTimeMs, open: close, high: close + 1, low: close - 1, close, volume: 2 };
+  });
+  store.append("KRW-BTC", M, candles);
+  let fetchCalls = 0;
+  const composition = composeResearchExperiments({
+    env: env({ NUSA_RESEARCH_MARKETS: "KRW-BTC", NUSA_RESEARCH_TRAIN_DAYS: "1", NUSA_RESEARCH_VALIDATION_DAYS: "1", NUSA_RESEARCH_HOLDOUT_DAYS: "1", NUSA_RESEARCH_INTERVAL_MINUTES: "1,15,60" }),
+    database: db,
+    now: () => T_END,
+    log: () => {},
+    fetchImpl: async () => { fetchCalls += 1; return new Response("[]", { status: 200, headers: { "content-type": "application/json" } }); },
+  });
+  try {
+    const [backfill] = await composition.backfill();
+    assert.equal(backfill.status, "INCOMPLETE");
+    assert.equal(backfill.errorCode, "SOURCE_RECEIPTS_INCOMPLETE");
+    assert.equal(fetchCalls, 1);
+    for (const interval of ["1m", "15m", "60m"]) assert.equal(composition.datasetManifests.latest("KRW-BTC", interval), undefined, interval);
+  } finally { composition.stop(); db.close(); }
+});
+
 test("backfill is skipped entirely when disabled, and after stop", async () => {
   const db = open();
   let calls = 0;

@@ -2,6 +2,7 @@ import { createHash } from "node:crypto";
 import { calculateResearchCandleSha256, calculateResearchDatasetIdV2, type CanonicalResearchCandle, type HistoricalDatasetManifest, type ResearchDatasetProvenanceV2, type ResearchInterval } from "../../../packages/contracts/src/researchDatasetSemantics";
 import { SqliteResearchDatasetManifestStore } from "../../../packages/storage/src/index";
 import { SqliteResearchCandleStore, type StoredResearchCandle } from "../../../packages/storage/src/researchCandleStore";
+import { ResearchDatasetManifestStoreError } from "../../../packages/storage/src/researchDatasetManifest";
 import { UPBIT_CANDLE_SOURCE_FINGERPRINT } from "./researchCandleBackfill";
 import { AggregatedResearchCandleSource } from "./researchCandleAggregation";
 
@@ -62,6 +63,17 @@ export function materializeResearchDatasetManifest(input: {
     replayRuntimeSha256: hash({ sourceCommitSha: input.sourceCommitSha, nodeVersion: process.version, materializer: "research-dataset-v2-v1" }),
   };
   const manifest: HistoricalDatasetManifest = { schemaVersion: 2, datasetId: calculateResearchDatasetIdV2(input.source, candles, contentSha256, provenance), source: input.source, market: input.market, interval, candleCount: candles.length, startOpenTime: candles[0]!.openTime, endCloseTime: candles.at(-1)!.closeTime, timezone: "UTC", ordering: "OPEN_TIME_ASC", missingCandlePolicy: "REJECT", missingCandleCount: 0, createdAt: input.createdAt, contentSha256, provenance };
+  try {
+    const existing = input.store.read(manifest.datasetId);
+    const existingWithCurrentCreatedAt = { ...existing, createdAt: manifest.createdAt };
+    if (JSON.stringify(existingWithCurrentCreatedAt) !== JSON.stringify(manifest)) {
+      throw new ResearchDatasetManifestStoreError("MANIFEST_CONFLICT", "an existing dataset identity has different canonical manifest content");
+    }
+    // Replays of unchanged, immutable source material keep the original creation timestamp and are no-ops.
+    return existing;
+  } catch (error) {
+    if (!(error instanceof ResearchDatasetManifestStoreError) || error.code !== "MANIFEST_NOT_FOUND") throw error;
+  }
   input.store.persistVerified(manifest, candles);
   return Object.freeze(manifest);
 }
