@@ -10,7 +10,8 @@ Safety stays: PAPER_ONLY, liveAuthority=NONE, productionMutationAllowed=false, a
 |---|---|
 | PR | #2999 (초안) |
 | 승인서가 적은 HEAD | `05502724801e5f8c4bee0dcfebc443ec121fb671` |
-| 이 증거를 더한 뒤의 HEAD | 이 문서를 담은 커밋 (SHA가 바뀌므로 아래 검증은 새 SHA에서 다시 해야 한다) |
+| 독립 검증이 본 HEAD | `408a29d41ca0fe4ea420e30cdf2732e91c793616` (PASS_WITH_NOTES) |
+| 핀 이동 준비 커밋 이후 | 새 SHA. 전체 필수 CI와 독립 검증을 그 SHA에서 다시 해야 한다 |
 | 대상 모듈 | `apps/cloud/src/cloudPaperCanonicalRiskGateway.ts` (RISK canonical entrypoint) |
 | 현재 pin (원본) | git blob `b43962beb41a193eda30c8dc717f2cbcc8971edd` |
 | 이 PR의 커밋된 blob | git blob `2174d4e62e6a402cb239719e1a25126069cfaf36` |
@@ -54,7 +55,10 @@ pin이 걸린 곳은 두 곳이고 함께 움직여야 한다 (`WO-RISK-20261007
 
 해석: 실패는 정확히 결함 사례(1, 2, 5) 세 개에서만 난다. 나머지 8개(fail-closed 의미)는 원본에서도 통과해서 **변경이 안전 쪽 의미를 약하게 하지 않았다**는 증거다. 5번의 표본에서 원본이 잘못 막은 이력이 실제로 있음을 테스트가 직접 확인한다.
 
-함께 돌린 기존 테스트: 일 손실 연속(`cloud-paper-daily-loss-streak`), 라이브 상태 위험 게이트(`paper-risk-gate-live-state`), 취소 체결 위험(`cloud-paper-cancelled-fill-risk`), 위험 한도 스케일(`paper-risk-limit-scaling`) — 변경 소스에서 모두 통과 (이전 실행 29/29, 새 테스트 추가 후 새 SHA에서 다시 확인해야 한다).
+함께 돌린 기존 테스트: 일 손실 연속(`cloud-paper-daily-loss-streak`), 라이브 상태 위험 게이트(`paper-risk-gate-live-state`), 취소 체결 위험(`cloud-paper-cancelled-fill-risk`), 위험 한도 스케일(`paper-risk-limit-scaling`), 프로덕션 E2E(`cloud-paper-production-e2e`), 위험 배선(`cloud-runtime-canonical-risk-wiring`).
+- 개발 세션 로컬(소스 diff 직후): 위 4개 + 새 테스트 = 29/29 통과.
+- **독립 VALIDATOR(세션 `NUSA_AGENT_ROLE=validator`, 대상 SHA `408a29d41ca0fe4ea420e30cdf2732e91c793616`, PR #2999 리뷰 댓글)**: 새 테스트 + 위 6개 = **42/42 통과**. 원본 소스에서는 새 테스트 11개 중 8 통과·3 실패(결함 사례 1, 2, 5). 자체 반례 4,500건에서 잘못 막은 것 0건(원본은 같은 방법으로 1,500건 중 840건), 진짜 초과 매도(+1e-8) 1,200건은 모두 여전히 `HALT`. 판정 **PASS_WITH_NOTES**, P0·P1 없음.
+- 이 숫자들은 위 SHA 기준이다. 핀을 옮긴 최종 SHA에서는 전체 필수 CI(Node 24 포함)와 독립 검증을 다시 해야 한다.
 
 ## 4. 독립 검토 결과 (회수, 판정은 이 문서의 몫이 아님)
 비작성자 세션의 `/grill-me` 검토(COMMENT, 승인 아님, 대상 `0550272`): **P0 없음, P1 없음, P2 2개**.
