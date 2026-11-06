@@ -74,16 +74,16 @@ validation:
   independent_technical_disposition: "CHANGES_REQUIRED on aabfdaa880985f1ec773d794d6e8030393d04bff (COMMENT 5798993398); successor 21b59512a43c687d9b3a123e9abdd9ea9626804e review also CHANGES_REQUIRED, P0=0/P1=0/P2=1 (COMMENT 5799212431). Both were separate validator sessions under the same author account, not non-author approval, Formal Validation, Audit, or Release."
   successor_exact_head_ci: "537f3d8e48e32c7ca63b01a7610076fa501cffa9: CI 42208707239 and five required companion workflows 42208707210, 42208707179, 42208707184, 42208707263, 42208707379 all terminal SUCCESS (6/6)."
   successor_independent_review: "Exact-head technical disposition 5799431551: ACCEPTED, P0/P1/P2=0, on 537f3d8e48e32c7ca63b01a7610076fa501cffa9. Fresh read-only NUSA_AGENT_ROLE=validator session; same GitHub author identity cinamoncandy, so this is technical disposition, not non-author APPROVE, Formal Validation, Audit, or Release authorization. Review threads: 0."
-  e5_p2_followup_review: "Exact-head COMMENT 5800280244 on e5c02d97767c212e2f8746102379c5d94dcf0d01 found P2: credential-like runtime ERROR/HALT, heartbeat lastError, and stderr-derived values could be reflected. Local follow-up replaces runtime-provided code reflection with locally owned reason-code allowlists; sanitizes restart-health and CLI errors; and adds regression coverage. Separate local validator re-review found no actionable findings in this diff, but it is pre-commit and not a successor-SHA receipt or non-author approval."
-  current_remote_pr_head: "PR #3006 is OPEN/Ready at e5c02d97767c212e2f8746102379c5d94dcf0d01, base/protected main 2224d7f8e2f58081cf3edcd2597ea7048e07f70a. The e5 exact-head CI and five companions are SUCCESS, but are historical for the uncommitted local follow-up."
+  e5_p2_followup_review: "Exact-head COMMENT 5800280244 on e5c02d97767c212e2f8746102379c5d94dcf0d01 found P2: credential-like runtime ERROR/HALT, heartbeat lastError, and stderr-derived values could be reflected. The repair replaces runtime-provided code reflection with locally owned reason-code allowlists, sanitizes restart-health and CLI errors, and adds regression coverage; commit fbe0662ab5dc53b73a5f2bfaad16129f7cff3291. Fresh separate validator session inspected the fbe code and found no actionable code issue; exact-head CI 42224955455 and five companions are now terminal SUCCESS. A fresh exact-SHA terminal COMMENT is the remaining review gate. This is not non-author approval."
+  pre_metadata_update_remote_pr_head: "Fresh GitHub query: PR #3006 is OPEN/Draft/mergeable at fbe0662ab5dc53b73a5f2bfaad16129f7cff3291, base/protected main 2224d7f8e2f58081cf3edcd2597ea7048e07f70a. Exact-head CI 42224955455 and companions 42224955780, 42224955493, 42224955481, 42224955665, 42224955453 are terminal SUCCESS (6/6). Conditional causal-regression-contract and attest-causal-regression jobs were SKIPPED because no mismatch occurred and are not positive-path evidence."
   source_run_42199682632:
     artifact_id: 13494211160
     artifact_sha256: bc978a415808eb15c8d9ab3d9f808d020c9f3e86404bc4ea0890355a6c958f24
     result: INCOMPLETE
-    observation: "60.772s; 61 samples; 92 recorded Decision cycles; 0 orders/fills; SIGNAL and RISK NOT_OBSERVED; 250-event cap encountered; cycle chronology may be incomplete"
+    observation: "60.772s; 61 samples; 92 distinct Decision cycles; 459 deduplicated timeline entries (91 MARKET_DATA, 92 each DECISION/ORDER_INTENT/PNL/UNKNOWN); 0 orders/fills/account-PnL changes; SIGNAL and RISK NOT_OBSERVED; paperLearning retained 250 events across restart; event_evidence_truncated=true."
     root_cause_classification: WARMUP_NOT_COMPLETED
     first_broken_transition: "Fresh E2E database -> 20 completed market-specific 1m closes -> SMA candidate"
-    exact_strategy_reason: "INSUFFICIENT_SMA_OBSERVATIONS:1/20"
+    artifact_reason_codes: "Each recorded cycle reports NO_ACTIONABLE_PAPER_DECISION, WAIT, INSUFFICIENT_HISTORY. The artifact does not expose the underlying SMA observation count; exact strategy reason/count is UNKNOWN for this run."
     canonical_runtime_database_history: UNVERIFIED
   successor_run_42205762459:
     artifact_id: 13496063538
@@ -94,7 +94,7 @@ validation:
     exact_strategy_reason: "INSUFFICIENT_SMA_OBSERVATIONS:1/20"
     root_cause_classification: WARMUP_NOT_COMPLETED
     canonical_runtime_database_history: UNVERIFIED
-  current_exact_head_run_42208707379:
+  historical_exact_head_run_42208707379:
     head_sha: 537f3d8e48e32c7ca63b01a7610076fa501cffa9
     artifact_id: 13498272063
     artifact_sha256: 8f0ba7dfc83bfed04e2a6372a46634a8747d7a54d8adff7d93dfaeb3207079e4
@@ -104,14 +104,14 @@ validation:
     root_cause_classification: WARMUP_NOT_COMPLETED_FOR_ISOLATED_E2E
     first_broken_transition: "Fresh E2E state.sqlite -> 20 completed market-specific one-minute closes -> SMA candidate; the isolated run had 1/20."
     canonical_runtime_database_history: UNVERIFIED
-  event_cap_analysis: "Recorder, SQLite retention, and read-only projection are each bounded at 250 by default. The artifact contains 459 unique timeline events accumulated over 61 samples, but no cursor/counter delta proves there were no gaps. EVENT_EVIDENCE_TRUNCATED is conservative and remains INCOMPLETE; do not infer missing-event count or increase limits without a bounded summary contract."
-  canonical_runtime_readback: "Fresh read-only SentinelX check 2026-11-06: nusa-datascale nusa.service active, but /opt/nusa/current resolves to release 185c52c22691a5a35b13fe024cb39d810719a833 while protected main is 2224d7f8e2f58081cf3edcd2597ea7048e07f70a. The service stores state under /var/lib/nusa; current SentinelX file_ops read allowlist does not include that path. nusa-paper-codex is offline. Canonical deployed candle-history state therefore remains UNVERIFIED; do not infer it from the isolated GitHub E2E."
+  event_cap_analysis: "Run 42199682632 artifact 13494211160 was freshly matched to GitHub digest sha256:bc978a415808eb15c8d9ab3d9f808d020c9f3e86404bc4ea0890355a6c958f24. It records 61 samples, 92 distinct Decision cycles, 459 timeline entries (92 DECISION, 92 ORDER_INTENT, 92 PNL, 92 UNKNOWN, 91 MARKET_DATA); 92 decisions were WAIT/INSUFFICIENT_HISTORY, with zero orders/fills and no account/PnL change. The 250-event paperLearning projection was durable across restart; event_evidence_truncated=true and stop_reason=EVENT_EVIDENCE_TRUNCATED. Missing-event count remains UNKNOWN because there is no cursor/counter delta. The isolated E2E recreates state.sqlite and uses a 5/20 SMA over completed market-specific 1m closes; 60s cannot establish its 20-close warm-up. Exact per-decision history length in this artifact is UNKNOWN. Canonical deployed DB history remains UNVERIFIED. Do not raise the cap or change the strategy threshold."
+  canonical_runtime_readback: "Fresh read-only SentinelX check at 2026-11-06T13:51Z: nusa-datascale is connected and nusa.service active; /opt/nusa/current resolves to release 185c52c22691a5a35b13fe024cb39d810719a833 while protected main is 2224d7f8e2f58081cf3edcd2597ea7048e07f70a. Current read allowlist is /etc, /var/log, /var/www, /opt, /srv; /var/lib/nusa is excluded. nusa-paper-codex remains offline. Canonical deployed candle-history state therefore remains UNVERIFIED; do not infer it from the isolated GitHub E2E."
   successor_21b59512_exact_head:
     ci: "42205762445 plus five companions 6/6 SUCCESS"
     actual_paper: "42205762459 SUCCESS workflow; artifact remains INCOMPLETE and is not readiness PASS"
     conditional_causal_jobs: "causal-regression-contract and attest-causal-regression SKIPPED; no positive-path evidence"
     independent_technical_disposition: "CHANGES_REQUIRED P0=0/P1=0/P2=1, review 5799212431"
-  current_e5_paper_run:
+  historical_e5_paper_run:
     source_sha: e5c02d97767c212e2f8746102379c5d94dcf0d01
     workflow_run: 42218870740
     artifact_id: 13502646550
@@ -120,13 +120,34 @@ validation:
     observation: "60.893s; Upbit PUBLIC KRW-BIRB; 50 recorded natural Decision cycles, all WAIT/INSUFFICIENT_HISTORY; final reason INSUFFICIENT_SMA_OBSERVATIONS:1/20; zero orders/fills and no account/PnL change; SIGNAL/RISK NOT_OBSERVED; 250-event evidence cap reached and marked truncated. This is isolated fresh-database evidence only."
     canonical_runtime_database_history: UNVERIFIED
   local_failure_code_sanitizer_followup:
-    state: UNCOMMITTED_LOCAL_CHANGE
+    state: COMMITTED_PUSHED
+    commit_sha: fbe0662ab5dc53b73a5f2bfaad16129f7cff3291
     files:
       - scripts/actual-paper-runtime-e2e.js
       - tests/actual-paper-runtime-observation.test.js
     summary: "Strict locally owned writer/runtime/observation reason-code allowlists; ACCESSKEY variant detection; no raw stderr or CLI error reflection; regressions cover ERROR/HALT, heartbeat, failure callback, restart health error, CLI failure, and canonical writer reason retention."
     focused_tests: "38/38 PASS"
     local_validator_recheck: "No actionable P0/P1/P2 in local diff; separate read-only review only, not exact successor SHA evidence."
+  pre_metadata_update_exact_head_ci:
+    head_sha: fbe0662ab5dc53b73a5f2bfaad16129f7cff3291
+    ci_run: 42224955455
+    ci_status_at_last_fresh_check: SUCCESS
+    companion_runs: "42224955780,42224955493,42224955481,42224955665,42224955453 — all SUCCESS"
+    validator_review: "Fresh separate read-only validator session inspected the committed fbe code and found no actionable code finding. Exact-head CI and companions are terminal SUCCESS; fresh exact-SHA technical COMMENT remains pending. No non-author APPROVE, Formal Validation, Audit, or Release evidence."
+  pre_metadata_update_actual_paper:
+    run_id: 42224955453
+    head_sha: fbe0662ab5dc53b73a5f2bfaad16129f7cff3291
+    artifact_id: 13504928353
+    artifact_sha256: 0f81f7f1606df5247761f9335f8cd8b69ce494f80312ea519b0e01cf216d78ec
+    downloaded_zip_bytes: 7243
+    downloaded_zip_sha256_matches_github_digest: true
+    workflow_result: SUCCESS
+    semantic_result: INCOMPLETE_NO_AUTONOMOUS_ORDER_FILL_PNL
+    observation: "60.230s; 61 samples; 6 distinct natural Decision cycles; 30 timeline events (six each MARKET_DATA, DECISION, ORDER_INTENT, PERMISSION, PNL); event_evidence_truncated=false; all decisions NO_ACTIONABLE_PAPER_DECISION; SIGNAL/RISK/PAPER_ORDER/PAPER_FILL NOT_OBSERVED; 61 account observations with no account/PnL change; 0 orders/fills."
+    persistence: "35 bounded paperLearning events before restart, at shutdown, and after recovery; no duplicate IDs; recovered window matches persisted window."
+    idempotency_retry: "NOT_APPLICABLE_NO_AUTOMATIC_ORDER; duplicate order/fill replay was not exercised because no automatic order existed."
+    runtime_safety_smoke: PASS
+    readiness_claim_allowed: false
   local_followup_validation:
     full_tests: "1,335 isolated test files PASS"
     typecheck: PASS
@@ -134,7 +155,7 @@ validation:
     security_gate: PASS
     workflow_action_pins: PASS
     lint: "0 errors / 47 baseline warnings"
-    aipos_validation: PASS (YAML, provenance, conformance, evidence, validate:full)
-    diff_check: PASS after metadata refresh
+    aipos_validation: PASS after inspected-artifact metadata update (AIPOS YAML, provenance, conformance, evidence integrity, validate:full)
+    diff_check: PASS after inspected-artifact metadata update
   local_public_market_e2e: "Not rerun locally; exact-head GitHub workflows used actual Upbit PUBLIC ticker data. No synthetic evidence was used."
-next: "Finish AIPOS YAML/provenance/conformance/evidence validation and final diff review. Then commit and push only the existing WO-0059 branch; obtain fresh exact-successor CI and exact-SHA technical disposition. Keep readiness INCOMPLETE: the e5 isolated run observed 1/20 completed one-minute SMA closes, while canonical deployed database history remains UNVERIFIED. Obtain an approved read-only report for deployed PAPER candle count/range/gaps/provenance. Do not widen SentinelX access, access or mutate DB directly, deploy, restart, change readiness semantics, or treat CI/workflow success as semantic readiness. Formal Validator, Audit, Release authorization, and governed merge remain distinct pending gates."
+next: "AIPOS validators and diff-check pass after the inspected artifact update. Commit/push only this metadata correction on the existing branch; obtain fresh exact-successor CI and a fresh exact-SHA technical COMMENT. Keep readiness INCOMPLETE. Separately obtain an approved bounded read-only report for deployed PAPER candle count/range/gaps/provenance; do not widen SentinelX access, access or mutate DB directly, deploy, restart, change readiness semantics, or treat workflow success as semantic readiness. Formal Validator, Audit, Release authorization, and governed merge remain separate pending gates."
