@@ -32,3 +32,14 @@ Safety stays: PAPER_ONLY, liveAuthority=NONE, productionMutationAllowed=false, a
 - 35개 장부 항목 각각이 왜 연결되지 않았는지(소유 이슈 #2117 등)는 주석 요약만 읽었다.
 - 진짜 보호된 main에서 `attest-causal-regression`이 한 번이라도 돈 적이 있는지는 마지막 두 push만 봤다.
 - 인과 검증기의 사전 설계가 #1851 인계 기록 안에 따로 있는지는 읽지 않았다.
+
+## 2026-11-06 갱신 (KST, main `ecdf774`, 코드 읽기만 한 결과)
+위 2번("`CODE_ACTIONABLE`을 만들어 내는 코드가 없다")은 더 이상 맞지 않는다. #2992와 #2994가 병합되어 main에 다음이 있다.
+- `causalRegressionAdmission.ts`: 인과 승인 영수증을 만들고 구조·유효성을 검사한다(`createCausalAdmissionReceipt`, `isValidCausalAdmissionReceipt`). 격리 검증 판정(`classifyIsolatedCausalVerification`)과 고정된 생산자 지문도 있다.
+- `causalDispatchBinding.ts`: 디스패치에 인과 바인딩을 붙이고(`dispatchWithCausalBinding`), 일회용 클레임과 검증(`claimVerifiedCausalDispatch`, `verifyClaimedCausalDispatch`)을 한다.
+- `causalAdmissionAuthorization.ts`, `causalProposalReceipt.ts`, `causalRepairPatch.ts`: 승인, 제안 영수증, 수리 대상 한 파일로 제한된 패치.
+- 격리 검증 경로(`causal-verification*.yml`)는 증명 체인을 점검하는 장치이고 **양성 증명으로 세지 않는다**. 이 경로는 `NUSA_ISOLATED_CAUSAL_VERIFICATION_ENABLED=true`일 때만 열린다.
+
+**여전히 확인되지 않은 것 (L1 PARTIAL 유지):** 실제 보호된 main에서 어긋난 계약이 만든 진짜 증명서, 그것을 소비 검증기가 받아 `CODE_ACTIONABLE`로 승인하는 운영 환경 증거, 그리고 양성 CodingRunner 종단 동작. 이는 카나리(`FORGE_CANARY_PREPARATION_20261104.md`)로만 확인할 수 있고, 카나리는 승인·실행되지 않았다. L2는 HOLD다.
+
+이 갱신은 코드를 읽어 이름과 역할을 적은 것이며, 동작을 실행해서 확인한 것이 아니다.
