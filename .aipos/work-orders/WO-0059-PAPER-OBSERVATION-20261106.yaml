@@ -60,20 +60,22 @@ verification_commands:
   - "node scripts/validate-workflow-action-pins.js"
   - "git diff --check"
 validation:
-  focused_tests: "34/34 PASS after exact-head review findings were reproduced and repaired locally"
+  focused_tests: "38/38 PASS after exact-head e5 P2 sanitizer finding was reproduced and repaired locally"
   full_tests: "1,335 isolated test files PASS on the local successor worktree"
   typecheck: PASS
   validate_full: PASS
   security_gate: PASS
   lint: "0 errors / 47 baseline warnings"
   aipos_provenance: PASS
-  aipos_yaml: "578 files PASS after state update"
+  aipos_yaml: "PASS (578 files)"
   workflow_action_pins: PASS
   diff_check: PASS
   prior_exact_head_ci: "PASS at aabfdaa880985f1ec773d794d6e8030393d04bff; historical after local repair"
   independent_technical_disposition: "CHANGES_REQUIRED on aabfdaa880985f1ec773d794d6e8030393d04bff (COMMENT 5798993398); successor 21b59512a43c687d9b3a123e9abdd9ea9626804e review also CHANGES_REQUIRED, P0=0/P1=0/P2=1 (COMMENT 5799212431). Both were separate validator sessions under the same author account, not non-author approval, Formal Validation, Audit, or Release."
   successor_exact_head_ci: "537f3d8e48e32c7ca63b01a7610076fa501cffa9: CI 42208707239 and five required companion workflows 42208707210, 42208707179, 42208707184, 42208707263, 42208707379 all terminal SUCCESS (6/6)."
   successor_independent_review: "Exact-head technical disposition 5799431551: ACCEPTED, P0/P1/P2=0, on 537f3d8e48e32c7ca63b01a7610076fa501cffa9. Fresh read-only NUSA_AGENT_ROLE=validator session; same GitHub author identity cinamoncandy, so this is technical disposition, not non-author APPROVE, Formal Validation, Audit, or Release authorization. Review threads: 0."
+  e5_p2_followup_review: "Exact-head COMMENT 5800280244 on e5c02d97767c212e2f8746102379c5d94dcf0d01 found P2: credential-like runtime ERROR/HALT, heartbeat lastError, and stderr-derived values could be reflected. Local follow-up replaces runtime-provided code reflection with locally owned reason-code allowlists; sanitizes restart-health and CLI errors; and adds regression coverage. Separate local validator re-review found no actionable findings in this diff, but it is pre-commit and not a successor-SHA receipt or non-author approval."
+  current_remote_pr_head: "PR #3006 is OPEN/Ready at e5c02d97767c212e2f8746102379c5d94dcf0d01, base/protected main 2224d7f8e2f58081cf3edcd2597ea7048e07f70a. The e5 exact-head CI and five companions are SUCCESS, but are historical for the uncommitted local follow-up."
   source_run_42199682632:
     artifact_id: 13494211160
     artifact_sha256: bc978a415808eb15c8d9ab3d9f808d020c9f3e86404bc4ea0890355a6c958f24
@@ -109,15 +111,30 @@ validation:
     actual_paper: "42205762459 SUCCESS workflow; artifact remains INCOMPLETE and is not readiness PASS"
     conditional_causal_jobs: "causal-regression-contract and attest-causal-regression SKIPPED; no positive-path evidence"
     independent_technical_disposition: "CHANGES_REQUIRED P0=0/P1=0/P2=1, review 5799212431"
+  current_e5_paper_run:
+    source_sha: e5c02d97767c212e2f8746102379c5d94dcf0d01
+    workflow_run: 42218870740
+    artifact_id: 13502646550
+    artifact_sha256: a7642cd1aba6d16783d3feda80455661a6c7fa57ce4d94c306958955b5a14930
+    result: INCOMPLETE
+    observation: "60.893s; Upbit PUBLIC KRW-BIRB; 50 recorded natural Decision cycles, all WAIT/INSUFFICIENT_HISTORY; final reason INSUFFICIENT_SMA_OBSERVATIONS:1/20; zero orders/fills and no account/PnL change; SIGNAL/RISK NOT_OBSERVED; 250-event evidence cap reached and marked truncated. This is isolated fresh-database evidence only."
+    canonical_runtime_database_history: UNVERIFIED
+  local_failure_code_sanitizer_followup:
+    state: UNCOMMITTED_LOCAL_CHANGE
+    files:
+      - scripts/actual-paper-runtime-e2e.js
+      - tests/actual-paper-runtime-observation.test.js
+    summary: "Strict locally owned writer/runtime/observation reason-code allowlists; ACCESSKEY variant detection; no raw stderr or CLI error reflection; regressions cover ERROR/HALT, heartbeat, failure callback, restart health error, CLI failure, and canonical writer reason retention."
+    focused_tests: "38/38 PASS"
+    local_validator_recheck: "No actionable P0/P1/P2 in local diff; separate read-only review only, not exact successor SHA evidence."
   local_followup_validation:
-    focused_tests: "34/34 PASS"
     full_tests: "1,335 isolated test files PASS"
     typecheck: PASS
     validate_full: PASS
     security_gate: PASS
-    lint: "0 errors / 47 baseline warnings"
     workflow_action_pins: PASS
-    aipos_provenance_yaml: PASS
-    diff_check: PASS
+    lint: "0 errors / 47 baseline warnings"
+    aipos_validation: PASS (YAML, provenance, conformance, evidence, validate:full)
+    diff_check: PASS after metadata refresh
   local_public_market_e2e: "Not rerun locally; exact-head GitHub workflows used actual Upbit PUBLIC ticker data. No synthetic evidence was used."
-next: "The bounded observation implementation is accepted in scoped exact-head technical review and its current exact-head CI plus five companions pass. Do not alter readiness semantics or claim actual PAPER readiness: the isolated run is WARMUP_NOT_COMPLETED with 1/20 completed one-minute closes, while canonical deployed database history remains UNVERIFIED. Next require an approved read-only query (or existing safe read-only API) for the deployed PAPER market's completed one-minute candle count, range, gaps, and provenance; do not widen SentinelX access or read/mutate the database directly. Formal Validator, Audit, Release authorization, and governed merge remain distinct pending gates."
+next: "Finish AIPOS YAML/provenance/conformance/evidence validation and final diff review. Then commit and push only the existing WO-0059 branch; obtain fresh exact-successor CI and exact-SHA technical disposition. Keep readiness INCOMPLETE: the e5 isolated run observed 1/20 completed one-minute SMA closes, while canonical deployed database history remains UNVERIFIED. Obtain an approved read-only report for deployed PAPER candle count/range/gaps/provenance. Do not widen SentinelX access, access or mutate DB directly, deploy, restart, change readiness semantics, or treat CI/workflow success as semantic readiness. Formal Validator, Audit, Release authorization, and governed merge remain distinct pending gates."

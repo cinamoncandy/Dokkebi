@@ -108,7 +108,10 @@ async function stopSupervisor(supervisor) {
 async function waitForHealth(baseUrl, runtime, timeoutMs = 30_000) {
   const deadline = Date.now() + timeoutMs;
   while (Date.now() < deadline) {
-    if (runtime.child.exitCode != null) throw new Error(`cloud runtime exited early (${runtime.child.exitCode}): ${runtime.stderr.join("").slice(-4000)}`);
+    if (runtime.child.exitCode != null) {
+      const failureCode = runtimeExitFailureCode(runtime) ?? "RUNTIME_PROCESS_EXITED";
+      throw new Error(`cloud runtime exited early (${runtime.child.exitCode}): ${failureCode}`);
+    }
     try {
       const response = await fetch(`${baseUrl}/health`);
       if (response.ok) return;
@@ -177,7 +180,110 @@ const LEARNING_EVENT_STAGES = new Set(["MARKET_DATA", "SIGNAL", "CANDIDATE", "DE
 const LOCAL_OPERATIONS_FAILURE_CODES = new Set(["RUNTIME_OPERATIONS_TIMEOUT", "RUNTIME_OPERATIONS_UNAVAILABLE"]);
 const PAPER_ORDER_STATUSES = new Set(["OPEN", "PENDING", "FILLED", "CANCELLED", "REJECTED"]);
 const SAFE_REASON_CODE_PATTERN = /^[A-Z][A-Z0-9_]{1,100}$/;
-const SENSITIVE_REASON_CODE_PATTERN = /(TOKEN|SECRET|PASSWORD|CREDENTIAL|EMAIL|API_KEY|ACCESS_KEY|PRIVATE_KEY|ACCOUNT_(?:ID|NUMBER)|WALLET_ADDRESS|IP_ADDRESS)/;
+const SENSITIVE_REASON_CODE_PATTERN = /(TOKEN|SECRET|PASSWORD|CREDENTIAL|EMAIL|API[_-]?KEY|ACCESS[_-]?KEY|PRIVATE[_-]?KEY|ACCOUNT[_-]?(?:ID|NUMBER)|WALLET[_-]?ADDRESS|IP[_-]?ADDRESS)/;
+// Only locally-owned codes are emitted. Runtime-controlled uppercase strings are not a trust
+// boundary: credentials such as UPBIT_ACCESSKEY_ABC123 also satisfy the old token grammar.
+const SAFE_WRITER_FAILURE_CODES = new Set([
+  "PAPER_WRITER_ALREADY_ACTIVE",
+  "PAPER_WRITER_LEASE_CONFLICT",
+  "PAPER_WRITER_CLOCK_INVALID",
+  "PAPER_WRITER_CLOCK_REGRESSION",
+  "PAPER_WRITER_CLOCK_ANOMALY",
+  "PAPER_WRITER_LEASE_CORRUPTED",
+  "PAPER_WRITER_LEASE_EXPIRED",
+  "PAPER_WRITER_LEASE_LOST",
+  "PAPER_WRITER_LEASE_OWNER_MISMATCH",
+  "PAPER_WRITER_LEASE_RENEWAL_REJECTED",
+  "PAPER_WRITER_LEASE_ROW_MISSING",
+]);
+const SAFE_RUNTIME_FAILURE_CODES = new Set([
+  ...SAFE_WRITER_FAILURE_CODES,
+  "AUTOMATIC_RUNTIME_STARTUP_FAILED",
+  "AUTOMATIC_RUNTIME_STARTUP_TIMEOUT",
+  "PAPER_AUTHORITY_INVARIANT_VIOLATION",
+  "PAPER_FILL_DUPLICATE_ID_IN_SNAPSHOT",
+  "PAPER_FILL_IDENTITY_INVALID",
+  "PAPER_FILL_ID_CONFLICT",
+  "PAPER_FILL_TIME_INVALID",
+  "PAPER_LEARNING_EVENT_IDENTITY_INVALID",
+  "PAPER_LEARNING_EVENT_ID_CONFLICT",
+  "PAPER_LEARNING_EVENT_INVALID",
+  "PAPER_LEARNING_EVENT_TIME_INVALID",
+  "PAPER_LEARNING_EVENT_TIME_IN_FUTURE",
+  "PAPER_LEARNING_PROJECTION_INVALID",
+  "PAPER_MARKET_TRANSPORT_NOT_ONLINE",
+  "PAPER_ORDER_DUPLICATE_ID_IN_SNAPSHOT",
+  "PAPER_ORDER_IDENTITY_INVALID",
+  "PAPER_ORDER_ID_CONFLICT",
+  "PAPER_ORDER_MARKET_INVALID",
+  "PAPER_ORDER_STATUS_INVALID",
+  "PAPER_ORDER_TIME_INVALID",
+  "PAPER_RUNTIME_HEARTBEAT_INVALID",
+  "PAPER_RUNTIME_NOT_RUNNING",
+  "RUNTIME_ERROR_PRESENT",
+  "RUNTIME_HEALTH_TIMEOUT",
+  "RUNTIME_OPERATIONS_SNAPSHOT_MISSING",
+  "RUNTIME_OPERATIONS_TIMEOUT",
+  "RUNTIME_OPERATIONS_UNAVAILABLE",
+  "RUNTIME_PROCESS_EXITED",
+  "RUNTIME_TRANSIENTLY_UNAVAILABLE",
+]);
+const SAFE_OBSERVATION_REASON_CODES = new Set([
+  ...SAFE_WRITER_FAILURE_CODES,
+  "ACCOUNT_DAILY_LOSS_LIMIT",
+  "APPROVAL_EXPIRED",
+  "APPROVAL_MISSING",
+  "APPROVAL_SCOPE_MISMATCH",
+  "CONSECUTIVE_LOSS_LIMIT",
+  "CONFIG_FINGERPRINT_MISMATCH",
+  "DAILY_LOSS_LIMIT",
+  "DEPLOYMENT_INTEGRITY_FAILED",
+  "DUPLICATE_CLIENT_ORDER_ID",
+  "DUPLICATE_COMMAND",
+  "DUPLICATE_SIGNAL",
+  "INSUFFICIENT_CASH",
+  "INSUFFICIENT_POSITION",
+  "INSUFFICIENT_SMA_OBSERVATIONS",
+  "INVALID_REQUEST",
+  "KILL_SWITCH_ACTIVE",
+  "LIVE_CAPABILITY_DETECTED",
+  "MARKET_DATA_GAP",
+  "MARKET_DATA_INVALID",
+  "MARKET_DATA_OUT_OF_ORDER",
+  "MARKET_DATA_RECONNECTING",
+  "MARKET_DATA_STALE",
+  "MARKET_DATA_WARMING_UP",
+  "MAX_DAILY_BUY_NOTIONAL",
+  "MAX_DAILY_SELL_NOTIONAL",
+  "MAX_ORDER_NOTIONAL",
+  "MAX_PORTFOLIO_EXPOSURE",
+  "MAX_POSITION_NOTIONAL",
+  "MAX_SYMBOL_EXPOSURE",
+  "NO_ACTIONABLE_PAPER_DECISION",
+  "NO_ACTIONABLE_SIGNAL",
+  "NO_CANONICAL_TRADE_PERMISSION_EVIDENCE",
+  "NOT_EVALUATED_NO_ACTIONABLE_DECISION",
+  "OPEN_ORDER_LIMIT",
+  "OPEN_P0_ALERT",
+  "ORDER_RATE_LIMIT_PER_MINUTE",
+  "ORDER_RATE_LIMIT_PER_SECOND",
+  "PAPER_LIMIT_FILLED",
+  "PAPER_LIMIT_OPEN",
+  "PAPER_LIMIT_PARTIALLY_FILLED",
+  "PAPER_STRATEGY_BUDGET_EXHAUSTED",
+  "PAPER_STRATEGY_BUDGET_UNEXECUTABLE",
+  "PAPER_STRATEGY_FILLED",
+  "PAPER_STRATEGY_PARTIALLY_FILLED",
+  "PERSISTENCE_UNHEALTHY",
+  "PRICE_DEVIATION_LIMIT",
+  "PRIVATE_API_CAPABILITY_DETECTED",
+  "RECONCILIATION_FAILED",
+  "RISK_POLICY_FINGERPRINT_MISMATCH",
+  "RUNTIME_FINGERPRINT_MISMATCH",
+  "SAME_SIDE_BURST_LIMIT",
+  "SESSION_DRAWDOWN_LIMIT",
+  "STRATEGY_FINGERPRINT_MISMATCH",
+]);
 
 function observationTimestamp(value) {
   if (Number.isSafeInteger(value) && value >= 0) return value;
@@ -198,15 +304,15 @@ function safeReasonCodes(value) {
   return [...new Set(candidates
     .filter((candidate) => typeof candidate === "string")
     .map((candidate) => candidate.trim())
-    .filter((candidate) => SAFE_REASON_CODE_PATTERN.test(candidate) && !SENSITIVE_REASON_CODE_PATTERN.test(candidate)))].slice(0, 16);
+    .filter((candidate) => SAFE_REASON_CODE_PATTERN.test(candidate) && SAFE_OBSERVATION_REASON_CODES.has(candidate) && !SENSITIVE_REASON_CODE_PATTERN.test(candidate)))].slice(0, 16);
 }
 
 function safeRuntimeFailureCode(value) {
   if (typeof value !== "string" || value.length === 0) return "RUNTIME_ERROR_PRESENT";
-  const leaseCode = value.match(/\bPAPER_WRITER_(?:LEASE|CLOCK)_[A-Z_]+\b|\bPAPER_WRITER_ALREADY_ACTIVE\b|\bPAPER_WRITER_LEASE_CONFLICT\b/);
-  if (leaseCode) return leaseCode[0];
+  const writerCode = value.match(/\bPAPER_WRITER_[A-Z_]+\b/);
+  if (writerCode && SAFE_WRITER_FAILURE_CODES.has(writerCode[0])) return writerCode[0];
   const code = value.split(/[\s:;,]/, 1)[0];
-  return SAFE_REASON_CODE_PATTERN.test(code) && !SENSITIVE_REASON_CODE_PATTERN.test(code) ? code : "RUNTIME_ERROR_PRESENT";
+  return SAFE_RUNTIME_FAILURE_CODES.has(code) && SAFE_REASON_CODE_PATTERN.test(code) && !SENSITIVE_REASON_CODE_PATTERN.test(code) ? code : "RUNTIME_ERROR_PRESENT";
 }
 
 function observationSnapshotFailure(response) {
@@ -837,13 +943,14 @@ function parseArgs(args) {
 }
 
 if (require.main === module) {
-  run(parseArgs(process.argv.slice(2))).then((evidence) => {
+  Promise.resolve().then(() => run(parseArgs(process.argv.slice(2)))).then((evidence) => {
     process.stdout.write(`${JSON.stringify({ result: evidence.result, evidence_type: evidence.evidence_type, artifact_hash: evidence.artifact_hash.value })}\n`);
     if (evidence.result === "FAIL") process.exitCode = 1;
   }).catch((error) => {
-    process.stderr.write(`actual PAPER runtime E2E failed: ${error instanceof Error ? error.message : "unknown error"}\n`);
+    const failureCode = safeRuntimeFailureCode(error instanceof Error ? error.message : "");
+    process.stderr.write(`actual PAPER runtime E2E failed: ${failureCode}\n`);
     process.exitCode = 1;
   });
 }
 
-module.exports = { availablePort, buildBoundPaperChaosRestartEvidence, canonical, observeAutomaticRuntime, paperChaosStateFromSnapshot, readPersistedPaperLearningIds, run, scrubPrivateExchangeEnv, sha256, snapshotObservedAt, summarizeSnapshot };
+module.exports = { availablePort, buildBoundPaperChaosRestartEvidence, canonical, observeAutomaticRuntime, paperChaosStateFromSnapshot, readPersistedPaperLearningIds, run, scrubPrivateExchangeEnv, sha256, snapshotObservedAt, summarizeSnapshot, waitForHealth };

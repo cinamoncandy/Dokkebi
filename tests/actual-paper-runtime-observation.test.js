@@ -1,6 +1,7 @@
 const assert = require("node:assert/strict");
+const { spawnSync } = require("node:child_process");
 const test = require("node:test");
-const { observeAutomaticRuntime } = require("../scripts/actual-paper-runtime-e2e.js");
+const { observeAutomaticRuntime, waitForHealth } = require("../scripts/actual-paper-runtime-e2e.js");
 const { classify } = require("../scripts/classify-actual-paper-runtime-readiness.js");
 
 const BASE_TIME = Date.parse("2026-11-06T12:00:00.000Z");
@@ -231,6 +232,73 @@ test("untrusted HTTP failure codes cannot leak while locally generated codes rem
     readSnapshot: async () => ({ httpStatus: 503, body: { failureCode: "RUNTIME_OPERATIONS_TIMEOUT" } }),
   });
   assert.equal(timeout.evidence.failure_code, "RUNTIME_OPERATIONS_TIMEOUT");
+});
+
+test("runtime ERROR/HALT, heartbeat, and stderr-like failures emit only locally owned codes", async () => {
+  const credentialLike = "UPBIT_ACCESSKEY_ABC123";
+  for (const stage of ["ERROR", "HALT"]) {
+    const result = await runObservation({
+      currentEvents: () => [event(`runtime-failure-${stage}`, stage, BASE_TIME + 1, { status: "FAIL", reason: credentialLike })],
+    });
+    assert.equal(result.status, "FAIL");
+    assert.equal(result.evidence.failure_code, "RUNTIME_ERROR_PRESENT");
+    assert.deepEqual(result.evidence.timeline[0].reason_codes, []);
+    assert.doesNotMatch(JSON.stringify(result.evidence), /UPBIT_ACCESSKEY_ABC123/);
+  }
+
+  const heartbeat = await runObservation({
+    currentEvents: () => cycleEvents(1, BASE_TIME + 1),
+    snapshotOverrides: () => ({ operations: { heartbeat: { startedAt: BASE_TIME - 1_000, lastHeartbeatAt: BASE_TIME, lastError: credentialLike } } }),
+  });
+  assert.equal(heartbeat.status, "FAIL");
+  assert.equal(heartbeat.evidence.failure_code, "RUNTIME_ERROR_PRESENT");
+  assert.doesNotMatch(JSON.stringify(heartbeat.evidence), /UPBIT_ACCESSKEY_ABC123/);
+
+  let snapshotReads = 0;
+  const stderrLike = await observeAutomaticRuntime({
+    initialSnapshot: snapshot([]),
+    checkRuntimeFailure: () => `runtime exited: ${credentialLike}`,
+    minimumDurationMs: 1_000,
+    maximumDurationMs: 1_000,
+    minimumDecisionCycles: 1,
+    now: () => 0,
+    wallNow: () => BASE_TIME,
+    readSnapshot: async () => { snapshotReads += 1; return { httpStatus: 200, body: snapshot([]) }; },
+    delay: async () => {},
+  });
+  assert.equal(snapshotReads, 0);
+  assert.equal(stderrLike.status, "FAIL");
+  assert.equal(stderrLike.evidence.failure_code, "RUNTIME_ERROR_PRESENT");
+  assert.doesNotMatch(JSON.stringify(stderrLike.evidence), /UPBIT_ACCESSKEY_ABC123/);
+});
+
+test("known locally owned PAPER writer reason codes survive strict reason-code normalization", async () => {
+  const result = await runObservation({
+    currentEvents: () => [event("known-writer-failure", "HALT", BASE_TIME + 1, { status: "FAIL", reason: "PAPER_WRITER_LEASE_LOST" })],
+  });
+  assert.equal(result.status, "FAIL");
+  assert.equal(result.evidence.failure_code, "PAPER_WRITER_LEASE_LOST");
+  assert.deepEqual(result.evidence.timeline[0].reason_codes, ["PAPER_WRITER_LEASE_LOST"]);
+});
+
+test("restart health failures preserve bounded classification without reflecting child stderr", async () => {
+  const credentialLike = "UPBIT_ACCESSKEY_ABC123";
+  await assert.rejects(
+    waitForHealth("http://127.0.0.1:1", { child: { exitCode: 1 }, stderr: [credentialLike] }),
+    (error) => {
+      assert.match(error.message, /cloud runtime exited early \(1\): RUNTIME_ERROR_PRESENT/);
+      assert.doesNotMatch(error.message, /UPBIT_ACCESSKEY_ABC123/);
+      return true;
+    },
+  );
+});
+
+test("CLI errors expose only a bounded code even when the rejected argument resembles a credential", () => {
+  const credentialLike = "UPBIT_ACCESSKEY_ABC123";
+  const result = spawnSync(process.execPath, ["scripts/actual-paper-runtime-e2e.js", `--invalid=${credentialLike}`], { encoding: "utf8" });
+  assert.equal(result.status, 1);
+  assert.match(result.stderr, /actual PAPER runtime E2E failed: RUNTIME_ERROR_PRESENT/);
+  assert.doesNotMatch(result.stderr, /UPBIT_ACCESSKEY_ABC123/);
 });
 
 test("Risk rejection keeps bounded canonical reason codes without raw detail", async () => {

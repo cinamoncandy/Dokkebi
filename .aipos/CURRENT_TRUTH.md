@@ -9,7 +9,7 @@ Everything below is what the repository's records *claim*. Re-verify on GitHub b
 
 [`.aipos/handoffs/2026-11-06-wo-0059-observation.md`](handoffs/2026-11-06-wo-0059-observation.md) — WO-0059 PAPER Observation Handoff — 2026-11-06
 
-> ## Scope and owner
+> ## Scope and safety
 
 ## Work orders
 
