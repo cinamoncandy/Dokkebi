@@ -192,5 +192,41 @@ validation:
     exact_head_ci: PENDING successor commit
     actual_paper_retest: PENDING successor CI; existing eee1db8 failure remains historical and cause UNKNOWN
     independent_review: PENDING successor exact SHA
+  successor_review_6f71a9fe:
+    head_sha: 6f71a9fe304d61273be5b4076cf73e04105bb739
+    base_and_protected_main: 2224d7f8e2f58081cf3edcd2597ea7048e07f70a
+    exact_head_ci: "42237698690 SUCCESS; four safety companions 42237698637, 42237698640, 42237698717, 42237698705 SUCCESS; Actual PAPER 42237698763 workflow SUCCESS. Conditional causal-regression and attestation jobs were SKIPPED and are not positive-path evidence."
+    actual_paper:
+      artifact_id: 13512578070
+      artifact_sha256: f2106bd65d392be1ecc0924f5fd0806c0a9cf1c0cede44e344353254d9a796bc
+      workflow_result: PASS
+      semantic_result: INCOMPLETE_NO_AUTONOMOUS_ORDER_FILL_PNL
+      observation: "60.357s; 25 natural Decisions; 0 orders/fills/account-PnL changes; SIGNAL/RISK/PAPER_ORDER/PAPER_FILL NOT_OBSERVED; no event truncation. Runtime safety observation does not certify autonomous PAPER readiness."
+    independent_validator:
+      disposition: CHANGES_REQUIRED
+      p0: 0
+      p1: 0
+      p2: 1
+      github_comment: NOT_POSTED
+      finding: "safeRuntimeFailureCode extracted an allowlisted prefix before whitespace/colon/semicolon and could misclassify arbitrary suffix text (including credential-like input) as a locally owned failure code. The value was not emitted, but the cause classification was not trustworthy."
+    local_p2_repair:
+      status: COMMITTED_PENDING_EXACT_HEAD_CI
+      change: "Accept exact allowlisted strings only; preserve writer errors only when the stack starts with an exact locally owned PAPER_WRITER code and the remaining lines are stack frames; all suffix-tainted/unknown values map to RUNTIME_ERROR_PRESENT."
+      regression: "Suffix-tainted examples for three runtime codes and PAPER_WRITER_LEASE_LOST are rejected without reflecting a credential-like value; an anchored writer stack retains its exact code."
+      focused_tests: "41/41 PASS across the five WO-0059 focused test files"
+      full_tests: "PASS 1,335 isolated test files"
+      typecheck: PASS
+      validate_full: PASS
+      security_gate: PASS
+      workflow_action_pins_inputs: PASS
+      aipos_focused_tests: "47/47 PASS"
+      aipos_yaml: "PASS (579 files)"
+      aipos_provenance: PASS
+      aipos_evidence_integrity: PASS
+      current_truth_regenerated: PASS
+      lint: "0 errors / 47 existing baseline warnings"
+      diff_check: PASS
+      exact_head_ci: PENDING_PUSH_AND_CURRENT_COMMIT_CI
+      independent_review: PENDING_PUSH_AND_CURRENT_COMMIT_REVIEW
   local_public_market_e2e: "Not rerun locally; exact-head GitHub workflows used actual Upbit PUBLIC ticker data. No synthetic evidence was used."
-next: "Commit/push only the locally validated four-code diagnostic allowlist fix and its regression to the existing #3006 branch after the AIPOS update and final diff check; do not create another PR. Run fresh exact-head CI/companions on that successor, then a fresh separate VALIDATOR COMMENT. The new Actual PAPER artifact may reveal one of the fixed local codes but must remain fail-closed; if it is still generic, keep cause UNKNOWN and seek only an approved bounded diagnostic source. Separately obtain an approved read-only report for deployed per-market completed 1m candle count/range/gaps/provenance. Do not change SMA warmup, 250-event cap, or readiness semantics; do not widen SentinelX access, read/mutate DB, deploy, restart, or claim readiness. Formal Validator, Audit, Release authorization, and governed merge remain separate pending gates."
+next: "Push the committed P2 failure-code classification repair to the existing #3006 branch; create no competing PR. Run fresh exact-head CI/companions on the successor, then a separate exact-SHA VALIDATOR review. Keep semantic readiness INCOMPLETE. Separately obtain an approved read-only report for deployed per-market completed 1m candle count/range/gaps/provenance. Do not change SMA warmup, 250-event cap, or readiness semantics; do not widen SentinelX access, read/mutate DB, deploy, restart, or claim readiness. Formal Validator, Audit, Release authorization, and governed merge remain separate pending gates."

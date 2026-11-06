@@ -299,6 +299,35 @@ test("known locally generated runtime failure codes survive strict heartbeat nor
   }
 });
 
+test("allowlisted runtime code prefixes with untrusted suffixes fail closed", async () => {
+  const secret = "UPBIT_ACCESSKEY_ABC123";
+  const lastErrors = [
+    `PAPER_ORDERBOOK_UNRECONCILED: ${secret}`,
+    `PAPER_PERIOD_EVIDENCE_REJECTED; ${secret}`,
+    `PUBLIC_ORDERBOOK_SNAPSHOT_UNAVAILABLE ${secret}`,
+    `PAPER_WRITER_LEASE_LOST: ${secret}`,
+  ];
+
+  for (const lastError of lastErrors) {
+    const result = await runObservation({
+      snapshotOverrides: () => ({ operations: { heartbeat: { startedAt: BASE_TIME - 1_000, lastHeartbeatAt: BASE_TIME, lastError } } }),
+    });
+    assert.equal(result.status, "FAIL");
+    assert.equal(result.evidence.failure_code, "RUNTIME_ERROR_PRESENT");
+    assert.doesNotMatch(JSON.stringify(result.evidence), /UPBIT_ACCESSKEY_ABC123/);
+  }
+});
+
+test("anchored local writer error stacks preserve only the exact leading failure code", async () => {
+  await assert.rejects(
+    waitForHealth("http://127.0.0.1:1", { child: { exitCode: 1 }, stderr: ["Error: PAPER_WRITER_LEASE_LOST\n    at acquireLease (runtime.js:1:1)\n"] }),
+    (error) => {
+      assert.match(error.message, /cloud runtime exited early \(1\): PAPER_WRITER_LEASE_LOST/);
+      return true;
+    },
+  );
+});
+
 test("restart health failures preserve bounded classification without reflecting child stderr", async () => {
   const credentialLike = "UPBIT_ACCESSKEY_ABC123";
   await assert.rejects(

@@ -313,10 +313,10 @@ function safeReasonCodes(value) {
 
 function safeRuntimeFailureCode(value) {
   if (typeof value !== "string" || value.length === 0) return "RUNTIME_ERROR_PRESENT";
-  const writerCode = value.match(/\bPAPER_WRITER_[A-Z_]+\b/);
-  if (writerCode && SAFE_WRITER_FAILURE_CODES.has(writerCode[0])) return writerCode[0];
-  const code = value.split(/[\s:;,]/, 1)[0];
-  return SAFE_RUNTIME_FAILURE_CODES.has(code) && SAFE_REASON_CODE_PATTERN.test(code) && !SENSITIVE_REASON_CODE_PATTERN.test(code) ? code : "RUNTIME_ERROR_PRESENT";
+  const exactValue = value.trim();
+  if (SAFE_RUNTIME_FAILURE_CODES.has(exactValue) && SAFE_REASON_CODE_PATTERN.test(exactValue) && !SENSITIVE_REASON_CODE_PATTERN.test(exactValue)) return exactValue;
+  const writerStack = exactValue.match(/^Error: (PAPER_WRITER_[A-Z_]+)(?:\r?\n(?: {2,}at [^\r\n]*\r?\n?)*)?$/);
+  return writerStack && SAFE_WRITER_FAILURE_CODES.has(writerStack[1]) ? writerStack[1] : "RUNTIME_ERROR_PRESENT";
 }
 
 function observationSnapshotFailure(response) {
