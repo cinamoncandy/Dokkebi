@@ -1,0 +1,23 @@
+id: WO-ARCH-20261106-DESIGN-IMPROVEMENT
+title: "Design improvement proposal: canary, NUSA Forge L1 and the whole system (proposal only)"
+status: READY_FOR_REVIEW
+owner: nusa-development
+repository: cinamoncandy/NUSA
+base_branch: main
+implementation_branch: claude/design-improvement-20261106
+authority_impact: none
+objective: "Owner asked for design improvement of the canary, NUSA Forge L1 and the whole system on 2026-11-06. Record a prioritized proposal built on docs/DESIGN_ASSESSMENT_2026-10-28.md and on what was read and measured during 2026-11-04..06, separating verified facts from estimates and SAFE items from OWNER decisions."
+scope:
+  - "docs/DESIGN_IMPROVEMENT_20261106.md: the proposal document."
+exclusions:
+  - "Proposal only. No code, workflow, pin, gate, threshold, limit, capital or server change. No proposal is approved by this document."
+safety:
+  paper_only: true
+  liveAuthority: NONE
+  productionMutationAllowed: false
+  aiAuthority: ZERO_AUTHORITY
+  fail_closed: "Nothing here changes behaviour."
+verification_commands:
+  - node scripts/validate-aipos-yaml.js
+review: "Draft PR; a non-author review of the claims is requested before the owner picks items."
+residual: "Host disk, memory and backup time were not re-measured; the unreached-module count was not recomputed."
