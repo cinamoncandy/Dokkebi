@@ -26,7 +26,7 @@ export function computeTodayRealizedPnlKrw(fills: readonly PaperFillRecord[], po
     const prior = rebuilt.get(fill.market) ?? { quantity: 0, averageEntryPrice: 0 };
     if (fill.side === "BUY") {
       const quantity = ledgerRound8(prior.quantity + fill.quantity);
-      rebuilt.set(fill.market, { quantity, averageEntryPrice: (prior.averageEntryPrice * prior.quantity + fill.quantity * fill.price + fill.fee) / quantity });
+      rebuilt.set(fill.market, { quantity, averageEntryPrice: quantity <= 0 ? 0 : (prior.averageEntryPrice * prior.quantity + fill.quantity * fill.price + fill.fee) / quantity });
       continue;
     }
     if (fill.quantity > prior.quantity + Number.EPSILON) return null;
@@ -59,7 +59,7 @@ export function computeLimitReachedAt(fills: readonly PaperFillRecord[], now: nu
     const prior = rebuilt.get(fill.market) ?? { quantity: 0, averageEntryPrice: 0 };
     if (fill.side === "BUY") {
       const quantity = ledgerRound8(prior.quantity + fill.quantity);
-      rebuilt.set(fill.market, { quantity, averageEntryPrice: (prior.averageEntryPrice * prior.quantity + fill.quantity * fill.price + fill.fee) / quantity });
+      rebuilt.set(fill.market, { quantity, averageEntryPrice: quantity <= 0 ? 0 : (prior.averageEntryPrice * prior.quantity + fill.quantity * fill.price + fill.fee) / quantity });
       continue;
     }
     if (fill.quantity > prior.quantity + Number.EPSILON) return null;
