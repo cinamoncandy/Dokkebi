@@ -24,7 +24,7 @@ const BASELINE_PATH = ".github/workflow-authority-map.json";
  */
 
 const WRITE_LEVELS = new Set(["write"]);
-const TRACKED_SCOPES = ["contents", "actions", "issues", "pull-requests", "statuses", "id-token", "packages", "deployments", "security-events", "checks"];
+const TRACKED_SCOPES = ["contents", "actions", "issues", "pull-requests", "statuses", "id-token", "packages", "deployments", "security-events", "checks", "attestations", "artifact-metadata"];
 
 const CANONICAL_MERGE_WORKFLOW = "autopilot-deterministic-audit-release.yml";
 const MERGE_CALL = /gh\s+pr\s+merge|\/pulls\/[^\s"']*\/merge|pulls\/\$\{?[A-Za-z_]*\}?[^\s"']*\/merge|"[^"]*\/merge"/;
@@ -105,7 +105,7 @@ function parseWorkflow(name, text) {
 /** The write scopes a job effectively holds, counting the workflow-level default. */
 // `id-token: write` mints an OIDC assertion; it is not repository mutation authority, so it is
 // tracked by the ratchet but does not by itself make a job dangerous to run PR code in.
-const MUTATION_SCOPES = new Set(["contents", "actions", "issues", "pull-requests", "statuses", "packages", "deployments", "security-events", "checks"]);
+const MUTATION_SCOPES = new Set(["contents", "actions", "issues", "pull-requests", "statuses", "packages", "deployments", "security-events", "checks", "attestations", "artifact-metadata"]);
 
 function writeScopes(workflow, job) {
   const merged = { ...workflow.permissions, ...job.permissions };

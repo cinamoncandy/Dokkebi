@@ -1,0 +1,49 @@
+current_autopilot_1851_isolated_claim_implementation_20261104:
+  observed_at_utc: "2026-11-04T03:44:00Z"
+  work_order: WO-AUTOPILOT-20261030-1851-CAUSAL-ADMISSION
+  issue: 1851
+  pull_request: 2994
+  branch: codex/1851-postmerge-p1-20261103
+  starting_head: 185fc1200a88b7cd5e7448bef040464982051e3b
+  starting_base: 3046600b093f8f07a26ba11df3fc48043ae00830
+  protected_main_at_start: efa8e295e7a468d7cb1652fb3924f30c83c3e5f7
+  implementation:
+    status: LOCAL_UNCOMMITTED
+    isolated_atomic_claim: IMPLEMENTED
+    storage: "Existing SQLite Durable Object; required transaction; domain-separated permanent tombstone; duplicate and uncertain commit fail closed."
+    oidc: "Dedicated consumer identity verified separately from exact source run/attempt/job using GitHub API."
+    sigstore: "Existing verifier retained; no genuine protected-main bundle available."
+    consumer: "No source checkout/execution; actions:read and id-token:write only; receipt sanitized on failures."
+    worker_route: DEFAULT_DISABLED
+    authority: PAPER_ONLY_ZERO_AUTHORITY
+  integration:
+    local_workerd_sqlite_do: "PASS: 32 concurrent claims, exactly 1 winner; duplicate rejected; tombstone persisted after Workerd restart with same local persistence."
+    local_worker_codingrunner: "PASS with synthetic verified object, mock GitHub reads, fake AI binding and no-op sandbox; not genuine OIDC/Sigstore or deployed Worker evidence."
+    production_or_remote: NOT_RUN
+  validation:
+    focused_tests: PASS
+    full_isolated_suite: "PASS_1331_ISOLATED_TEST_FILES"
+    typecheck: PASS
+    validate_full: PASS
+    security_gate: PASS
+    lint: "PASS_0_ERRORS_47_WARNINGS"
+    workflow_authority_map_and_action_validators: PASS
+    aipos_yaml: PASS_569_FILES
+    aipos_work_order_provenance: PASS
+    validate_full_after_state_insert: PASS
+    git_diff_check: PASS
+    exact_head_ci: NOT_STARTED
+  governance:
+    pull_request_state: OPEN_DRAFT
+    p2_threads:
+      - PRRT_kwDOTUbne86y_bHe
+      - PRRT_kwDOTUbne86y_bHi
+    independent_current_head_review: NOT_PRESENT
+    genuine_sigstore_bundle: UNVERIFIED
+    worker_runtime_limits_and_live_token_scope: UNVERIFIED
+    github_publication: AUTHORIZED_CONDITIONALLY_AFTER_SCOPED_COMMIT
+    merge_or_deployment: NOT_AUTHORIZED
+    l1: PARTIAL
+    l2: HOLD
+  next: "After final AIPOS/diff and preservation checks, publish only the scoped successor to existing PR #2994 if publication prerequisites remain satisfied; keep Draft and do not merge/deploy. Then inspect exact-head CI and prepare independent validator handoff."
+  safety: PAPER_ONLY_LIVE_NONE_PRODUCTION_MUTATION_FALSE_REAL_ORDER_FALSE_REAL_TRANSFER_FALSE_AI_ZERO_AUTHORITY
