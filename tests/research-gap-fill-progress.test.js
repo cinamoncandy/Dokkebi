@@ -27,6 +27,45 @@ test("gap-fill progress is durable per market and clear removes only the selecte
   } finally { db.close(); }
 });
 
+test("pass-only state survives restart without inventing a history cursor and migrates legacy pass state", () => {
+  const filename = join(mkdtempSync(join(tmpdir(), "nusa-gap-pass-state-")), "research.db");
+  let db = new SqliteDatabase(filename);
+  let store = new SqliteResearchGapFillProgressStore(db);
+  const at = Date.UTC(2026, 10, 5, 12, 0, 0);
+  store.saveNextPass("KRW-XRP", "HISTORY", at);
+  assert.equal(store.load("KRW-XRP"), undefined, "pass state is not represented by a fabricated page cursor");
+  assert.deepEqual(store.loadNextPass("KRW-XRP"), { nextPass: "HISTORY", updatedAtMs: at });
+  db.close();
+
+  db = new SqliteDatabase(filename);
+  store = new SqliteResearchGapFillProgressStore(db);
+  try {
+    assert.equal(store.load("KRW-XRP"), undefined);
+    assert.deepEqual(store.loadNextPass("KRW-XRP"), { nextPass: "HISTORY", updatedAtMs: at });
+    const cursor = at - M;
+    store.save("KRW-BTC", { historyCursorStartMs: cursor, nextPass: "HEAD", updatedAtMs: at });
+    db.connection.exec("DROP TABLE research_gap_fill_pass_state"); // simulate the pre-migration schema
+    const migrated = new SqliteResearchGapFillProgressStore(db);
+    assert.deepEqual(migrated.load("KRW-BTC"), { historyCursorStartMs: cursor, nextPass: "HEAD", updatedAtMs: at });
+    assert.deepEqual(migrated.loadNextPass("KRW-BTC"), { nextPass: "HEAD", updatedAtMs: at });
+    migrated.saveNextPass("KRW-BTC", "HISTORY", at + M);
+    assert.deepEqual(migrated.load("KRW-BTC"), { historyCursorStartMs: cursor, nextPass: "HISTORY", updatedAtMs: at + M }, "pass-only updates keep the legacy cursor row consistent");
+  } finally { db.close(); }
+});
+
+test("pass-state SQLite failures roll back cursor writes and fail closed", () => {
+  const db = new SqliteDatabase(":memory:");
+  const store = new SqliteResearchGapFillProgressStore(db);
+  const at = Date.UTC(2026, 10, 5, 12, 0, 0);
+  try {
+    db.connection.exec(`CREATE TRIGGER reject_gap_pass_state BEFORE INSERT ON research_gap_fill_pass_state
+      BEGIN SELECT RAISE(ABORT, 'injected pass-state failure'); END`);
+    assert.throws(() => store.save("KRW-BTC", { historyCursorStartMs: at - M, nextPass: "HISTORY", updatedAtMs: at }), /injected pass-state failure/);
+    assert.equal(store.load("KRW-BTC"), undefined, "cursor and pass writes are atomic");
+    assert.equal(store.loadNextPass("KRW-BTC"), undefined);
+  } finally { db.close(); }
+});
+
 test("corrupt durable cursor fails closed instead of resetting history progress", () => {
   const db = new SqliteDatabase(":memory:");
   const store = new SqliteResearchGapFillProgressStore(db);

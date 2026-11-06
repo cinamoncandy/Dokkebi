@@ -347,23 +347,25 @@ export function composeResearchExperiments(input: {
         if (stopped) break;
         try {
           const previous = gapFillProgress.load(market);
-          const pass = previous?.nextPass ?? "HEAD";
+          const pass = gapFillProgress.loadNextPass(market)?.nextPass ?? previous?.nextPass ?? "HEAD";
           const headPass = pass === "HEAD";
+          const historyStartBeforeMs = headPass ? undefined : previous?.historyCursorStartMs ?? store.latestCloseTime(market, M);
           const fillStarted = performance.now();
           const result = await fillRecentGaps({ market, windowMs: targetSpanMs, nowMs: now(), store, fetchPage, sleep,
             maxPages: RESEARCH_GAP_FILL_MAX_PAGES_PER_RUN,
-            ...(headPass || previous == null ? {} : { startBeforeMs: previous.historyCursorStartMs }) });
+            ...(historyStartBeforeMs === undefined ? {} : { startBeforeMs: historyStartBeforeMs }) });
           fillMs += performance.now() - fillStarted;
           // A head probe must never replace an older history cursor; only history continuation advances it.
           const nextCursor = headPass
             ? previous?.historyCursorStartMs ?? result.nextCursorStartMs
             : result.nextCursorStartMs ?? previous?.historyCursorStartMs;
           if (result.status === "NO_GAPS" || result.status === "FILLED" || result.historyComplete === true) gapFillProgress.clear(market);
-          else if (nextCursor !== undefined) gapFillProgress.save(market, {
-            historyCursorStartMs: nextCursor,
-            nextPass: headPass ? "HISTORY" : "HEAD",
-            updatedAtMs: now(),
-          });
+          else {
+            const nextPass = headPass ? "HISTORY" : "HEAD";
+            const updatedAtMs = now();
+            if (nextCursor !== undefined) gapFillProgress.save(market, { historyCursorStartMs: nextCursor, nextPass, updatedAtMs });
+            else gapFillProgress.saveNextPass(market, nextPass, updatedAtMs);
+          }
           results.push(result);
           if (result.recorded > 0 || result.status === "NO_GAPS" || result.status === "FILLED") {
             const firstClose = store.earliestCloseTime(market, M);

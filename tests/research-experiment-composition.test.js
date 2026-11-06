@@ -552,6 +552,83 @@ test("a failed head request still yields the next attempt to saved historical pr
   } finally { composition.stop(); db.close(); }
 });
 
+test("an initial HEAD failure persists only the next pass and restarts into HISTORY from a real stored candle", async () => {
+  const filename = join(mkdtempSync(join(tmpdir(), "nusa-gap-initial-head-failure-")), "research.db");
+  const anchor = Math.floor(T_END / M) * M;
+  const first = anchor - 501 * M;
+  const oldGapClose = anchor - 450 * M;
+  const requests = [];
+  const stamp = (ms) => new Date(ms).toISOString().slice(0, 19);
+  const fetchImpl = async (url) => {
+    const to = Date.parse(new URL(url).searchParams.get("to"));
+    requests.push(to);
+    if (requests.length === 1) throw Object.assign(new Error("newest page unavailable"), { code: "UPSTREAM_503" });
+    const candles = [];
+    for (let start = to - M; candles.length < 200 && start >= first - M; start -= M) {
+      candles.push({ market: "KRW-BTC", candle_date_time_utc: stamp(start), opening_price: 20, high_price: 21, low_price: 19, trade_price: 20.5, candle_acc_trade_volume: 2 });
+    }
+    return new Response(JSON.stringify(candles), { status: 200, headers: { "content-type": "application/json" } });
+  };
+  let db = new SqliteDatabase(filename);
+  const store = new SqliteResearchCandleStore(db, 200_000);
+  const rows = [];
+  for (let close = first; close < anchor; close += M) if (close !== oldGapClose) rows.push({ closeTimeMs: close, open: 10, high: 11, low: 9, close: 10 });
+  store.append("KRW-BTC", M, rows);
+  const clock = T_END;
+  let composition = composeResearchExperiments({ env: env({ NUSA_RESEARCH_MARKETS: "KRW-BTC" }), database: db, now: () => clock, log: () => {}, fetchImpl, sleep: async () => undefined });
+  try {
+    const [firstResult] = await composition.fillGaps();
+    assert.equal(firstResult.status, "ERROR");
+    assert.equal(firstResult.errorCode, "UPSTREAM_503");
+    const progress = new SqliteResearchGapFillProgressStore(db);
+    assert.equal(progress.load("KRW-BTC"), undefined, "a failed API call cannot create a nonexistent history cursor");
+    assert.deepEqual(progress.loadNextPass("KRW-BTC"), { nextPass: "HISTORY", updatedAtMs: clock });
+    assert.equal(requests[0], anchor, "the initial attempt is the HEAD request");
+  } finally { composition.stop(); db.close(); }
+
+  db = new SqliteDatabase(filename);
+  composition = composeResearchExperiments({ env: env({ NUSA_RESEARCH_MARKETS: "KRW-BTC" }), database: db, now: () => clock + RESEARCH_GAP_FILL_INTERVAL_MS, log: () => {}, fetchImpl, sleep: async () => undefined });
+  try {
+    const [historyResult] = await composition.fillGaps();
+    assert.equal(requests[1], anchor - M, "HISTORY begins from the actual latest stored candle, not the failed HEAD cursor");
+    assert.equal(historyResult.pages, 1);
+    assert.equal(historyResult.status, "PARTIAL");
+    const progress = new SqliteResearchGapFillProgressStore(db);
+    assert.deepEqual(progress.loadNextPass("KRW-BTC"), { nextPass: "HEAD", updatedAtMs: clock + RESEARCH_GAP_FILL_INTERVAL_MS });
+    assert.equal(progress.load("KRW-BTC").historyCursorStartMs, historyResult.nextCursorStartMs, "only a cursor returned by a valid page becomes durable history progress");
+  } finally { composition.stop(); db.close(); }
+});
+
+test("consecutive HEAD and HISTORY failures alternate durably without losing a verified cursor", async () => {
+  const db = new SqliteDatabase(":memory:");
+  const store = new SqliteResearchCandleStore(db, 200_000);
+  const anchor = Math.floor(T_END / M) * M;
+  const first = anchor - 501 * M;
+  const oldGapClose = anchor - 450 * M;
+  const rows = [];
+  for (let close = first; close < anchor; close += M) if (close !== oldGapClose) rows.push({ closeTimeMs: close, open: 10, high: 11, low: 9, close: 10 });
+  store.append("KRW-BTC", M, rows);
+  const initialCursor = anchor - 200 * M;
+  const progress = new SqliteResearchGapFillProgressStore(db);
+  progress.save("KRW-BTC", { historyCursorStartMs: initialCursor, nextPass: "HEAD", updatedAtMs: T_END });
+  const requests = [];
+  const fetchImpl = async (url) => {
+    requests.push(Date.parse(new URL(url).searchParams.get("to")));
+    throw Object.assign(new Error("page unavailable"), { code: "UPSTREAM_503" });
+  };
+  let clock = T_END;
+  const composition = composeResearchExperiments({ env: env({ NUSA_RESEARCH_MARKETS: "KRW-BTC" }), database: db, now: () => clock, log: () => {}, fetchImpl, sleep: async () => undefined });
+  try {
+    for (let pass = 0; pass < 4; pass += 1) {
+      clock = T_END + pass * RESEARCH_GAP_FILL_INTERVAL_MS;
+      assert.equal((await composition.fillGaps())[0].status, "ERROR");
+      assert.equal(progress.load("KRW-BTC").historyCursorStartMs, initialCursor, "failed pages cannot replace the verified cursor");
+      assert.equal(progress.loadNextPass("KRW-BTC").nextPass, pass % 2 === 0 ? "HISTORY" : "HEAD");
+    }
+    assert.deepEqual(requests, [anchor, initialCursor, anchor + 2 * RESEARCH_GAP_FILL_INTERVAL_MS, initialCursor]);
+  } finally { composition.stop(); db.close(); }
+});
+
 test("a corrupt market cursor fails closed without preventing another market from being processed", async () => {
   const db = new SqliteDatabase(":memory:");
   const progress = new SqliteResearchGapFillProgressStore(db);
