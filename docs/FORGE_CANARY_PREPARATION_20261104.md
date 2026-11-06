@@ -39,7 +39,7 @@ Safety stays: PAPER_ONLY, liveAuthority=NONE, productionMutationAllowed=false, a
 2. `C`와 무관한 검사(보안 게이트, 다른 테스트, 서버 배포 관련)가 실패할 때.
 3. `OBSERVED_MISMATCH`가 아니거나, **카나리 커밋 `C`의 실행에서** 증명서가 두 번 이상 만들어질 때(예상 밖 동작). 다른 병합 때문에 생기는 증명서는 위 병합 동결로 막는다.
 4. 증명서의 source identity가 기대와 하나라도 다를 때.
-5. 자율개발이 그 실패를 실제 작업으로 집어 들려는 징후가 보일 때(Gate A 거절 외의 동작).
+5. 자율개발이 올린 **초안이 아닌** PR이 생기거나, 그 PR이 자동으로 감사·병합 경로에 들어서려는 징후가 보일 때. (초안 PR 한 건 자체는 예상된 양성 경로 증거이며 중단 사유가 아니다. 위 "승인 이후 경로" 참조.)
 6. 다른 개발자의 PR이 이 빨간 main 때문에 막힐 때(오너 판단으로 연장 가능).
 
 ## C와 R 준비 결과 (2026-11-06, 병합·실행 안 함, 로컬 검증)
@@ -89,8 +89,13 @@ Safety stays: PAPER_ONLY, liveAuthority=NONE, productionMutationAllowed=false, a
 - **`NUSA_GLOBAL_RELEASE_FREEZE`는 보류 장치로 쓰면 안 된다.** 켜면 `worker.ts`가 **Audit와 Release를 모두 거절**(`GLOBAL_RELEASE_FREEZE_ACTIVE`)하므로 `R`을 봇으로 병합하는 길까지 막힌다.
 - **PR 단위 보류(HOLD 라벨, 초안)는 PR 실행용이다.** main의 실패 실행에는 적용되지 않는다.
 - 현재 main에서 빨간 main `CI`를 막는 것은 위 "필수 조건"에 적은 **구조적 3겹**(스케줄러 중단, 워커 409, 러너 신원 거절)이다. 이는 인과 승인이 **없을 때** 막는 장치다.
-- **중요한 열린 질문:** `autopilot-github-event-bridge.yml`은 빨간 main `CI`(push, main)에서 같은 실행의 증명서를 내려받아 `dispatch-github-event-to-autopilot.mjs`가 웹훅 본문에 `nusa_causal_attestation_bundle`로 실어 보낸다. 즉 진짜 증명서가 생기고 소비 검증기가 main에 있으면 **승인(admission)이 열릴 수 있고**, 그 뒤 자율개발이 "제안(proposal)" 단계까지 가는지, "게시(publish)/PR 생성"까지 가는지는 **이 조사에서 확정하지 못했다.** Gate A(#2961)가 게시를 계속 막는지, 카나리가 실제로 어디까지 가는지를 #2994 병합 **이후** 라이브가 아니라 코드와 테스트로 먼저 확정해야 한다. 확정되지 않으면 카나리는 실행하지 않는다.
-- 따라서 보류 수단은 (a) 전용 스위치를 새로 만들지 않고(게이트를 바꾸지 않는다는 원칙), (b) 위 승인 이후 경로가 "제안까지만 가고 게시는 거절됨"임을 테스트로 확인하는 것으로 대신한다. 이 확인이 끝나기 전에는 중단 조건 5번이 감시만으로는 충분하지 않다.
+- **승인 이후 경로 (2026-11-06 코드로 확정, main `185c52c22`):** `autopilot-github-event-bridge.yml`이 빨간 main `CI`(push, main)에서 같은 실행의 증명서를 `dispatch-github-event-to-autopilot.mjs`로 웹훅 본문(`nusa_causal_attestation_bundle`)에 실어 보낸다. #2994의 소비 검증기가 main에 있으면 진짜 증명서로 승인이 열릴 수 있다. 그 뒤 `worker.ts`의 `/coding/propose`는 AI 제안을 만들고, `/coding/publish`는 승인된 경우 **고정된 수리 대상 파일 하나**(`CAUSAL_REPAIR_TARGET`)에 대해서만 검증된 패치를 게시한다(파일 수·경로 불일치는 `CAUSAL_REPAIR_TARGET_MISMATCH`로 거절).
+- **게시는 항상 초안(Draft)이다.** `githubValidatedPatchPublisher.ts`는 `draft: true`로만 PR을 만들고("Autonomous publication is always Draft. Ready-for-review requires a separate, explicit control-plane transition") 이 불변 조건은 테스트(`githubValidatedPatchPublisher.test.ts`: "autonomous publication must remain Draft")로 보호된다(관련 17개 통과). `apps/autopilot`에는 초안을 해제하는 코드가 없다. 따라서 **카나리의 최악의 결과는 자율개발이 올린 초안 PR 한 건**이다. 자동 병합은 일어나지 않는다. 감사와 릴리스는 비초안 PR만 진행시킨다(sticky HOLD #1876).
+- **그러므로 전용 보류 스위치를 새로 만들지 않는다.** 초안 불변 조건이 보류 장치다. 대신 창 동안 다음 규칙을 둔다.
+  1. 자율개발이 올린 초안 PR은 **카나리가 양성 경로를 실제로 통과했다는 증거**이지 실패가 아니다. 읽고 기록하되 **초안을 해제하지 않고 병합하지 않는다.** `ready_for_review` 이벤트는 감사 경로를 시작시키므로(`index.ts`의 PR_CHANGED 처리), 오너를 포함해 아무도 그 PR을 초안 해제하지 않는다.
+  2. `R`이 병합되면 그 초안 PR은 오너가 닫는다(결과 기록에 번호를 적는다). 자율개발은 같은 실행에 대해 중복 PR을 만들지 않는다(`existingPulls` 검사로 확인).
+  3. 초안이 아닌 PR이나 자동 병합 징후가 보이면 **즉시 중단 조건**이다(원인은 불변 조건 위반이다).
+- 이 확인은 코드와 테스트 수준이다. 실제 소비 검증기(#2994)가 main에 들어간 뒤 같은 경로가 어떻게 동작하는지, Workers AI 호출(`ZERO_CREDIT_MODE=true`로 유료 추론은 막힘)이 이 경로에서 어디까지 가는지는 **실행해 보기 전에는 확정할 수 없다.**
 
 ## 확인하지 못한 것
 - 빨강 자체는 확정(위 3번)이고, `C`를 넣었을 때 함께 실패하는 기존 테스트는 3개로 확인했다(위 "C와 R 준비 결과"). 다만 GitHub Actions의 보호된 main에서 실제 CI가 어떻게 빨개지는지는 로컬에서 재현할 수 없다.
