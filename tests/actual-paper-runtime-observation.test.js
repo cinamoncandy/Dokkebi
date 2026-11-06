@@ -208,18 +208,29 @@ test("a capped PAPER PERMISSION event keeps its known stage in the observation e
   assert.ok(result.evidence.timeline.some((item) => item.stage === "PERMISSION"));
 });
 
-test("untrusted HTTP failure codes are sanitized before they enter evidence", async () => {
-  const result = await observeAutomaticRuntime({
+test("untrusted HTTP failure codes cannot leak while locally generated codes remain useful", async () => {
+  for (const failureCode of ["API_KEY_TEST_SECRET", "UPBIT_ACCESSKEY_ABC123", "UPBIT_ACCESS_KEY_ABC123", "TOKEN_PRIVATE_VALUE"]) {
+    const result = await observeAutomaticRuntime({
+      initialSnapshot: snapshot([]),
+      minimumDurationMs: 1_000,
+      maximumDurationMs: 1_000,
+      minimumDecisionCycles: 1,
+      readSnapshot: async () => ({ httpStatus: 503, body: { failureCode } }),
+    });
+
+    assert.equal(result.status, "FAIL");
+    assert.equal(result.evidence.failure_code, "RUNTIME_OPERATIONS_UNAVAILABLE");
+    assert.doesNotMatch(JSON.stringify(result.evidence), /API_KEY_TEST_SECRET|UPBIT_ACCESSKEY_ABC123|UPBIT_ACCESS_KEY_ABC123|TOKEN_PRIVATE_VALUE/);
+  }
+
+  const timeout = await observeAutomaticRuntime({
     initialSnapshot: snapshot([]),
     minimumDurationMs: 1_000,
     maximumDurationMs: 1_000,
     minimumDecisionCycles: 1,
-    readSnapshot: async () => ({ httpStatus: 503, body: { failureCode: "API_KEY_TEST_SECRET" } }),
+    readSnapshot: async () => ({ httpStatus: 503, body: { failureCode: "RUNTIME_OPERATIONS_TIMEOUT" } }),
   });
-
-  assert.equal(result.status, "FAIL");
-  assert.equal(result.evidence.failure_code, "RUNTIME_ERROR_PRESENT");
-  assert.doesNotMatch(JSON.stringify(result.evidence), /API_KEY_TEST_SECRET/);
+  assert.equal(timeout.evidence.failure_code, "RUNTIME_OPERATIONS_TIMEOUT");
 });
 
 test("Risk rejection keeps bounded canonical reason codes without raw detail", async () => {

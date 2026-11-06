@@ -174,6 +174,7 @@ const PAPER_OBSERVATION = Object.freeze({
 });
 const OBSERVATION_STAGES = Object.freeze(["MARKET_DATA", "SIGNAL", "DECISION", "PERMISSION", "RISK", "ORDER_INTENT", "PAPER_ORDER", "PAPER_FILL", "ACCOUNT", "PNL"]);
 const LEARNING_EVENT_STAGES = new Set(["MARKET_DATA", "SIGNAL", "CANDIDATE", "DECISION", "PERMISSION", "RISK", "ORDER_INTENT", "FILL", "PNL", "LEARNING", "HALT", "ERROR", "IDEMPOTENCY", "PERIOD_OPEN", "PERIOD_REALIZED_PERSISTED", "PERIOD_REJECTED"]);
+const LOCAL_OPERATIONS_FAILURE_CODES = new Set(["RUNTIME_OPERATIONS_TIMEOUT", "RUNTIME_OPERATIONS_UNAVAILABLE"]);
 const PAPER_ORDER_STATUSES = new Set(["OPEN", "PENDING", "FILLED", "CANCELLED", "REJECTED"]);
 const SAFE_REASON_CODE_PATTERN = /^[A-Z][A-Z0-9_]{1,100}$/;
 const SENSITIVE_REASON_CODE_PATTERN = /(TOKEN|SECRET|PASSWORD|CREDENTIAL|EMAIL|API_KEY|ACCESS_KEY|PRIVATE_KEY|ACCOUNT_(?:ID|NUMBER)|WALLET_ADDRESS|IP_ADDRESS)/;
@@ -211,7 +212,7 @@ function safeRuntimeFailureCode(value) {
 function observationSnapshotFailure(response) {
   if (response?.httpStatus !== 200) {
     const failureCode = response?.body?.failureCode;
-    if (typeof failureCode === "string") return safeRuntimeFailureCode(failureCode);
+    if (typeof failureCode === "string" && LOCAL_OPERATIONS_FAILURE_CODES.has(failureCode)) return failureCode;
     if (response?.body?.error === "RUNTIME_TRANSIENTLY_UNAVAILABLE") return "RUNTIME_TRANSIENTLY_UNAVAILABLE";
     return "RUNTIME_OPERATIONS_UNAVAILABLE";
   }
