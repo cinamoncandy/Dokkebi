@@ -13,6 +13,8 @@ import type { PaperAccountPosition, PaperFillRecord } from "./paperTradingExecut
  * from the retained fills must equal the account's own position quantity for every market; any mismatch yields null.
  */
 const QUANTITY_TOLERANCE = 1e-9;
+// The ledger keeps quantities rounded to 8 decimals (PaperTradingExecutionLoop round8); the rebuild must round the same way at the same step.
+const ledgerRound8 = (value: number): number => Number(value.toFixed(8));
 
 export function computeTodayRealizedPnlKrw(fills: readonly PaperFillRecord[], positions: readonly PaperAccountPosition[], now: number): number | null {
   if (!Number.isFinite(now)) return null;
@@ -23,13 +25,13 @@ export function computeTodayRealizedPnlKrw(fills: readonly PaperFillRecord[], po
     if (![fill.quantity, fill.price, fill.fee, fill.filledAt].every(Number.isFinite) || fill.quantity <= 0) return null;
     const prior = rebuilt.get(fill.market) ?? { quantity: 0, averageEntryPrice: 0 };
     if (fill.side === "BUY") {
-      const quantity = prior.quantity + fill.quantity;
+      const quantity = ledgerRound8(prior.quantity + fill.quantity);
       rebuilt.set(fill.market, { quantity, averageEntryPrice: (prior.averageEntryPrice * prior.quantity + fill.quantity * fill.price + fill.fee) / quantity });
       continue;
     }
     if (fill.quantity > prior.quantity + Number.EPSILON) return null;
     const pnl = (fill.price - prior.averageEntryPrice) * fill.quantity - fill.fee;
-    const quantity = Math.max(0, prior.quantity - fill.quantity);
+    const quantity = ledgerRound8(Math.max(0, prior.quantity - fill.quantity));
     rebuilt.set(fill.market, { quantity, averageEntryPrice: quantity === 0 ? 0 : prior.averageEntryPrice });
     if (fill.filledAt <= now && paperTradingDayKey(fill.filledAt) === today) realized += pnl;
   }
@@ -56,13 +58,13 @@ export function computeLimitReachedAt(fills: readonly PaperFillRecord[], now: nu
     if (![fill.quantity, fill.price, fill.fee, fill.filledAt].every(Number.isFinite) || fill.quantity <= 0) return null;
     const prior = rebuilt.get(fill.market) ?? { quantity: 0, averageEntryPrice: 0 };
     if (fill.side === "BUY") {
-      const quantity = prior.quantity + fill.quantity;
+      const quantity = ledgerRound8(prior.quantity + fill.quantity);
       rebuilt.set(fill.market, { quantity, averageEntryPrice: (prior.averageEntryPrice * prior.quantity + fill.quantity * fill.price + fill.fee) / quantity });
       continue;
     }
     if (fill.quantity > prior.quantity + Number.EPSILON) return null;
     const pnl = (fill.price - prior.averageEntryPrice) * fill.quantity - fill.fee;
-    const quantity = Math.max(0, prior.quantity - fill.quantity);
+    const quantity = ledgerRound8(Math.max(0, prior.quantity - fill.quantity));
     rebuilt.set(fill.market, { quantity, averageEntryPrice: quantity === 0 ? 0 : prior.averageEntryPrice });
     const previous = sellOrders.get(fill.orderId);
     sellOrders.set(fill.orderId, { pnl: (previous?.pnl ?? 0) + pnl, filledAt: fill.filledAt });

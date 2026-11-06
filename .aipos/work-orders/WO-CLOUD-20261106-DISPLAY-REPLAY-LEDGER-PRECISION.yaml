@@ -1,0 +1,27 @@
+id: WO-CLOUD-20261106-DISPLAY-REPLAY-LEDGER-PRECISION
+title: "Display-only fill replays (today's realized PnL, loss attribution) follow the ledger's 8-decimal rounding"
+status: READY_FOR_REVIEW
+owner: nusa-development
+repository: cinamoncandy/NUSA
+base_branch: main
+implementation_branch: claude/display-replay-round8
+authority_impact: none
+objective: "paperTodayRealized.ts rebuilds positions from fills in raw floats and returns null (shown as unknown) when a sell exceeds the rebuilt position by more than Number.EPSILON. After a position is sold in several orders the ledger's 8-decimal remainder can exceed the raw remainder, so the figure can wrongly become unknown. This is the same mismatch fixed for the RISK gateway in #2999. paperLossAttribution.ts uses the same raw replay (no null path) and now ends fully sold positions at exactly 0."
+scope:
+  - "apps/cloud/src/paperTodayRealized.ts and apps/cloud/src/paperLossAttribution.ts: replayed quantity rounded to 8 decimals on BUY and SELL (Number(value.toFixed(8))), like PaperTradingExecutionLoop."
+  - "tests/paper-display-replay-ledger-precision.test.js: reproduced failing case (original returns null), a real oversell still null, loss attribution on chunked exits."
+exclusions:
+  - "Display only: neither function feeds a decision. No limit, threshold, capital or gate change. Neither module is a pinned qualification module."
+  - "The oversell comparison and the quantity tolerance are unchanged (fail-closed kept). Average entry price stays raw floating point."
+safety:
+  paper_only: true
+  liveAuthority: NONE
+  productionMutationAllowed: false
+  aiAuthority: ZERO_AUTHORITY
+  fail_closed: "A genuine oversell or any non-finite value still yields null."
+verification_commands:
+  - node_modules/.bin/tsc -p tsconfig.json
+  - node -r ./tests/register-dist.cjs --test tests/paper-display-replay-ledger-precision.test.js tests/paper-loss-attribution.test.js
+  - node scripts/validate-aipos-yaml.js
+review: "Draft PR. A separate non-author review is required before it leaves Draft."
+residual: "Server fill history was not read. Only the tests above were run locally; full CI is left to GitHub."
