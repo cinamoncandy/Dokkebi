@@ -3,8 +3,10 @@ import test from "node:test";
 import { observeRepairableWorkflowContract, REPAIRABLE_WORKFLOW_CONTRACT } from "./causalRegressionContract";
 import { isRepairableMainWorkflowFailure } from "./repairableWorkflowRun";
 
-test("the current repository predicate satisfies the fixed observation contract", () => {
-  assert.deepEqual(observeRepairableWorkflowContract(isRepairableMainWorkflowFailure), { contract: REPAIRABLE_WORKFLOW_CONTRACT, status: "MATCH" });
+test("CANARY C': the narrowed repository predicate is a bounded, expected mismatch of the fixed contract (timed_out is no longer repairable)", () => {
+  const result = observeRepairableWorkflowContract(isRepairableMainWorkflowFailure);
+  assert.equal(result.status, "OBSERVED_MISMATCH");
+  assert.equal("CODE_ACTIONABLE" in result, false);
 });
 
 test("a stable incorrect predicate yields only a bounded observation, not coding authority", () => {
