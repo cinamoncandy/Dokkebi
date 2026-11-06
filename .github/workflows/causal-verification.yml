@@ -1,0 +1,77 @@
+name: NUSA Isolated Causal Verification
+
+on:
+  workflow_dispatch:
+
+permissions: {}
+
+concurrency:
+  group: nusa-isolated-causal-verification-${{ github.run_id }}
+  cancel-in-progress: false
+
+jobs:
+  verify-causal-positive:
+    name: verify-causal-positive
+    if: ${{ github.repository == 'cinamoncandy/NUSA' && github.ref == 'refs/heads/main' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+      id-token: write
+      attestations: write
+      artifact-metadata: write
+    steps:
+      - name: Checkout protected-main workflow source
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+
+      - name: Enable pnpm via Corepack
+        run: |
+          corepack enable
+          corepack prepare pnpm@11.7.0 --activate
+
+      - name: Set up Node
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: 24
+          cache: pnpm
+
+      - name: Install locked dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Compile the committed policy and construct only an ephemeral defect fixture
+        env:
+          GITHUB_REPOSITORY: ${{ github.repository }}
+          GITHUB_SHA: ${{ github.sha }}
+          GITHUB_RUN_ID: ${{ github.run_id }}
+          GITHUB_RUN_ATTEMPT: ${{ github.run_attempt }}
+          GITHUB_REF: ${{ github.ref }}
+          GITHUB_EVENT_NAME: ${{ github.event_name }}
+          NUSA_WORKFLOW_REF: ${{ github.workflow_ref }}
+          NUSA_WORKFLOW_SHA: ${{ github.workflow_sha }}
+          NUSA_ISOLATED_OUTPUT_DIR: ${{ runner.temp }}/nusa-isolated-causal-input
+        run: |
+          pnpm exec tsc -p tsconfig.json
+          node scripts/create-isolated-causal-fixture.js
+
+      - name: Attest exact isolated observation with a distinct predicate
+        uses: actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6 # v4.2.2
+        with:
+          subject-path: ${{ runner.temp }}/nusa-isolated-causal-input/receipt.json
+          predicate-type: https://github.com/cinamoncandy/NUSA/attestations/isolated-causal-verification/v1
+          predicate-path: ${{ runner.temp }}/nusa-isolated-causal-input/receipt.json
+          bundle-path: ${{ runner.temp }}/nusa-isolated-causal-input/attestation.json
+          push-to-registry: false
+          create-storage-record: false
+          show-summary: false
+
+      - name: Upload signed isolated proof for the read-only consumer
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: nusa-isolated-causal-attestation-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/nusa-isolated-causal-input/attestation.json
+          compression-level: 0
+          if-no-files-found: error
+          retention-days: 7
