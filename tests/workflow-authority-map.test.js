@@ -45,6 +45,18 @@ test("undeclared write authority fails, so a new privileged job cannot appear si
   rmSync(root, { recursive: true, force: true });
 });
 
+test("attestation, artifact metadata, and check-run write scopes are tracked by the ratchet", () => {
+  const root = sandbox({
+    "proof.yml": [
+      "name: Proof", "on:", "  workflow_run:", "jobs:", "  claim:", "    permissions:",
+      "      attestations: write", "      artifact-metadata: write", "      checks: write", "    steps:", "      - run: echo proof", ""
+    ].join("\n")
+  }, EMPTY_BASELINE);
+  const result = validateWorkflowAuthorityMap(root);
+  assert.ok(result.failures.includes("UNDECLARED_WRITE_AUTHORITY:proof.yml:claim:artifact-metadata,attestations,checks"), JSON.stringify(result.failures));
+  rmSync(root, { recursive: true, force: true });
+});
+
 test("widening an already declared job's authority fails", () => {
   const workflow = ["name: Widen", "on:", "  push:", "jobs:", "  grant:", "    permissions:", "      contents: write", "      actions: write", "    steps:", "      - run: echo hi", ""].join("\n");
   const root = sandbox({ "widen.yml": workflow }, { jobs: { "widen.yml:grant": { write: ["contents"], secrets: false, environment: null } }, acknowledgedDebt: {} });
@@ -70,6 +82,20 @@ test("running PR-controlled code while holding a mutation token fails", () => {
   const result = validateWorkflowAuthorityMap(root);
   assert.ok(result.failures.some((failure) => failure.startsWith("PR_CODE_EXECUTION_WITH_WRITE_AUTHORITY:risky.yml:risky")), JSON.stringify(result.failures));
   rmSync(root, { recursive: true, force: true });
+});
+
+test("attestation and artifact-metadata write authority reject PR-controlled code", () => {
+  for (const scope of ["attestations", "artifact-metadata"]) {
+    const workflow = [
+      "name: Risky", "on:", "  pull_request_target:", "jobs:", "  risky:", "    permissions:", `      ${scope}: write`,
+      "    steps:", "      - uses: actions/checkout@aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "        with:", "          ref: ${{ github.event.pull_request.head.sha }}", "      - run: npm test", ""
+    ].join("\n");
+    const root = sandbox({ "risky.yml": workflow }, { jobs: { "risky.yml:risky": { write: [scope], secrets: false, environment: null } }, acknowledgedDebt: {} });
+    const result = validateWorkflowAuthorityMap(root);
+    assert.ok(result.failures.includes(`PR_CODE_EXECUTION_WITH_WRITE_AUTHORITY:risky.yml:risky:${scope}`), JSON.stringify(result.failures));
+    rmSync(root, { recursive: true, force: true });
+  }
 });
 
 test("id-token alone does not make a PR job dangerous, because it mutates nothing", () => {
