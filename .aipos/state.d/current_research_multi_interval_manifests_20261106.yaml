@@ -1,0 +1,48 @@
+current_research_multi_interval_manifests_20261106:
+  work_order: WO-RESEARCH-20261105-MULTI-INTERVAL-MANIFESTS
+  issue: 2815
+  observed_at_utc: "2026-11-06T03:47:19.530Z"
+  protected_main: 185c52c22691a5a35b13fe024cb39d810719a833
+  branch: WO-RESEARCH-20261105-MULTI-INTERVAL-MANIFESTS
+  implementation_head: 6c85aaa7f7add65913a7150ba91df28b67b7fce5
+  pull_request: 3002
+  pr_state: OPEN_DRAFT_MERGEABLE
+  exact_head_ci: PASS_42155288545
+  companion_workflows: PASS_7_OF_7
+  exact_head_skips: "attest-causal-regression, causal-regression-contract, and audit-dispatch-fallback were SKIPPED; none is positive causal evidence."
+  local_validation:
+    build: PASS
+    focused_tests: PASS_45_OF_45_AFTER_BUILD
+    focused_scope: "research candle backfill, interval composition, gap retry behavior, and durable progress"
+    full_suite: "Exact-head GitHub CI PASS; no separate local pnpm test run claimed in this checkpoint."
+    preserved_untracked: "Four existing docs/audits reports remain unmodified and excluded."
+  independent_research_data_review: PENDING
+  formal_validator: PENDING
+  audit: PENDING
+  release_authorization: PENDING
+  runtime_acceptance: UNVERIFIED
+  runtime_read_only:
+    host: nusa-datascale
+    service: ACTIVE
+    runtime_sha: 185c52c22691a5a35b13fe024cb39d810719a833
+    research_collection: COLLECTING
+    candle_count: 62633
+    required_candle_count: 15840
+    interval_manifest_skips: "15m and 60m each show 120 cumulative MANIFEST_NOT_FOUND skips; counters do not prove durable manifest identity."
+    integrity_snapshot: "PASS but observedAt 2026-11-06T00:18:51Z, stale at the 03:47Z health read."
+    learning: "LEARNING_NOT_EVALUATED; cyclesEvaluated=0, cyclesRecorded=0, holdoutPasses=0."
+    performance_signal: "lastMaterializeMs=6047, maxMaterializeMs=7173, eventLoopMaxStallMs=7123 at approximately the gap-fill timestamp; correlated only, root cause UNKNOWN. Review multi-interval synchronous cost."
+    database_access: "Not available in the host read allowlist; no DB read/write, deployment, restart, or timer trigger."
+  related_work:
+    pr_2975: "OPEN/Draft/CONFLICTING; active P1 remains independent-review-owned; no author resolution."
+    pr_3000: "OPEN/Draft; existing handoff 6652709639 retained; no submitted review."
+    pr_3001: "OPEN/Draft; display-only health projection, CI PASS, no submitted review."
+    pr_2994: "OPEN/Draft/BEHIND but mergeable; L1 isolated verification lane exists on PR; fresh independent review unavailable."
+  status:
+    issue_2815: OPEN
+    l1: PARTIAL
+    l2: HOLD
+    learning_loop_verified: false
+    performance_improvement: UNPROVEN
+    safety: PAPER_ONLY_ZERO_AUTHORITY_FAIL_CLOSED
+  next: "Correct #3002 stale PR metadata, run local AIPOS/full contract validation, publish only to the existing branch, then obtain independent review and separately adjudicate the #2975 P1."

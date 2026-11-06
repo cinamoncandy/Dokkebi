@@ -57,13 +57,14 @@ verification_commands:
   - "pnpm test"
   - "git diff --check"
 validation: "LOCAL_VALIDATION_PASS on the uncommitted integrated worktree based on the existing #3002 branch: focused Research gap-fill/manifest tests 48/48; pnpm test 1328 isolated test files; build, typecheck, preflight, validate:full, security:gate (0 high/critical, 0 secrets), AIPOS provenance/YAML/drift/conformance, lint:scripts (0 errors, 47 warnings), and git diff --check PASS. These local results are not exact-head CI, an independent review, or runtime acceptance."
-exact_head_ci: "PENDING for the integrated local successor; predecessor PR #3002 checks do not validate this combined diff."
-fresh_canonical_snapshot_2026_11_06:
+exact_head_ci: "PASS on published PR #3002 exact head 6c85aaa7f7add65913a7150ba91df28b67b7fce5: CI run 42155288545 and seven companion workflow runs 42155288647, 42155284831, 42155288527, 42155288495, 42155288520, 42155288636, and 42155288773 all concluded SUCCESS. The three intentional causal/audit jobs were SKIPPED and are not positive causal evidence."
+prepublication_snapshot_2026_11_06:
   protected_main: 185c52c22691a5a35b13fe024cb39d810719a833
   protection: "Branch metadata reports protected=true and required nusa/release-authorized from App 4935691; direct branch-protection endpoint returned 403 to the connected integration."
   pr_2975: "OPEN/Draft, head cb6ecce1907eefd99ee39e6311ff0820acceed76, base 3e610394ab9441e925769ac66033d3ec9fedc429, mergeable=false; 14 check runs success and 3 skipped; 7 workflow runs success. Active P1 PRRT_kwDOTUbne86yW75k is unresolved/non-outdated; older P1/P2 threads are unresolved/outdated. Submitted reviews are historical Codex/author comments, with no independent terminal disposition."
   pr_3002: "OPEN/Draft, head c3984912ff07e5d6747dc7e23c12e38f8e4ee852, base 185c52c22691a5a35b13fe024cb39d810719a833, mergeable=true but blocked; 14 check runs success and 3 skipped; 7 workflow runs success; zero submitted reviews and zero review threads. These checks apply to the remote predecessor, not this integrated local working-tree diff."
   local_successor: "Uncommitted changes in the existing #3002 worktree; no commit, push, new PR, review request, or thread mutation."
+  superseded_by: current_checkpoint_2026_11_06T0347Z
 predecessor_validation: "Historical local validation on #3002 predecessor 1ccd50f1e39900c679cceeee133ad1c4acd9aaef: focused research-experiment-composition 15/15; full isolated suite 1327 files; preflight, build, typecheck, validate:full, security:gate, lint:scripts, AIPOS truth/index/YAML/provenance, and diff check PASS; 0 lint errors and 47 baseline warnings. Not evidence for the integrated successor."
 predecessor_exact_head_ci: "Historical #3002 head 1ccd50f1e39900c679cceeee133ad1c4acd9aaef: CI run 42041990038 and companions 42041989907, 42041989956, 42041990012, 42041989852, 42041990302 succeeded. These runs do not validate this combined diff."
 independent_research_data_review: PENDING
@@ -71,4 +72,35 @@ formal_validator: PENDING
 audit: PENDING
 release_authorization: PENDING
 runtime_acceptance: PENDING
-next: "The 2026-11-06 remote snapshot is fresh and local validation is complete. The integrated diff remains unpublished under the current read-only scope. After explicit authorization for publication, update only the existing #3002 branch, obtain exact-head CI, preserve the active #2975 threads, and obtain an independent Research/Data disposition before Formal Validator, Audit, or Release. Runtime market freshness, durable manifests, Research sessions, and learning cycles remain unverified."
+next: "The integrated code is already published on the existing #3002 branch at 6c85aaa7f7add65913a7150ba91df28b67b7fce5 with exact-head CI and seven companions passing. AIPOS and PR description contain stale pre-publication snapshots; make one metadata-only successor on the same branch, run AIPOS/full-contract validation and fresh exact-head checks, then request independent Research/Data review. Preserve #2975 threads and keep Formal Validator, Audit, Release, merge, and runtime acceptance separate."
+
+current_checkpoint_2026_11_06T0347Z:
+  protected_main: 185c52c22691a5a35b13fe024cb39d810719a833
+  implementation_head: 6c85aaa7f7add65913a7150ba91df28b67b7fce5
+  branch: WO-RESEARCH-20261105-MULTI-INTERVAL-MANIFESTS
+  pr: "#3002 OPEN/Draft, mergeable, base=protected main; exact-head CI and seven companions PASS; no reviews, reviewer requests, or review threads."
+  validation: "After a local build generated the ignored dist tree, focused candle/backfill/composition/retry/progress tests passed 45/45. The initial direct node --test invocation before build failed because those tests load dist; no source correction was needed. Exact-head CI run 42155288545 and companions on 6c85 are terminal SUCCESS. Four pre-existing untracked audit reports remain preserved and excluded."
+  review: "Independent Research/Data review is pending. Current repository collaborator enumeration exposes only the PR author cinamoncandy; this CORE session cannot submit independent disposition. Request a fresh exact-head technical review after CI, but do not count it as Formal Validator, Audit, or Release."
+  overlap: "#2975 remains OPEN/Draft and conflicting on an old base. Its active P1 thread PRRT_kwDOTUbne86yW75k remains independently adjudication-owned; #3002 incorporates the bounded cursor behavior but does not close or supersede that thread. #2979/#2980 remain separately owned rolling-holdout branches."
+  runtime_read_only_observation:
+    host: nusa-datascale
+    observed_at_utc: "2026-11-06T03:47:19.530Z"
+    runtime_sha: 185c52c22691a5a35b13fe024cb39d810719a833
+    research: "COLLECTING; 62,633 candles / 15,840 required; 1m sessionsStarted=10; 15m and 60m each have sessionsStarted=10 and cumulative MANIFEST_NOT_FOUND skips=120. These counters do not identify a durable manifest or Research session receipt."
+    learning: "LEARNING_NOT_EVALUATED; cyclesEvaluated=0, cyclesRecorded=0, holdoutPasses=0; NO_DEPLOYABLE_CANDIDATE / REALIZED_TRADE remains pending."
+    freshness: "dataIntegrity reports PASS but its embedded observedAt is 2026-11-06T00:18:51Z, more than three hours before this health observation; it is stale for current freshness acceptance."
+    performance_signal: "The current-main pre-integration /health reports lastMaterializeMs=6047, maxMaterializeMs=7173 and eventLoopMaxStallMs=7123 at approximately the same gap-fill timestamp. This is correlation, not proven causality. Independent review must assess synchronous multi-interval materialization cost and bounded execution before recommending release."
+    access_limit: "Only the bounded read-only /health and service status were queried. Host read allowlist does not expose /var/lib/nusa or /var/backups/nusa; no database read, write, restart, deployment, or timer trigger was performed."
+  status:
+    implementation: PRESENT_ON_EXISTING_PR
+    local_build: PASS
+    focused_tests: PASS_45_OF_45_AFTER_BUILD
+    exact_head_ci: PASS
+    independent_research_data_review: PENDING
+    formal_validator: PENDING
+    audit: PENDING
+    release_authorization: PENDING
+    governed_merge: NOT_DONE
+    runtime_acceptance: UNVERIFIED
+    issue_2815: OPEN
+  next: "Update PR #3002 description to the actual integrated scope and 6c85 evidence, then request exact-head independent technical review with explicit Research/Data, performance, and #2975 P1 disposition questions. Keep Draft; do not resolve threads or claim runtime/L1 acceptance."
