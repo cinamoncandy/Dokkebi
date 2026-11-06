@@ -122,3 +122,9 @@ Safety stays: PAPER_ONLY, liveAuthority=NONE, productionMutationAllowed=false, a
 - **중단 책임자:** 오너 본인. **감시자:** Claude(읽기 전용).
 - **시작 직전 재확인(모두 통과해야 시작):** main 최신 blob `865c7fb4…` 불변, `autopilot-codex-coding.yml` 비활성, 서버 매수·학습 정상, 열린 P0 없음, 보호된 main이 이미 빨갛지 않음.
 - 하나라도 어긋나면 창을 취소하고 다음 후보(2026-11-08 같은 시간)로 미룬다.
+
+## 창 동의와 새 main 재확인 (2026-11-06 KST, 읽기 전용, main `ecdf774`)
+- **창 동의:** 오너가 위 제안(2026-11-07 10:00–11:00 KST, 60분 한도)에 "그렇게 해"라고 답했다. 시작은 오너가 그 시각에 "시작"이라고 말할 때만이며, 그 전에는 아무것도 바꾸지 않는다. 자동 예약은 없다.
+- **Draft-only 재분석(P2-2):** 자율 패치 게시기를 부르는 곳은 `worker.ts` 한 곳이고 게시기는 계속 `draft: true`다. #2994의 격리 검증 경로는 `NUSA_ISOLATED_CAUSAL_VERIFICATION_ENABLED=true`일 때만 열리고, 그 워크플로(`causal-verification*.yml`)에는 PR 생성이 없다.
+- **다른 PR 생성자:** `Autopilot Codex Coding`은 여전히 `disabled_manually`. `Oracle Codex Dev Runner`는 수동 실행(`workflow_dispatch`)뿐이고 PR 생성 단계가 없다.
+- **미충족(남음):** 실제 빨간 main에서의 Gate A 라이브 동작은 실행해 보기 전에는 확정할 수 없다. 오너의 브랜치 보호·병합 대기열 확인, 시작 직전 재확인, 오너의 "시작" 지시.
