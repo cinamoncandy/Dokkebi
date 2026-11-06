@@ -7,9 +7,13 @@ import { SIGSTORE_TRUSTED_ROOT_JSON_TEXT } from "./sigstoreTrustedRoot";
 const REPOSITORY = "cinamoncandy/NUSA";
 const WORKFLOW_PATH = ".github/workflows/ci.yml";
 const WORKFLOW_REF = `${REPOSITORY}/${WORKFLOW_PATH}@refs/heads/main`;
+const ISOLATED_WORKFLOW_PATH = ".github/workflows/causal-verification.yml";
+const ISOLATED_WORKFLOW_REF = `${REPOSITORY}/${ISOLATED_WORKFLOW_PATH}@refs/heads/main`;
 const OIDC_ISSUER = "https://token.actions.githubusercontent.com";
 const PREDICATE_TYPE = "https://github.com/cinamoncandy/NUSA/attestations/causal-regression/v1";
+const ISOLATED_PREDICATE_TYPE = "https://github.com/cinamoncandy/NUSA/attestations/isolated-causal-verification/v1";
 const CONTRACT_ID = "REPAIRABLE_WORKFLOW_POLICY_V1";
+const ISOLATED_DOMAIN = "NUSA_ISOLATED_CAUSAL_VERIFICATION_V1";
 const TRUSTED_ROOT_SHA256 = "6494e21ea73fa7ee769f85f57d5a3e6a08725eae1e38c755fc3517c9e6bc0b66";
 const SHA256 = /^[a-f0-9]{64}$/;
 const SHA40 = /^[a-f0-9]{40}$/;
@@ -51,6 +55,26 @@ export interface CryptographicallyVerifiedCausalManifest {
   readonly manifest: VerifiedCausalObservationManifest;
   readonly signerIdentity: Readonly<{ subjectAlternativeName: string; issuer: string }>;
   readonly statementDigest: string;
+}
+
+export interface VerifiedIsolatedCausalVerification {
+  readonly domain: typeof ISOLATED_DOMAIN;
+  readonly source: Readonly<{
+    repository: typeof REPOSITORY;
+    workflowPath: typeof ISOLATED_WORKFLOW_PATH;
+    workflowRef: typeof ISOLATED_WORKFLOW_REF;
+    workflowSha: string;
+    ref: "refs/heads/main";
+    event: "workflow_dispatch";
+    job: "verify-causal-positive";
+    sha: string;
+    runId: string;
+    runAttempt: string;
+  }>;
+  readonly caseId: "isolated-policy-regression";
+  readonly fixtureDigest: string;
+  readonly statementDigest: string;
+  readonly signerIdentity: Readonly<{ subjectAlternativeName: string; issuer: string }>;
 }
 
 function fail(): never {
@@ -169,54 +193,119 @@ export async function verifyCausalProducerAttestation(
   expectedSource: CausalSourceRunIdentity,
 ): Promise<CryptographicallyVerifiedCausalManifest> {
   try {
-    const rootText = trustedRootText();
-    if (await sha256Hex(new TextEncoder().encode(rootText)) !== TRUSTED_ROOT_SHA256) fail();
-    const root = TrustedRoot.fromJSON(JSON.parse(rootText));
-    const bundleRecord = asObject(bundleInput);
-    if (!bundleRecord) fail();
-    const bundle = bundleFromJSON(bundleRecord as never);
-    const entity = toSignedEntity(bundle);
-    const restoreDigestAdapter = installEntityScopedWorkerDigestAdapter(entity);
-    let signer;
-    try {
-      try {
-        signer = new Verifier(toTrustMaterial(root), { ctlogThreshold: 1, tlogThreshold: 1, timestampThreshold: 1 }).verify(entity, {
-          subjectAlternativeName: new RegExp(`^${WORKFLOW_REF.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}$`),
-          extensions: { issuer: OIDC_ISSUER },
-        });
-      } catch (error) {
-        if (asObject(error)?.code === "UNTRUSTED_SIGNER_ERROR") throw new Error("CAUSAL_ATTESTATION_SIGNER_REJECTED");
-        throw error;
-      }
-    } finally {
-      restoreDigestAdapter();
-    }
-    const identity = signer.identity;
-    if (!isIdentity(identity?.subjectAlternativeName) || identity.subjectAlternativeName !== WORKFLOW_REF
-      || identity.extensions?.issuer !== OIDC_ISSUER) fail();
-
-    const dsse = (entity.signature as typeof entity.signature & { env?: { payload?: Uint8Array } }).env;
-    if (!(dsse?.payload instanceof Uint8Array) || dsse.payload.byteLength > 64_000) fail();
-    const statement = asObject(JSON.parse(new TextDecoder("utf-8", { fatal: true }).decode(dsse.payload)));
-    const subjects = statement?.subject;
-    const predicate = asObject(statement?.predicate);
-    if (statement?._type !== "https://in-toto.io/Statement/v1" || statement.predicateType !== PREDICATE_TYPE
-      || !Array.isArray(subjects) || subjects.length !== 1 || !predicate) fail();
-    const subject = asObject(subjects[0]);
-    const digest = asObject(subject?.digest);
-    if (!subject || !digest || typeof digest.sha256 !== "string" || !SHA256.test(digest.sha256)) fail();
-
+    const { predicate, statementDigest, signerIdentity } = await verifySignedPredicate(bundleInput, WORKFLOW_REF, PREDICATE_TYPE);
     const manifest = validateManifest(predicate, expectedSource);
-    const exactReceiptBytes = new TextEncoder().encode(`${JSON.stringify(predicate)}\n`);
-    const statementDigest = await sha256Hex(exactReceiptBytes);
-    if (statementDigest !== digest.sha256) fail();
     return Object.freeze({
       manifest,
-      signerIdentity: Object.freeze({ subjectAlternativeName: identity.subjectAlternativeName, issuer: identity.extensions.issuer }),
+      signerIdentity,
       statementDigest,
     });
   } catch (error) {
     if (error instanceof Error && (error.message === "CAUSAL_ATTESTATION_SIGNER_REJECTED" || error.message === "CAUSAL_ATTESTATION_INVALID")) throw error;
     throw new Error("CAUSAL_ATTESTATION_INVALID");
   }
+}
+
+/**
+ * Verifies a manually dispatched, non-production proof lane. Its signer and predicate are
+ * deliberately distinct from the production causal producer and cannot be passed to the
+ * production causal admission verifier.
+ */
+export async function verifyIsolatedCausalVerificationAttestation(
+  bundleInput: unknown,
+  expected: { readonly sha: string; readonly runId: string; readonly runAttempt: string },
+): Promise<VerifiedIsolatedCausalVerification> {
+  try {
+    if (!SHA40.test(expected.sha) || !/^[1-9][0-9]{0,19}$/.test(expected.runId)
+      || !/^[1-9][0-9]{0,9}$/.test(expected.runAttempt)) fail();
+    const { predicate, statementDigest, signerIdentity } = await verifySignedPredicate(
+      bundleInput, ISOLATED_WORKFLOW_REF, ISOLATED_PREDICATE_TYPE,
+    );
+    const source = asObject(predicate.source);
+    const observation = asObject(predicate.observation);
+    if (predicate.domain !== ISOLATED_DOMAIN || predicate.schemaVersion !== 1 || !source || !observation
+      || source.repository !== REPOSITORY || source.workflowPath !== ISOLATED_WORKFLOW_PATH
+      || source.workflowRef !== ISOLATED_WORKFLOW_REF || source.workflowSha !== expected.sha
+      || source.ref !== "refs/heads/main" || source.event !== "workflow_dispatch"
+      || source.job !== "verify-causal-positive" || source.sha !== expected.sha
+      || source.runId !== expected.runId || source.runAttempt !== expected.runAttempt
+      || observation.caseId !== "isolated-policy-regression" || observation.expected !== true
+      || observation.observed !== false || observation.status !== "OBSERVED_MISMATCH"
+      || typeof predicate.fixtureDigest !== "string" || !SHA256.test(predicate.fixtureDigest)) fail();
+    return Object.freeze({
+      domain: ISOLATED_DOMAIN,
+      source: Object.freeze({
+        repository: REPOSITORY,
+        workflowPath: ISOLATED_WORKFLOW_PATH,
+        workflowRef: ISOLATED_WORKFLOW_REF,
+        workflowSha: expected.sha,
+        ref: "refs/heads/main",
+        event: "workflow_dispatch",
+        job: "verify-causal-positive",
+        sha: expected.sha,
+        runId: expected.runId,
+        runAttempt: expected.runAttempt,
+      }),
+      caseId: "isolated-policy-regression",
+      fixtureDigest: predicate.fixtureDigest,
+      statementDigest,
+      signerIdentity,
+    });
+  } catch (error) {
+    if (error instanceof Error && error.message === "CAUSAL_ATTESTATION_SIGNER_REJECTED") throw error;
+    throw new Error("ISOLATED_CAUSAL_VERIFICATION_INVALID");
+  }
+}
+
+async function verifySignedPredicate(
+  bundleInput: unknown,
+  workflowRef: string,
+  predicateType: string,
+): Promise<{
+  readonly predicate: Record<string, unknown>;
+  readonly statementDigest: string;
+  readonly signerIdentity: Readonly<{ subjectAlternativeName: string; issuer: string }>;
+}> {
+  const rootText = trustedRootText();
+  if (await sha256Hex(new TextEncoder().encode(rootText)) !== TRUSTED_ROOT_SHA256) fail();
+  const root = TrustedRoot.fromJSON(JSON.parse(rootText));
+  const bundleRecord = asObject(bundleInput);
+  if (!bundleRecord) fail();
+  const bundle = bundleFromJSON(bundleRecord as never);
+  const entity = toSignedEntity(bundle);
+  const restoreDigestAdapter = installEntityScopedWorkerDigestAdapter(entity);
+  let signer;
+  try {
+    try {
+      signer = new Verifier(toTrustMaterial(root), { ctlogThreshold: 1, tlogThreshold: 1, timestampThreshold: 1 }).verify(entity, {
+        subjectAlternativeName: new RegExp(`^${workflowRef.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}$`),
+        extensions: { issuer: OIDC_ISSUER },
+      });
+    } catch (error) {
+      if (asObject(error)?.code === "UNTRUSTED_SIGNER_ERROR") throw new Error("CAUSAL_ATTESTATION_SIGNER_REJECTED");
+      throw error;
+    }
+  } finally {
+    restoreDigestAdapter();
+  }
+  const identity = signer.identity;
+  if (!isIdentity(identity?.subjectAlternativeName) || identity.subjectAlternativeName !== workflowRef
+    || identity.extensions?.issuer !== OIDC_ISSUER) fail();
+  const dsse = (entity.signature as typeof entity.signature & { env?: { payload?: Uint8Array } }).env;
+  if (!(dsse?.payload instanceof Uint8Array) || dsse.payload.byteLength > 64_000) fail();
+  const statement = asObject(JSON.parse(new TextDecoder("utf-8", { fatal: true }).decode(dsse.payload)));
+  const subjects = statement?.subject;
+  const predicate = asObject(statement?.predicate);
+  if (statement?._type !== "https://in-toto.io/Statement/v1" || statement.predicateType !== predicateType
+    || !Array.isArray(subjects) || subjects.length !== 1 || !predicate) fail();
+  const subject = asObject(subjects[0]);
+  const digest = asObject(subject?.digest);
+  if (!subject || !digest || typeof digest.sha256 !== "string" || !SHA256.test(digest.sha256)) fail();
+  const statementDigest = await sha256Hex(new TextEncoder().encode(`${JSON.stringify(predicate)}\n`));
+  if (statementDigest !== digest.sha256) fail();
+  return Object.freeze({
+    predicate,
+    statementDigest,
+    signerIdentity: Object.freeze({ subjectAlternativeName: identity.subjectAlternativeName, issuer: identity.extensions.issuer }),
+  });
 }

@@ -1,0 +1,70 @@
+current_autopilot_1851_formal_p1_repair_20261103:
+  observed_at_utc: "2026-11-03T06:55:05Z"
+  work_order: WO-AUTOPILOT-20261030-1851-CAUSAL-ADMISSION
+  pull_request: 2994
+  previous_published_head: 51e2ab49d4a44d8a32cfa37f8561d81dd19aa792
+  previous_base: 7e702eaf078d56614cff9e4f4325d08419e19185
+  current_protected_main: 3046600b093f8f07a26ba11df3fc48043ae00830
+  local_successor_merge_commit: 3b7b9224511d5e252b99073fa9c96092e6855b2b
+  independent_formal_validator:
+    verdict: REJECTED
+    p0: 0
+    p1: 1
+    p2: 0
+    finding: "attestations and artifact-metadata write scopes were tracked but not classified as mutation scopes; PR-controlled code could bypass the authority guard."
+    github_receipt: NOT_PUBLISHED
+  repair:
+    files: [scripts/validate-workflow-authority-map.js, tests/workflow-authority-map.test.js]
+    scope: "Add both write scopes to MUTATION_SCOPES and regression cases for PR-controlled execution."
+    focused_tests: PASS_13_OF_13
+    full_suite_after_main_merge: PASS_1327_ISOLATED_TEST_FILES
+    preflight: PASS_568_AIPOS_YAML_FILES
+  local_validation_after_main_merge:
+    focused_authority_map_regression: PASS_13_OF_13
+    full_isolated_suite: PASS_1327_TEST_FILES
+    typecheck: PASS
+    validate_full: PASS
+    security_gate: PASS
+    lint: PASS_0_ERRORS_47_WARNINGS
+    workflow_action_pins_inputs: PASS
+    workflow_authority_map: PASS_41_WORKFLOWS
+    aipos_yaml: PASS_568_FILES
+    aipos_provenance: PASS
+    diff_check: PASS
+  remote_pr_at_formal_review: OPEN_DRAFT_MERGEABLE_HEAD_E4512211
+  exact_head_ci: SIX_SUCCESS
+  fresh_review_for_repair: COMPLETED_NO_FINDINGS
+  unresolved_p2_threads: [PRRT_kwDOTUbne86y_bHe, PRRT_kwDOTUbne86y_bHi]
+  successor_publication:
+    head: e4512211b66463337978da28641056e9275c0374
+    base_and_protected_main: 3046600b093f8f07a26ba11df3fc48043ae00830
+    pushed_non_force: true
+    exact_head_workflows: SIX_SUCCESS
+    codex_review:
+      exact_head: e4512211b66463337978da28641056e9275c0374
+      receipt_comment: 6597324705
+      summary_comment: 6595655091
+      result: COMPLETED_NO_FINDINGS
+  formal_validator:
+    exact_head: e4512211b66463337978da28641056e9275c0374
+    verdict: HOLD
+    p0: 0
+    p1: 0
+    p2: 1
+    finding: "The committed handoff had no superseding publication checkpoint and still ended with the predecessor statement that the repair was unpublished."
+    release_authorized_status: ABSENT_ON_PR_HEAD
+    release_status_ordering: "The deterministic workflow publishes nusa/release-authorized only in its release job, which depends on successful Audit; it is a protected merge/release gate, not an Audit prerequisite."
+    audit_gate: BLOCKED_PENDING_FRESH_FORMAL_ADJUDICATION
+    source_or_thread_mutation: NONE
+  evidence_repair:
+    scope: "Correct AIPOS provenance chronology on the existing #2994 branch; no source change, new PR, Draft transition, or thread resolution."
+    exact_head_revalidation_required: true
+    rationale: "Required to resolve the independent Formal HOLD's stale-provenance finding."
+  commit_gate: MET_FOR_SUCCESSOR_PUBLICATION_TO_EXISTING_DRAFT_PR
+  l1: PARTIAL
+  l2: HOLD
+  topology: HOLD
+  deployment_authority: HOLD
+  db_state: HOLD
+  backup_recovery: HOLD
+  safety: PAPER_ONLY_LIVE_NONE_PRODUCTION_MUTATION_FALSE_REAL_ORDER_FALSE_REAL_TRANSFER_FALSE_AI_ZERO_AUTHORITY
