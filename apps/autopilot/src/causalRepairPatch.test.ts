@@ -36,6 +36,34 @@ describe("server-side causal repair patch application", () => {
     assert.equal(candidate, "a\nB\nc\n");
   });
 
+  it("applies valid first and later hunks after untouched source gaps", () => {
+    const source = "one\ntwo\nthree\nfour\nfive\nsix\nseven\neight\n";
+    const candidate = applyCausalRepairPatch(source, [
+      "diff --git a/" + CAUSAL_REPAIR_TARGET + " b/" + CAUSAL_REPAIR_TARGET,
+      "--- a/" + CAUSAL_REPAIR_TARGET,
+      "+++ b/" + CAUSAL_REPAIR_TARGET,
+      "@@ -3 +3 @@",
+      "-three",
+      "+THREE",
+      "@@ -6 +6 @@",
+      "-six",
+      "+SIX",
+    ].join("\n"));
+    assert.equal(candidate, "one\ntwo\nTHREE\nfour\nfive\nSIX\nseven\neight\n");
+  });
+
+  it("rejects overlapping or position-inconsistent hunks", () => {
+    const source = "one\ntwo\nthree\nfour\nfive\nsix\n";
+    const header = [
+      "diff --git a/" + CAUSAL_REPAIR_TARGET + " b/" + CAUSAL_REPAIR_TARGET,
+      "--- a/" + CAUSAL_REPAIR_TARGET,
+      "+++ b/" + CAUSAL_REPAIR_TARGET,
+      "@@ -2 +2 @@", "-two", "+TWO",
+    ];
+    assert.throws(() => applyCausalRepairPatch(source, [...header, "@@ -2 +2 @@", "-two", "+SECOND"].join("\n")), /CAUSAL_REPAIR_PATCH_INVALID/);
+    assert.throws(() => applyCausalRepairPatch(source, [...header, "@@ -5 +6 @@", "-five", "+FIVE"].join("\n")), /CAUSAL_REPAIR_PATCH_INVALID/);
+  });
+
   it("preserves CRLF source and rejects client content that differs from the applied patch", () => {
     const source = "a\r\nb\r\n";
     const candidate = applyCausalRepairPatch(source, patch([

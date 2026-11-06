@@ -5,6 +5,7 @@ import type { ExecutionHold, HoldClearance } from "./autonomousExecutionState";
 import { claimCausalDispatchBinding, consumeClaimedCausalDispatchAdmissionBinding, createCausalDispatchBinding, verifyClaimedCausalDispatchBinding, type CausalDispatchBinding } from "./causalDispatchBinding";
 import { hasValidCausalAdmissionReceiptStructure, type CausalAdmissionReceipt } from "./causalRegressionAdmission";
 import type { SourceExecutionIdentity, VerifiedCodingPublisherIdentity } from "./githubActionsOidc";
+import type { VerifiedIsolatedCausalVerification } from "./sigstoreCausalAttestation";
 
 interface DurableObjectStorageLike {
   get<T>(key: string): Promise<T | undefined>;
@@ -106,6 +107,47 @@ export interface CausalDispatchClaim {
   readonly now: number;
   /** Recomputed by the Worker from the signed bundle; null for provenance-only claims. */
   readonly causalAdmission?: CausalAdmissionReceipt | null;
+}
+
+interface IsolatedCausalAttemptClaim {
+  readonly schemaVersion: 1;
+  readonly domain: "NUSA_ISOLATED_CAUSAL_ATTEMPT_CLAIM_V1";
+  readonly sourceIdentityDigest: string;
+  readonly statementDigest: string;
+  readonly claimedAt: number;
+}
+
+const ISOLATED_CAUSAL_CLAIM_STORAGE_PREFIX = "isolated-causal-attempt-v1:";
+const ISOLATED_CAUSAL_CLAIM_OBJECT_PREFIX = "nusa-isolated-causal-attempt-v1:";
+const SHA256_HEX = /^[a-f0-9]{64}$/;
+
+function validIsolatedClaimRequest(value: unknown): value is IsolatedCausalAttemptClaim {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return false;
+  const request = value as Partial<IsolatedCausalAttemptClaim>;
+  return request.schemaVersion === 1
+    && request.domain === "NUSA_ISOLATED_CAUSAL_ATTEMPT_CLAIM_V1"
+    && typeof request.sourceIdentityDigest === "string" && SHA256_HEX.test(request.sourceIdentityDigest)
+    && typeof request.statementDigest === "string" && SHA256_HEX.test(request.statementDigest)
+    && validSafeTimestamp(request.claimedAt);
+}
+
+function validStoredIsolatedClaim(value: unknown, identityDigest: string): value is IsolatedCausalAttemptClaim {
+  return validIsolatedClaimRequest(value)
+    && value.sourceIdentityDigest === identityDigest;
+}
+
+async function isolatedSourceIdentityDigest(source: VerifiedIsolatedCausalVerification["source"]): Promise<string> {
+  const canonicalIdentity = [
+    "NUSA_ISOLATED_CAUSAL_ATTEMPT_CLAIM_V1",
+    source.repository,
+    source.workflowPath,
+    source.sha.toLowerCase(),
+    source.runId,
+    source.runAttempt,
+  ].join("\n");
+  const bytes = new TextEncoder().encode(canonicalIdentity);
+  const digest = await crypto.subtle.digest("SHA-256", bytes);
+  return Array.from(new Uint8Array(digest), (byte) => byte.toString(16).padStart(2, "0")).join("");
 }
 
 interface CausalDispatchHistory {
@@ -478,6 +520,7 @@ export class ExecutionCoordinator {
     if (request.method === "GET" && url.pathname === "/provider-capacity-wait") return this.readProviderCapacityWait();
     if (request.method !== "POST") return json({ error: "METHOD_NOT_ALLOWED" }, 405);
     if (url.pathname === "/acquire") return this.acquire(await request.json());
+    if (url.pathname === "/isolated-causal/claim") return this.claimIsolatedCausalAttempt(await request.json());
     if (url.pathname === "/causal-dispatch/register") return this.registerCausalDispatch(await request.json());
     if (url.pathname === "/causal-dispatch/claim") return this.claimCausalDispatch(await request.json());
     if (url.pathname === "/causal-dispatch/verify") return this.verifyCausalDispatch(await request.json());
@@ -499,6 +542,34 @@ export class ExecutionCoordinator {
     if (url.pathname === "/provider-capacity-wait") return this.recordProviderCapacityWait(await request.json());
     if (url.pathname === "/paid-overflow-reserve") return this.reservePaidOverflowCall(await request.json());
     return json({ error: "NOT_FOUND" }, 404);
+  }
+
+  private async claimIsolatedCausalAttempt(value: unknown): Promise<Response> {
+    if (!validIsolatedClaimRequest(value)) return json({ claimed: false, error: "ISOLATED_CAUSAL_CLAIM_INVALID" }, 400);
+    const transactional = this.ctx.storage as DurableObjectStorageLike & Partial<TransactionalDurableObjectStorageLike>;
+    if (typeof transactional.transaction !== "function") {
+      return json({ claimed: false, error: "ISOLATED_CAUSAL_TRANSACTION_REQUIRED" }, 503);
+    }
+
+    const storageKey = `${ISOLATED_CAUSAL_CLAIM_STORAGE_PREFIX}${value.sourceIdentityDigest}`;
+    try {
+      return await transactional.transaction(async (storage) => {
+        const existing = await storage.get<unknown>(storageKey);
+        if (existing !== undefined) {
+          if (!validStoredIsolatedClaim(existing, value.sourceIdentityDigest)) {
+            return json({ claimed: false, error: "ISOLATED_CAUSAL_CLAIM_STATE_CORRUPT" }, 500);
+          }
+          return json({ claimed: false, reason: "ISOLATED_CAUSAL_ATTEMPT_ALREADY_CONSUMED" }, 409);
+        }
+
+        const record: IsolatedCausalAttemptClaim = Object.freeze({ ...value });
+        await storage.put(storageKey, record);
+        return json({ claimed: true, domain: record.domain }, 201);
+      });
+    } catch {
+      // Transaction commit outcome may be uncertain. The caller must never start execution on error.
+      return json({ claimed: false, error: "ISOLATED_CAUSAL_CLAIM_STORAGE_UNAVAILABLE" }, 503);
+    }
   }
 
   private async acquire(value: unknown): Promise<Response> {
@@ -1284,6 +1355,56 @@ function validExecutionTelemetrySummary(value: unknown): value is AutopilotExecu
 export interface ExecutionCoordinatorNamespace {
   idFromName(name: string): DurableObjectIdLike;
   get(id: DurableObjectIdLike): DurableObjectStubLike;
+}
+
+/**
+ * Atomically consumes one validated isolated source identity forever. The DO object name and
+ * storage key are separately domain-separated from production leases and causal-dispatch state.
+ */
+export async function claimIsolatedCausalAttempt(
+  namespace: ExecutionCoordinatorNamespace,
+  verified: VerifiedIsolatedCausalVerification,
+  now = Date.now(),
+): Promise<{ readonly claimed: boolean; readonly sourceIdentityDigest: string }> {
+  const source = verified.source;
+  if (source.repository !== "cinamoncandy/NUSA"
+    || source.workflowPath !== ".github/workflows/causal-verification.yml"
+    || source.workflowRef !== `${source.repository}/${source.workflowPath}@refs/heads/main`
+    || source.ref !== "refs/heads/main" || source.event !== "workflow_dispatch"
+    || source.job !== "verify-causal-positive"
+    || !/^[a-f0-9]{40}$/.test(source.sha)
+    || !/^[1-9][0-9]{0,19}$/.test(source.runId)
+    || !/^[1-9][0-9]{0,9}$/.test(source.runAttempt)
+    || !SHA256_HEX.test(verified.statementDigest)
+    || !validSafeTimestamp(now)) throw new Error("ISOLATED_CAUSAL_CLAIM_IDENTITY_INVALID");
+
+  const sourceIdentityDigest = await isolatedSourceIdentityDigest(source);
+  const objectName = `${ISOLATED_CAUSAL_CLAIM_OBJECT_PREFIX}${sourceIdentityDigest}`;
+  const stub = namespace.get(namespace.idFromName(objectName));
+  let response: Response;
+  try {
+    response = await stub.fetch("https://execution-coordinator/isolated-causal/claim", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        schemaVersion: 1,
+        domain: "NUSA_ISOLATED_CAUSAL_ATTEMPT_CLAIM_V1",
+        sourceIdentityDigest,
+        statementDigest: verified.statementDigest,
+        claimedAt: now,
+      } satisfies IsolatedCausalAttemptClaim),
+    });
+  } catch {
+    throw new Error("ISOLATED_CAUSAL_CLAIM_STORAGE_UNAVAILABLE");
+  }
+
+  if (response.status === 409) return Object.freeze({ claimed: false, sourceIdentityDigest });
+  if (response.status !== 201) throw new Error("ISOLATED_CAUSAL_CLAIM_STORAGE_UNAVAILABLE");
+  const body = await response.json() as { claimed?: unknown; domain?: unknown };
+  if (body.claimed !== true || body.domain !== "NUSA_ISOLATED_CAUSAL_ATTEMPT_CLAIM_V1") {
+    throw new Error("ISOLATED_CAUSAL_CLAIM_RESPONSE_INVALID");
+  }
+  return Object.freeze({ claimed: true, sourceIdentityDigest });
 }
 
 /** Coordinator-only calls; HTTP routes must authenticate and verify GitHub identities before invoking them. */

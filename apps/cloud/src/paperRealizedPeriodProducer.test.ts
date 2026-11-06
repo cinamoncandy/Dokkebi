@@ -86,6 +86,29 @@ describe("PaperRealizedPeriodProducer", () => {
     } finally { state.db.close(); }
   });
 
+  it("reserves slots so several FILLED observations still fit after sampled non-fill observations saturate, and the total cap holds", () => {
+    const state = producer();
+    try {
+      const plan = state.producer.openPeriod(openPeriod());
+      // Same sampling hash as the producer: only ids with hash % 64 === 0 are persisted as non-fill, so pick those directly.
+      const sampled = (id: string): boolean => { let hash = 0; for (const char of id) hash = (hash * 31 + char.charCodeAt(0)) >>> 0; return hash % 64 === 0; };
+      const size = () => state.producer.listOpenPeriods()[0]!.observationIds.length;
+      let n = 0;
+      let at = 1;
+      const observe = (id: string, status: "WAIT" | "FILLED") => state.producer.observeExecution({ observationId: id, observedAt: plan.periodStartAt + (at += 1), status });
+      const nextSampled = (): string => { for (;;) { const id = `obs-${n++}`; if (sampled(id)) return id; } };
+      const nextUnsampled = (): string => { for (;;) { const id = `obs-${n++}`; if (!sampled(id)) return id; } };
+      observe(nextSampled(), "WAIT"); // the first observation of a period is always kept
+      while (size() < 1_008) observe(nextSampled(), "WAIT");
+      assert.equal(size(), 1_008);
+      assert.equal(observe(nextSampled(), "WAIT"), "RECORDED"); // sampled non-fill beyond the reserve is dropped, not stored
+      assert.equal(size(), 1_008); // non-fill sampling stops 16 short of the cap
+      for (let i = 0; i < 16; i += 1) assert.equal(observe(nextUnsampled(), "FILLED"), "RECORDED");
+      assert.equal(size(), 1_024);
+      assert.equal(codeOf(() => observe(nextUnsampled(), "FILLED")), "OBSERVATION_LIMIT"); // total cap unchanged
+    } finally { state.db.close(); }
+  });
+
   it("appends exactly one canonical #885 envelope and replays it after restart", () => {
     const state = producer();
     try {

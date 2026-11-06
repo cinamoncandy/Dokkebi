@@ -1,5 +1,5 @@
 import baseWorker, { globalReleaseFreezeActive, handleCodingExecute, type Env as BaseEnv } from "./index";
-import { acquirePersistentExecution, ExecutionCoordinator, handoffOrAcquirePersistentExecution, markPersistentExecutionDispatched, readPersistentControlPlaneHold, readProviderCapacityWait, recordCodingExecutionEvidence, recordProviderCapacityWait, releaseActiveWip, releasePersistentExecution } from "./executionCoordinator";
+import { acquirePersistentExecution, claimIsolatedCausalAttempt, ExecutionCoordinator, handoffOrAcquirePersistentExecution, markPersistentExecutionDispatched, readPersistentControlPlaneHold, readProviderCapacityWait, recordCodingExecutionEvidence, recordProviderCapacityWait, releaseActiveWip, releasePersistentExecution } from "./executionCoordinator";
 import { createCodingExecutionEvidence } from "./codingExecutionEvidence";
 import { reconcileCodingExecutionEvidence } from "./productionExecutionSpine";
 import {
@@ -16,13 +16,14 @@ import {
   type CodingRunnerRequest,
 } from "./codingRunner";
 import { GithubValidatedPatchPublisher } from "./githubValidatedPatchPublisher";
-import { verifyGithubActionsOidcToken, verifyGithubReleaseControlOidcToken } from "./githubActionsOidc";
+import { verifyGithubActionsOidcToken, verifyGithubIsolatedConsumerIdentity, verifyGithubIsolatedConsumerRun, verifyGithubIsolatedSourceRun, verifyGithubReleaseControlOidcToken } from "./githubActionsOidc";
 import { AUDIT_PROVIDER, executeIndependentAudit, executeProviderGatedAudit, validateAuditRunnerRequest } from "./auditRunner";
 import { classifyAiBudgetState } from "./aiBudgetState";
 import { decideCodingRunnerNoAction } from "./codingRunnerRemediation";
 import { claimVerifiedCausalDispatch, verifyClaimedCausalDispatch } from "./causalAdmissionAuthorization";
 import { hashCausalDispatchCapability } from "./causalDispatchBinding";
-import { verifyCausalProducerAttestation } from "./sigstoreCausalAttestation";
+import { verifyCausalProducerAttestation, verifyIsolatedCausalVerificationAttestation } from "./sigstoreCausalAttestation";
+import { executeVerifiedIsolatedCausalVerification } from "./isolatedCausalVerificationHarness";
 import { verifyGithubCausalProducerEvidence, verifyGithubCodingPublisherIdentity, verifyGithubCodingPublisherRun, type SourceExecutionIdentity } from "./githubActionsOidc";
 import { createCausalAdmissionReceipt } from "./causalRegressionAdmission";
 import { applyCausalRepairPatch, verifyCausalPublishedFiles } from "./causalRepairPatch";
@@ -32,6 +33,8 @@ export { ExecutionCoordinator };
 
 export interface WorkerEnv extends BaseEnv {
   NUSA_AI_AUDIT_MODEL?: string;
+  /** Deliberately absent from deployment config until a separately authorized Worker release. */
+  NUSA_ISOLATED_CAUSAL_VERIFICATION_ENABLED?: string;
 }
 
 interface ReleaseControlPlaneCheckRequest {
@@ -280,6 +283,65 @@ export async function handleCausalDispatchClaim(request: Request, env: WorkerEnv
   return claimed.claimed
     ? json({ claimed: true, causalAttestationVerified: causalAdmission !== null, causalAdmissionGranted: claimed.causalAdmissionGranted, ...authority })
     : json({ claimed: false, causalAttestationVerified: causalAdmission !== null, causalAdmissionGranted: false, error: "CAUSAL_DISPATCH_BINDING_REJECTED", ...authority }, 409);
+}
+
+/** Disabled-by-default isolated proof lane; claim and CodingRunner execution stay inside this Worker. */
+export async function handleIsolatedCausalVerification(
+  request: Request,
+  env: WorkerEnv,
+  dependencies: { readonly now?: () => number; readonly fetchImpl?: typeof fetch } = {},
+): Promise<Response> {
+  const authority = { mutationAllowed: false, liveAuthority: "NONE", productionMutationAllowed: false, aiAuthority: "ZERO_AUTHORITY" } as const;
+  if (env.NUSA_ISOLATED_CAUSAL_VERIFICATION_ENABLED !== "true") {
+    return json({ accepted: false, error: "ISOLATED_CAUSAL_VERIFICATION_DISABLED", ...authority }, 404);
+  }
+  const token = request.headers.get("authorization")?.replace(/^Bearer\s+/i, "").trim();
+  if (!token) return json({ accepted: false, error: "ISOLATED_CONSUMER_UNAUTHORIZED", ...authority }, 401);
+  const allowedRepository = env.NUSA_GITHUB_REPOSITORY?.trim() || "cinamoncandy/NUSA";
+  if (allowedRepository !== "cinamoncandy/NUSA" || !env.NUSA_GITHUB_TOKEN?.trim() || !env.NUSA_EXECUTION_COORDINATOR) {
+    return json({ accepted: false, error: "ISOLATED_VERIFICATION_DEPENDENCY_UNAVAILABLE", ...authority }, 503);
+  }
+
+  let body: { sourceRunId?: unknown; sourceRunAttempt?: unknown; attestationBundle?: unknown };
+  try {
+    body = JSON.parse(await readBoundedCausalClaimBody(request)) as typeof body;
+  } catch {
+    return json({ accepted: false, error: "ISOLATED_VERIFICATION_REQUEST_INVALID", ...authority }, 400);
+  }
+  if (!body || typeof body !== "object" || Array.isArray(body)
+    || typeof body.sourceRunId !== "string" || !/^[1-9][0-9]{0,19}$/.test(body.sourceRunId)
+    || typeof body.sourceRunAttempt !== "string" || !/^[1-9][0-9]{0,9}$/.test(body.sourceRunAttempt)
+    || !body.attestationBundle || typeof body.attestationBundle !== "object" || Array.isArray(body.attestationBundle)) {
+    return json({ accepted: false, error: "ISOLATED_VERIFICATION_REQUEST_INVALID", ...authority }, 400);
+  }
+
+  const fetchImpl = dependencies.fetchImpl ?? fetch;
+  const now = dependencies.now?.() ?? Date.now();
+  try {
+    const consumer = await verifyGithubIsolatedConsumerIdentity(token, allowedRepository, fetchImpl as never, Math.floor(now / 1000));
+    await verifyGithubIsolatedConsumerRun(consumer, env.NUSA_GITHUB_TOKEN.trim(), fetchImpl as never);
+    const sourceRun = await verifyGithubIsolatedSourceRun(body.sourceRunId, body.sourceRunAttempt, env.NUSA_GITHUB_TOKEN.trim(), fetchImpl as never);
+    const verified = await verifyIsolatedCausalVerificationAttestation(body.attestationBundle, {
+      sha: sourceRun.sha,
+      runId: sourceRun.runId,
+      runAttempt: sourceRun.runAttempt,
+    });
+    const result = await executeVerifiedIsolatedCausalVerification(verified, {
+      githubToken: env.NUSA_GITHUB_TOKEN.trim(),
+      fetchImpl,
+      verifiedSourceRun: sourceRun,
+      claimAttempt: (evidence) => claimIsolatedCausalAttempt(env.NUSA_EXECUTION_COORDINATOR!, evidence, now),
+    });
+    return json({ accepted: true, receipt: result, ...authority });
+  } catch (error) {
+    const code = error instanceof Error ? error.message : "ISOLATED_VERIFICATION_REJECTED";
+    const unavailable = /UNAVAILABLE|STORAGE|JWKS_HTTP/.test(code);
+    return json({
+      accepted: false,
+      error: unavailable ? "ISOLATED_VERIFICATION_EVIDENCE_UNAVAILABLE" : "ISOLATED_VERIFICATION_REJECTED",
+      ...authority,
+    }, unavailable ? 503 : 409);
+  }
 }
 
 /**
@@ -722,6 +784,10 @@ const worker = {
 
     if (request.method === "POST" && url.pathname === "/coding/causal/claim") {
       return handleCausalDispatchClaim(request, env);
+    }
+
+    if (request.method === "POST" && url.pathname === "/isolated/causal/verify-and-run") {
+      return handleIsolatedCausalVerification(request, env);
     }
 
     if (request.method === "POST" && url.pathname === "/coding/sandbox/validate") {
