@@ -128,3 +128,16 @@ Safety stays: PAPER_ONLY, liveAuthority=NONE, productionMutationAllowed=false, a
 - **Draft-only 재분석(P2-2):** 자율 패치 게시기를 부르는 곳은 `worker.ts` 한 곳이고 게시기는 계속 `draft: true`다. #2994의 격리 검증 경로는 `NUSA_ISOLATED_CAUSAL_VERIFICATION_ENABLED=true`일 때만 열리고, 그 워크플로(`causal-verification*.yml`)에는 PR 생성이 없다.
 - **다른 PR 생성자:** `Autopilot Codex Coding`은 여전히 `disabled_manually`. `Oracle Codex Dev Runner`는 수동 실행(`workflow_dispatch`)뿐이고 PR 생성 단계가 없다.
 - **미충족(남음):** 실제 빨간 main에서의 Gate A 라이브 동작은 실행해 보기 전에는 확정할 수 없다. 오너의 브랜치 보호·병합 대기열 확인, 시작 직전 재확인, 오너의 "시작" 지시.
+
+## 브랜치 보호 확인과 C′ (2026-11-06 KST, 오너가 보낸 설정 캡처 기준)
+**확인한 설정(`main` 규칙):** PR 필수, 새 커밋 시 승인 무효화, 상태 체크 필수(필수 체크는 `nusa/release-authorized` 하나), 병합 전 최신 main 필수, 대화 해결 필수, 우회 금지(관리자 포함). 강제 푸시·삭제는 꺼짐. 병합 대기열은 이 화면에 없다(룰셋 화면은 아직 미확인).
+
+**발견한 문제:** 위 설정에서는 PR CI가 빨간 변경(원래의 `C`)은 `release-authorized`를 받지 못하고 우회도 막혀 있어 main에 들어갈 수 없다. 보호 설정을 풀어서 해결하지 않는다.
+
+**해결안 C′ (PR #3005, DO NOT MERGE 초안):** `C`와 함께 실패하던 테스트 3개를 새 동작에 맞게 고친다(`timed_out`은 복구 대상 아님, 계약 관찰은 `OBSERVED_MISMATCH`). PR CI는 초록이라 Audit를 통과할 수 있고, PR에서 돌지 않는 `causal-regression-contract`가 main 푸시에서만 불일치를 관찰해 빨개진다. 복구 대상을 넓히지 않고 좁히기만 한다. 로컬에서 main `ecdf774`에 적용해 자율개발·인과 계열 975개 모두 통과, 불일치 관찰은 `main-ci-timeout`(기대 true, 실제 false)이다. 되돌리기 `R`은 병합 커밋의 `git revert`다.
+
+**C′의 병합 경로는 정식이다:** 병합은 Audit와 봇을 거치는 일반 경로뿐이다. 이 병합 자체가 오너의 명시적 카나리 승인 뒤에만 일어나며, 그전에는 초안으로 둔다.
+
+**병합 동결 보강:** 필수 체크가 PR 단위라서 main이 빨개져도 다른 PR 병합이 자동으로 막히지는 않는다. 창 동안 Audit 요청과 초안 해제를 하지 않는다. 병합 전 최신 main 필수 규칙 때문에 빨간 main을 합친 PR은 대부분 CI가 빨개져 막힌다(보조 효과, 보장은 아니다).
+
+**미충족(추가):** C′의 독립 검토, 룰셋·병합 대기열 화면 확인, 위 시작 직전 재확인, 오너의 "시작".
