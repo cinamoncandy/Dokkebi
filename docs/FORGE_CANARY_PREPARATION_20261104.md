@@ -155,3 +155,10 @@ Safety stays: PAPER_ONLY, liveAuthority=NONE, productionMutationAllowed=false, a
 **P2.** (a) 병합 동결 규칙은 `R` 자신과 충돌한다: 우회가 막혀 있어 `R`은 초안 해제 + Audit가 유일한 길이므로 "창 동안 Audit 요청 금지"에 `R`의 예외를 명시한다. 빨간 main이 Audit를 막는지는 코드에서 찾지 못했고 미확인이다. (b) 세 번째 테스트는 `status`만 확인하므로 `caseId: main-ci-timeout`, `expected: true`, `observed: false`까지 고정하는 편이 낫다(PR #3005에 반영 예정). (c) PR CI에서 "실제 구현이 계약과 일치한다"는 단언이 사라지므로 `R` 전까지 그 일치는 main 푸시 작업 하나만 지킨다(의도된 것). (d) 배포: 빨간 main에서는 Deploy/Promote가 나가지 않는다(`deployment-convergence-watchdog.yml:130-136`), 비초안 PR은 생기지 않는다(`autopilot-codex-coding.yml`은 `disabled_manually`).
 
 **현재 상태:** 시작 승인 요청이 있었으나 위 P1 때문에 **시작하지 않았다.** 오너가 수정된 성공 기준과 증명서 최대 3개 허용을 확인하고, 창 시각을 다시 정하기 전에는 실행하지 않는다.
+
+## 오너 결정 (2026-11-06 KST): Claude의 추천을 따른다
+- **성공 기준 수정을 받아들인다:** main 푸시에서 불일치 관찰 → 증명서 생성 → Sigstore 서명 → 정확한 source identity 검증, 그리고 승인 단계의 닫힌 거절까지를 이 카나리의 목표로 한다. 진짜 `CODE_ACTIONABLE`(양성 종단 경로)은 이 카나리의 목표가 아니며, 증명되었다고 쓰지 않는다. L1은 이 카나리 뒤에도 PARTIAL이다.
+- **Release의 자동 재실행을 허용한다:** 증명서 최대 3개(`run_attempt` 1~3)와 Release 실행이 빨갛게 끝나는 흔적을 허용한다. 중단 조건 3은 "4개째 증명서, 서로 다른 source identity, 비초안 PR 생성, 배포·서버 영향"으로 바꾼다.
+- **`R` 예외:** 창 동안 Audit 요청 금지에서 `R`(되돌리기) PR만 예외다.
+- **C′ 보강(검토 P2):** 세 번째 테스트가 `caseId: main-ci-timeout, expected: true, observed: false`까지 고정한다(PR #3005, 위 커밋). 변경분은 테스트 단언 한 줄이고, 시작 전에 이 변경분만 짧게 재검토한다.
+- **창은 아직 확정되지 않았다.** 시작 조건: ① #2973 병합 완료(병합 동결과 겹치지 않게), ② C′ 변경분 재검토 통과, ③ 시작 직전 재확인 통과, ④ 오너의 그 시각 "시작" 지시. 후보는 2026-11-07(토) 10:00 KST, 조건이 안 맞으면 2026-11-08(일) 10:00 KST.
