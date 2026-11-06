@@ -114,3 +114,11 @@ Safety stays: PAPER_ONLY, liveAuthority=NONE, productionMutationAllowed=false, a
 - 새 main에서 `repairableWorkflowRun.ts`의 blob은 그대로 `865c7fb4…`이고 자율 패치 게시는 여전히 `draft: true`다.
 - `C`는 깨끗하게 적용되고(`c7fa7a8d…`), `R`(역적용)은 `865c7fb4…`로 정확히 되돌린다. `C`를 적용하면 `causalRegressionContract`와 `repairableWorkflowRun` 테스트가 각각 의도대로 1개씩 실패한다.
 - **아직 미충족:** 새 main에서의 실제 디스패치(Gate A) 라이브 동작 확인, 새 소비 검증기 경로의 Draft-only 재분석(P2-2), 이름 지정된 감시자, 오너가 정할 날짜·시간대(KST)와 중단 한도, `autopilot-codex-coding.yml` 비활성 재확인. 이 문서는 실행 승인이 아니다.
+
+## 창 제안 (2026-11-06 KST, 오너 위임으로 Claude가 제안 — 확정 아님)
+오너가 날짜·시간·중단 기준을 Claude에게 맡겼다. 아래는 **제안**이며 오너의 명시적 실행 승인이 있어야만 효력이 생긴다. 승인 전에는 실행하지 않는다.
+- **창:** 2026-11-07(토) 10:00–11:00 KST. 오너가 깨어 있고 바로 중단할 수 있는 낮 시간이며, 일 경계(00:00 KST)와 멀다. 자동 예약은 걸지 않는다.
+- **중단 한도:** 60분. 60분이 지나면 `R`(역적용)로 되돌리는 PR을 준비하고, 오너가 중단을 결정한다.
+- **중단 책임자:** 오너 본인. **감시자:** Claude(읽기 전용).
+- **시작 직전 재확인(모두 통과해야 시작):** main 최신 blob `865c7fb4…` 불변, `autopilot-codex-coding.yml` 비활성, 서버 매수·학습 정상, 열린 P0 없음, 보호된 main이 이미 빨갛지 않음.
+- 하나라도 어긋나면 창을 취소하고 다음 후보(2026-11-08 같은 시간)로 미룬다.
