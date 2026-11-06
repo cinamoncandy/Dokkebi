@@ -172,6 +172,12 @@ function dailyNotional(state: PaperAccountState, now: number): Readonly<{ dailyB
   return Object.freeze({ dailyBuyNotional, dailySellNotional });
 }
 
+// The PAPER ledger keeps position quantities rounded to 8 decimals (PaperTradingExecutionLoop). This replay must follow the same
+// rounding: with raw floats the replayed remainder of a position that was sold in several orders drifts from the ledger's remainder by
+// more than Number.EPSILON once quantities are large, so the final sell looked like an oversell, dailyRealizedPnL became NaN and every
+// later request was halted as INVALID_REQUEST. Rounding like the ledger keeps the oversell check exact at the ledger's precision.
+const ledgerRound8 = (value: number): number => Number(value.toFixed(8));
+
 function realizedLossState(state: PaperAccountState, now: number): Readonly<{ dailyRealizedPnL: number; consecutiveLossCount: number; todayCompletedSells: number; todayLosingSells: number; lastIncrementAt: number | null }> {
   const positions = new Map<string, { quantity: number; averageEntryPrice: number }>();
   const sells: Array<{ pnl: number; filledAt: number }> = [];
@@ -179,14 +185,14 @@ function realizedLossState(state: PaperAccountState, now: number): Readonly<{ da
   for (const order of [...state.fills].reverse().sort((a, b) => a.filledAt - b.filledAt)) {
     const prior = positions.get(order.market) ?? { quantity: 0, averageEntryPrice: 0 };
     if (order.side === "BUY") {
-      const nextQuantity = prior.quantity + order.quantity;
+      const nextQuantity = ledgerRound8(prior.quantity + order.quantity);
       const nextAverage = nextQuantity <= 0 ? 0 : (prior.averageEntryPrice * prior.quantity + order.quantity * order.price + order.fee) / nextQuantity;
       positions.set(order.market, { quantity: nextQuantity, averageEntryPrice: nextAverage });
       continue;
     }
     if (order.quantity > prior.quantity + Number.EPSILON) return Object.freeze({ dailyRealizedPnL: Number.NaN, consecutiveLossCount: Number.MAX_SAFE_INTEGER, todayCompletedSells: 0, todayLosingSells: 0, lastIncrementAt: null });
     const pnl = (order.price - prior.averageEntryPrice) * order.quantity - order.fee;
-    const nextQuantity = Math.max(0, prior.quantity - order.quantity);
+    const nextQuantity = ledgerRound8(Math.max(0, prior.quantity - order.quantity));
     positions.set(order.market, { quantity: nextQuantity, averageEntryPrice: nextQuantity === 0 ? 0 : prior.averageEntryPrice });
     sells.push({ pnl, filledAt: order.filledAt });
     const previous = sellOrders.get(order.orderId);
