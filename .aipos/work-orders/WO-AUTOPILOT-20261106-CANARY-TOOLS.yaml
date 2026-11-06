@@ -1,0 +1,24 @@
+id: WO-AUTOPILOT-20261106-CANARY-TOOLS
+title: "Read-only canary tools: pre-start recheck evaluator and evidence hash helper"
+status: READY_FOR_REVIEW
+owner: nusa-development
+repository: cinamoncandy/NUSA
+base_branch: main
+implementation_branch: claude/canary-tools
+authority_impact: none
+objective: "Design proposal docs/DESIGN_IMPROVEMENT_20261106.md items C3 and C4. The canary pre-start recheck and the evidence step were manual. Two small read-only scripts make the rules deterministic and testable: scripts/canary-preflight-evaluate.js (PASS or FAIL per fact, missing facts fail closed) and scripts/canary-evidence-hash.js (sha256 of receipt.json and attestation.json per attempt; flags more than three attempts, differing source identity, a non-mismatch observation or a CODE_ACTIONABLE key)."
+scope:
+  - "scripts/canary-preflight-evaluate.js, scripts/canary-evidence-hash.js, tests/canary-tools.test.js."
+exclusions:
+  - "Read-only: no network, no writes in the input directory, no workflow, gate, pin, limit or server change. The helper does not verify signatures and is not evidence by itself. The canary is not approved or run by this change."
+safety:
+  paper_only: true
+  liveAuthority: NONE
+  productionMutationAllowed: false
+  aiAuthority: ZERO_AUTHORITY
+  fail_closed: "Missing or malformed input is a FAIL or REVIEW, never a PASS."
+verification_commands:
+  - node --test tests/canary-tools.test.js
+  - node scripts/validate-aipos-yaml.js
+review: "Draft PR; non-author review before use."
+residual: "The receipt field names (source.repository or source.repo, observation.status) follow the existing producer test; a real receipt from the canary may need a small adjustment."
