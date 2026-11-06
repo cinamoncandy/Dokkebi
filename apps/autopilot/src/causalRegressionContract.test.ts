@@ -6,6 +6,7 @@ import { isRepairableMainWorkflowFailure } from "./repairableWorkflowRun";
 test("CANARY C': the narrowed repository predicate is a bounded, expected mismatch of the fixed contract (timed_out is no longer repairable)", () => {
   const result = observeRepairableWorkflowContract(isRepairableMainWorkflowFailure);
   assert.equal(result.status, "OBSERVED_MISMATCH");
+  assert.deepEqual(result, { contract: REPAIRABLE_WORKFLOW_CONTRACT, status: "OBSERVED_MISMATCH", caseId: "main-ci-timeout", expected: true, observed: false });
   assert.equal("CODE_ACTIONABLE" in result, false);
 });
 
