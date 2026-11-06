@@ -104,3 +104,49 @@ current_checkpoint_2026_11_06T0347Z:
     runtime_acceptance: UNVERIFIED
     issue_2815: OPEN
   next: "Update PR #3002 description to the actual integrated scope and 6c85 evidence, then request exact-head independent technical review with explicit Research/Data, performance, and #2975 P1 disposition questions. Keep Draft; do not resolve threads or claim runtime/L1 acceptance."
+
+current_checkpoint_2026_11_06T0441Z:
+  protected_main: ecdf77461771629f81d97a5b28be091414700e6f
+  local_branch: WO-RESEARCH-20261105-MULTI-INTERVAL-MANIFESTS
+  main_reconciliation_commit: 7c8f8b45f5ed9cafd1a60cc174495631b417379e
+  remote_pr_head: eb7af47232d1e26a02ac11f22e30746c228e57ce
+  pr_state: OPEN_DRAFT_BEHIND_MERGEABLE
+  main_reconciliation: "Local merge commit includes current protected main; not yet published. Four pre-existing untracked docs/audits files are preserved and excluded."
+  predecessor_exact_head_evidence: "CI 42159688403 and seven companions are SUCCESS on eb7af472 only; historical for local_head. Intentional causal/audit skips are not positive evidence."
+  local_validation:
+    build: PASS
+    focused_tests: PASS_45_OF_45
+    full_suite: PASS_1333_ISOLATED_TEST_FILES
+    typecheck: PASS
+    validate_full: PASS
+    security_gate: "PASS; high/critical=0, secrets=0."
+    lint_scripts: "PASS; 0 errors, 47 warnings."
+    aipos_provenance_yaml_drift_conformance: PASS
+    diff_check: PASS
+    test_runner_restoration: "Restored isolated-test-failure.txt from HEAD; SHA256 matches pre-test capture 08bc33d87f7961f92502cc48453dfd738a5559161ae447217f36b299e2ca20de."
+    excluded_untracked: "Four 2025-11-05 reports and four 2026-11-06 security-gate reports under docs/audits remain preserved and excluded."
+  independent_research_data_review: PENDING_REVIEWER_UNAVAILABLE
+  runtime_read_only:
+    host: nusa-datascale
+    observed_at_utc: "2026-11-06T04:29:11.775Z"
+    runtime_sha: 185c52c22691a5a35b13fe024cb39d810719a833
+    protected_main_sha: ecdf77461771629f81d97a5b28be091414700e6f
+    runtime_exact_main: false
+    research_candle_count: 62633
+    research_collection: COLLECTING
+    interval_manifest_skips: "15m and 60m each remain at 120 MANIFEST_NOT_FOUND skips; durable manifest identity is not exposed."
+    gap_fill: "24 runs, all FILLED; last materialization 6047ms, max 7173ms, event-loop max stall 7123ms; correlation only, root cause UNKNOWN."
+    data_integrity: "PASS status has embedded observedAt 2026-11-06T00:18:51Z and is stale relative to this health read."
+    learning: "LEARNING_NOT_EVALUATED; cyclesEvaluated=0, cyclesRecorded=0, holdoutPasses=0; no deployable candidate."
+    previous_stop: PAPER_WRITER_CLOCK_ANOMALY
+    database_access: "Read-only host allowlist excludes /var/lib/nusa and /var/backups/nusa; durable candle continuity, source receipts, and manifest rows remain UNVERIFIED. No database or runtime mutation performed."
+  forge_l1_boundary:
+    canonical_scope: "Issue #1851 acceptance plus owner checkpoint comment 6545892314 and WO-AUTOPILOT-20261030-1851-CAUSAL-ADMISSION. Research/Learning completion is separate unless a canonical dependency is established."
+    status: PARTIAL
+    reason: "#2994 is merged, but no genuine protected-producer positive attestation through the isolated verification route, verification-domain CODE_ACTIONABLE receipt, and bounded CodingRunner positive E2E are proven."
+  related_work:
+    pr_2975: "OPEN/Draft/CONFLICTING on stale base; active P1 thread PRRT_kwDOTUbne86yW75k still needs independent disposition. #3002 does not resolve it."
+    pr_3000: "OPEN/Draft/BEHIND; no independent review submitted; existing handoff 6652709639 retained."
+    pr_3001: "OPEN/Draft/BEHIND; display-only health projection; no independent Research/Data review submitted."
+    pr_2994: "MERGED at ecdf7746 via release authority; automatic deployment reports exact revision, but isolated positive consumer remains disabled and L1 acceptance is incomplete."
+  next: "Publish the locally validated successor to the existing #3002 branch, wait for exact-head CI/companions, then hand off to an eligible independent Research/Data reviewer. Keep #2975 thread disposition and #2815 runtime acceptance separate."

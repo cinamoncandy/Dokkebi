@@ -69,3 +69,44 @@ No Oracle runtime, actual candle advancement, manifest persistence on production
 `PAPER_ONLY`; `liveAuthority=NONE`; `productionMutationAllowed=false`; `realOrderAuthority=false`; `realTransferAuthority=false`; `aiAuthority=ZERO_AUTHORITY`; fail-closed. No production `CODE_ACTIONABLE`, deployment, restart, database mutation, or evidence fabrication occurred.
 
 Next: correct #3002's stale scope/validation metadata on its existing branch, run AIPOS/full-contract validation, and publish a single metadata-only successor. Refresh exact-head CI, update the PR description without changing the head, then request a focused exact-head technical review covering Research/Data correctness, work bounds, synchronous materialization cost, and the #2975 predecessor finding. Keep the PR Draft. Human non-author disposition, Formal Validator, Audit, Release, merge, and runtime evidence remain separate gates.
+
+## Fresh convergence update — 2026-11-06 04:41 UTC
+
+### Canonical L1 contract and current main
+
+- Protected main is `ecdf77461771629f81d97a5b28be091414700e6f`, protected=true. It advanced when PR #2994 was merged by the repository release-authority bot. The corresponding automatic Cloudflare deployment reported the same revision; this was externally triggered by governed automation, not by this CORE session.
+- The L1 scope is not inferred from all Research or Learning work. The canonical contract is Issue #1851 acceptance plus owner checkpoint `6545892314` and `WO-AUTOPILOT-20261030-1851-CAUSAL-ADMISSION`: a genuine isolated OBSERVED_MISMATCH, repository-issued cryptographic attestation, trusted verification in a domain separated from production, `REPOSITORY_CODE_REGRESSION` to verification-domain `CODE_ACTIONABLE`, and bounded existing-CodingRunner positive/dedupe proof, while production authority stays zero.
+- #2994 merged as `ecdf77461771629f81d97a5b28be091414700e6f` from PR head `41348508dc9c55727fb3f7dcbf84c52994896832`; the release-authority check succeeded. Fresh PR review data shows only a Codex bot COMMENTED receipt on older `7d15efc...` plus author COMMENTED entries on `89fb28c...`; there is no non-author APPROVED/terminal review in the current PR record. The exact-main CI and companion workflows passed, but `attest-causal-regression` and `causal-regression-contract` were SKIPPED. No protected-producer positive attestation, verified isolated CODE_ACTIONABLE receipt, or CodingRunner positive E2E is established. L1 remains PARTIAL; this Research PR does not satisfy or replace the #1851 criteria.
+
+### #1851 acceptance reconciliation
+
+| Canonical criterion | Current evidence | Disposition |
+|---|---|---|
+| Generic workflow failure alone cannot dispatch coding | Merged source and regression tests are present; exact-main CI passed | Source/test contract PASS; no positive authority inferred |
+| Credential/dependency-shaped failure remains human/evidence-only | Merged classification code and tests are present | Source/test contract PASS; no runtime receipt |
+| Deterministic repository-code regression can be positively classified | Classifier and isolated harness code exist | NOT PROVEN: no genuine repository-issued positive attestation has traversed the consumer |
+| Trusted producer, exact source identity, and artifact/job binding | Isolated workflow and verifier code exist | NOT PROVEN end-to-end with a genuine protected producer artifact |
+| Durable one-time claim/replay protection | Coordinator implementation and local tests exist | NOT PROVEN in a genuine signed positive flow; no production `CODE_ACTIONABLE` issued |
+| Existing CodingRunner positive path with duplicate suppression | Bounded harness code/tests exist | NOT PROVEN by a genuine attested end-to-end receipt |
+| Independent review / Formal / Audit evidence | PR #2994 was governed-merged and `nusa/release-authorized` succeeded | No current non-author exact-head review receipt was found; do not infer missing L1 positive acceptance from merge/checks |
+
+The production Worker route is deliberately disabled by absent configuration and must not be enabled in this implementation lane. A genuine test that would write the production Durable Object is not permitted under the current authority boundary. The missing positive acceptance therefore remains an explicit owner/governance transition, not a reason to fabricate evidence or relax the route guard.
+
+### Existing #3002 main reconciliation
+
+- Local `origin/main` was freshly fetched at `ecdf7746...`. The existing #3002 branch was merged locally without conflict; local merge commit is `7c8f8b45f5ed9cafd1a60cc174495631b417379e`. The remote PR still points to `eb7af47232d1e26a02ac11f22e30746c228e57ce` and reports BEHIND until a validated successor is published.
+- The old exact-head CI (`42159688403` plus seven companions) applies only to `eb7af472`; it is historical for the local merged successor. Its causal/audit skips were not positive evidence. The four pre-existing untracked `docs/audits/` reports remain untouched and excluded.
+- No Research source change was made in this main-sync step. On the current-main reconciled worktree, build, focused gap-fill/manifest tests 45/45, full isolated suite 1,333/1,333, typecheck, `validate:full`, security gate, AIPOS provenance/YAML/drift/conformance, lint-scripts (0 errors/47 warnings), and final diff check passed. The test runner removed tracked `isolated-test-failure.txt`; it was restored byte-for-byte from HEAD and its pre-run SHA-256 `08bc33d87f7961f92502cc48453dfd738a5559161ae447217f36b299e2ca20de` was verified. The local main-reconciled successor has not yet been published; its predecessor's exact-head CI is historical. The PR remains Draft.
+- The repository collaborator list exposes only the author `cinamoncandy`; this CORE session is not an eligible independent Research/Data reviewer. No review, Formal Validator, Audit, Release, or merge disposition is claimed.
+
+### Fresh read-only Datascale observation
+
+- `nusa-datascale` `/health` was read at `2026-11-06T04:29:11.775Z`. Runtime SHA remains `185c52c22691a5a35b13fe024cb39d810719a833`, behind current protected main `ecdf7746...`; no runtime action was taken.
+- Research reports 62,633 candles and COLLECTING. The 15m and 60m interval counters still each show 120 `MANIFEST_NOT_FOUND` skips. The health endpoint does not expose durable manifest IDs or source-receipt rows.
+- Gap-fill reports 24 runs, all FILLED; last materialization 6,047 ms, max 7,173 ms, and event-loop max stall 7,123 ms. These are correlated measurements only; root cause remains UNKNOWN.
+- The embedded data-integrity result is PASS but its observation time is `2026-11-06T00:18:51Z`, stale relative to this read. Learning is `LEARNING_NOT_EVALUATED`, with `cyclesEvaluated=0`, `cyclesRecorded=0`, `holdoutPasses=0`, and no deployable candidate. `previousStop=PAPER_WRITER_CLOCK_ANOMALY` remains visible.
+- The host read allowlist does not expose `/var/lib/nusa` or `/var/backups/nusa`; durable candle continuity, manifest persistence, and source receipts remain UNVERIFIED. No DB access, mutation, deployment, restart, or timer trigger was performed.
+
+### Current next transition
+
+Publish the locally validated successor to the existing #3002 branch, wait for exact-head CI/companions, then hand off to an eligible independent Research/Data reviewer. Independently, #2975 still needs an eligible reviewer to dispose the active P1 thread; #3000 and #3001 remain Draft with no independent reviews. No operational or L1 completion claim follows from this update.
