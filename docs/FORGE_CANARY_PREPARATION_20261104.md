@@ -42,6 +42,29 @@ Safety stays: PAPER_ONLY, liveAuthority=NONE, productionMutationAllowed=false, a
 5. 자율개발이 그 실패를 실제 작업으로 집어 들려는 징후가 보일 때(Gate A 거절 외의 동작).
 6. 다른 개발자의 PR이 이 빨간 main 때문에 막힐 때(오너 판단으로 연장 가능).
 
+## C와 R 준비 결과 (2026-11-06, 병합·실행 안 함, 로컬 검증)
+기준: main `185c52c22`. 대상 파일 `apps/autopilot/src/repairableWorkflowRun.ts`의 원본 git blob `865c7fb4f3a3669511acae08135853337545d70f`.
+
+**`C` (한 줄, 복구 대상 범위를 좁히기만 한다):**
+```diff
+-const REPAIRABLE_CONCLUSIONS: ReadonlySet<string> = new Set(["failure", "timed_out"]);
++const REPAIRABLE_CONCLUSIONS: ReadonlySet<string> = new Set(["failure"]);
+```
+- 깨끗하게 적용된다(`git apply --check`). `C`를 적용한 blob은 `c7fa7a8ded991b7d7d9e431adbe73ee6712ab2e0`.
+- 이 변경은 어떤 입력도 새로 복구 대상으로 만들지 않는다(`timed_out`을 제외할 뿐). 자율개발의 권한을 넓히지 않는다.
+
+**`R` (되돌리기):** `C`의 역적용(`git apply -R`, 병합 뒤에는 `git revert`)이 blob을 `865c7fb4f3a3669511acae08135853337545d70f`로 정확히 되돌린다. 원본과 비트 단위로 같음을 확인했다.
+
+**불일치 관찰:** `C`를 적용하고 `observeRepairableWorkflowContract(isRepairableMainWorkflowFailure)`를 실행하면 `OBSERVED_MISMATCH`, 사례 `main-ci-timeout`(기대 `true`, 실제 `false`)이다. 이 확인은 함수만 돌린 것이고 영수증이나 GitHub 신원은 만들지 않았다. 실제 영수증은 보호된 main의 `push`에서만 만들어진다.
+
+**함께 실패하는 기존 테스트 (자율개발 전체 + 인과·자율개발 계열 957개 중 정확히 3개):**
+1. `the current repository predicate satisfies the fixed observation contract`
+2. `canonical code checks that failed on main are repair targets`
+3. `producer observes the actual predicate and binds fixed contract fingerprints`
+이 테스트들은 고치거나 끄지 않는다. 빨간 main은 의도된 것이고 `R`로 사라진다.
+
+**주의:** 이 값들은 main `185c52c22` 기준이다. `repairableWorkflowRun.ts`가 그 사이 바뀌면 blob 값과 패치를 다시 만들어 다시 검토해야 한다. 이 준비는 **실행 승인이 아니다**(위 "실행 전 승인 조건" 3~5번과 #2994 병합이 남아 있다).
+
 ## 판정
 - **성공:** 같은 실행의 증명서 + 독립 검증기가 모든 항목을 통과하고, 분류가 정확히 `REPOSITORY_CODE_REGRESSION`이며, 되돌린 뒤 main CI가 다시 초록.
 - **실패 또는 중단:** 양성 증명은 **미검증**으로 남긴다. 실패 원인과 보존한 로그를 기록한다.
@@ -49,7 +72,7 @@ Safety stays: PAPER_ONLY, liveAuthority=NONE, productionMutationAllowed=false, a
 
 ## 실행 전 승인 조건 (모두 아직 충족되지 않음)
 1. #2994(또는 후속)가 병합되어 소비 쪽 검증기가 main에 있다. **현재 미충족:** 초안이고 main보다 뒤처져 있으며, 열린 P2 리뷰 스레드 2건(`PRRT_kwDOTUbne86y_bHe`, `PRRT_kwDOTUbne86y_bHi`)의 공식 처리가 남아 있고, 적격 비작성자 검토자가 없어 `BLOCKED_VALIDATOR_INDEPENDENCE` 상태다.
-2. `R`이 준비되어 있고 `C`와 같은 시점에 검토되었다. **현재 미충족:** `R`은 만들어지지 않았다.
+2. `R`이 준비되어 있고 `C`와 같은 시점에 검토되었다. **현재 부분 충족:** `C`와 `R`을 준비하고 로컬에서 검증했다(아래 "C와 R 준비 결과"). 아직 **독립 검토를 받지 않았고**, 병합하지 않은 패치 상태다.
 3. 빨간 main에서 Gate A 거절과 재배정 재시도 동작을 확인했고, 창 동안 지켜볼 담당자가 이름으로 정해졌다. **현재 부분 충족:**
    - **코드 수준 확인됨 (2026-11-05, main `185c52c22`, 읽기 전용):** 빨간 main `CI`(이름 `CI`, 실패, `main`, `push`)는 `scheduledRuntime.ts`가 복구 대상으로 집지만, 그 뒤 세 겹이 막는다.
      (1) 스케줄러: `scheduledEvolutionCoding.ts`가 실패 신호가 있는 `REPOSITORY_AUTOPILOT` 요청을 `workflow-failure-causal-evidence-unverified`로 **중단(ABSTAINED)** 한다. 임대 획득과 코딩 배정 **이전**이다.
@@ -61,7 +84,7 @@ Safety stays: PAPER_ONLY, liveAuthority=NONE, productionMutationAllowed=false, a
 5. 오너가 날짜와 시간대(한국시간), 중단 상한, 60분 중단 책임자를 정해 명시적으로 승인했다. **현재 미충족.**
 
 ## 확인하지 못한 것
-- 빨강 자체는 확정(위 3번)이지만, `C`를 넣었을 때 어떤 기존 테스트가 함께 실패하는지는 돌려 보지 않았다.
+- 빨강 자체는 확정(위 3번)이고, `C`를 넣었을 때 함께 실패하는 기존 테스트는 3개로 확인했다(위 "C와 R 준비 결과"). 다만 GitHub Actions의 보호된 main에서 실제 CI가 어떻게 빨개지는지는 로컬에서 재현할 수 없다.
 - 병합 대기열과 PR 필수 검사가 빨간 main에서 어떻게 동작하는지는 확인하지 못했다.
 - `attest-causal-regression`의 증명서를 소비하는 검증기가 #2994 안에서 어디까지 구현되었는지 전부 읽지는 않았다.
 - 진짜 Sigstore 검증(Fulcio·Rekor)을 이 샌드박스에서는 돌릴 수 없다. 실제 GitHub 실행에서만 확인된다.
