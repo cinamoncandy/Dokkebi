@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { claimCausalDispatchBinding, hashCausalDispatchCapability, newCausalDispatchCapability, type CausalDispatchBinding } from "./causalDispatchBinding";
+import type { CausalAdmissionReceipt } from "./causalRegressionAdmission";
 import type { SourceExecutionIdentity, VerifiedCodingPublisherIdentity } from "./githubActionsOidc";
 
 const repository = "cinamoncandy/NUSA";
@@ -39,4 +40,24 @@ test("denies source, publisher, capability, and time substitution", () => {
   assert.equal(claimCausalDispatchBinding(pending, publisher, source, "b".repeat(64), 100), null);
   assert.equal(claimCausalDispatchBinding(pending, publisher, source, digest, 200), null);
   assert.equal(claimCausalDispatchBinding(pending, publisher, source, digest, -1), null);
+});
+
+test("claims the registered causal evidence when only its verification window is refreshed", () => {
+  const registered: CausalAdmissionReceipt = Object.freeze({
+    schemaVersion: 1, decision: "CODE_ACTIONABLE", classification: "REPOSITORY_CODE_REGRESSION",
+    contractId: "REPAIRABLE_WORKFLOW_POLICY_V1", caseId: "main-ci-failure", sourceConclusion: "failure",
+    source, sourceRunAttempt: source.runAttempt, statementDigest: "b".repeat(64), producerJobId: 10,
+    attestationJobId: 11, producerArtifactId: 12, producerArtifactDigest: `sha256:${"c".repeat(64)}`,
+    producerArtifactName: `nusa-causal-attestation-${source.runAttempt}`, implementationFingerprint: "d".repeat(64),
+    verifiedAt: 90, expiresAt: 150, replayKeySha256: "e".repeat(64),
+  });
+  const refreshed: CausalAdmissionReceipt = Object.freeze({ ...registered, verifiedAt: 105, expiresAt: 180 });
+  const binding: CausalDispatchBinding = Object.freeze({ ...pending, expiresAt: 150, causalAdmission: registered });
+
+  const claimed = claimCausalDispatchBinding(binding, publisher, source, digest, 110, refreshed);
+
+  assert.ok(claimed);
+  assert.equal(claimed.causalAdmission, registered);
+  assert.equal(claimCausalDispatchBinding(binding, publisher, source, digest, 110, { ...refreshed, replayKeySha256: "f".repeat(64) }), null);
+  assert.equal(claimCausalDispatchBinding(binding, publisher, source, digest, 151, refreshed), null);
 });
