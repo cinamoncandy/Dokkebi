@@ -72,8 +72,8 @@ validation:
   diff_check: PASS
   prior_exact_head_ci: "PASS at aabfdaa880985f1ec773d794d6e8030393d04bff; historical after local repair"
   independent_technical_disposition: "CHANGES_REQUIRED on aabfdaa880985f1ec773d794d6e8030393d04bff (COMMENT 5798993398); successor 21b59512a43c687d9b3a123e9abdd9ea9626804e review also CHANGES_REQUIRED, P0=0/P1=0/P2=1 (COMMENT 5799212431). Both were separate validator sessions under the same author account, not non-author approval, Formal Validation, Audit, or Release."
-  successor_exact_head_ci: PENDING
-  successor_independent_review: PENDING
+  successor_exact_head_ci: "537f3d8e48e32c7ca63b01a7610076fa501cffa9: CI 42208707239 and five required companion workflows 42208707210, 42208707179, 42208707184, 42208707263, 42208707379 all terminal SUCCESS (6/6)."
+  successor_independent_review: "Exact-head technical disposition 5799431551: ACCEPTED, P0/P1/P2=0, on 537f3d8e48e32c7ca63b01a7610076fa501cffa9. Fresh read-only NUSA_AGENT_ROLE=validator session; same GitHub author identity cinamoncandy, so this is technical disposition, not non-author APPROVE, Formal Validation, Audit, or Release authorization. Review threads: 0."
   source_run_42199682632:
     artifact_id: 13494211160
     artifact_sha256: bc978a415808eb15c8d9ab3d9f808d020c9f3e86404bc4ea0890355a6c958f24
@@ -92,7 +92,18 @@ validation:
     exact_strategy_reason: "INSUFFICIENT_SMA_OBSERVATIONS:1/20"
     root_cause_classification: WARMUP_NOT_COMPLETED
     canonical_runtime_database_history: UNVERIFIED
+  current_exact_head_run_42208707379:
+    head_sha: 537f3d8e48e32c7ca63b01a7610076fa501cffa9
+    artifact_id: 13498272063
+    artifact_sha256: 8f0ba7dfc83bfed04e2a6372a46634a8747d7a54d8adff7d93dfaeb3207079e4
+    result: INCOMPLETE
+    observation: "60.866s; 61 samples; 54 recorded natural Decision cycles; all recorded cycles WAIT/INSUFFICIENT_HISTORY; final strategy reason INSUFFICIENT_SMA_OBSERVATIONS:1/20; 0 orders/fills; 61 account snapshots with no account/PnL change; SIGNAL/RISK NOT_OBSERVED; PERMISSION observed as skipped; event evidence truncated; readiness INCOMPLETE_NO_AUTONOMOUS_ORDER_FILL_PNL."
+    source: "Upbit PUBLIC ticker, KRW-BIRB; GitHub workflow run and artifact are bound to exact head 537f3d8e48e32c7ca63b01a7610076fa501cffa9."
+    root_cause_classification: WARMUP_NOT_COMPLETED_FOR_ISOLATED_E2E
+    first_broken_transition: "Fresh E2E state.sqlite -> 20 completed market-specific one-minute closes -> SMA candidate; the isolated run had 1/20."
+    canonical_runtime_database_history: UNVERIFIED
   event_cap_analysis: "Recorder, SQLite retention, and read-only projection are each bounded at 250 by default. The artifact contains 459 unique timeline events accumulated over 61 samples, but no cursor/counter delta proves there were no gaps. EVENT_EVIDENCE_TRUNCATED is conservative and remains INCOMPLETE; do not infer missing-event count or increase limits without a bounded summary contract."
+  canonical_runtime_readback: "Fresh read-only SentinelX check 2026-11-06: nusa-datascale nusa.service active, but /opt/nusa/current resolves to release 185c52c22691a5a35b13fe024cb39d810719a833 while protected main is 2224d7f8e2f58081cf3edcd2597ea7048e07f70a. The service stores state under /var/lib/nusa; current SentinelX file_ops read allowlist does not include that path. nusa-paper-codex is offline. Canonical deployed candle-history state therefore remains UNVERIFIED; do not infer it from the isolated GitHub E2E."
   successor_21b59512_exact_head:
     ci: "42205762445 plus five companions 6/6 SUCCESS"
     actual_paper: "42205762459 SUCCESS workflow; artifact remains INCOMPLETE and is not readiness PASS"
@@ -109,4 +120,4 @@ validation:
     aipos_provenance_yaml: PASS
     diff_check: PASS
   local_public_market_e2e: "Not rerun locally; exact-head GitHub workflows used actual Upbit PUBLIC ticker data. No synthetic evidence was used."
-next: "Complete local full validation for the strict failure-code allowlist regression, push only scoped WO-0059/AIPOS changes to the existing #3006 branch, then verify successor exact-head CI and obtain a fresh exact-SHA technical review. Keep actual PAPER readiness INCOMPLETE; canonical runtime history still requires an approved read-only query."
+next: "The bounded observation implementation is accepted in scoped exact-head technical review and its current exact-head CI plus five companions pass. Do not alter readiness semantics or claim actual PAPER readiness: the isolated run is WARMUP_NOT_COMPLETED with 1/20 completed one-minute closes, while canonical deployed database history remains UNVERIFIED. Next require an approved read-only query (or existing safe read-only API) for the deployed PAPER market's completed one-minute candle count, range, gaps, and provenance; do not widen SentinelX access or read/mutate the database directly. Formal Validator, Audit, Release authorization, and governed merge remain distinct pending gates."

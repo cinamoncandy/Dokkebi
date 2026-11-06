@@ -7,7 +7,7 @@ Everything below is what the repository's records *claim*. Re-verify on GitHub b
 
 ## Newest handoff
 
-[`.aipos/handoffs/2026-11-03-1851-causal-admission.md`](handoffs/2026-11-03-1851-causal-admission.md) — CORE handoff — 2026-11-03 — #1851 causal admission
+[`.aipos/handoffs/2026-11-06-wo-0059-observation.md`](handoffs/2026-11-06-wo-0059-observation.md) — WO-0059 PAPER Observation Handoff — 2026-11-06
 
 > ## Scope and owner
 
