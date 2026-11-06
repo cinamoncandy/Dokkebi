@@ -7,9 +7,9 @@ Everything below is what the repository's records *claim*. Re-verify on GitHub b
 
 ## Newest handoff
 
-[`.aipos/handoffs/2026-11-05-research-multi-interval-manifests.md`](handoffs/2026-11-05-research-multi-interval-manifests.md) — CORE handoff — 2026-11-05 — #2815 configured interval manifests
+[`.aipos/handoffs/2026-11-06-nusa-3002-current-main-reconciliation.md`](handoffs/2026-11-06-nusa-3002-current-main-reconciliation.md) — CORE handoff — 2026-11-06 — #3002 latest-main reconciliation
 
-> ## Fresh ownership and source finding
+> ## Objective and boundary
 
 ## Work orders
 

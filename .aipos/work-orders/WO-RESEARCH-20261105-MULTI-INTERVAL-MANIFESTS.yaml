@@ -149,4 +149,35 @@ current_checkpoint_2026_11_06T0441Z:
     pr_3000: "OPEN/Draft/BEHIND; no independent review submitted; existing handoff 6652709639 retained."
     pr_3001: "OPEN/Draft/BEHIND; display-only health projection; no independent Research/Data review submitted."
     pr_2994: "MERGED at ecdf7746 via release authority; automatic deployment reports exact revision, but isolated positive consumer remains disabled and L1 acceptance is incomplete."
-  next: "Publish the locally validated successor to the existing #3002 branch, wait for exact-head CI/companions, then hand off to an eligible independent Research/Data reviewer. Keep #2975 thread disposition and #2815 runtime acceptance separate."
+  next: "Publish the latest-main reconciled successor to the existing #3002 branch only after AIPOS checkpoint validation; then verify new exact-head CI and hand off for independent Research/Data review. Preserve #2975 threads and keep runtime acceptance separate."
+
+current_checkpoint_2026_11_06T0748Z:
+  protected_main: 2224d7f8e2f58081cf3edcd2597ea7048e07f70a
+  pr_3002_preintegration_head: b775b30485f193602ca531db6af7c51fa4e2cfea
+  local_main_integration_commit: c58699281455e1285afd363015e9a01830bd245a
+  integration: "Merged the latest protected main locally into the existing #3002 head. The only overlapping path was generated .aipos/CURRENT_TRUTH.md; regenerated after selecting merged AIPOS sources. Main's rolling-holdout source additions remain the unchanged upstream merge from #2973. No #2975 finding was resolved or modified."
+  local_validation:
+    build: PASS
+    focused_tests: "PASS 56/56 across candle backfill, interval composition, pass persistence, retry behavior, and rolling-runner integration."
+    preflight: PASS
+    typecheck: PASS
+    validate_full: PASS
+    security_gate: "PASS; high/critical=0; secrets=0."
+    lint_scripts: "PASS; 0 errors, 47 existing warnings."
+    full_suite: "PASS 1,335 isolated test files. Initial attempt exposed Windows PATH missing bash; rerun with installed Git Bash on PATH passed."
+    diff_check: PASS
+    test_side_effect_restoration: "Restored isolated-test-failure.txt and seven Android XML assets after the full suite; sentinel SHA-256 restored to 11DB0518C1A8FBD29DB22377CE05D621D3C1BB861A7AA0F1BD576EBACA0BD825."
+    preserved_untracked: "Four existing docs/audits reports were preserved and excluded."
+  github:
+    pr_3002: "OPEN/Draft; remote head still b775b30485f193602ca531db6af7c51fa4e2cfea at last fresh read; behind main and mergeable=false until successor publication."
+    reviews: "0 submitted reviews; 0 review threads. Independent Research/Data reviewer not present in the visible collaborator/review state."
+    exact_head_ci: PENDING_PUBLICATION
+  governance:
+    independent_research_data_review: PENDING_REVIEWER
+    formal_validator: PENDING
+    audit: PENDING
+    release_authorization: PENDING
+    runtime_acceptance: UNVERIFIED
+    issue_2815: OPEN
+  safety: PAPER_ONLY_ZERO_AUTHORITY_FAIL_CLOSED
+  next: "Complete AIPOS state/handoff checkpoint and full metadata validation; publish as a fast-forward successor to existing PR #3002 using expected head b775b30485f193602ca531db6af7c51fa4e2cfea; verify exact-head CI. Keep Draft and do not resolve #2975 threads."

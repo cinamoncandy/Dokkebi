@@ -1,0 +1,33 @@
+current_research_multi_interval_manifests_20261106T0748Z:
+  work_order: WO-RESEARCH-20261105-MULTI-INTERVAL-MANIFESTS
+  issue: 2815
+  observed_at_utc: "2026-11-06T07:48:12Z"
+  protected_main: 2224d7f8e2f58081cf3edcd2597ea7048e07f70a
+  pr_3002_remote_head_before_publication: b775b30485f193602ca531db6af7c51fa4e2cfea
+  pr_3002_base_before_publication: ecdf77461771629f81d97a5b28be091414700e6f
+  local_main_integration_commit: c58699281455e1285afd363015e9a01830bd245a
+  main_integration: "Latest protected main merged locally into existing PR head; only shared path was generated .aipos/CURRENT_TRUTH.md, regenerated after merge."
+  local_validation:
+    build: PASS
+    focused_tests: "56/56 PASS"
+    preflight: PASS
+    typecheck: PASS
+    validate_full: PASS
+    security_gate: "PASS; high_critical=0; secrets=0"
+    lint_scripts: "PASS; errors=0; existing_warnings=47"
+    full_suite: "PASS; 1,335 isolated test files"
+    diff_check: PASS
+    sentinel_restored_sha256: 11DB0518C1A8FBD29DB22377CE05D621D3C1BB861A7AA0F1BD576EBACA0BD825
+  remote_state:
+    pr_3002: OPEN_DRAFT_MERGEABLE_FALSE_AT_LAST_READ
+    reviews: 0
+    review_threads: 0
+    exact_head_ci_for_successor: PENDING_PUBLICATION
+  independent_research_data_review: BLOCKED_REVIEWER_NOT_PRESENT
+  formal_validator: PENDING
+  audit: PENDING
+  release_authorization: PENDING
+  runtime_acceptance: UNVERIFIED
+  issue_2815: OPEN
+  safety: PAPER_ONLY_ZERO_AUTHORITY_FAIL_CLOSED
+  next: "Complete AIPOS validation, then publish a fast-forward successor to existing #3002 only if its head is still b775b30485f193602ca531db6af7c51fa4e2cfea; confirm exact-head CI and hand off for independent Research/Data review."
