@@ -281,6 +281,24 @@ test("known locally owned PAPER writer reason codes survive strict reason-code n
   assert.deepEqual(result.evidence.timeline[0].reason_codes, ["PAPER_WRITER_LEASE_LOST"]);
 });
 
+test("known locally generated runtime failure codes survive strict heartbeat normalization", async () => {
+  const localCodes = [
+    "PAPER_ORDERBOOK_OBSERVATION_REJECTED",
+    "PAPER_ORDERBOOK_UNRECONCILED",
+    "PAPER_PERIOD_EVIDENCE_REJECTED",
+    "PUBLIC_ORDERBOOK_SNAPSHOT_UNAVAILABLE",
+  ];
+
+  for (const lastError of localCodes) {
+    const result = await runObservation({
+      currentEvents: () => cycleEvents(1, BASE_TIME + 1),
+      snapshotOverrides: () => ({ operations: { heartbeat: { startedAt: BASE_TIME - 1_000, lastHeartbeatAt: BASE_TIME, lastError } } }),
+    });
+    assert.equal(result.status, "FAIL");
+    assert.equal(result.evidence.failure_code, lastError);
+  }
+});
+
 test("restart health failures preserve bounded classification without reflecting child stderr", async () => {
   const credentialLike = "UPBIT_ACCESSKEY_ABC123";
   await assert.rejects(
