@@ -1,0 +1,23 @@
+id: WO-AUTOPILOT-20261106-FORGE-STATUS-AFTER-2994
+title: "Update the Forge status document after #2992/#2994 (causal verifier code is on main; positive production evidence is still missing)"
+status: READY_FOR_REVIEW
+owner: nusa-development
+repository: cinamoncandy/NUSA
+base_branch: main
+implementation_branch: claude/forge-status-after-2994
+authority_impact: none
+objective: "docs/FORGE_STATUS_20261103.md still says the code producing CODE_ACTIONABLE does not exist. After #2992 and #2994 it exists on main. Record that, from reading the code, and keep the honest list of what is still unverified."
+scope:
+  - "docs/FORGE_STATUS_20261103.md: a dated update section."
+exclusions:
+  - "Docs only. No code, workflow, pin, gate or test change. L1 stays PARTIAL and L2 stays HOLD; nothing here claims a positive production attestation."
+safety:
+  paper_only: true
+  liveAuthority: NONE
+  productionMutationAllowed: false
+  aiAuthority: ZERO_AUTHORITY
+  fail_closed: "Without a genuine attestation from a protected-main push, the positive path stays UNVERIFIED."
+verification_commands:
+  - node scripts/validate-aipos-yaml.js
+review: "Draft PR; a non-author review is optional for a docs-only change."
+residual: "Names and roles were read from the source, not executed."
