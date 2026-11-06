@@ -172,7 +172,7 @@ const PAPER_OBSERVATION = Object.freeze({
   maximumSamples: 200,
   maximumEvents: 5_000,
 });
-const OBSERVATION_STAGES = Object.freeze(["MARKET_DATA", "SIGNAL", "DECISION", "RISK", "ORDER_INTENT", "PAPER_ORDER", "PAPER_FILL", "ACCOUNT", "PNL"]);
+const OBSERVATION_STAGES = Object.freeze(["MARKET_DATA", "SIGNAL", "DECISION", "PERMISSION", "RISK", "ORDER_INTENT", "PAPER_ORDER", "PAPER_FILL", "ACCOUNT", "PNL"]);
 const LEARNING_EVENT_STAGES = new Set(["MARKET_DATA", "SIGNAL", "CANDIDATE", "DECISION", "PERMISSION", "RISK", "ORDER_INTENT", "FILL", "PNL", "LEARNING", "HALT", "ERROR", "IDEMPOTENCY", "PERIOD_OPEN", "PERIOD_REALIZED_PERSISTED", "PERIOD_REJECTED"]);
 const PAPER_ORDER_STATUSES = new Set(["OPEN", "PENDING", "FILLED", "CANCELLED", "REJECTED"]);
 const SAFE_REASON_CODE_PATTERN = /^[A-Z][A-Z0-9_]{1,100}$/;
@@ -211,7 +211,7 @@ function safeRuntimeFailureCode(value) {
 function observationSnapshotFailure(response) {
   if (response?.httpStatus !== 200) {
     const failureCode = response?.body?.failureCode;
-    if (typeof failureCode === "string" && SAFE_REASON_CODE_PATTERN.test(failureCode)) return failureCode;
+    if (typeof failureCode === "string") return safeRuntimeFailureCode(failureCode);
     if (response?.body?.error === "RUNTIME_TRANSIENTLY_UNAVAILABLE") return "RUNTIME_TRANSIENTLY_UNAVAILABLE";
     return "RUNTIME_OPERATIONS_UNAVAILABLE";
   }
@@ -404,8 +404,13 @@ async function observeAutomaticRuntime({
     const response = await readSnapshot(timeoutMs);
     const observedAtMs = wallNow();
     const elapsedMs = Math.max(0, now() - startedMonotonic);
-    if (response?.httpStatus === 200 && response.body != null && typeof response.body === "object") finalSnapshot = response.body;
     appendSample({ observed_at: new Date(observedAtMs).toISOString(), elapsed_ms: Math.round(elapsedMs), http_status: Number.isSafeInteger(response?.httpStatus) ? response.httpStatus : null });
+    if (elapsedMs > maximumDurationMs) {
+      if (response?.httpStatus !== 200) failureCode = observationSnapshotFailure(response);
+      stopReason = "MAX_OBSERVATION_BUDGET_EXHAUSTED";
+      break;
+    }
+    if (response?.httpStatus === 200 && response.body != null && typeof response.body === "object") finalSnapshot = response.body;
     if (response?.httpStatus !== 200) {
       failureCode = observationSnapshotFailure(response);
       stopReason = "RUNTIME_READ_FAILURE";

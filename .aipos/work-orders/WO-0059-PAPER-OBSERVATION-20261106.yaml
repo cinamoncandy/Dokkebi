@@ -60,17 +60,37 @@ verification_commands:
   - "node scripts/validate-workflow-action-pins.js"
   - "git diff --check"
 validation:
-  focused_tests: "31/31 PASS"
-  full_tests: "1,335 test files PASS"
+  focused_tests: "34/34 PASS after exact-head review findings were reproduced and repaired locally"
+  full_tests: "1,335 isolated test files PASS on the local successor worktree"
   typecheck: PASS
   validate_full: PASS
   security_gate: PASS
   lint: "0 errors / 47 baseline warnings"
   aipos_provenance: PASS
-  aipos_yaml: "575 files PASS"
+  aipos_yaml: "577 files PASS after state update"
   workflow_action_pins: PASS
   diff_check: PASS
-  local_public_market_e2e: "BLOCKED: Upbit public endpoint was unreachable from this environment; no synthetic data used. Re-run on exact-head GitHub workflow."
-  exact_head_ci: PENDING
-  independent_non_author_review: PENDING
-next: "Commit only the scoped WO-0059 files, publish a Draft PR, verify exact-head CI, and obtain an eligible non-author review. Keep actual PAPER readiness INCOMPLETE unless natural order/fill/account evidence satisfies the unchanged classifier."
+  prior_exact_head_ci: "PASS at aabfdaa880985f1ec773d794d6e8030393d04bff; historical after local repair"
+  independent_technical_disposition: "CHANGES_REQUIRED on aabfdaa880985f1ec773d794d6e8030393d04bff; GitHub COMMENT review 5798993398 records a separate validator session under the same author account; not non-author approval, Formal Validation, Audit, or Release"
+  successor_exact_head_ci: PENDING
+  successor_independent_review: PENDING
+  source_run_42199682632:
+    artifact_id: 13494211160
+    artifact_sha256: bc978a415808eb15c8d9ab3d9f808d020c9f3e86404bc4ea0890355a6c958f24
+    result: INCOMPLETE
+    observation: "60.772s; 61 samples; 92 recorded Decision cycles; 0 orders/fills; SIGNAL and RISK NOT_OBSERVED; 250-event cap encountered; cycle chronology may be incomplete"
+    root_cause_classification: WARMUP_NOT_COMPLETED
+    first_broken_transition: "Fresh E2E database -> 20 completed market-specific 1m closes -> SMA candidate"
+    exact_strategy_reason: "INSUFFICIENT_SMA_OBSERVATIONS:1/20"
+    canonical_runtime_database_history: UNVERIFIED
+  event_cap_analysis: "Recorder, SQLite retention, and read-only projection are each bounded at 250 by default. The artifact contains 459 unique timeline events accumulated over 61 samples, but no cursor/counter delta proves there were no gaps. EVENT_EVIDENCE_TRUNCATED is conservative and remains INCOMPLETE; do not infer missing-event count or increase limits without a bounded summary contract."
+  local_successor_validation:
+    focused_tests: "34/34 PASS"
+    full_tests: "1,335 isolated test files PASS"
+    validate_full: PASS
+    security_gate: PASS
+    lint: "0 errors / 47 warnings (baseline)"
+    workflow_action_pins: PASS
+    diff_check: PASS
+  local_public_market_e2e: "Not rerun locally; prior exact-head GitHub workflow used actual Upbit PUBLIC ticker data. No synthetic evidence was used."
+next: "Commit and push only the scoped WO-0059 code/tests plus required AIPOS state to the existing #3006 branch, then verify fresh exact-head CI and request a fresh technical review on the successor. Keep actual PAPER readiness INCOMPLETE; separately verify canonical runtime history through an approved read-only path."

@@ -167,6 +167,61 @@ test("the finite maximum budget returns INCOMPLETE when natural Decision cycles 
   assert.equal(result.evidence.decision_cycles_observed, 1);
 });
 
+test("a snapshot returned after the maximum budget cannot complete the observation as PASS", async () => {
+  let monotonic = 0;
+  let wall = BASE_TIME;
+  const result = await observeAutomaticRuntime({
+    initialSnapshot: snapshot([]),
+    minimumDurationMs: 1_000,
+    maximumDurationMs: 1_000,
+    minimumDecisionCycles: 1,
+    pollIntervalMs: 100,
+    now: () => monotonic,
+    wallNow: () => wall,
+    delay: async (duration) => { monotonic += duration; wall += duration; },
+    readSnapshot: async () => {
+      monotonic += 1_200;
+      wall += 1_200;
+      return { httpStatus: 200, body: snapshot(cycleEvents(1, BASE_TIME + 100), {}, wall) };
+    },
+  });
+
+  assert.equal(result.status, "INCOMPLETE");
+  assert.equal(result.evidence.stop_reason, "MAX_OBSERVATION_BUDGET_EXHAUSTED");
+  assert.ok(result.evidence.elapsed_ms > result.evidence.maximum_budget_ms);
+  assert.equal(result.evidence.decision_cycles_observed, 0, "late events must not satisfy the bounded window");
+});
+
+test("a capped PAPER PERMISSION event keeps its known stage in the observation evidence", async () => {
+  const result = await runObservation({
+    minimumDurationMs: 1_000,
+    maximumDurationMs: 1_000,
+    minimumDecisionCycles: 1,
+    currentEvents: () => [
+      ...cycleEvents(1, BASE_TIME),
+      event("natural-cycle-1", "PERMISSION", BASE_TIME + 2, { status: "SKIP", reason: "NOT_EVALUATED_NO_ACTIONABLE_DECISION" }),
+    ],
+  });
+
+  assert.equal(result.evidence.stage_evidence.PERMISSION.status, "OBSERVED");
+  assert.equal(result.evidence.stage_evidence.PERMISSION.event_count, 1);
+  assert.ok(result.evidence.timeline.some((item) => item.stage === "PERMISSION"));
+});
+
+test("untrusted HTTP failure codes are sanitized before they enter evidence", async () => {
+  const result = await observeAutomaticRuntime({
+    initialSnapshot: snapshot([]),
+    minimumDurationMs: 1_000,
+    maximumDurationMs: 1_000,
+    minimumDecisionCycles: 1,
+    readSnapshot: async () => ({ httpStatus: 503, body: { failureCode: "API_KEY_TEST_SECRET" } }),
+  });
+
+  assert.equal(result.status, "FAIL");
+  assert.equal(result.evidence.failure_code, "RUNTIME_ERROR_PRESENT");
+  assert.doesNotMatch(JSON.stringify(result.evidence), /API_KEY_TEST_SECRET/);
+});
+
 test("Risk rejection keeps bounded canonical reason codes without raw detail", async () => {
   const result = await runObservation({ currentEvents: (readCount, time) => Array.from({ length: Math.min(readCount, 3) }, (_, index) => cycleEvents(index + 1, BASE_TIME + Math.max(0, time - ((Math.min(readCount, 3) - index - 1) * 1_000)), { riskReject: true })) });
   assert.equal(result.status, "PASS");
