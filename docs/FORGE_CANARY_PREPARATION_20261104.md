@@ -108,3 +108,9 @@ Safety stays: PAPER_ONLY, liveAuthority=NONE, productionMutationAllowed=false, a
 - `attest-causal-regression`의 증명서를 소비하는 검증기가 #2994 안에서 어디까지 구현되었는지 전부 읽지는 않았다.
 - 진짜 Sigstore 검증(Fulcio·Rekor)을 이 샌드박스에서는 돌릴 수 없다. 실제 GitHub 실행에서만 확인된다.
 - 카나리 동안 다른 PR이 받는 영향의 크기는 추정하지 않았다.
+
+## #2994 병합 뒤 상태 (2026-11-06 13:14 KST 병합, main `ecdf774`, 읽기 전용)
+- #2994는 Audit PASS 뒤 `nusa-release-authority[bot]`이 병합했다. 위 "실행 전 승인 조건" 1번은 **충족**으로 바뀐다. 열린 스레드 2건은 해결되어 있었다.
+- 새 main에서 `repairableWorkflowRun.ts`의 blob은 그대로 `865c7fb4…`이고 자율 패치 게시는 여전히 `draft: true`다.
+- `C`는 깨끗하게 적용되고(`c7fa7a8d…`), `R`(역적용)은 `865c7fb4…`로 정확히 되돌린다. `C`를 적용하면 `causalRegressionContract`와 `repairableWorkflowRun` 테스트가 각각 의도대로 1개씩 실패한다.
+- **아직 미충족:** 새 main에서의 실제 디스패치(Gate A) 라이브 동작 확인, 새 소비 검증기 경로의 Draft-only 재분석(P2-2), 이름 지정된 감시자, 오너가 정할 날짜·시간대(KST)와 중단 한도, `autopilot-codex-coding.yml` 비활성 재확인. 이 문서는 실행 승인이 아니다.
