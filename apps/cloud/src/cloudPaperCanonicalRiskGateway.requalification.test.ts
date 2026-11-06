@@ -4,7 +4,7 @@ import { readFileSync } from "node:fs";
 import { describe, it } from "node:test";
 import { CLOUD_PAPER_RISK_LIMITS } from "./cloudPaperCanonicalRiskGateway";
 
-const EXPECTED_RISK_BLOB = "b43962beb41a193eda30c8dc717f2cbcc8971edd";
+const EXPECTED_RISK_BLOB = "2174d4e62e6a402cb239719e1a25126069cfaf36";
 
 function committedGitBlobSha(path: string): string {
   return execFileSync("git", ["rev-parse", `HEAD:${path}`], {

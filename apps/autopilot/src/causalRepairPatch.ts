@@ -66,7 +66,8 @@ export function applyCausalRepairPatch(source: string, patch: string): string {
     // counts from the signed patch body here, but still enforce exact source and output positions.
     const oldPosition = oldCount === 0 ? oldStart : oldStart - 1;
     const newPosition = newCount === 0 ? newStart : newStart - 1;
-    if (oldPosition !== sourceCursor || newPosition !== output.length + (oldPosition - sourceCursor)
+    const unchangedGap = oldPosition - sourceCursor;
+    if (unchangedGap < 0 || newPosition !== output.length + unchangedGap
       || oldPosition > sourceLines.length) invalid();
     output.push(...sourceLines.slice(sourceCursor, oldPosition));
     sourceCursor = oldPosition;
