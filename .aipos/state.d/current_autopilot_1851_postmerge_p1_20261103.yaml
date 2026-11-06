@@ -1,0 +1,45 @@
+current_autopilot_1851_postmerge_p1_20261103:
+  observed_at_utc: "2026-11-03T04:34:00Z"
+  work_order: WO-AUTOPILOT-20261030-1851-CAUSAL-ADMISSION
+  issue: 1851
+  protected_main: 7e702eaf078d56614cff9e4f4325d08419e19185
+  prior_pr: 2992
+  prior_pr_head: 88f47919c5d6e01907aa0ae6c47f1b3e9841e537
+  prior_pr_merge: 7e702eaf078d56614cff9e4f4325d08419e19185
+  post_merge_runtime:
+    workflow_run_triggered_by: nusa-release-authority[bot]
+    cloudflare_deploy_run: 41578010970
+    cloudflare_deploy: SUCCESS_EXACT_MAIN_7e702eaf078d56614cff9e4f4325d08419e19185
+    cloudflare_promote_run: 41578011053
+    cloudflare_promote: SUCCESS_EXACT_MAIN_7e702eaf078d56614cff9e4f4325d08419e19185
+    runtime_proof_run: 41578120466
+    runtime_proof: SUCCESS
+    initiated_by_this_session: false
+  follow_up_branch: codex/1851-postmerge-p1-20261103
+  follow_up_base: 7e702eaf078d56614cff9e4f4325d08419e19185
+  review_findings:
+    PRRT_kwDOTUbne86y-md2: "P1 unresolved on merged PR; claim was rebuilding receipt freshness timestamps, causing exact volatile timestamp comparison to reject otherwise matching immutable evidence."
+    PRRT_kwDOTUbne86y-md5: "P1 unresolved on merged PR; valid unified diff hunks after untouched source gaps were rejected."
+  implementation:
+    causal_claim: "Require registered and refreshed receipts both valid at claim time, compare immutable producer/source/replay identity, and retain the registered receipt in the binding."
+    patch_application: "Permit ordered, nonoverlapping hunks after untouched source gaps; validate new-output positions and preserve fail-closed overlap/position checks."
+  validation:
+    focused: PASS_10_OF_10
+    full_isolated_suite: PASS_1326_OF_1326
+    typescript_build_compile: PASS
+    typecheck: PASS
+    validate_full: PASS
+    lint: PASS_0_ERRORS_47_WARNINGS
+    security_gate: PASS
+    diff_check: PASS
+    initial_suite_attempt: "Environment-only spawnSync bash ENOENT; rerun with Git for Windows bin/usr/bin on PATH passed."
+  commit_gate: MET_FOR_LOCAL_FOLLOW_UP_PUBLICATION_ONLY
+  current_commit: NOT_CREATED
+  exact_head_ci: NOT_STARTED
+  review: REQUIRED_AFTER_PUBLICATION
+  formal_validator_audit_release: NOT_STARTED
+  genuine_positive_causal_evidence: ABSENT
+  code_actionable: NOT_ISSUED
+  l1: PARTIAL
+  l2: HOLD
+  safety: PAPER_ONLY_LIVE_NONE_PRODUCTION_MUTATION_FALSE_REAL_ORDER_FALSE_REAL_TRANSFER_FALSE_AI_ZERO_AUTHORITY

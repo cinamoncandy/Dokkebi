@@ -61,7 +61,7 @@ describe("K-of-N decision", () => {
     assert.equal(d("CHALLENGER_BETTER", "NOT_BETTER", "NOT_BETTER"), "FAIL");
     assert.equal(d("NOT_BETTER", "INSUFFICIENT", "NOT_BETTER"), "FAIL");
   });
-  it("other fold counts, K below 2, K above N and non-integer values never pass", () => {
+  it("the pure rule is generic in N, but K below 2, K above N and non-integer values never pass", () => {
     assert.equal(decideRollingHoldout(["CHALLENGER_BETTER", "CHALLENGER_BETTER"], 2, 2).decision, "PASS", "the pure rule itself is generic in N; the runner only allows N=3");
     assert.equal(decideRollingHoldout(["CHALLENGER_BETTER", "CHALLENGER_BETTER", "CHALLENGER_BETTER"], 4, 3).decision, "INSUFFICIENT_EVIDENCE");
     assert.equal(decideRollingHoldout(["CHALLENGER_BETTER", "CHALLENGER_BETTER", "CHALLENGER_BETTER"], 2.5, 3).decision, "INSUFFICIENT_EVIDENCE");
