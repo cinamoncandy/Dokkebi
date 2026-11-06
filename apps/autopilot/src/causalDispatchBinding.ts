@@ -69,9 +69,15 @@ export function createCausalDispatchBinding(
     causalAdmission: causalAdmission ?? null, causalAdmissionConsumedAt: null });
 }
 
-function sameCausalAdmission(left: CausalAdmissionReceipt | null | undefined, right: CausalAdmissionReceipt | null | undefined): boolean {
+function sameCausalAdmission(
+  left: CausalAdmissionReceipt | null | undefined,
+  right: CausalAdmissionReceipt | null | undefined,
+  source: SourceExecutionIdentity,
+  now: number,
+): boolean {
   if (left == null || right == null) return left == null && right == null;
-  return left.schemaVersion === 1 && right.schemaVersion === 1
+  return isValidCausalAdmissionReceipt(left, source, now) && isValidCausalAdmissionReceipt(right, source, now)
+    && left.schemaVersion === 1 && right.schemaVersion === 1
     && left.decision === "CODE_ACTIONABLE" && right.decision === "CODE_ACTIONABLE"
     && left.classification === "REPOSITORY_CODE_REGRESSION" && right.classification === "REPOSITORY_CODE_REGRESSION"
     && left.contractId === right.contractId && left.caseId === right.caseId
@@ -82,7 +88,6 @@ function sameCausalAdmission(left: CausalAdmissionReceipt | null | undefined, ri
     && left.producerArtifactDigest === right.producerArtifactDigest
     && left.producerArtifactName === right.producerArtifactName
     && left.implementationFingerprint === right.implementationFingerprint
-    && left.verifiedAt === right.verifiedAt && left.expiresAt === right.expiresAt
     && left.replayKeySha256 === right.replayKeySha256;
 }
 
@@ -107,7 +112,7 @@ export function claimCausalDispatchBinding(
     || now < 0 || now >= binding.expiresAt || binding.publisher !== null
     || !sameDigest(binding.capabilityDigest, capabilityDigest)
     || !sameSource(binding.source, requestedSource)
-    || !sameCausalAdmission(binding.causalAdmission, causalAdmission)
+    || !sameCausalAdmission(binding.causalAdmission, causalAdmission, binding.source, now)
     || (binding.causalAdmissionConsumedAt !== undefined && binding.causalAdmissionConsumedAt !== null)) return null;
 
   if (publisher.repository !== binding.source.repository || publisher.sha !== binding.source.sha
