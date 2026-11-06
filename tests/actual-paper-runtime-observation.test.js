@@ -1,0 +1,205 @@
+const assert = require("node:assert/strict");
+const test = require("node:test");
+const { observeAutomaticRuntime } = require("../scripts/actual-paper-runtime-e2e.js");
+const { classify } = require("../scripts/classify-actual-paper-runtime-readiness.js");
+
+const BASE_TIME = Date.parse("2026-11-06T12:00:00.000Z");
+
+function event(cycleId, stage, occurredAt, overrides = {}) {
+  return {
+    id: `${cycleId}:${stage}`,
+    cycleId,
+    stage,
+    occurredAt,
+    market: "KRW-BTC",
+    status: "PASS",
+    ...(stage === "DECISION" ? { decision: { action: "WAIT" } } : {}),
+    ...overrides,
+  };
+}
+
+function cycleEvents(cycleNumber, occurredAt, { riskReject = false } = {}) {
+  const cycleId = `natural-cycle-${cycleNumber}`;
+  return [
+    event(cycleId, "MARKET_DATA", occurredAt, { reason: "source=UPBIT_PUBLIC_TICKER" }),
+    event(cycleId, "DECISION", occurredAt + 1, { reason: "NO_ACTIONABLE_PAPER_DECISION:WAIT:NO_SIGNAL" }),
+    ...(riskReject ? [event(cycleId, "RISK", occurredAt + 2, { status: "FAIL", reason: "ACCOUNT_DAILY_LOSS_LIMIT,SECRET_VALUE" })] : []),
+  ];
+}
+
+function snapshot(events, overrides = {}, observedAt = BASE_TIME) {
+  const heartbeat = Object.hasOwn(overrides.operations ?? {}, "heartbeat")
+    ? overrides.operations.heartbeat
+    : { startedAt: BASE_TIME - 1_000, lastHeartbeatAt: observedAt, lastError: null };
+  const operations = {
+    runtimeState: "RUNNING",
+    schedulerRunning: true,
+    transport: "ONLINE",
+    ...(overrides.operations ?? {}),
+    heartbeat,
+  };
+  return {
+    mode: "PAPER",
+    liveAuthority: "NONE",
+    productionMutationAllowed: false,
+    paperLearning: { mode: "PAPER", readOnly: true, liveAuthority: "NONE", productionMutationAllowed: false, events },
+    portfolio: { account: { cash: 10_000_000, equity: 10_000_000, realizedPnl: 0, unrealizedPnl: 0, position: { quantity: 0 } } },
+    orders: [],
+    ...overrides,
+    operations,
+  };
+}
+
+async function runObservation({
+  minimumDurationMs = 2_000,
+  maximumDurationMs = 5_000,
+  minimumDecisionCycles = 3,
+  currentEvents = (readCount, time) => Array.from({ length: Math.min(readCount, 3) }, (_, index) => cycleEvents(index + 1, BASE_TIME + Math.max(0, time - ((Math.min(readCount, 3) - index - 1) * 1_000)))),
+  initialSnapshot = snapshot([]),
+  snapshotOverrides = () => ({}),
+} = {}) {
+  let monotonic = 0;
+  let wall = BASE_TIME;
+  let readCount = 0;
+  const result = await observeAutomaticRuntime({
+    initialSnapshot,
+    minimumDurationMs,
+    maximumDurationMs,
+    minimumDecisionCycles,
+    pollIntervalMs: 1_000,
+    now: () => monotonic,
+    wallNow: () => wall,
+    delay: async (duration) => { monotonic += duration; wall += duration; },
+    readSnapshot: async () => {
+      readCount += 1;
+      const events = currentEvents(readCount, monotonic).flat();
+      return { httpStatus: 200, body: snapshot(events, snapshotOverrides(readCount, monotonic), BASE_TIME + monotonic) };
+    },
+  });
+  return { ...result, readCount };
+}
+
+test("an immediate public ticker/startup projection cannot end the observation window early", async () => {
+  const oldEvents = [1, 2, 3].flatMap((cycle) => cycleEvents(cycle, BASE_TIME - 10_000));
+  const result = await runObservation({
+    initialSnapshot: snapshot(oldEvents, { markets: [{ market: "KRW-BTC", source: "UPBIT_PUBLIC_TICKER" }] }),
+    currentEvents: (readCount) => [
+      ...oldEvents,
+      ...(readCount >= 2 ? cycleEvents(4, BASE_TIME + 1_000) : []),
+      ...(readCount >= 3 ? cycleEvents(5, BASE_TIME + 1_500) : []),
+      ...(readCount >= 4 ? cycleEvents(6, BASE_TIME + 2_500) : []),
+    ],
+  });
+
+  assert.equal(result.status, "PASS");
+  assert.ok(result.evidence.elapsed_ms >= result.evidence.minimum_duration_ms);
+  assert.equal(result.evidence.decision_cycles_observed, 3);
+  assert.equal(result.evidence.stop_reason, "MINIMUM_DURATION_AND_DECISION_CYCLES_REACHED");
+  assert.equal(result.evidence.stage_evidence.SIGNAL.status, "NOT_OBSERVED");
+  assert.ok(result.readCount >= 4, "pre-window cycles must not count toward the natural observation window");
+});
+
+test("bounded observation collects several distinct natural Decision cycles without an order", async () => {
+  const result = await runObservation();
+  assert.equal(result.status, "PASS", "PASS here means the observation window completed, not that trading completed");
+  assert.equal(result.evidence.decision_cycles_observed, 3);
+  assert.equal(new Set(result.evidence.decision_cycles.map((cycle) => cycle.cycle_ref_sha256)).size, 3);
+  assert.equal(result.evidence.stage_evidence.PAPER_ORDER.status, "NOT_OBSERVED");
+  assert.equal(result.evidence.stage_evidence.PAPER_FILL.status, "NOT_OBSERVED");
+  assert.match(result.evidence.timeline.find((entry) => entry.stage === "MARKET_DATA").occurred_at, /^2026-11-06T/);
+  assert.ok(result.evidence.timeline.find((entry) => entry.stage === "DECISION").reason_codes.includes("NO_ACTIONABLE_PAPER_DECISION"));
+  assert.ok(result.evidence.stage_evidence.ACCOUNT.first_observed_at);
+  assert.ok(result.evidence.stage_evidence.ACCOUNT.last_observed_at);
+
+  const readiness = classify({
+    result: "PASS",
+    authority: { mode: "PAPER_ONLY", liveAuthority: "NONE", productionMutationAllowed: false },
+    market_data: { channel: "PUBLIC_TICKER" },
+    execution: { order_count: 0, fill_count: 0 },
+    first_runtime: { orderCount: 0, realizedPnl: 0, unrealizedPnl: 0, position: { quantity: 0 } },
+    prohibited_capabilities: { real_money_mutation: false },
+  });
+  assert.equal(readiness.result, "INCOMPLETE");
+  assert.equal(readiness.autonomous_trading_certification.status, "INCOMPLETE_NO_AUTONOMOUS_ORDER_FILL_PNL");
+  assert.equal(readiness.production_readiness.completion_claim_allowed, false);
+});
+
+test("PAPER order and fill evidence uses observed projection timestamps and hashed identities", async () => {
+  const fillTime = new Date(BASE_TIME + 1_000).toISOString();
+  const result = await runObservation({
+    currentEvents: (readCount, time) => [
+      ...Array.from({ length: Math.min(readCount, 3) }, (_, index) => cycleEvents(index + 1, BASE_TIME + Math.max(0, time - ((Math.min(readCount, 3) - index - 1) * 1_000)))),
+      ...(readCount >= 2 ? [
+        event("natural-cycle-1", "FILL", BASE_TIME + 1_500, { fill: { id: "private-paper-fill-id", filledAt: fillTime } }),
+        event("natural-cycle-1", "PNL", BASE_TIME + 1_500, { account: { cash: 9_999_999, equity: 10_000_000, realizedPnl: 0, unrealizedPnl: 0 }, reason: "cash:9999999;equity:10000000" }),
+      ] : []),
+    ],
+    snapshotOverrides: () => ({ orders: [{ id: "private-paper-order-id", market: "KRW-BTC", side: "BUY", status: "FILLED", quantity: 0.01, price: 1_000, fee: 0, filledAt: fillTime, fills: [{ id: "private-paper-fill-id", filledAt: fillTime }] }] }),
+  });
+  assert.equal(result.evidence.stage_evidence.PAPER_ORDER.status, "OBSERVED");
+  assert.equal(result.evidence.stage_evidence.PAPER_FILL.status, "OBSERVED");
+  assert.equal(result.evidence.timeline.find((entry) => entry.stage === "PAPER_ORDER").occurred_at, "UNKNOWN");
+  assert.equal(result.evidence.timeline.find((entry) => entry.stage === "PAPER_FILL").occurred_at, fillTime);
+  assert.equal(result.evidence.stage_evidence.PNL.status, "OBSERVED");
+  const serialized = JSON.stringify(result.evidence);
+  assert.doesNotMatch(serialized, /private-paper-(?:order|fill)-id/);
+});
+
+test("conflicting order identity across read-only snapshots fails closed", async () => {
+  const result = await runObservation({
+    snapshotOverrides: (readCount) => ({ orders: [{ id: "same-paper-order", market: "KRW-BTC", side: "BUY", status: "FILLED", quantity: 0.01, price: readCount === 1 ? 1_000 : 1_001, fee: 0, filledAt: new Date(BASE_TIME + 1_000).toISOString(), fills: [] }] }),
+  });
+  assert.equal(result.status, "FAIL");
+  assert.equal(result.evidence.failure_code, "PAPER_ORDER_ID_CONFLICT");
+});
+
+test("the finite maximum budget returns INCOMPLETE when natural Decision cycles are insufficient", async () => {
+  const result = await runObservation({
+    minimumDurationMs: 2_000,
+    maximumDurationMs: 2_500,
+    minimumDecisionCycles: 3,
+    currentEvents: (readCount) => readCount === 1 ? cycleEvents(1, BASE_TIME) : [],
+  });
+  assert.equal(result.status, "INCOMPLETE");
+  assert.equal(result.evidence.stop_reason, "MAX_OBSERVATION_BUDGET_EXHAUSTED");
+  assert.equal(result.evidence.elapsed_ms, 2_500);
+  assert.ok(result.evidence.elapsed_ms <= result.evidence.maximum_budget_ms);
+  assert.equal(result.evidence.decision_cycles_observed, 1);
+});
+
+test("Risk rejection keeps bounded canonical reason codes without raw detail", async () => {
+  const result = await runObservation({ currentEvents: (readCount, time) => Array.from({ length: Math.min(readCount, 3) }, (_, index) => cycleEvents(index + 1, BASE_TIME + Math.max(0, time - ((Math.min(readCount, 3) - index - 1) * 1_000)), { riskReject: true })) });
+  assert.equal(result.status, "PASS");
+  assert.equal(result.evidence.risk_rejections.length, 3);
+  assert.ok(result.evidence.risk_rejections.every((item) => item.reason_codes.includes("ACCOUNT_DAILY_LOSS_LIMIT")));
+  const serialized = JSON.stringify(result.evidence);
+  assert.doesNotMatch(serialized, /SECRET_VALUE/);
+  assert.doesNotMatch(serialized, /10_000_000/);
+  assert.equal(result.evidence.stage_evidence.RISK.status, "OBSERVED");
+});
+
+test("writer lease conflict fails closed while preserving already observed bounded events", async () => {
+  const result = await runObservation({
+    currentEvents: () => cycleEvents(1, BASE_TIME),
+    snapshotOverrides: () => ({ operations: { runtimeState: "RUNNING", schedulerRunning: true, transport: "ONLINE", heartbeat: { startedAt: BASE_TIME - 1_000, lastHeartbeatAt: BASE_TIME, lastError: "PAPER_WRITER_LEASE_LOST" } } }),
+  });
+  assert.equal(result.status, "FAIL");
+  assert.equal(result.evidence.stop_reason, "RUNTIME_OR_EVIDENCE_FAILURE");
+  assert.equal(result.evidence.failure_code, "PAPER_WRITER_LEASE_LOST");
+  assert.ok(result.evidence.timeline.some((entry) => entry.stage === "DECISION"));
+  assert.doesNotMatch(JSON.stringify(result.evidence), /access[_-]?token|secret|password/i);
+});
+
+test("malformed heartbeat and PAPER authority changes fail closed", async () => {
+  for (const snapshotOverrides of [
+    () => ({ operations: { heartbeat: null } }),
+    () => ({ productionMutationAllowed: true }),
+  ]) {
+    const result = await runObservation({
+      currentEvents: () => cycleEvents(1, BASE_TIME),
+      snapshotOverrides,
+    });
+    assert.equal(result.status, "FAIL");
+    assert.match(result.evidence.failure_code, /PAPER_RUNTIME_HEARTBEAT_INVALID|PAPER_AUTHORITY_INVARIANT_VIOLATION/);
+  }
+});

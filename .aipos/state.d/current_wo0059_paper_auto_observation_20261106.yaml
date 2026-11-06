@@ -1,0 +1,10 @@
+current_wo0059_paper_auto_observation_20261106:
+  work_order: WO-0059-PAPER-OBSERVATION-20261106
+  status: IN_PROGRESS
+  branch: WO-0059-PAPER-OBSERVATION-20261106
+  base_sha: 2224d7f8e2f58081cf3edcd2597ea7048e07f70a
+  objective: "Add a bounded minimum-duration observation window to the existing read-only WO-0059 PAPER runtime evidence harness; preserve unchanged readiness certification."
+  first_broken_transition: "Automatic runtime startup observed -> bounded natural Decision-cycle observation and sanitized Decision/Risk/Execution evidence"
+  validation: "Implemented in the isolated WO-0059 branch. Focused observation/readiness/replay tests 31/31 PASS; pnpm test 1,335 test files PASS; typecheck, validate:full, security:gate, lint (0 errors/47 baseline warnings), AIPOS provenance/YAML, workflow action pins, and diff-check PASS. Local actual Upbit PUBLIC E2E is BLOCKED because the public endpoint is unreachable from this environment; no synthetic data was used. Exact-head CI and independent non-author review are pending."
+  next: "Commit only the scoped WO-0059 files, publish a Draft PR, then verify exact-head CI and obtain an eligible non-author review. Keep runtime readiness INCOMPLETE until real natural order/fill/account evidence passes the unchanged classifier."
+  safety: PAPER_ONLY_LIVE_NONE_PRODUCTION_MUTATION_FALSE_REAL_ORDER_FALSE_REAL_TRANSFER_FALSE_AI_ZERO_AUTHORITY

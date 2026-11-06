@@ -1,0 +1,76 @@
+id: WO-0059-PAPER-OBSERVATION-20261106
+title: "Bounded observation of natural PAPER decision and execution outcomes"
+status: IN_PROGRESS
+priority: P0
+owner: nusa-development
+repository: cinamoncandy/NUSA
+base_branch: main
+base_commit: 2224d7f8e2f58081cf3edcd2597ea7048e07f70a
+implementation_branch: WO-0059-PAPER-OBSERVATION-20261106
+source_work_order: .aipos/work-orders/WO-0059-actual-paper-runtime-e2e.yaml
+related_issues:
+  - 2996
+  - 1605
+  - 2770
+objective: "Extend the existing WO-0059 public-market PAPER evidence harness with a bounded observation window that records several natural decision cycles and the observed Decision-to-Risk-to-execution evidence without treating missing outcomes as success."
+scope:
+  - "Keep waitForAutomaticRuntime() as the startup check and add a separate explicit bounded observation window."
+  - "Observe for at least 60 seconds and at most 180 seconds, polling the existing read-only PAPER operations projection, and require at least three distinct natural Decision cycle identities for a complete observation window."
+  - "Do not stop early because no order or fill exists; record actual elapsed time and a stable stop reason."
+  - "Record sanitized event-time/status/reason-code evidence for MARKET_DATA, SIGNAL, DECISION, RISK, PAPER_ORDER, PAPER_FILL, and ACCOUNT/PNL; mark absent stages NOT_OBSERVED or UNKNOWN."
+  - "Treat runtime errors, lease conflicts, malformed observations, and authority invariant violations as fail-closed evidence."
+  - "Retain restart/replay duplicate-fill checks and the existing semantic readiness classifier unchanged."
+acceptance:
+  - "Ticker/startup readiness does not end the observation window before its minimum duration."
+  - "At least three distinct natural Decision cycle IDs are collected when available; reaching the finite maximum without them is INCOMPLETE."
+  - "A completed observation with no natural order/fill/account change remains INCOMPLETE for autonomous PAPER certification."
+  - "Risk rejection preserves only the existing bounded reason code; raw detail, secrets, account identity, and private credentials are never emitted."
+  - "Restart/replay keeps duplicate-fill rejection, and a writer-lease/runtime failure ends observation fail-closed while retaining bounded failure evidence."
+  - "No signal or order is synthesized, and readiness certification thresholds or runtime authority are not changed."
+exclusions:
+  - "No changes to the canonical Cloud runtime, risk policy, writer lease, scheduler, or order path."
+  - "No changes to Research interval collection or manifests in PR #3002."
+  - "No change to PR #2996 readiness callback or its branch."
+  - "No production deployment, restart, database mutation, LIVE activation, real order, withdrawal, or transfer."
+architecture_impact:
+  acknowledged: true
+  analysis: "This is an evidence-harness-only addition over the existing local canonical Cloud PAPER runtime and its read-only operations projection. Startup readiness remains separate from observation completion. It introduces no runtime component, writer, execution path, scheduler, risk policy, or authority and does not satisfy WO-0051's human/environment gate."
+  references:
+    - .aipos/architecture.md
+    - .aipos/AI_HANDOFF_CONTRACT.md
+    - docs/NUSA_CORE_ARCHITECTURE_PRINCIPLE.md
+    - docs/NUSA_INVESTMENT_KNOWLEDGE_PRINCIPLE.md
+    - .aipos/work-orders/WO-0059-actual-paper-runtime-e2e.yaml
+safety:
+  paper_only: true
+  liveAuthority: NONE
+  productionMutationAllowed: false
+  realOrderAuthority: false
+  realTransferAuthority: false
+  aiAuthority: ZERO_AUTHORITY
+  fail_closed: "Incomplete observation, runtime error, lease collision, missing stage, or unknown evidence cannot certify autonomous execution."
+verification_commands:
+  - "node --test tests/actual-paper-runtime-observation.test.js tests/actual-paper-runtime-e2e-chaos-boundary.test.js tests/actual-paper-runtime-persisted-replay.test.js tests/actual-paper-runtime-readiness-classification.test.js tests/exact-head-paper-readiness-certification.test.js"
+  - "node scripts/actual-paper-runtime-e2e.js --working-dir <temporary-path> --output <temporary-path>/actual-paper-runtime-e2e.json"
+  - "pnpm test"
+  - "pnpm run typecheck"
+  - "pnpm run validate:full"
+  - "pnpm run security:gate"
+  - "pnpm run lint"
+  - "node scripts/validate-workflow-action-pins.js"
+  - "git diff --check"
+validation:
+  focused_tests: "31/31 PASS"
+  full_tests: "1,335 test files PASS"
+  typecheck: PASS
+  validate_full: PASS
+  security_gate: PASS
+  lint: "0 errors / 47 baseline warnings"
+  aipos_provenance: PASS
+  aipos_yaml: "575 files PASS"
+  workflow_action_pins: PASS
+  diff_check: PASS
+  local_public_market_e2e: "BLOCKED: Upbit public endpoint was unreachable from this environment; no synthetic data used. Re-run on exact-head GitHub workflow."
+  exact_head_ci: PENDING
+  independent_non_author_review: PENDING
+next: "Commit only the scoped WO-0059 files, publish a Draft PR, verify exact-head CI, and obtain an eligible non-author review. Keep actual PAPER readiness INCOMPLETE unless natural order/fill/account evidence satisfies the unchanged classifier."
