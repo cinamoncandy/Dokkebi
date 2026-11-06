@@ -141,3 +141,17 @@ Safety stays: PAPER_ONLY, liveAuthority=NONE, productionMutationAllowed=false, a
 **병합 동결 보강:** 필수 체크가 PR 단위라서 main이 빨개져도 다른 PR 병합이 자동으로 막히지는 않는다. 창 동안 Audit 요청과 초안 해제를 하지 않는다. 병합 전 최신 main 필수 규칙 때문에 빨간 main을 합친 PR은 대부분 CI가 빨개져 막힌다(보조 효과, 보장은 아니다).
 
 **미충족(추가):** C′의 독립 검토, 위 시작 직전 재확인, 오너의 "시작".
+
+## C′ 독립 검토 결과와 계획 수정 (2026-11-06 KST, PR #3005 검토 `5796723397`, 판정 PASS_WITH_NOTES, P0 없음, P1 2건)
+코드 diff는 주장대로 안전하다(한 줄 좁히기, 테스트 3건은 범위가 한정된 정당한 변경, 975/975 통과). 그러나 계획 자체에 두 가지 사실이 빠져 있었고, 이 문서의 이전 서술 중 해당 부분은 **이 절로 대체한다.**
+
+**P1-1. 이 `C′`로는 `CODE_ACTIONABLE`이 나올 수 없을 가능성이 매우 높다.** 불일치 사례는 `main-ci-timeout`인데, 승인 단계는 이 사례에 원본 실행 결론이 `timed_out`이기를 요구한다(`causalRegressionAdmission.ts:149-150`, 구조 검사 `:201-202`). 카나리의 실제 원본 실행은 `failure`이므로 `CAUSAL_ADMISSION_EVIDENCE_INSUFFICIENT`로 거절될 가능성이 크다(라이브로는 미확인). 더 닫힌 쪽의 결과라 위험은 아니지만, 이전 "성공" 정의와 "초안 PR 한 건은 예상된 양성 경로 증거"는 이 `C′`로는 성립하지 않는다.
+- **수정된 성공 기준(오너 확인 필요):** main 푸시에서 불일치 관찰 → 증명서 생성 → Sigstore 서명 → 정확한 source identity 검증까지를 확인하고, 승인 단계가 닫힌 채 거절하는 것까지를 "관찰된 안전한 결과"로 기록한다. 진짜 `CODE_ACTIONABLE`(양성 종단 경로)은 이 카나리로 **증명하지 못한다.**
+- 대안 후보(권하지 않음, 별도 검토 필요): `failure` 사례를 어긋나게 하는 다른 좁히기. 단 `failure`를 복구 대상에서 빼면 빨간 main이 복구 대상에서 빠진다.
+
+**P1-2. Release가 실패한 main CI를 자동으로 재실행한다.** 병합 뒤 Release의 post-merge 단계가 정확한 main CI 성공을 최대 약 13분 기다리며 실패 시 `rerun-failed-jobs`를 봇이 호출한다(`autopilot-deterministic-audit-release.yml:474-519`, 3회째 재시도 소진 시 `exit 1`). 그래서 `causal-regression-contract`가 계속 실패하고 `attest-causal-regression`이 다시 돌아 **증명서가 최대 3개**(`run_attempt` 1~3) 생길 수 있다. 이전 필수 조건 "재실행 금지"와 중단 조건 3("증명서가 두 번 이상")은 **병합 뒤 약 10분 안에 자동으로 충족**된다.
+- **수정:** "한 번만"은 "봇의 자동 재실행으로 증명서 최대 3개는 정상"으로 고친다. 원본 시도(attempt 1)와 재시도 산출물을 구분해 함께 보존한다(7일 보존 기간 안에 내려받아 해시 기록). 중단 조건 3은 "4개째 또는 서로 다른 source identity"로 바꾼다. 이 허용 범위는 오너가 알고 승인해야 한다. Release 실행이 빨갛게 끝나고 이후 배포 단계가 건너뛰어지는 흔적이 남는다(Release/HOLD 상태에 남는 영향은 미확인).
+
+**P2.** (a) 병합 동결 규칙은 `R` 자신과 충돌한다: 우회가 막혀 있어 `R`은 초안 해제 + Audit가 유일한 길이므로 "창 동안 Audit 요청 금지"에 `R`의 예외를 명시한다. 빨간 main이 Audit를 막는지는 코드에서 찾지 못했고 미확인이다. (b) 세 번째 테스트는 `status`만 확인하므로 `caseId: main-ci-timeout`, `expected: true`, `observed: false`까지 고정하는 편이 낫다(PR #3005에 반영 예정). (c) PR CI에서 "실제 구현이 계약과 일치한다"는 단언이 사라지므로 `R` 전까지 그 일치는 main 푸시 작업 하나만 지킨다(의도된 것). (d) 배포: 빨간 main에서는 Deploy/Promote가 나가지 않는다(`deployment-convergence-watchdog.yml:130-136`), 비초안 PR은 생기지 않는다(`autopilot-codex-coding.yml`은 `disabled_manually`).
+
+**현재 상태:** 시작 승인 요청이 있었으나 위 P1 때문에 **시작하지 않았다.** 오너가 수정된 성공 기준과 증명서 최대 3개 허용을 확인하고, 창 시각을 다시 정하기 전에는 실행하지 않는다.
