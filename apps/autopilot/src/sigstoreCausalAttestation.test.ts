@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import test from "node:test";
-import { verifyCausalProducerAttestation } from "./sigstoreCausalAttestation";
+import { verifyCausalProducerAttestation, verifyIsolatedCausalVerificationAttestation } from "./sigstoreCausalAttestation";
 
 const fixturePath = join(process.cwd(), "apps/autopilot/src/test-fixtures/sigstore-upstream-valid.json");
 const source = Object.freeze({ repository: "cinamoncandy/NUSA", sha: "a".repeat(40), runId: "456", runAttempt: "1" });
@@ -33,4 +33,15 @@ test("malformed bundles fail closed", async () => {
   await assert.rejects(verifyCausalProducerAttestation({ mediaType: "application/json" }, source), {
     message: "CAUSAL_ATTESTATION_INVALID",
   });
+});
+
+test("isolated proof verification is fail-closed and does not reuse production admission", async () => {
+  await assert.rejects(
+    verifyIsolatedCausalVerificationAttestation({ mediaType: "application/json" }, source),
+    { message: "ISOLATED_CAUSAL_VERIFICATION_INVALID" },
+  );
+  await assert.rejects(
+    verifyIsolatedCausalVerificationAttestation({ mediaType: "application/json" }, { ...source, sha: "invalid" }),
+    { message: "ISOLATED_CAUSAL_VERIFICATION_INVALID" },
+  );
 });

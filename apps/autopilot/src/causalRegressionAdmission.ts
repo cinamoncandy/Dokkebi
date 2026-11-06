@@ -1,4 +1,4 @@
-import type { CryptographicallyVerifiedCausalManifest } from "./sigstoreCausalAttestation";
+import type { CryptographicallyVerifiedCausalManifest, VerifiedIsolatedCausalVerification } from "./sigstoreCausalAttestation";
 import type { SourceExecutionIdentity, VerifiedCausalProducerEvidence } from "./githubActionsOidc";
 
 export type CausalRegressionCase = "main-ci-failure" | "main-ci-timeout";
@@ -30,6 +30,63 @@ const WORKFLOW_REF = `${REPOSITORY}/.github/workflows/ci.yml@refs/heads/main`;
 const OIDC_ISSUER = "https://token.actions.githubusercontent.com";
 const CONTRACT_ID = "REPAIRABLE_WORKFLOW_POLICY_V1";
 const SHA256 = /^[a-f0-9]{64}$/;
+
+export interface IsolatedCausalVerificationDecision {
+  readonly domain: "NUSA_ISOLATED_CAUSAL_VERIFICATION_V1";
+  readonly decision: "CODE_ACTIONABLE";
+  readonly classification: "REPOSITORY_CODE_REGRESSION";
+  readonly caseId: "isolated-policy-regression";
+  readonly fixtureDigest: string;
+  readonly statementDigest: string;
+  readonly sourceSha: string;
+  readonly sourceRunId: string;
+  readonly sourceRunAttempt: string;
+}
+
+function classifyObservedMismatch(observation: {
+  readonly status: unknown;
+  readonly expected: unknown;
+  readonly observed: unknown;
+}): { readonly decision: "CODE_ACTIONABLE"; readonly classification: "REPOSITORY_CODE_REGRESSION" } {
+  if (observation.status !== "OBSERVED_MISMATCH" || observation.expected !== true || observation.observed !== false) {
+    throw new Error("CAUSAL_ADMISSION_EVIDENCE_INSUFFICIENT");
+  }
+  return Object.freeze({ decision: "CODE_ACTIONABLE", classification: "REPOSITORY_CODE_REGRESSION" });
+}
+
+/**
+ * Classifies only the explicitly domain-separated manual verification proof. This result is for
+ * the bounded harness and is not a production CausalAdmissionReceipt accepted by the Worker.
+ */
+export function classifyIsolatedCausalVerification(
+  verified: VerifiedIsolatedCausalVerification,
+): IsolatedCausalVerificationDecision {
+  if (!verified || verified.domain !== "NUSA_ISOLATED_CAUSAL_VERIFICATION_V1"
+    || verified.caseId !== "isolated-policy-regression"
+    || !SHA256.test(verified.fixtureDigest) || !SHA256.test(verified.statementDigest)
+    || verified.source.repository !== "cinamoncandy/NUSA"
+    || verified.source.workflowPath !== ".github/workflows/causal-verification.yml"
+    || verified.source.workflowRef !== "cinamoncandy/NUSA/.github/workflows/causal-verification.yml@refs/heads/main"
+    || verified.source.event !== "workflow_dispatch" || verified.source.ref !== "refs/heads/main"
+    || verified.source.job !== "verify-causal-positive" || verified.source.sha !== verified.source.workflowSha
+    || !/^[1-9][0-9]{0,19}$/.test(verified.source.runId)
+    || !/^[1-9][0-9]{0,9}$/.test(verified.source.runAttempt)
+    || verified.signerIdentity.subjectAlternativeName !== verified.source.workflowRef
+    || verified.signerIdentity.issuer !== "https://token.actions.githubusercontent.com") {
+    throw new Error("ISOLATED_CAUSAL_VERIFICATION_INVALID");
+  }
+  const classification = classifyObservedMismatch({ status: "OBSERVED_MISMATCH", expected: true, observed: false });
+  return Object.freeze({
+    domain: "NUSA_ISOLATED_CAUSAL_VERIFICATION_V1",
+    ...classification,
+    caseId: verified.caseId,
+    fixtureDigest: verified.fixtureDigest,
+    statementDigest: verified.statementDigest,
+    sourceSha: verified.source.sha,
+    sourceRunId: verified.source.runId,
+    sourceRunAttempt: verified.source.runAttempt,
+  });
+}
 
 /** These source inputs change only with an explicitly reviewed producer-contract update. */
 export const PINNED_CAUSAL_PRODUCER_FINGERPRINTS = Object.freeze({
@@ -105,13 +162,14 @@ export async function createCausalAdmissionReceipt(input: {
     throw new Error("CAUSAL_ADMISSION_IMPLEMENTATION_FINGERPRINT_MISMATCH");
   }
 
+  const classification = classifyObservedMismatch(observation);
+
   const replayKey = [source.repository, source.sha, source.workflowPath, source.runId, source.runAttempt,
     producer.producerJobId, producer.attestationJobId, CONTRACT_ID, observation.caseId, verified.statementDigest,
     producer.artifact.id, producer.artifact.digest, fingerprints.implementation].join("|");
   return Object.freeze({
     schemaVersion: 1,
-    decision: "CODE_ACTIONABLE",
-    classification: "REPOSITORY_CODE_REGRESSION",
+    ...classification,
     contractId: CONTRACT_ID,
     caseId: observation.caseId,
     sourceConclusion: producer.sourceConclusion,

@@ -1,8 +1,9 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { createCausalAdmissionReceipt, PINNED_CAUSAL_PRODUCER_FINGERPRINTS } from "./causalRegressionAdmission";
+import { classifyIsolatedCausalVerification, createCausalAdmissionReceipt, PINNED_CAUSAL_PRODUCER_FINGERPRINTS } from "./causalRegressionAdmission";
 import type { VerifiedCausalProducerEvidence, SourceExecutionIdentity } from "./githubActionsOidc";
 import type { CryptographicallyVerifiedCausalManifest } from "./sigstoreCausalAttestation";
+import type { VerifiedIsolatedCausalVerification } from "./sigstoreCausalAttestation";
 
 const repository = "cinamoncandy/NUSA";
 const sha = "a".repeat(40);
@@ -108,4 +109,41 @@ test("rejects generic, altered, stale and unpinned evidence without issuing a re
     () => createCausalAdmissionReceipt({ source, verified: valid.verified, producer: { ...valid.producer, fingerprints: { ...valid.producer.fingerprints, workflow: "f".repeat(64) } }, now: 1000, expiresAt: 2000 }),
     /CAUSAL_ADMISSION_PRODUCER_CONTRACT_MISMATCH/,
   );
+});
+
+test("classifies only the domain-separated isolated verification proof and never returns a production receipt", () => {
+  const verified: VerifiedIsolatedCausalVerification = {
+    domain: "NUSA_ISOLATED_CAUSAL_VERIFICATION_V1" as const,
+    source: {
+      repository,
+      workflowPath: ".github/workflows/causal-verification.yml" as const,
+      workflowRef: `${repository}/.github/workflows/causal-verification.yml@refs/heads/main` as const,
+      workflowSha: sha,
+      ref: "refs/heads/main" as const,
+      event: "workflow_dispatch" as const,
+      job: "verify-causal-positive" as const,
+      sha,
+      runId: "457",
+      runAttempt: "1",
+    },
+    caseId: "isolated-policy-regression" as const,
+    fixtureDigest: "f".repeat(64),
+    statementDigest: "e".repeat(64),
+    signerIdentity: {
+      subjectAlternativeName: `${repository}/.github/workflows/causal-verification.yml@refs/heads/main`,
+      issuer: "https://token.actions.githubusercontent.com",
+    },
+  };
+  const result = classifyIsolatedCausalVerification(verified);
+  assert.equal(result.decision, "CODE_ACTIONABLE");
+  assert.equal(result.classification, "REPOSITORY_CODE_REGRESSION");
+  assert.equal(result.domain, "NUSA_ISOLATED_CAUSAL_VERIFICATION_V1");
+  assert.equal("replayKeySha256" in result, false);
+  assert.equal("expiresAt" in result, false);
+  assert.throws(() => classifyIsolatedCausalVerification({ ...verified, domain: "production" } as never), /ISOLATED_CAUSAL_VERIFICATION_INVALID/);
+  assert.throws(() => classifyIsolatedCausalVerification({ ...verified, source: { ...verified.source, event: "push" } } as never), /ISOLATED_CAUSAL_VERIFICATION_INVALID/);
+  assert.throws(() => classifyIsolatedCausalVerification({
+    ...verified,
+    signerIdentity: { ...verified.signerIdentity, subjectAlternativeName: `${repository}/.github/workflows/ci.yml@refs/heads/main` },
+  } as never), /ISOLATED_CAUSAL_VERIFICATION_INVALID/);
 });
