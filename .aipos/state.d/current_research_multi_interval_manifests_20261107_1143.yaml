@@ -1,0 +1,19 @@
+current_research_multi_interval_manifests_20261107_1143:
+  work_order: WO-RESEARCH-20261105-MULTI-INTERVAL-MANIFESTS
+  issue: 2815
+  pr: 3002
+  protected_main: 60e4185e7c6abba18fce0c0a80797d0aec4fe92b
+  reviewed_predecessor_sha: 0d77d4607dce887d984fd2ce2718cd35a94f7b68
+  exact_head_ci: "PASS: CI 42369131128; companions 42369131160, 42369131115, 42369131153, 42369131169, 42369131146, and 42369131267 all SUCCESS."
+  conditional_jobs: "causal-regression-contract and attest-causal-regression SKIPPED; not positive causal evidence."
+  independent_technical_review: "CHANGES_REQUIRED; P0=0, P1=0, P2=1. The reviewer found stale status text in the Work Order; code fixes were verified. This metadata successor corrects that record. No GitHub review was submitted."
+  local_validation: "Focused Research 50/50; full suite 1,336 isolated test files; typecheck, validate:full, security:gate, full lint (0 errors/47 existing warnings), AIPOS YAML/provenance/drift/conformance, and diff-check PASS."
+  actual_paper: "Workflow 42369131267; artifact 13572808292, sha256:f1f3a5209acc4c0a658368572944e573af3057ec65236cb7c9f5b3ca0f5fbc84. INCOMPLETE after 60.291s and 7 natural decisions; no actionable signal, Risk evaluation, order/fill, or account change."
+  runtime_acceptance: UNVERIFIED
+  next_sha_exact_head_ci: PENDING
+  successor_independent_review: PENDING
+  formal_validator: PENDING
+  audit: PENDING
+  release_authorization: PENDING
+  governed_merge: NOT_DONE
+  safety: PAPER_ONLY_ZERO_AUTHORITY_FAIL_CLOSED

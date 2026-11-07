@@ -56,8 +56,8 @@ verification_commands:
   - "pnpm run lint:scripts"
   - "pnpm test"
   - "git diff --check"
-validation: "LOCAL_VALIDATION_PASS on the uncommitted #3002 successor based on protected main 60e4185e7c6abba18fce0c0a80797d0aec4fe92b: focused Research tests 50/50; pnpm test 1,336 isolated test files; typecheck, validate:full (including AIPOS drift/conformance and safety invariants), security:gate (0 high/critical, 0 secrets), full lint (0 errors, 47 existing warnings), and git diff --check PASS. The full-test runner's tracked isolated-test-failure.txt deletion was restored from HEAD. These local results are not exact-head CI, an independent review, or runtime acceptance."
-exact_head_ci: "Latest historical exact-head CI: PR #3002 head 6da3a1ebac74cee6cdfcf9d98eec2c6f671b67ab, CI run 42366804021 plus six companions all SUCCESS; the conditional causal-regression and attest-causal-regression jobs were SKIPPED and are not positive causal evidence. Local successor changes are uncommitted, so exact-head CI for them is PENDING."
+validation: "LOCAL_VALIDATION_PASS on published code successor 0d77d4607dce887d984fd2ce2718cd35a94f7b68 based on protected main 60e4185e7c6abba18fce0c0a80797d0aec4fe92b: focused Research tests 50/50; pnpm test 1,336 isolated test files; typecheck, validate:full (including AIPOS drift/conformance and safety invariants), security:gate (0 high/critical, 0 secrets), full lint (0 errors, 47 existing warnings), and git diff --check PASS. The full-test runner's tracked isolated-test-failure.txt deletion was restored from HEAD. These local results do not apply to the following AIPOS metadata-only successor."
+exact_head_ci: "PR #3002 exact head 0d77d4607dce887d984fd2ce2718cd35a94f7b68: CI run 42369131128 and companion runs 42369131160, 42369131115, 42369131153, 42369131169, 42369131146, and 42369131267 all concluded SUCCESS. The causal-regression-contract and attest-causal-regression jobs were SKIPPED and are not positive causal evidence. This result is historical for any subsequent metadata successor SHA."
 prepublication_snapshot_2026_11_06:
   protected_main: 185c52c22691a5a35b13fe024cb39d810719a833
   protection: "Branch metadata reports protected=true and required nusa/release-authorized from App 4935691; direct branch-protection endpoint returned 403 to the connected integration."
@@ -72,7 +72,7 @@ formal_validator: PENDING
 audit: PENDING
 release_authorization: PENDING
 runtime_acceptance: PENDING
-next: "A local successor repairs the independent review's P1 interval-materialization event-loop stall risk by yielding between configured intervals and rejects raw-source material with rejected observations. Focused tests (50/50), full suite (1,336 isolated test files), typecheck, validate:full, security, lint (0 errors/47 existing warnings), and diff-check pass. Commit/publish only after final fresh ownership/base/head check; then verify exact-head CI and companions and obtain one fresh independent Research/Data review. Preserve #2975 threads and keep Formal Validator, Audit, Release, merge, and runtime acceptance separate."
+next: "The published #3002 successor 0d77d4607dce887d984fd2ce2718cd35a94f7b68 passed exact-head CI 42369131128 and six companions; a fresh independent technical review then identified a P2 stale AIPOS checkpoint. Correct this work order to the published SHA and its terminal evidence on a metadata successor, rerun AIPOS/full-contract validation and exact-head checks for that SHA, then obtain a fresh independent Research/Data review. Preserve #2975 threads and keep Formal Validator, Audit, Release, merge, and runtime acceptance separate."
 
 current_checkpoint_2026_11_06T0347Z:
   protected_main: 185c52c22691a5a35b13fe024cb39d810719a833
@@ -229,16 +229,17 @@ current_checkpoint_2026_11_07TLOCAL_REVIEW_REPAIR:
   protected_main: 60e4185e7c6abba18fce0c0a80797d0aec4fe92b
   pr_3002_predecessor_head: 6da3a1ebac74cee6cdfcf9d98eec2c6f671b67ab
   review_findings: "Fresh exact-head technical review identified P1: sequential synchronous materialization of configured intervals could stall runtime timers; P2: rejected source observations could still yield a manifest; P2: state.d exact-head CI metadata was pending despite predecessor checks passing."
-  implementation_repair: "Yield to the event loop after every configured interval (including no-op intervals) during backfill and gap-fill; reject any source receipt with rejectedObservations != 0 before manifest creation. The state.d successor checkpoint is added after the code successor is published so it can bind the final SHA and CI."
+  implementation_repair: "Yield to the event loop after every configured interval (including no-op intervals) during backfill and gap-fill; reject any source receipt with rejectedObservations != 0 before manifest creation."
   local_validation: "Focused Research tests 50/50; pnpm test 1,336 isolated test files; typecheck, validate:full, security:gate PASS; lint 0 errors / 47 existing warnings; git diff --check PASS."
   full_test_side_effect: "scripts/run-tests-isolated.js deleted the tracked isolated-test-failure.txt during execution; restored byte-for-byte from HEAD after successful completion."
-  pr_3002: "OPEN/Draft; current remote predecessor still 6da3a1ebac74cee6cdfcf9d98eec2c6f671b67ab at last fresh check; local repair is not committed or published."
-  exact_head_ci: PENDING_SUCCESSOR_COMMIT
-  independent_research_data_review: PENDING_SUCCESSOR_CI
-  runtime_acceptance: UNVERIFIED
+  pr_3002: "OPEN/Draft/mergeable; published successor HEAD 0d77d4607dce887d984fd2ce2718cd35a94f7b68 against protected base 60e4185e7c6abba18fce0c0a80797d0aec4fe92b."
+  exact_head_ci: "PASS: CI 42369131128; six companions 42369131160, 42369131115, 42369131153, 42369131169, 42369131146, 42369131267 all SUCCESS. Conditional causal-regression-contract and attest-causal-regression jobs were SKIPPED."
+  predecessor_independent_review: "FRESH TECHNICAL REVIEW CHANGES_REQUIRED: P2 stale checkpoint identified in this work-order state at predecessor 0d77d460…. The PR body accurately recorded that predecessor SHA and checks; no attributable GitHub review was submitted. This metadata successor corrects the record."
+  actual_paper_evidence: "Workflow 42369131267 SUCCESS; artifact 13572808292 SHA-256 f1f3a5209acc4c0a658368572944e573af3057ec65236cb7c9f5b3ca0f5fbc84 binds exact source SHA. Result INCOMPLETE after 60.291s / 7 natural decisions; no actionable signal, Risk evaluation, order/fill, or account change."
+  runtime_acceptance: "UNVERIFIED; the PAPER observation was semantically INCOMPLETE and does not prove durable market data/manifests/session acceptance."
   formal_validator: PENDING
   audit: PENDING
   release_authorization: PENDING
   governed_merge: NOT_DONE
   safety: PAPER_ONLY_ZERO_AUTHORITY_FAIL_CLOSED
-  next: "Fresh-check protected main, PR base/head and working tree; finalize generated AIPOS CURRENT_TRUTH from this work-order update, commit and fast-forward-publish only to existing PR #3002, then exact-head CI/companions and a fresh independent Research/Data review."
+  next: "Publish this AIPOS correction as a fast-forward successor to existing PR #3002, rerun exact-head CI/companions, and request a fresh independent exact-SHA review. The prior CI and review apply only to 0d77d460…. Keep PR Draft; runtime acceptance, Formal Validator, Audit, Release, and merge remain separate gates."
