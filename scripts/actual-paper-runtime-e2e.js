@@ -209,8 +209,13 @@ async function waitForStablePaperObservationStart({
 
   while (wallNow() <= deadline) {
     if (!readInitial) {
-      const response = await readSnapshot(Math.max(1_000, Math.min(10_000, deadline - wallNow())));
+      const remainingMs = deadline - wallNow();
+      if (remainingMs <= 0) break;
+      const response = await readSnapshot(Math.max(1, Math.min(10_000, remainingMs)));
       snapshot = response?.httpStatus === 200 ? response.body : null;
+      if (wallNow() > deadline) {
+        return { status: "FAIL", failureCode: "AUTOMATIC_RUNTIME_STARTUP_TIMEOUT", snapshot, evidence: evidence() };
+      }
       if (response?.httpStatus !== 200) {
         const failureCode = observationSnapshotFailure(response);
         return { status: "FAIL", failureCode, snapshot: null, evidence: evidence() };

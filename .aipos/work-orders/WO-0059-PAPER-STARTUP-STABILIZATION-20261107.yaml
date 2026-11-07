@@ -72,4 +72,4 @@ verification_commands:
   - "node scripts/validate-workflow-action-pins.js"
   - "git diff --check"
 next: "Implement the bounded pre-observation synchronization gate and regressions on this successor branch; preserve all actual-PAPER readiness failures and require fresh exact-head CI plus review."
-local_validation: "PASS: focused observation 29/29; focused lifecycle/replay/readiness 51/51; pnpm test 1335/1335 isolated test files; TypeScript; validate:full; security gate; workflow action pins; git diff --check. Lint 0 errors / 47 existing warnings; no changed-file warnings. Exact-head CI and independent review remain pending."
+local_validation: "PASS: focused observation 30/30; focused lifecycle/replay/readiness 23/23; pnpm test 1335/1335 isolated test files; TypeScript; validate:full; security gate; workflow action pins; git diff --check. Lint 0 errors / 47 existing warnings; no changed-file warnings. Exact-head CI and independent review for the next commit remain pending."

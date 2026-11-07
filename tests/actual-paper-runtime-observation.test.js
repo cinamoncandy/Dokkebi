@@ -468,9 +468,28 @@ test("persistent startup synchronization error exhausts its bounded budget witho
 
   assert.equal(result.status, "FAIL");
   assert.equal(result.failureCode, "AUTOMATIC_RUNTIME_STARTUP_TIMEOUT");
-  assert.equal(result.evidence.error_occurrence_count, 3);
+  assert.equal(result.evidence.error_occurrence_count, 2);
   assert.equal(result.evidence.consecutive_clean_snapshots, 0);
-  assert.equal(reads, 2);
+  assert.equal(reads, 1);
+});
+
+test("a clean startup snapshot returned after the synchronization deadline is rejected", async () => {
+  let wall = BASE_TIME;
+  const initial = snapshot([]);
+  const result = await waitForStablePaperObservationStart({
+    initialSnapshot: initial,
+    startupBudgetMs: 1_000,
+    pollIntervalMs: 500,
+    wallNow: () => wall,
+    delay: async (duration) => { wall += duration; },
+    readSnapshot: async () => {
+      wall += 600;
+      return { httpStatus: 200, body: snapshot([], {}, wall) };
+    },
+  });
+  assert.equal(result.status, "FAIL");
+  assert.equal(result.failureCode, "AUTOMATIC_RUNTIME_STARTUP_TIMEOUT");
+  assert.equal(result.evidence.consecutive_clean_snapshots, 1);
 });
 
 test("lease, unknown, and suffixed runtime startup errors fail immediately", async () => {
