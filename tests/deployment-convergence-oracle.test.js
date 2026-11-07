@@ -283,6 +283,23 @@ test("watchdog gates receipt dispatch on exact-main Release and later read-only 
   assert.ok(releaseGate >= 0 && receiptDispatch > releaseGate);
 });
 
+test("watchdog dedupes only semantically verified exact-main receipts and bounds replay", () => {
+  const watchdog = read(".github/workflows/deployment-convergence-watchdog.yml");
+  const receiptGate = watchdog.slice(watchdog.indexOf("receipt_success() {"), watchdog.indexOf("dispatch_bounded() {"));
+  assert.match(receiptGate, /gh run download "\$run_id"/);
+  assert.match(receiptGate, /deployment-convergence-receipt-\$MAIN_SHA/);
+  assert.match(receiptGate, /\.convergence_status == "CONVERGED"/);
+  assert.match(receiptGate, /\.oracle_convergence_status == "CONVERGED"/);
+  assert.match(receiptGate, /\.source_sha == \$sha/);
+  assert.match(receiptGate, /\.components\.oracle_host\.runtime_source_sha == \$sha/);
+  assert.match(receiptGate, /\.path == "\.github\/workflows\/deployment-convergence-receipt\.yml"/);
+  const bounded = watchdog.slice(watchdog.indexOf("dispatch_bounded() {"), watchdog.indexOf('CI_CONCLUSION="'));
+  assert.match(bounded, /if receipt_success; then/);
+  assert.match(bounded, /\.status == "completed"\)\] \| length/);
+  assert.match(bounded, /if \[ "\$failures" -ge 3 \]; then/);
+  assert.match(bounded, /if workflow_active "\$workflow_name"; then/);
+});
+
 test("receipt consumes server-read Release and Host Diagnose evidence, not a client-asserted host SHA", () => {
   const receipt = read(".github/workflows/deployment-convergence-receipt.yml");
   assert.match(receipt, /ref: \$\{\{ github\.sha \}\}/);
