@@ -139,6 +139,8 @@ test("a continuously overlapping capped read-only window is not lost evidence", 
   assert.equal(result.status, "PASS");
   assert.equal(result.evidence.stop_reason, "MINIMUM_DURATION_AND_DECISION_CYCLES_REACHED");
   assert.equal(result.evidence.event_evidence_truncated, false);
+  assert.equal(result.evidence.projection_window.adjacent_windows_anchored, true);
+  assert.ok(result.evidence.projection_window.moving_anchored_capped_samples > 0);
   assert.ok(result.evidence.projection_window.capped_samples >= 3);
   assert.equal(result.evidence.projection_window.newest_anchor_verified_capped_samples, result.evidence.projection_window.capped_samples);
   assert.equal(result.evidence.decision_cycles_observed, 3);
@@ -169,7 +171,7 @@ test("a full projection without a previous-window overlap remains INCOMPLETE", a
   assert.equal(result.status, "INCOMPLETE");
   assert.equal(result.evidence.stop_reason, "EVENT_EVIDENCE_TRUNCATED");
   assert.equal(result.evidence.event_evidence_truncated, true);
-  assert.equal(result.evidence.projection_window.continuity_proven, false);
+  assert.equal(result.evidence.projection_window.adjacent_windows_anchored, false);
 });
 
 test("capped projection continuity does not excuse missing natural Decision cycles", async () => {
@@ -184,6 +186,8 @@ test("capped projection continuity does not excuse missing natural Decision cycl
   assert.equal(result.evidence.stop_reason, "MAX_OBSERVATION_BUDGET_EXHAUSTED");
   assert.equal(result.evidence.decision_cycles_observed, 0);
   assert.equal(result.evidence.event_evidence_truncated, false);
+  assert.equal(result.evidence.projection_window.moving_anchored_capped_samples, 0);
+  assert.equal(result.evidence.projection_window.adjacent_windows_anchored, false);
 });
 
 
@@ -211,7 +215,7 @@ test("duplicate event IDs in a saturated projection cannot prove continuity", as
   });
   assert.equal(result.status, "INCOMPLETE");
   assert.equal(result.evidence.stop_reason, "EVENT_EVIDENCE_TRUNCATED");
-  assert.equal(result.evidence.projection_window.continuity_proven, false);
+  assert.equal(result.evidence.projection_window.adjacent_windows_anchored, false);
 });
 
 test("reverse timestamp order in a saturated projection cannot prove continuity", async () => {
@@ -222,7 +226,7 @@ test("reverse timestamp order in a saturated projection cannot prove continuity"
   });
   assert.equal(result.status, "INCOMPLETE");
   assert.equal(result.evidence.stop_reason, "EVENT_EVIDENCE_TRUNCATED");
-  assert.equal(result.evidence.projection_window.continuity_proven, false);
+  assert.equal(result.evidence.projection_window.adjacent_windows_anchored, false);
 });
 
 test("visible HALT failures cannot be hidden by a saturated projection", async () => {
