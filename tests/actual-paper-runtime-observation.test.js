@@ -132,7 +132,7 @@ test("a continuously overlapping capped read-only window is not lost evidence", 
     initialSnapshot: snapshot(baseline),
     currentEvents: (readCount) => [
       ...baseline,
-      ...Array.from({ length: Math.min(readCount, 3) }, (_, i) => cycleEvents(i + 1, BASE_TIME + i * 1_000)),
+      ...Array.from({ length: Math.min(readCount, 3) }, (_, i) => cycleEvents(i + 1, BASE_TIME + i * 1_000)).flat(),
     ].sort((a, b) => b.occurredAt - a.occurredAt || a.id.localeCompare(b.id)).slice(0, 250),
   });
 
@@ -140,7 +140,7 @@ test("a continuously overlapping capped read-only window is not lost evidence", 
   assert.equal(result.evidence.stop_reason, "MINIMUM_DURATION_AND_DECISION_CYCLES_REACHED");
   assert.equal(result.evidence.event_evidence_truncated, false);
   assert.ok(result.evidence.projection_window.capped_samples >= 3);
-  assert.equal(result.evidence.projection_window.overlap_verified_capped_samples, result.evidence.projection_window.capped_samples);
+  assert.equal(result.evidence.projection_window.newest_anchor_verified_capped_samples, result.evidence.projection_window.capped_samples);
   assert.equal(result.evidence.decision_cycles_observed, 3);
   assert.equal(result.evidence.stage_evidence.PAPER_ORDER.status, "NOT_OBSERVED");
 
@@ -163,7 +163,7 @@ test("a full projection without a previous-window overlap remains INCOMPLETE", a
     initialSnapshot: snapshot(baseline),
     currentEvents: (readCount) => [
       ...unrelated,
-      ...Array.from({ length: Math.min(readCount, 3) }, (_, i) => cycleEvents(i + 1, BASE_TIME + 1_000 + i * 1_000)),
+      ...Array.from({ length: Math.min(readCount, 3) }, (_, i) => cycleEvents(i + 1, BASE_TIME + 1_000 + i * 1_000)).flat(),
     ].sort((a, b) => b.occurredAt - a.occurredAt || a.id.localeCompare(b.id)).slice(0, 250),
   });
   assert.equal(result.status, "INCOMPLETE");
@@ -184,6 +184,58 @@ test("capped projection continuity does not excuse missing natural Decision cycl
   assert.equal(result.evidence.stop_reason, "MAX_OBSERVATION_BUDGET_EXHAUSTED");
   assert.equal(result.evidence.decision_cycles_observed, 0);
   assert.equal(result.evidence.event_evidence_truncated, false);
+});
+
+
+test("overlap with older IDs but loss of the previous newest anchor remains INCOMPLETE", async () => {
+  const baseline = Array.from({ length: 250 }, (_, i) => event(`baseline-gap-${i}`, "MARKET_DATA", BASE_TIME - 30_000 - i));
+  const result = await runObservation({
+    initialSnapshot: snapshot(baseline),
+    currentEvents: (readCount) => [
+      ...baseline.slice(1, 244),
+      ...Array.from({ length: Math.min(readCount, 3) }, (_, i) => cycleEvents(i + 1, BASE_TIME + 1_000 + i * 1_000)).flat(),
+      ...Array.from({ length: 8 }, (_, i) => event(`recent-gap-${i}`, "MARKET_DATA", BASE_TIME + 4_000 + i)),
+    ].sort((a, b) => b.occurredAt - a.occurredAt || a.id.localeCompare(b.id)).slice(0, 250),
+  });
+  assert.equal(result.status, "INCOMPLETE");
+  assert.equal(result.evidence.stop_reason, "EVENT_EVIDENCE_TRUNCATED");
+  assert.equal(result.evidence.event_evidence_truncated, true);
+  assert.ok(result.evidence.projection_window.capped_samples > 0);
+});
+
+test("duplicate event IDs in a saturated projection cannot prove continuity", async () => {
+  const baseline = Array.from({ length: 250 }, (_, i) => event(`baseline-duplicate-${i}`, "MARKET_DATA", BASE_TIME - 30_000 - i));
+  const result = await runObservation({
+    initialSnapshot: snapshot(baseline),
+    currentEvents: () => [...baseline.slice(0, 249), baseline[248]],
+  });
+  assert.equal(result.status, "INCOMPLETE");
+  assert.equal(result.evidence.stop_reason, "EVENT_EVIDENCE_TRUNCATED");
+  assert.equal(result.evidence.projection_window.continuity_proven, false);
+});
+
+test("reverse timestamp order in a saturated projection cannot prove continuity", async () => {
+  const baseline = Array.from({ length: 250 }, (_, i) => event(`baseline-reverse-${i}`, "MARKET_DATA", BASE_TIME - 30_000 - i));
+  const result = await runObservation({
+    initialSnapshot: snapshot(baseline),
+    currentEvents: () => baseline.slice().reverse(),
+  });
+  assert.equal(result.status, "INCOMPLETE");
+  assert.equal(result.evidence.stop_reason, "EVENT_EVIDENCE_TRUNCATED");
+  assert.equal(result.evidence.projection_window.continuity_proven, false);
+});
+
+test("visible HALT failures cannot be hidden by a saturated projection", async () => {
+  const baseline = Array.from({ length: 250 }, (_, i) => event(`baseline-halt-${i}`, "MARKET_DATA", BASE_TIME - 30_000 - i));
+  const result = await runObservation({
+    initialSnapshot: snapshot(baseline),
+    currentEvents: () => [
+      event("visible-halt", "HALT", BASE_TIME + 1, { status: "FAIL", reason: "PAPER_WRITER_LEASE_LOST" }),
+      ...baseline.slice(0, 249),
+    ],
+  });
+  assert.equal(result.status, "FAIL");
+  assert.equal(result.evidence.failure_code, "PAPER_WRITER_LEASE_LOST");
 });
 
 test("PAPER order and fill evidence uses observed projection timestamps and hashed identities", async () => {
