@@ -1,0 +1,66 @@
+current_wo0059_observation_p2_repair_20261106:
+  work_order: WO-0059-PAPER-OBSERVATION-20261106
+  status: COMMITTED_PENDING_EXACT_HEAD_CI
+  repository: cinamoncandy/NUSA
+  pull_request: 3006
+  branch: WO-0059-PAPER-OBSERVATION-20261106
+  observed_at_utc: "2026-11-06T15:16:31Z"
+  protected_main_and_base: 2224d7f8e2f58081cf3edcd2597ea7048e07f70a
+  previous_head: 6f71a9fe304d61273be5b4076cf73e04105bb739
+  previous_head_exact_checks: "CI 42237698690 and four safety companions 42237698637, 42237698640, 42237698717, 42237698705 SUCCESS; Actual PAPER 42237698763 workflow SUCCESS. Conditional causal-regression and attest jobs SKIPPED, not positive evidence."
+  independent_review_of_previous_head:
+    disposition: CHANGES_REQUIRED
+    p0: 0
+    p1: 0
+    p2: 1
+    finding: "safeRuntimeFailureCode split an allowlisted prefix at delimiters, allowing arbitrary suffix text to be misclassified as a local code. No value was emitted, but the cause label was untrustworthy."
+    github_comment: NOT_POSTED
+  local_repair:
+    status: COMMITTED_PENDING_EXACT_HEAD_CI
+    files:
+      - scripts/actual-paper-runtime-e2e.js
+      - tests/actual-paper-runtime-observation.test.js
+    behavior: "Only exact allowlisted strings are preserved; a writer code is extracted from an anchored Error stack only when remaining lines are stack frames; tainted suffixes fail closed to RUNTIME_ERROR_PRESENT."
+    regressions: "Reject colon, semicolon, whitespace, and writer-code suffixes without reflecting a credential-like value; retain an exact locally owned writer stack code."
+  validation:
+    focused_wo0059: PASS_41_OF_41
+    full_isolated_suite: PASS_1335_TEST_FILES
+    typecheck: PASS
+    build: PASS_VIA_PNPM_TEST
+    validate_full: PASS
+    security_gate: PASS
+    workflow_action_pins_and_inputs: PASS
+    aipos_yaml_provenance_evidence: PASS
+    lint: "0_ERRORS_47_BASELINE_WARNINGS"
+    diff_check: PASS
+    successor_exact_head_ci: PENDING_PUSH_AND_CURRENT_COMMIT_CI
+    successor_independent_review: PENDING_PUSH_AND_CURRENT_COMMIT_REVIEW
+  actual_paper_run_42237698763:
+    head_sha: 6f71a9fe304d61273be5b4076cf73e04105bb739
+    artifact_id: 13512578070
+    artifact_sha256: f2106bd65d392be1ecc0924f5fd0806c0a9cf1c0cede44e344353254d9a796bc
+    workflow_result: SUCCESS
+    semantic_result: INCOMPLETE_NO_AUTONOMOUS_ORDER_FILL_PNL
+    observation: "60.357s; 25 natural Decisions; zero orders/fills/account-PnL changes; SIGNAL/RISK/PAPER_ORDER/PAPER_FILL NOT_OBSERVED; no event truncation."
+  insufficient_history:
+    source_run: 42199682632
+    artifact_id: 13494211160
+    final_observed_strategy_detail: "INSUFFICIENT_SMA_OBSERVATIONS:1/20"
+    isolated_run_classification: WARMUP_NOT_COMPLETED
+    reason: "The E2E creates a fresh state.sqlite; the owner-baseline SMA requires 20 completed market-specific 1m closes and the final observed Decision had one. Earlier per-Decision counts and truncated rows remain UNKNOWN."
+    deployed_database_history: UNVERIFIED
+  event_cap: "250-event bound remains unchanged at recorder/persistence/projection; truncation is explicit and missing-event count remains UNKNOWN. No limit increase is justified."
+  next: "Non-force-push the committed focused repair to existing PR #3006, then obtain fresh exact-head CI/companions and a separate exact-SHA VALIDATOR review. Keep Draft and semantic readiness INCOMPLETE. Obtain an approved bounded read-only report for deployed per-market completed 1m candle count/range/gaps/provenance; do not widen access or read/mutate DB."
+  governance:
+    commit_gate: MET_FOR_SUCCESSOR_COMMIT_TO_EXISTING_DRAFT_PR_ONLY
+    readiness: NOT_ATTESTED
+    exact_head_ci: PENDING_PUSH_AND_SUCCESSOR_CHECKS
+    independent_review: PENDING_SUCCESSOR_EXACT_SHA
+    l1: PARTIAL
+    l2: HOLD
+    liveAuthority: NONE
+    productionMutationAllowed: false
+    realOrderAuthority: false
+    realTransferAuthority: false
+    aiAuthority: ZERO_AUTHORITY
+    fail_closed: true

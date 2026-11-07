@@ -174,3 +174,10 @@ Safety stays: PAPER_ONLY, liveAuthority=NONE, productionMutationAllowed=false, a
 - **예약:** 그 시각에 Claude 세션에 시작 알림이 한 번 들어간다(예약 `trig_01BM6RRaf2MSuY37myUSra2A`). 알림을 받으면 먼저 시작 직전 재확인(대상 파일 blob `865c7fb4…`, `Autopilot Codex Coding` 비활성, main이 이미 빨갛지 않음과 진행 중인 다른 병합 없음, 서버 정상, 열린 P0 없음, #3005가 초안 그대로)을 하고, **하나라도 어긋나면 아무것도 하지 않고 취소**한 뒤 2026-11-08 10:00 KST를 제안한다.
 - **재확인이 모두 통과하면:** #3005에 main을 합치고(Audit는 기준 main이 같아야 한다) 새 CI가 초록인지 확인한 뒤 초안을 해제해 Audit를 시작한다. 오너가 시작을 미리 승인했으므로 그 시각의 별도 "시작" 지시는 필요 없지만, 오너는 언제든 중단을 지시할 수 있다.
 - **변하지 않는 것:** 병합은 봇만 한다. 보호 설정·워크플로·게이트·서버는 건드리지 않는다. 창 동안 `R`을 제외한 다른 PR의 초안 해제와 Audit 요청을 하지 않는다. 성공 기준은 "오너 결정" 절의 축소된 기준이며 진짜 `CODE_ACTIONABLE`은 주장하지 않는다. L1은 PARTIAL이다.
+
+## 2026-11-07 10:20 KST: 시작 시도와 중단 (카나리는 main에 들어가지 않았다)
+- 10:01 재확인에서 "열린 P0 없음"이 걸렸다(#2770, #2589는 오래된 추적 이슈). 오너가 "알고 있고 막지 않는다"고 선택해 진행했다.
+- 10:09 `#3005`를 초안 해제해 Audit를 시작했으나 Audit가 `EXACT_HEAD_PAPER_AUDIT_REJECTED:RUNTIME_SAFETY_SMOKE_NOT_PASS`로 거절했다. PR 단계 CI 확인은 모두 성공이었고, 거절 근거는 `wo-0059-actual-paper-runtime.yml`이 만든 증거 파일의 `runtime_observation.status=INCOMPLETE`, `stop_reason=EVENT_EVIDENCE_TRUNCATED`(60초 동안 결정 이벤트 73건, 거래가 활발한 시장 KRW-CYBER)였다. 같은 검사가 #3006 head(`9c3514e`)에서는 PASS(13건, KRW-SOL)였다.
+- 해석(추정, 두 증거 파일 비교): 활발한 시장이 뽑히면 이벤트 증거가 한도를 넘어 잘려 어떤 PR이든 Audit에서 떨어질 수 있는 증거 설계의 허점이다. 카나리 변경과는 무관하다.
+- 조치: `#3005`는 다시 초안으로 되돌렸다. main·서버·코드는 바뀌지 않았고 병합이 없었으므로 60분 시계는 시작되지 않았다.
+- 오너 결정: 증거 잘림 문제를 먼저 고친 뒤 카나리를 한다(재실행으로 우연히 통과시키지 않는다). 새 창은 그 수정이 병합되고 Audit가 정상으로 돌아온 뒤 오너와 다시 정한다.
