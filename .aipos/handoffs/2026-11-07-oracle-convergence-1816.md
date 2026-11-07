@@ -46,3 +46,15 @@ Safety remains `PAPER_ONLY`, `liveAuthority=NONE`, `productionMutationAllowed=fa
 - Oracle evidence remains historical: no exact-main Release/Host Diagnose/official Convergence receipt exists for `3241c525…`; the reported runtime is at `0209466469…`. Research manifest/session and `TICK_ERROR` cause remain unverified because authorized journal/database read access is unavailable.
 
 Next: complete final AIPOS/diff checks, commit the current-main reconciliation to this existing #3000 branch, push fast-forward only, then verify successor exact-head checks and request/receive a fresh independent technical review. Formal Validator, Audit, Release authorization, governed merge, and post-merge Oracle evidence remain separate gates.
+
+## FORGE P2 watchdog repair successor — 2026-11-07
+
+- Fresh protected main and PR base: `3241c525ab9575271a1150d8635d87ef9764c069`; existing PR #3000 remains OPEN/Draft/mergeable.
+- P2 implementation and test predecessor: `4f03fb2f046fc3ab6bf661edaead35f950b65c3e`. Current final head must be re-read after documentation commits.
+- Watchdog now downloads the artifact of a successful exact-main Receipt run before deduping. It requires schema 3, exact source/main and Oracle/host SHA alignment, and CONVERGED at the top level and Oracle level. Missing, stale, malformed or inaccessible artifacts cannot prove completion.
+- All completed receipt runs (even a workflow SUCCESS with invalid semantic evidence) consume the per-main budget of three; queued/in-progress runs block duplicate dispatch. GitHub run history is the durable cross-restart counter.
+- Tests added to assert semantic proof, exact-run artifact binding, active-run guard and retry cap. No successful current-successor CI, independent validation, or runtime Convergence receipt is claimed before verification.
+- PR body refreshed to distinguish prior head results from current successor. This is not a Formal Validator receipt, Audit, Release authorization, governed merge or Oracle deployment.
+- FIRST_BROKEN_TRANSITION under repair: `Receipt Actions SUCCESS -> semantic receipt CONVERGED -> watchdog deduplication`. Separately, Formal Validator issuance and Audit consumption are not proven and must remain fail-closed.
+- Next: exact-head CI + companions, updated independent review, canonical Formal Validator evidence, deterministic Audit, Release authority and governed merge; post-merge exact-main Oracle Release / Host Diagnose / machine receipt only with proper external authorization.
+- Safety unchanged: PAPER_ONLY; liveAuthority=NONE; productionMutationAllowed=false; realOrderAuthority=false; realTransferAuthority=false; aiAuthority=ZERO_AUTHORITY.
