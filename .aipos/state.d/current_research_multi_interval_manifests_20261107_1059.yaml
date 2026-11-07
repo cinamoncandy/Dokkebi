@@ -1,0 +1,14 @@
+current_research_multi_interval_manifests_20261107_1059:
+  work_order: WO-RESEARCH-20261105-MULTI-INTERVAL-MANIFESTS
+  issue: 2815
+  pr: 3002
+  protected_main: 60e4185e7c6abba18fce0c0a80797d0aec4fe92b
+  previous_sync_head: fef4ab937c8895ba9af34916e71c5c696abb11f6
+  latest_main_delta: "Three commits; generated CURRENT_TRUTH conflict plus causal attestation workflow/test and AIPOS evidence, no #3002 Research source overlap."
+  latest_main_merged: true
+  regenerated_current_truth: true
+  latest_sync_validation: PASS_FOCUSED_60_FULL_1336_TYPECHECK_VALIDATE_SECURITY_AIPOS_WORKFLOW_DIFF
+  exact_head_ci: PENDING_SUCCESSOR_PUBLICATION
+  independent_research_data_review: PENDING
+  runtime_acceptance: UNVERIFIED
+  safety: PAPER_ONLY_ZERO_AUTHORITY_FAIL_CLOSED
