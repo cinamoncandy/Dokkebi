@@ -17,6 +17,27 @@ test("Actual PAPER E2E exercises the canonical closed-learning production root",
   assert.doesNotMatch(source, /dist\/apps\/cloud\/src\/runtime\.js/);
 });
 
+test("automatic startup check remains separate from the bounded natural observation window", () => {
+  assert.match(source, /async function waitForAutomaticRuntime\(/);
+  assert.match(source, /startupSnapshot = await waitForAutomaticRuntime\(baseUrl, token\);[\s\S]*?const observation = await observeAutomaticRuntime\(/);
+  assert.match(source, /minimumDurationMs: 60_000/);
+  assert.match(source, /maximumDurationMs: 180_000/);
+  assert.match(source, /minimumDecisionCycles: 3/);
+  assert.match(source, /if \(elapsedMs >= minimumDurationMs && decisionCycleCount >= minimumDecisionCycles\)/);
+  assert.match(source, /MAX_OBSERVATION_BUDGET_EXHAUSTED/);
+  assert.doesNotMatch(source, /if \(.*(?:order|fill).*length === 0\)[\s\S]{0,100}break;/i);
+});
+
+test("observation evidence does not replace the existing readiness classifier or authority boundary", () => {
+  assert.match(source, /liveAuthority: "NONE"/);
+  assert.match(source, /productionMutationAllowed: false/);
+  assert.match(source, /aiAuthority: "ZERO_AUTHORITY"/);
+  assert.match(source, /execution: \{[\s\S]*?order_count: observedOrders\.length,[\s\S]*?fill_count: observedFills\.length/);
+  assert.match(source, /result: observation\.status === "PASS" \? "PASS" : "INCOMPLETE"/);
+  assert.match(workflow, /node scripts\/classify-actual-paper-runtime-readiness\.js artifacts\/operational-evidence\/actual-paper-runtime-e2e\.json/);
+  assert.doesNotMatch(source, /require\("\.\/classify-actual-paper-runtime-readiness\.js"\)/);
+});
+
 test("PAPER chaos restart evidence binds the last pre-crash cycle to recovery", () => {
   assert.match(source, /buildBoundPaperChaosRestartEvidence\(root, secondCycleSnapshot, supervisedRecovery\)/);
   assert.doesNotMatch(source, /buildBoundPaperChaosRestartEvidence\(root, supervisedStart, supervisedRecovery\)/);
@@ -46,4 +67,11 @@ test("PAPER chaos E2E keeps fail-closed authority invariants", () => {
   assert.match(source, /liveAuthority:\s*"NONE"/);
   assert.match(source, /productionMutationAllowed:\s*false/);
   assert.match(source, /aiAuthority:\s*"ZERO_AUTHORITY"/);
+});
+
+test("restart and replay duplicate-order/fill rejection remains in the actual runtime E2E", () => {
+  assert.match(source, /repeatedOrders\.length !== 1 \|\| repeatedFills\.length !== 1/);
+  assert.match(source, /new Set\(orderIds\)\.size !== orderIds\.length \|\| new Set\(fillIds\)\.size !== fillIds\.length/);
+  assert.match(source, /paperLearning replay produced duplicate event ids after restart/);
+  assert.match(source, /persisted_window_matches_recovery: true/);
 });
