@@ -1,12 +1,12 @@
 current_ops_oracle_convergence_1816_20261105:
   work_order: WO-OPS-20261105-ORACLE-CONVERGENCE-1816
   issue: 1816
-  observed_at_utc: "2026-11-05T07:42:39Z"
+  observed_at_utc: "2026-11-07T07:44:21Z"
   status: IN_PROGRESS
   repository: cinamoncandy/NUSA
-  protected_main: 185c52c22691a5a35b13fe024cb39d810719a833
+  protected_main: 3241c525ab9575271a1150d8635d87ef9764c069
   branch: fix/oracle-convergence-host-evidence-1816
-  base_commit: 185c52c22691a5a35b13fe024cb39d810719a833
+  base_commit: 3241c525ab9575271a1150d8635d87ef9764c069
   implementation:
     watchdog_requires_latest_exact_main_oracle_release: true
     watchdog_requires_later_read_only_host_diagnose: true
@@ -31,12 +31,21 @@ current_ops_oracle_convergence_1816_20261105:
     full_suite: PASS_1328_FILES
     security: PASS
     lint: PASS_0_ERRORS_47_BASELINE_WARNINGS
-    exact_head_ci: PENDING
-    independent_review: PENDING
-  commit_gate: NOT_MET
+  reconciled_validation:
+    local_reconciled_tree: PASS
+    full_suite: PASS_1336_FILES
+    typecheck: PASS
+    validate_full: PASS
+    security: PASS_ZERO_FINDINGS_AND_SECRETS
+    lint: PASS_0_ERRORS_47_BASELINE_WARNINGS
+    diff_check: PASS
+    exact_head_ci: PENDING_NEW_SUCCESSOR_SHA
+    independent_review: PENDING_NEW_SUCCESSOR_SHA
+    formal_validator: BLOCKED_NO_CANONICAL_ISSUER_OR_RECEIPT_CONTRACT
+  commit_gate: LOCAL_RECONVERGENCE_VALIDATED_PENDING_EXACT_HEAD_CI_AND_FORMAL_VALIDATOR_CONTRACT
   canonical_receipt: NOT_PUBLISHED
   oracle_release_or_host_operation_performed: false
   l1: PARTIAL
   l2: HOLD
   safety: PAPER_ONLY_LIVE_NONE_PRODUCTION_MUTATION_FALSE_REAL_ORDER_FALSE_REAL_TRANSFER_FALSE_AI_ZERO_AUTHORITY_FAIL_CLOSED
-  next: "After final diff inspection, commit and publish the canonical Draft PR; await exact-head CI and independent review. Never dispatch a new Oracle Release from the watchdog."
+  next: "After final diff inspection and AIPOS validation, commit and non-force push the reconciled successor to the existing Draft #3000 branch; await exact-head CI and fresh independent review. Formal Validator remains blocked until its canonical receipt route is defined. Never dispatch a new Oracle Release from the watchdog."

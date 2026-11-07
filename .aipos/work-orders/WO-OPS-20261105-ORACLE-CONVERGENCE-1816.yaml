@@ -4,7 +4,7 @@ status: IN_PROGRESS
 owner: nusa-development
 repository: cinamoncandy/NUSA
 base_branch: main
-base_commit: 0209466469fe45b7f90dbeefb96d4a9e27cfb3b2
+base_commit: 3241c525ab9575271a1150d8635d87ef9764c069
 branch: fix/oracle-convergence-host-evidence-1816
 issues: [1816]
 authority_impact: deployment-evidence-only; no release, runtime, or execution authority change
@@ -64,6 +64,16 @@ evidence_at_2026_11_07:
   final_separate_session_technical_disposition: "Fresh read-only review on ca8bf7f6bbd2e88c3d60fb7200da6443502a3b02: PASS_WITH_NOTES, P0=0/P1=0/P2=0. The repository ADR allows a separate fresh VALIDATOR session on the owner GitHub account; exact head, review scope, work, and disposition are in the existing PR handoff comment. This is technical review, not Formal Validator acceptance, Audit, Release authorization, or merge approval."
   formal_validator_gate: "NOT_AVAILABLE_IN_CHECKOUT: no dedicated Formal Validator workflow/script found. The existing PR-ready event replays exact-head CI into the Autopilot PR_CI_SUCCEEDED path, whose planner emits AUDIT_REQUEST. Keep Draft to preserve required Formal Validator -> Audit order until the canonical Formal Validator receipt is obtained."
   governance: "PR #3000 remains OPEN/Draft; author cinamoncandy has 0 submitted reviews. Formal Validator, Audit, Release authorization, and merge are not complete. No post-change canonical Convergence receipt exists."
+reconciliation_checkpoint_2026_11_07:
+  protected_main: 3241c525ab9575271a1150d8635d87ef9764c069
+  prior_pr_head: 2d7b6c7d8ac804961ec150c308311eede2d24995
+  local_reconciliation: "The existing #3000 branch was reconciled locally with current protected main using a no-commit merge. The only merge conflict was generated .aipos/CURRENT_TRUTH.md; it was regenerated from canonical inputs. No protected-main or Oracle mutation was performed."
+  pr_3010: "PR #3010 is CLOSED/MERGED and its changes are present in current main. Its final PR description records successor exact-head CI and companion success; N1 remains an explicit known proof limitation because monotonic insertion timestamps are unverified. No new independent exact-head review or Formal Validator disposition is claimed. Do not recreate or reopen the work."
+  local_validation: "After main reconciliation: pnpm test PASS (1,336 isolated test files), pnpm run typecheck PASS, pnpm run validate:full PASS, pnpm run security:gate PASS (0 findings/secrets), pnpm run lint:scripts PASS (0 errors / 47 baseline warnings), git diff --check PASS. Exact-head CI and fresh independent review for the reconciled successor remain pending."
+  formal_validator_contract: "BLOCKED: current checkout defines no canonical Formal Validator issuer/workflow/receipt schema or Audit consumer. GRILL/technical Validator evidence is explicitly not Formal/Audit/Release. Keep Draft; do not invent a receipt or trigger the Ready-to-Audit path."
+  oracle_runtime: "No new exact-main Oracle Release, Host Diagnose, or canonical post-change Convergence receipt. Existing runtime SHA 0209466469fe45b7f90dbeefb96d4a9e27cfb3b2 is stale against protected main 3241c525ab9575271a1150d8635d87ef9764c069. Research manifest/session and TICK_ERROR root cause remain unverified; journal/DB read access is unavailable."
+  safety: PAPER_ONLY_LIVE_NONE_PRODUCTION_MUTATION_FALSE_REAL_ORDER_FALSE_REAL_TRANSFER_FALSE_AI_ZERO_AUTHORITY_FAIL_CLOSED
+  next: "Finish final diff and AIPOS validation, commit the validated reconciliation to the existing #3000 branch, non-force push only that branch, then verify new exact-head CI and obtain a fresh independent technical review. Formal Validator remains blocked until the authorized owner defines/executes the canonical receipt path."
 safety:
   PAPER_ONLY: true
   liveAuthority: NONE
