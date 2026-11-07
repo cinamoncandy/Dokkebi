@@ -301,8 +301,10 @@ export function composeResearchExperiments(input: {
             const source = minutes === 1
               ? `upbit-1m-closed:${market}:${M}`
               : `upbit-1m-aggregated:${market}:${intervalMs}`;
+            const manifestBuildStarted = performance.now();
             materializeResearchDatasetManifest({ store: datasetManifests, candleStore: store, market, intervalMs, candles, source, createdAt, sourceCommitSha: settings.sourceCommitSha });
             log(`[research-manifest] ${market}/${intervalName} materialized dataset manifest`);
+            log(`[research-manifest] ${market}/${intervalName} build durationMs=${Math.max(0, Math.round(performance.now() - manifestBuildStarted))}`);
           }
         }
       } catch (error) {
