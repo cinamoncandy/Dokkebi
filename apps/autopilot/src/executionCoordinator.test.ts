@@ -563,6 +563,7 @@ describe("persistent control-plane HOLD", () => {
     assert.equal((await post({ ...base, canonicalOwner: "bad owner" })).status, 400);
     assert.equal((await post({ ...base, conflictKeys: [] })).status, 400);
     assert.equal((await post({ ...base, conflictKeys: ["module:a", "module:a"] })).status, 400);
+    assert.equal((await post({ ...base, maxConcurrent: 3 })).status, 400, "FORGE L1 rejects a caller requesting more than two WIP slots");
     assert.equal((await post({ ...base, maxConcurrent: 9 })).status, 400);
   });
 
