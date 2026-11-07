@@ -7,21 +7,21 @@ Everything below is what the repository's records *claim*. Re-verify on GitHub b
 
 ## Newest handoff
 
-[`.aipos/handoffs/2026-11-06-wo-0059-observation.md`](handoffs/2026-11-06-wo-0059-observation.md) — WO-0059 PAPER Observation Handoff — 2026-11-06
+[`.aipos/handoffs/2026-11-07-forge-p0-p1-3010.md`](handoffs/2026-11-07-forge-p0-p1-3010.md) — CORE handoff — 2026-11-07 — #3000 Formal Validation and WO-0059 P2
 
-> ## Successor follow-up — 2026-11-06T15:16Z
+> Observed at `2026-11-07T03:59Z`.
 
 ## Work orders
 
-531 total: 502 in `.aipos/work-orders/`, 29 closed and merged in `.aipos/work-orders/archive/`.
-Of the 502 active files, 96 carry a closed status that has not been archived (merge not proven, or the path is still referenced) and 406 are open or unclassified.
+533 total: 504 in `.aipos/work-orders/`, 29 closed and merged in `.aipos/work-orders/archive/`.
+Of the 504 active files, 96 carry a closed status that has not been archived (merge not proven, or the path is still referenced) and 408 are open or unclassified.
 
 Most common statuses among the open files (new orders use only `READY_FOR_REVIEW`, `IN_PROGRESS`, `BLOCKED`, `COMPLETED`, `SUPERSEDED`, `ABANDONED`):
 
 | Status | Files |
 |---|---|
-| READY_FOR_REVIEW | 229 |
-| IN_PROGRESS | 35 |
+| READY_FOR_REVIEW | 230 |
+| IN_PROGRESS | 36 |
 | LOCAL_VALIDATED_PENDING_CI | 20 |
 | VERIFYING | 14 |
 | LOCAL_VALIDATED_PENDING_EXACT_HEAD_CI | 13 |
@@ -29,7 +29,7 @@ Most common statuses among the open files (new orders use only `READY_FOR_REVIEW
 | COMPLETED_NO_SURVIVOR | 6 |
 | LOCAL_VALIDATED_PENDING_REVIEW_CI | 6 |
 
-### In progress or blocked (42)
+### In progress or blocked (43)
 
 | Work order | Status | Title |
 |---|---|---|
@@ -39,6 +39,7 @@ Most common statuses among the open files (new orders use only `READY_FOR_REVIEW
 | `WO-0010` | BLOCKED | Resolve remaining repository P0/P1 gaps before release-target changes |
 | `WO-0051` | IN_PROGRESS | Constitutional Production Transition Human/Environment Gate |
 | `WO-0059-PAPER-OBSERVATION-20261106` | IN_PROGRESS | Bounded observation of natural PAPER decision and execution outcomes |
+| `WO-0059-PROJECTION-CONTINUITY-20261107` | IN_PROGRESS | Bounded PAPER evidence projection anchors under saturated read-only windows |
 | `WO-20260924-MOBILE-DELIVERY-RESIDUAL-GATES` | BLOCKED | Residual Android delivery and device gates from closed mobile UI work orders |
 | `WO-20260927-AUTOPILOT-CODING-RECEIPT-RECONCILIATION` | IN_PROGRESS | Autopilot coding receipt reconciliation |
 | `WO-20260927-AUTOPILOT-SCHEDULED-RECEIPT-RECOVERY` | IN_PROGRESS | Recover malformed scheduled runtime receipt state |
@@ -72,9 +73,8 @@ Most common statuses among the open files (new orders use only `READY_FOR_REVIEW
 | `WO-RESEARCH-20261016-RUN-FINGERPRINT` | IN_PROGRESS | Verify existing Research run fingerprint at qualification boundary |
 | `WO-RESEARCH-20261021-ORDERBOOK-RETENTION` | IN_PROGRESS | Order-book retention is 14 days: the pre-registered studies lose their training data befo… |
 | `WO-UI-20261006-CALM-REDESIGN` | IN_PROGRESS | Whole-app calm redesign: 지금 · 학습 · 안전 · 기록 |
-| `WO-UI-20261019-LEARNING-FUNNEL` | IN_PROGRESS | Learning screen redesign step 2: Research funnel (tested -> discovery -> holdout) |
 
-…and 2 more. Full list: `node scripts/aipos-work-order-index.js`.
+…and 3 more. Full list: `node scripts/aipos-work-order-index.js`.
 
 ## Refresh
 

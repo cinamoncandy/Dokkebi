@@ -181,3 +181,44 @@ Safety stays: PAPER_ONLY, liveAuthority=NONE, productionMutationAllowed=false, a
 - 해석(추정, 두 증거 파일 비교): 활발한 시장이 뽑히면 이벤트 증거가 한도를 넘어 잘려 어떤 PR이든 Audit에서 떨어질 수 있는 증거 설계의 허점이다. 카나리 변경과는 무관하다.
 - 조치: `#3005`는 다시 초안으로 되돌렸다. main·서버·코드는 바뀌지 않았고 병합이 없었으므로 60분 시계는 시작되지 않았다.
 - 오너 결정: 증거 잘림 문제를 먼저 고친 뒤 카나리를 한다(재실행으로 우연히 통과시키지 않는다). 새 창은 그 수정이 병합되고 Audit가 정상으로 돌아온 뒤 오너와 다시 정한다.
+
+## 카나리 결과 (2026-11-07 KST, 실행 완료·되돌림 완료)
+**한 줄:** 실제 보호된 main에서 계약 불일치를 관찰했고, 첫 시도에서 Sigstore 증명서가 생성·서명되었다. 증명서 묶음 파일은 올라가지 않았고, 소비 검증기 승인·거절 단계는 관찰하지 못했다. L1은 PARTIAL이다. `CODE_ACTIONABLE`은 주장하지 않는다.
+
+### 타임라인 (KST)
+| 시각 | 사건 |
+|---|---|
+| 10:01 | 시작 직전 재확인에서 "열린 P0 없음"이 걸렸다(#2770, #2589). 오너가 막지 않기로 결정. |
+| 10:09 | `#3005` 초안 해제 → Audit 거절(`RUNTIME_SAFETY_SMOKE_NOT_PASS`, 증거 잘림). 초안으로 되돌림. 병합 없음. |
+| 12:00 | `#3010`(증거 연속성 수정)이 봇을 통해 병합(독립 검증 PASS_WITH_NOTES 후). |
+| 12:12 | PAPER 증거가 `PAPER_ORDERBOOK_UNRECONCILED`로 12ms 만에 실패 → 오너 승인으로 정확히 1회 재실행 → 통과. |
+| 13:01 | 재확인 통과, `#3005` 초안 해제, Audit 통과. |
+| 13:02:56 | 봇이 `#3005`를 병합(`96e8b8b`). 60분 감시 시작. |
+| 13:03~13:12 | main CI(run `42336691050`) 시도 1~3: `causal-regression-contract` 실패(`OBSERVED_MISMATCH`), Release가 실패 작업을 자동 재실행. |
+| 13:33 | 다른 PR `#3011`이 병합되어 두 번째 main CI(run `42338949247`, 다른 sha) 시도 1~3이 같은 패턴으로 실패. |
+| 14:00 | 감시 종료, 되돌리기 PR `#3012`(R) 준비. |
+| 14:04 | R의 CI 중 Cloudflare 점검(`preflight`)이 실패하고 P0 `#1461`이 갱신되어 Release가 직렬화됨. |
+| 14:35 | 오너 승인으로 R 본문에 `Resolves #1461` 추가. |
+| 14:52 | 봇이 R을 병합(`3241c52`). 대상 blob이 `865c7fb4…`로 복원. 새 main CI 성공, Cloudflare 배포 2건 성공. |
+빨간 main이었던 시간은 약 1시간 50분(13:03~14:52).
+
+### 관찰된 것 (사실)
+- 불일치: `REPAIRABLE_WORKFLOW_POLICY_V1`, 사례 `main-ci-timeout`, 기대 true, 관찰 false. 영수증의 source는 `cinamoncandy/NUSA`, `ci.yml@refs/heads/main`, push, job `causal-regression-contract`, sha `96e8b8b…`, run `42336691050`, attempt 1.
+- 서명: Sigstore Public Good 인증서로 `receipt.json`(sha256 `a20ff04d…`)에 대한 증명서를 만들고 Rekor(logIndex 3729194207)와 GitHub 증명서(64763526)에 올렸다.
+- 영수증 해시(앞 16자): run `42336691050` 시도 1/2/3 = `a20ff04da084af76` / `5177886e8de44d86` / `d8ccf9ffe12e2526`; run `42338949247` 시도 1/2/3 = `f2636d773306963c` / `1392ca911a266f77` / `1c8e89dd3bb0e996`. 보관 산출물 이름은 `nusa-causal-repairable-v1-1..3`이다.
+- 비초안 자율 PR, 배포, 서버·Oracle 영향은 없었다.
+
+### 확인하지 못한 것
+- `nusa-causal-attestation-N` 산출물이 없다: 증명서 묶음 업로드 단계(`Upload signed observation bundle`)가 3번 모두 "`artifacts/causal-regression/attestation.json` 없음"으로 실패했다. 그래서 소비 검증기가 받을 묶음이 없다. 원인은 아직 읽지 못했다(별도 작업).
+- 소비 검증기 승인·거절(`CODE_ACTIONABLE` 또는 닫힌 거절), 라이브 Gate A, 시도 2·3의 개별 서명은 확인하지 못했다.
+
+### 새로 알게 된 설계 허점과 교훈
+1. **빨간 main이 정상 경로로 복구되지 않는 연쇄:** main CI 실패 → 배포 없음 → Cloudflare 점검 실패 → P0 `#1461` 갱신 → Release 직렬화(`NO_ACTION Release serialized before Audit`). PR 본문의 `Resolves #<P0>`라는 설계된 통과 규칙으로만 풀렸다. 다음 카나리 전에 이 경로를 계획서에 적거나 구조를 개선해야 한다.
+2. **P0 확인은 라벨이 아니라 제목(`P0:`)과 `Refs #903` 본문으로 해야 한다.** 이번 사전 확인은 라벨만 봐서 `#1461`을 놓쳤다.
+3. **창 동안 다른 PR이 병합될 수 있다.** 필수 체크가 PR 단위라서 막을 수 없었다(`#3011`). 동결은 오너·ChatGPT 쪽 합의가 필요하다.
+4. **PAPER 런타임 증거는 시작 시점에 불안정하다**(`PAPER_ORDERBOOK_UNRECONCILED`, 12ms 실패 1회). 증거 이벤트 잘림은 `#3010`으로 고쳐졌다.
+5. **Release의 자동 재실행**은 예상대로 증명서 시도를 3개로 늘렸다.
+6. **Audit는 같은 head·같은 CI 실행에 대해 한 번만 인정**한다. 본문만 고쳐서는 재시작되지 않는다(빈 커밋은 쓰지 않았다).
+
+### 다음 후보
+증명서 묶음 업로드 실패 원인 분석과 수정, 소비 검증기 경로 재시도, 빨간 main 복구 경로 개선.
