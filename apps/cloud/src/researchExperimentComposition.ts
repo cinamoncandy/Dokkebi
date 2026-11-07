@@ -122,6 +122,8 @@ export function composeResearchExperiments(input: {
   readonly log?: (line: string) => void;
   readonly fetchImpl?: typeof fetch;
   readonly sleep?: (ms: number) => Promise<void>;
+  /** Yield the shared runtime event loop between synchronous per-interval manifest builds. */
+  readonly yieldControl?: () => Promise<void>;
   /** Meta-learning steering: the longer bar lengths tick every N-th scheduled tick (1 = every tick). Read on every tick. */
   readonly longBarTickEvery?: () => number;
 }): ResearchExperimentComposition | undefined {
@@ -131,6 +133,7 @@ export function composeResearchExperiments(input: {
   if (parsed.status === "INVALID") { log(`[research-experiments] disabled: ${parsed.reason}`); return undefined; }
   const settings = parsed.settings;
   const now = input.now ?? Date.now;
+  const yieldControl = input.yieldControl ?? (() => new Promise<void>((resolve) => setImmediate(resolve)));
   const db = input.database;
 
   const store = new SqliteResearchCandleStore(db);
@@ -273,7 +276,7 @@ export function composeResearchExperiments(input: {
   let researchTickActive = false;
   const w = settings.windows;
   const targetSpanMs = w.trainMs + w.validationMs + w.holdoutMs + DAY_MS;
-  const materializeConfiguredManifests = (market: string, firstClose: number, lastClose: number, sourceChanged = false): void => {
+  const materializeConfiguredManifests = async (market: string, firstClose: number, lastClose: number, sourceChanged = false): Promise<void> => {
     const fromBaseClose = Math.max(firstClose, lastClose - targetSpanMs + M);
     const createdAt = new Date(now()).toISOString();
     for (const minutes of settings.intervalsMinutes) {
@@ -286,21 +289,28 @@ export function composeResearchExperiments(input: {
         const retryState = manifestRetrySchedule.lastAttempt(market, intervalName);
         const sourceAdvancedSinceAttempt = retryState != null && currentIntervalClose > retryState.inputWatermarkMs;
         const missingRetryDue = existing == null && (retryState == null || sourceAdvancedSinceAttempt || now() - retryState.atMs >= MISSING_MANIFEST_RETRY_MS);
-        if (!sourceChanged && !inputAdvanced && !missingRetryDue) continue;
-        manifestRetrySchedule.recordAttempt(market, intervalName, now(), currentIntervalClose);
-        const candles = bars.read(market, intervalMs, fromBaseClose, lastClose);
-        if (candles.length === 0) {
-          log(`[research-manifest] ${market}/${intervalName} blocked: no complete interval candles`);
-          continue;
+        if (!sourceChanged && !inputAdvanced && !missingRetryDue) {
+          // A materialization of another interval may have occupied the event loop long enough
+          // for the PAPER writer heartbeat to become due. Yield even when this interval is a no-op.
+        } else {
+          manifestRetrySchedule.recordAttempt(market, intervalName, now(), currentIntervalClose);
+          const candles = bars.read(market, intervalMs, fromBaseClose, lastClose);
+          if (candles.length === 0) {
+            log(`[research-manifest] ${market}/${intervalName} blocked: no complete interval candles`);
+          } else {
+            const source = minutes === 1
+              ? `upbit-1m-closed:${market}:${M}`
+              : `upbit-1m-aggregated:${market}:${intervalMs}`;
+            materializeResearchDatasetManifest({ store: datasetManifests, candleStore: store, market, intervalMs, candles, source, createdAt, sourceCommitSha: settings.sourceCommitSha });
+            log(`[research-manifest] ${market}/${intervalName} materialized dataset manifest`);
+          }
         }
-        const source = minutes === 1
-          ? `upbit-1m-closed:${market}:${M}`
-          : `upbit-1m-aggregated:${market}:${intervalMs}`;
-        materializeResearchDatasetManifest({ store: datasetManifests, candleStore: store, market, intervalMs, candles, source, createdAt, sourceCommitSha: settings.sourceCommitSha });
-        log(`[research-manifest] ${market}/${intervalName} materialized dataset manifest`);
       } catch (error) {
         log(`[research-manifest] ${market}/${intervalName} blocked: ${error instanceof Error ? error.message : "unknown"}`);
       }
+      // Manifest construction is synchronous and can be CPU/I/O heavy for the maximum history
+      // window. Let lease heartbeats and other bounded runtime timers run between intervals.
+      await yieldControl();
     }
   };
   const backfill = async (): Promise<readonly BackfillResult[]> => {
@@ -316,7 +326,7 @@ export function composeResearchExperiments(input: {
           const firstClose = store.earliestCloseTime(market, M);
           const lastClose = store.latestCloseTime(market, M);
           if (firstClose != null && lastClose != null) {
-            materializeConfiguredManifests(market, firstClose, lastClose, result.recorded > 0);
+            await materializeConfiguredManifests(market, firstClose, lastClose, result.recorded > 0);
           }
         }
         log(`[research-backfill] ${market} ${result.status} recorded=${result.recorded} rejected=${result.rejected} pages=${result.pages}${result.errorCode === undefined ? "" : ` error=${result.errorCode}`}`);
@@ -373,7 +383,7 @@ export function composeResearchExperiments(input: {
             if (firstClose != null && lastClose != null) {
               const shouldRefresh = result.recorded > 0;
               const materializeStarted = performance.now();
-              try { materializeConfiguredManifests(market, firstClose, lastClose, shouldRefresh); }
+              try { await materializeConfiguredManifests(market, firstClose, lastClose, shouldRefresh); }
               finally { materializeMs += performance.now() - materializeStarted; }
             }
           }

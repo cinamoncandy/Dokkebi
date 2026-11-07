@@ -197,6 +197,7 @@ test("verified base receipts materialize each configured interval manifest on ba
   }
   let now = T_END;
   let fetchCalls = 0;
+  let yieldedIntervals = 0;
   const lines = [];
   const composition = composeResearchExperiments({
     env: env({ NUSA_RESEARCH_MARKETS: "KRW-BTC", NUSA_RESEARCH_TRAIN_DAYS: "1", NUSA_RESEARCH_VALIDATION_DAYS: "1", NUSA_RESEARCH_HOLDOUT_DAYS: "1", NUSA_RESEARCH_INTERVAL_MINUTES: "1,15,60,240" }),
@@ -204,11 +205,13 @@ test("verified base receipts materialize each configured interval manifest on ba
     now: () => now,
     log: (line) => lines.push(line),
     fetchImpl: async () => { fetchCalls += 1; throw new Error("complete verified source must not fetch"); },
+    yieldControl: async () => { yieldedIntervals += 1; await new Promise(setImmediate); },
   });
   try {
     const [backfill] = await composition.backfill();
     assert.equal(backfill.status, "COMPLETE");
     assert.equal(fetchCalls, 0);
+    assert.equal(yieldedIntervals, 4, "the event loop yields after each configured interval's synchronous materialization");
     // The 240m window begins inside a 4-hour bar, so its partial leading bar is correctly omitted.
     const expectedCounts = new Map([["1m", count], ["15m", count / 15], ["60m", count / 60], ["240m", count / 240 - 1]]);
     const initial = new Map();
@@ -224,6 +227,7 @@ test("verified base receipts materialize each configured interval manifest on ba
     // It must preserve the immutable existing manifest instead of conflicting on createdAt.
     now += 1_000;
     assert.equal((await composition.backfill())[0].status, "COMPLETE");
+    assert.equal(yieldedIntervals, 8, "no-op intervals also provide event-loop checkpoints between markets/intervals");
     assert.equal((await composition.fillGaps())[0].status, "NO_GAPS");
     for (const [interval, prior] of initial) {
       const replay = composition.datasetManifests.latest("KRW-BTC", interval);
@@ -296,6 +300,37 @@ test("incomplete raw-source receipt coverage cannot materialize any configured i
     assert.equal(backfill.errorCode, "SOURCE_RECEIPTS_INCOMPLETE");
     assert.equal(fetchCalls, 1);
     for (const interval of ["1m", "15m", "60m"]) assert.equal(composition.datasetManifests.latest("KRW-BTC", interval), undefined, interval);
+  } finally { composition.stop(); db.close(); }
+});
+
+test("a raw-source receipt with rejected observations cannot produce a manifest", () => {
+  const db = open();
+  const store = new SqliteResearchCandleStore(db);
+  const rows = [
+    { closeTimeMs: T_END - M, open: 10, high: 11, low: 9, close: 10, volume: 1 },
+    { closeTimeMs: T_END, open: 10, high: 12, low: 9, close: 11, volume: 2 },
+  ];
+  store.appendWithMaterial("KRW-BTC", M, rows, {
+    source: "UPBIT_PUBLIC_CANDLES",
+    sourceFingerprint: UPBIT_CANDLE_SOURCE_FINGERPRINT,
+    evidenceFingerprintSha256: "e".repeat(64),
+    missingBuckets: 0,
+    incompleteBuckets: 0,
+    rejectedObservations: 1,
+  });
+  const composition = composeResearchExperiments({ env: env(), database: db, now: () => T_END, log: () => {} });
+  try {
+    assert.throws(() => materializeResearchDatasetManifest({
+      store: composition.datasetManifests,
+      candleStore: store,
+      market: "KRW-BTC",
+      intervalMs: M,
+      candles: rows,
+      source: `upbit-1m-closed:KRW-BTC:${M}`,
+      createdAt: new Date(T_END).toISOString(),
+      sourceCommitSha: SHA,
+    }), (error) => error?.code === "MANIFEST_SOURCE_MALFORMED");
+    assert.equal(composition.datasetManifests.latest("KRW-BTC", "1m"), undefined, "rejected source material creates no manifest");
   } finally { composition.stop(); db.close(); }
 });
 

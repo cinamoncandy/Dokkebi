@@ -47,6 +47,7 @@ export function materializeResearchDatasetManifest(input: {
   if (calculateResearchCandleSha256(derivedCanonical) !== contentSha256) throw Object.assign(new Error("dataset material does not match the verified source candles"), { code: "MANIFEST_CONTENT_MISMATCH" });
   const materials = input.candleStore.listMaterial(input.market, sourceIntervalMs, firstBaseClose, lastBaseClose);
   if (materials.length === 0 || materials.some((material) => material.source !== "UPBIT_PUBLIC_CANDLES" || material.sourceFingerprint !== UPBIT_CANDLE_SOURCE_FINGERPRINT || material.evidenceFingerprintSha256 == null || !SHA256.test(material.evidenceFingerprintSha256))) throw Object.assign(new Error("complete canonical raw-source receipts are required"), { code: "MANIFEST_PROVENANCE_REQUIRED" });
+  if (materials.some((material) => material.rejectedObservations !== 0)) throw Object.assign(new Error("malformed raw-source observations cannot produce a canonical manifest"), { code: "MANIFEST_SOURCE_MALFORMED" });
   const receiptCovered = new Set<number>();
   for (const material of materials) {
     for (const candle of input.candleStore.read(input.market, sourceIntervalMs, material.firstCloseTimeMs, material.lastCloseTimeMs)) receiptCovered.add(candle.closeTimeMs);
