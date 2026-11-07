@@ -52,7 +52,9 @@ jobs:
           }
 
           runs_for_main() {
-            gh api "repos/$GITHUB_REPOSITORY/actions/runs?head_sha=$MAIN_SHA&per_page=100"
+            gh api --paginate \
+              "repos/$GITHUB_REPOSITORY/actions/runs?head_sha=$MAIN_SHA&per_page=100" \
+              --jq '.workflow_runs[]' | jq -s '{workflow_runs: .}'
           }
 
           workflow_success() {
@@ -84,6 +86,50 @@ jobs:
             '
           }
 
+          latest_oracle_release() {
+            printf '%s' "$RUNS_JSON" | jq -c --arg sha "$MAIN_SHA" '
+              [.workflow_runs[] |
+                select(.name == "Oracle PAPER Release" and
+                  .path == ".github/workflows/oracle-paper-release.yml" and
+                  .head_branch == "main" and .head_sha == $sha)] |
+              sort_by(.run_started_at // .created_at) | last // empty
+            '
+          }
+
+          oracle_release_success() {
+            local run
+            run="$(latest_oracle_release)"
+            [ -n "$run" ] || return 1
+            printf '%s' "$run" | jq -e '
+              .status == "completed" and .conclusion == "success" and
+              (.run_attempt | type) == "number" and .run_attempt >= 1
+            ' >/dev/null
+          }
+
+          latest_post_release_host_diagnose() {
+            local release
+            release="$(latest_oracle_release)"
+            [ -n "$release" ] || return 1
+            printf '%s' "$RUNS_JSON" | jq -c --arg sha "$MAIN_SHA" --arg release_done "$(printf '%s' "$release" | jq -r '.updated_at // empty')" '
+              [.workflow_runs[] |
+                select(.name == "Oracle Host Diagnose" and
+                  .path == ".github/workflows/oracle-host-diagnose.yml" and
+                  .head_branch == "main" and .head_sha == $sha and
+                  ((.run_started_at // .created_at) > $release_done))] |
+              sort_by(.run_started_at // .created_at) | last // empty
+            '
+          }
+
+          oracle_host_diagnose_success() {
+            local run
+            run="$(latest_post_release_host_diagnose)"
+            [ -n "$run" ] || return 1
+            printf '%s' "$run" | jq -e '
+              .status == "completed" and .conclusion == "success" and
+              (.run_attempt | type) == "number" and .run_attempt >= 1
+            ' >/dev/null
+          }
+
           surface_incident() {
             local component="$1"
             local detail="$2"
@@ -97,13 +143,54 @@ jobs:
             fi
           }
 
+          # A successful Actions conclusion is not proof of a CONVERGED receipt.
+          # Read the artifact attached to that exact run and fail closed on any
+          # missing, stale or semantically incomplete evidence.
+          receipt_success() {
+            local run_id tmp
+            while IFS= read -r run_id; do
+              [ -n "$run_id" ] || continue
+              tmp="$(mktemp -d "$RUNNER_TEMP/receipt-verify.XXXXXX")"
+              if gh run download "$run_id" --repo "$GITHUB_REPOSITORY" \
+                  --name "deployment-convergence-receipt-$MAIN_SHA" --dir "$tmp" >/dev/null 2>&1 \
+                && jq -e --arg sha "$MAIN_SHA" '
+                    .schema_version == 3 and
+                    .source_sha == $sha and .expected_main_sha == $sha and
+                    .observed_main_sha == $sha and
+                    .convergence_status == "CONVERGED" and
+                    .oracle_convergence_status == "CONVERGED" and
+                    .components.protected_main.exact == true and
+                    .components.oracle_paper_release.pass == true and
+                    .components.oracle_host.observed_sha == $sha and
+                    .components.oracle_host.runtime_source_sha == $sha
+                  ' "$tmp/receipt.json" >/dev/null 2>&1; then
+                rm -rf -- "$tmp"
+                return 0
+              fi
+              rm -rf -- "$tmp"
+            done < <(printf '%s' "$RUNS_JSON" | jq -r --arg sha "$MAIN_SHA" '
+              [.workflow_runs[] |
+                select(.name == "Deployment Convergence Receipt" and
+                  .path == ".github/workflows/deployment-convergence-receipt.yml" and
+                  .head_sha == $sha and .status == "completed" and
+                  .conclusion == "success")] |
+                sort_by(.created_at) | reverse | .[].id
+            ')
+            return 1
+          }
+
           dispatch_bounded() {
             local component="$1"
             local workflow_name="$2"
             local workflow_file="$3"
             shift 3
 
-            if workflow_success "$workflow_name"; then
+            if [ "$workflow_name" = "Deployment Convergence Receipt" ]; then
+              if receipt_success; then
+                echo "$component already has a verified exact-main CONVERGED receipt."
+                return 0
+              fi
+            elif workflow_success "$workflow_name"; then
               echo "$component already has exact-main SUCCESS."
               return 0
             fi
@@ -113,9 +200,21 @@ jobs:
             fi
 
             local failures
-            failures="$(workflow_failures "$workflow_name")"
+            if [ "$workflow_name" = "Deployment Convergence Receipt" ]; then
+              # One GitHub run record can represent multiple reruns. Sum run_attempt
+              # for every completed exact-head receipt run so reruns consume budget too.
+              failures="$(printf '%s' "$RUNS_JSON" | jq -r --arg sha "$MAIN_SHA" '
+                [.workflow_runs[] |
+                  select(.name == "Deployment Convergence Receipt" and
+                    .path == ".github/workflows/deployment-convergence-receipt.yml" and
+                    .head_sha == $sha and .status == "completed") |
+                  (.run_attempt // 1)] | add // 0
+              ')"
+            else
+              failures="$(workflow_failures "$workflow_name")"
+            fi
             if [ "$failures" -ge 3 ]; then
-              surface_incident "$component" "Observed $failures failed/timed-out/cancelled exact-main runs."
+              surface_incident "$component" "Observed $failures completed exact-main receipt attempts."
               echo "$component retry budget exhausted; remaining fail-closed."
               return 0
             fi
@@ -234,11 +333,63 @@ jobs:
             && workflow_success "Windows Desktop Stable Release" \
             && [ "$ANDROID_TARGET" = "$MAIN_SHA" ] \
             && [ "$WINDOWS_TARGET" = "$MAIN_SHA" ]; then
-            dispatch_bounded \
-              "Deployment Receipt" \
-              "Deployment Convergence Receipt" \
-              "deployment-convergence-receipt.yml" \
-              -f "inputs[source_sha]=$MAIN_SHA"
+            if ! oracle_release_success; then
+              LATEST_RELEASE="$(latest_oracle_release)"
+              if [ -n "$LATEST_RELEASE" ]; then
+                RELEASE_STATUS="$(printf '%s' "$LATEST_RELEASE" | jq -r '.status // "unknown"')"
+                RELEASE_CONCLUSION="$(printf '%s' "$LATEST_RELEASE" | jq -r '.conclusion // "none"')"
+                RELEASE_ID="$(printf '%s' "$LATEST_RELEASE" | jq -r '.id // "unknown"')"
+                RELEASE_ATTEMPT="$(printf '%s' "$LATEST_RELEASE" | jq -r '.run_attempt // "unknown"')"
+                echo "Convergence receipt waits for the latest exact-main Oracle PAPER Release to complete successfully (run $RELEASE_ID, attempt $RELEASE_ATTEMPT, status $RELEASE_STATUS, conclusion $RELEASE_CONCLUSION). No Release is dispatched by the watchdog."
+                if [ "$RELEASE_STATUS" = "completed" ]; then
+                  surface_incident "Oracle PAPER Release" "Latest exact-main run $RELEASE_ID attempt $RELEASE_ATTEMPT concluded $RELEASE_CONCLUSION. The watchdog will not dispatch a Release; use the existing governed manual Release path after investigation."
+                fi
+              else
+                echo "Convergence receipt waits for an exact-main Oracle PAPER Release. No Release is dispatched by the watchdog."
+                surface_incident "Oracle PAPER Release" "No exact-main Oracle PAPER Release is available for $MAIN_SHA. The watchdog does not dispatch a Release; use the existing governed manual Release path."
+              fi
+            elif ! oracle_host_diagnose_success; then
+              LATEST_DIAGNOSE="$(latest_post_release_host_diagnose || true)"
+              if [ -n "$LATEST_DIAGNOSE" ]; then
+                DIAGNOSE_STATUS="$(printf '%s' "$LATEST_DIAGNOSE" | jq -r '.status // "unknown"')"
+                DIAGNOSE_CONCLUSION="$(printf '%s' "$LATEST_DIAGNOSE" | jq -r '.conclusion // "none"')"
+                DIAGNOSE_ID="$(printf '%s' "$LATEST_DIAGNOSE" | jq -r '.id // "unknown"')"
+                DIAGNOSE_ATTEMPT="$(printf '%s' "$LATEST_DIAGNOSE" | jq -r '.run_attempt // "unknown"')"
+                echo "Convergence receipt waits for the latest post-Release Oracle Host Diagnose to complete successfully (run $DIAGNOSE_ID, attempt $DIAGNOSE_ATTEMPT, status $DIAGNOSE_STATUS, conclusion $DIAGNOSE_CONCLUSION). Host Diagnose remains read-only and manual."
+                if [ "$DIAGNOSE_STATUS" = "completed" ]; then
+                  surface_incident "Oracle Host Diagnose" "Post-Release read-only Host Diagnose run $DIAGNOSE_ID attempt $DIAGNOSE_ATTEMPT concluded $DIAGNOSE_CONCLUSION. Convergence remains fail-closed until fresh matching host evidence is available."
+                fi
+              else
+                echo "Convergence receipt waits for a fresh read-only Oracle Host Diagnose started after the successful Release. The watchdog does not access or mutate the host."
+                RELEASE_ID="$(latest_oracle_release | jq -r '.id // "unknown"')"
+                RELEASE_ATTEMPT="$(latest_oracle_release | jq -r '.run_attempt // "unknown"')"
+                surface_incident "Oracle Host Diagnose" "No successful post-Release read-only Host Diagnose is available after Oracle Release run $RELEASE_ID attempt $RELEASE_ATTEMPT. The watchdog does not dispatch or access the host."
+              fi
+            else
+              WATCHDOG_SHA="$(git rev-parse HEAD)"
+              if [ "$WATCHDOG_SHA" != "$MAIN_SHA" ]; then
+                echo "Checked-out watchdog source $WATCHDOG_SHA is not the current protected main $MAIN_SHA; refusing receipt dispatch."
+                exit 0
+              fi
+
+              ORACLE_EVIDENCE_PATH="$RUNNER_TEMP/oracle-convergence-evidence.json"
+              EXPECTED_SHA="$MAIN_SHA" WORKFLOW_SHA="$WATCHDOG_SHA" \
+                node scripts/deployment-convergence-oracle.js > "$ORACLE_EVIDENCE_PATH"
+              ORACLE_STATUS="$(jq -r '.oracle_convergence_status // "INCOMPLETE"' "$ORACLE_EVIDENCE_PATH")"
+              ORACLE_REASON="$(jq -r '.oracle_convergence_reason // "UNKNOWN"' "$ORACLE_EVIDENCE_PATH")"
+              if [ "$ORACLE_STATUS" != "CONVERGED" ]; then
+                echo "HOST_SHA_VERIFIED=false status=$ORACLE_STATUS reason=$ORACLE_REASON; receipt dispatch remains blocked."
+                surface_incident "Oracle Host Evidence" "The server-side Release/Host SHA verifier returned $ORACLE_STATUS ($ORACLE_REASON) for exact-main $MAIN_SHA. No Convergence receipt was dispatched."
+              else
+                echo "HOST_SHA_VERIFIED=true source=$MAIN_SHA; dispatching the existing receipt validator."
+                assert_still_current
+                dispatch_bounded \
+                  "Deployment Receipt" \
+                  "Deployment Convergence Receipt" \
+                  "deployment-convergence-receipt.yml" \
+                  -f "inputs[source_sha]=$MAIN_SHA"
+              fi
+            fi
           else
             echo "Convergence receipt waits for all exact-main runtime and stable distribution proofs."
           fi

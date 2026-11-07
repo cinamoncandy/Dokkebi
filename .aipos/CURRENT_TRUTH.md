@@ -7,21 +7,21 @@ Everything below is what the repository's records *claim*. Re-verify on GitHub b
 
 ## Newest handoff
 
-[`.aipos/handoffs/2026-11-07-forge-p0-p1-3010.md`](handoffs/2026-11-07-forge-p0-p1-3010.md) — CORE handoff — 2026-11-07 — #3000 Formal Validation and WO-0059 P2
+[`.aipos/handoffs/2026-11-07-oracle-convergence-1816.md`](handoffs/2026-11-07-oracle-convergence-1816.md) — CORE handoff — 2026-11-07 — #1816 Exact-Main Oracle Convergence
 
-> Observed at `2026-11-07T03:59Z`.
+> ## Canonical state at handoff update
 
 ## Work orders
 
-532 total: 503 in `.aipos/work-orders/`, 29 closed and merged in `.aipos/work-orders/archive/`.
-Of the 503 active files, 96 carry a closed status that has not been archived (merge not proven, or the path is still referenced) and 407 are open or unclassified.
+533 total: 504 in `.aipos/work-orders/`, 29 closed and merged in `.aipos/work-orders/archive/`.
+Of the 504 active files, 96 carry a closed status that has not been archived (merge not proven, or the path is still referenced) and 408 are open or unclassified.
 
 Most common statuses among the open files (new orders use only `READY_FOR_REVIEW`, `IN_PROGRESS`, `BLOCKED`, `COMPLETED`, `SUPERSEDED`, `ABANDONED`):
 
 | Status | Files |
 |---|---|
 | READY_FOR_REVIEW | 229 |
-| IN_PROGRESS | 36 |
+| IN_PROGRESS | 37 |
 | LOCAL_VALIDATED_PENDING_CI | 20 |
 | VERIFYING | 14 |
 | LOCAL_VALIDATED_PENDING_EXACT_HEAD_CI | 13 |
@@ -29,7 +29,7 @@ Most common statuses among the open files (new orders use only `READY_FOR_REVIEW
 | COMPLETED_NO_SURVIVOR | 6 |
 | LOCAL_VALIDATED_PENDING_REVIEW_CI | 6 |
 
-### In progress or blocked (43)
+### In progress or blocked (44)
 
 | Work order | Status | Title |
 |---|---|---|
@@ -64,6 +64,7 @@ Most common statuses among the open files (new orders use only `READY_FOR_REVIEW
 | `WO-OPS-20261018-PERIOD-DISPOSITION-CONSUMER-V2` | IN_PROGRESS | Make canonical PAPER pending consumers recovery-safe across immutable schemaVersion=2 dis… |
 | `WO-OPS-20261019-ORACLE-STABILITY-ROLLBACK` | IN_PROGRESS | Prevent false Oracle stability rollback and converge Autopilot identity on rollback |
 | `WO-OPS-20261030-AIPOS-STATUS-ARCHIVE-TRUTH` | IN_PROGRESS | One work-order status enum, an archive for closed merged orders, and a generated current-… |
+| `WO-OPS-20261105-ORACLE-CONVERGENCE-1816` | IN_PROGRESS | Bind Deployment Convergence to exact Oracle Release and host read-back evidence |
 | `WO-PAPER-20261006-ANON-OBSERVATION` | IN_PROGRESS | Restore truthful mobile PAPER observation without widening authority |
 | `WO-POLICY-20261015-PAPER-LOSS-LIMIT` | IN_PROGRESS | Owner-approved removal of Cloud spot PAPER consecutive-loss halt |
 | `WO-RESEARCH-20261015-RAIM-VENUESPEC` | IN_PROGRESS | RAIM regime-adaptive market-making research: VenueSpec gate (step 2 of the validation ord… |
@@ -72,9 +73,8 @@ Most common statuses among the open files (new orders use only `READY_FOR_REVIEW
 | `WO-RESEARCH-20261016-QUALIFICATION-IDENTITY` | IN_PROGRESS | Bind canonical qualification results to run and frozen policy identity |
 | `WO-RESEARCH-20261016-RUN-FINGERPRINT` | IN_PROGRESS | Verify existing Research run fingerprint at qualification boundary |
 | `WO-RESEARCH-20261021-ORDERBOOK-RETENTION` | IN_PROGRESS | Order-book retention is 14 days: the pre-registered studies lose their training data befo… |
-| `WO-UI-20261006-CALM-REDESIGN` | IN_PROGRESS | Whole-app calm redesign: 지금 · 학습 · 안전 · 기록 |
 
-…and 3 more. Full list: `node scripts/aipos-work-order-index.js`.
+…and 4 more. Full list: `node scripts/aipos-work-order-index.js`.
 
 ## Refresh
 

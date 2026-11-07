@@ -1,0 +1,82 @@
+# CORE handoff — 2026-11-07 — #1816 Exact-Main Oracle Convergence
+
+## Canonical state at handoff update
+
+- Protected main was freshly verified as `0209466469fe45b7f90dbeefb96d4a9e27cfb3b2`.
+- Existing PR #3000 is OPEN/Draft and remains the sole implementation PR for Issue #1816. Implementation commit `10689b51e818dc98918accb5d447145635b72bb4` was pushed to `fix/oracle-convergence-host-evidence-1816`; the generated-truth successor is `e1c2a8c710bf91eac099a00791dc0cc622fac23a`, followed by status-only handoff/work-order updates. The latest exact-head CI and companion results are recorded below. The PR base is `main` and the branch is mergeable.
+- The current PR author is `cinamoncandy`. No submitted GitHub review exists; the separate-session technical disposition below is not a non-author GitHub review.
+- The documentation successor corrects the earlier handoff's stale pre-commit statements. Exact-head CI run `42322787479` for `109a2e08…` ended FAIL: `coverage-core-3` found a generated-document mismatch in `tests/aipos-current-truth.test.js` because `.aipos/CURRENT_TRUTH.md` had not been regenerated after the handoff heading changed. Core shards 0–2, UI coverage, validation, and companions passed; coverage aggregation was skipped and the downstream `test` gate failed because coverage was incomplete. This is a documentation-generation failure, not an Oracle verifier failure.
+- Four pre-existing untracked `docs/audits/*2026-11-05*` reports and locally generated `*2026-11-07*` security reports are preserved outside the PR diff.
+
+## Repair and validation completed at implementation SHA
+
+- The receipt verifier requires protected main, successful exact-main Oracle Release, deployed `current_release`, read-only post-release Host Diagnose `/opt/nusa/current`, and runtime `/health` `sourceCommitSha` to agree.
+- It binds the Release run/attempt to its jobs and a current, unexpired, bounded release artifact; downloads the ZIP and compares its SHA-256 with GitHub's artifact digest. It records Release and Diagnose run/attempt/job identifiers and raw job-log archive digests.
+- The Watchdog calls the same read-only verifier before dispatching the existing Receipt workflow. It blocks when its checked-out source is not current main, verification is incomplete, or main moves. It never dispatches Release or Host Diagnose and does not mutate the Oracle host.
+- `RELEASE_PROVENANCE_UNKNOWN` remains unchanged. No readiness, trading, risk, writer-lease, or execution authority changed.
+- Local validation on the implementation tree: `pnpm test` PASS (1,336 isolated test files); Oracle focused tests 14/14 PASS; `validate:full`, typecheck, build, security gate, workflow action input/pin/authority-map validation, modified-workflow YAML parse, and diff checks PASS. Lint: 0 errors / 47 baseline warnings. One first full-suite attempt hit transient `EADDRINUSE`; the affected test passed alone and a bounded full-suite rerun passed.
+- Security gate initially flagged a long test-only `token` placeholder. The fixture was changed to the repository's safe `test` placeholder; focused tests and the security gate then passed with zero secret findings.
+- Exact-head checks for implementation SHA `10689b51…`: CI run `42321553420` SUCCESS; Actual PAPER `42321553418`, bridge `42321550467`, read-only broker `42321553425`, activation rehearsal `42321553590`, capability guard `42321553440`, and transport readiness `42321553554` SUCCESS. CI's `causal-regression-contract` and `attest-causal-regression` jobs were SKIPPED and are not positive causal evidence.
+- A fresh separate-session read-only technical Validator returned `PASS_WITH_NOTES`: 0 P0, 0 P1, 1 P2. The P2 was stale handoff/work-order wording and is addressed by this documentation successor. This is not a GitHub non-author review, Formal Validator, Audit, Release authorization, or merge approval.
+- The generated truth mismatch at `109a2e08…` was corrected with `pnpm run aipos:truth`. The affected AIPOS test plus Oracle suite passed 18/18, AIPOS YAML validation passed, and the exact CI-equivalent local shard passed 335/335 files. These local results do not replace the new successor's exact-head CI.
+- Final generated-current-truth successor `e1c2a8c710bf91eac099a00791dc0cc622fac23a`: CI run `42323677036` SUCCESS; Actual PAPER `42323677064`, bridge `42323675211`, read-only broker `42323677171`, activation rehearsal `42323676928`, capability guard `42323676987`, and transport readiness `42323676947` SUCCESS. `causal-regression-contract` and `attest-causal-regression` were SKIPPED because no mismatch was observed; they are not positive causal evidence.
+- A fresh separate-session technical review of `e1c2a8c710bf91eac099a00791dc0cc622fac23a` returned `PASS_WITH_NOTES`, P0=0/P1=0/P2=1. Its P2 identified the stale next-step wording in this handoff and the work order; this status-only follow-up corrects that wording. The disposition is not a GitHub non-author review, Formal Validator, Audit, Release authorization, or merge approval.
+- A fresh separate-session technical review of `ca8bf7f6bbd2e88c3d60fb7200da6443502a3b02` returned `PASS_WITH_NOTES`, P0=0/P1=0/P2=0. This status-only handoff/work-order follow-up is newer than that reviewed head; recheck exact-head CI before advancing. The repository operating-model decision permits the owner account to use a separate fresh VALIDATOR session; the review session and exact target are recorded in the existing PR handoff comment.
+- The repository has no dedicated Formal Validator workflow or script. Marking this PR Ready emits `ready_for_review`; the bridge re-resolves the successful exact-head CI and `planAutopilotExecution` turns the resulting `PR_CI_SUCCEEDED` into `AUDIT_REQUEST`. Since the required gate order is Formal Validator before deterministic Audit, keep this PR Draft until the canonical Formal Validator result is available. Do not let an automatic Ready transition start Audit ahead of Formal validation.
+
+## Read-only Oracle evidence (unchanged)
+
+- Exact-main Oracle PAPER Release `42310426982`, attempt 1, succeeded for `0209466469fe45b7f90dbeefb96d4a9e27cfb3b2`; artifact `13547234011` (`nusa-paper-release`) was unexpired at lookup, size 25,098,146 bytes, digest `sha256:73741e5ce29c2b856e4b45390bd88ac3c36b11569683d5ed66101a4d1082abd1`.
+- Read-only Host Diagnose `42313636735`, attempt 1, succeeded later on runner ID 24. `/health` observed at `2026-11-06T23:42:13.591Z` reported `runtime.sourceCommitSha=0209466469fe45b7f90dbeefb96d4a9e27cfb3b2`; `current_release` resolved to the same SHA.
+- Older Convergence run `42312068928` failed before Release completed. No post-change canonical machine-readable Convergence receipt exists. The evidence above predates the repair and is not a receipt for it.
+
+## Next canonical transition
+
+Latest verified technical target `ca8bf7f6bbd2e88c3d60fb7200da6443502a3b02` has terminal exact-head CI and companion SUCCESS plus separate-session technical disposition PASS_WITH_NOTES, P0=0/P1=0/P2=0. A later status-only documentation update is being checked independently. The repository permits a same-account, separate fresh VALIDATOR session; its technical disposition is recorded in the existing PR handoff comment, while submitted GitHub reviews remain 0. The next required gate is a canonical Formal Validator terminal result. Keep the PR Draft: marking it Ready would replay CI into the Autopilot Audit request path before Formal validation. The repository currently exposes no dedicated Formal Validator workflow/script in this checkout. After Formal validation, follow the distinct deterministic Audit, Release-authority, and governed-merge gates. After governed inclusion, a new authorized Oracle Release and post-release Host Diagnose are required before the official Convergence receipt can be issued. Do not dispatch Release, deploy, restart, merge, or claim canonical Convergence from local evaluation.
+
+Safety remains `PAPER_ONLY`, `liveAuthority=NONE`, `productionMutationAllowed=false`, `realOrderAuthority=false`, `realTransferAuthority=false`, and `aiAuthority=ZERO_AUTHORITY`.
+
+## Current-main reconciliation — 2026-11-07 07:44 UTC
+
+- Fresh protected main is `3241c525ab9575271a1150d8635d87ef9764c069` (merge of PR #3012). PR #3000 is still OPEN/Draft at the predecessor `2d7b6c7d8ac804961ec150c308311eede2d24995`, with a stale recorded base `0209466469fe45b7f90dbeefb96d4a9e27cfb3b2` and `mergeable=false`.
+- The sole implementation branch remains `fix/oracle-convergence-host-evidence-1816`. A local no-commit merge of current main has been performed. The only merge conflict was generated `.aipos/CURRENT_TRUTH.md`; it was resolved by running `node scripts/generate-aipos-current-truth.js`. No protected-main or Oracle mutation occurred. Four untracked `docs/audits/*` reports remain outside the staged PR diff.
+- Reconciled-tree validation: `pnpm test` PASS (1,336 isolated test files); `pnpm run typecheck`, `pnpm run build` (within `pnpm test`), `pnpm run validate:full`, `pnpm run security:gate` PASS; `pnpm run lint:scripts` has 0 errors and 47 existing warnings; staged and unstaged `git diff --check` PASS. New exact-head CI and a fresh technical review are required after the successor commit.
+- PR #3010 is CLOSED/MERGED and its changes are in current main. Its final description records N2/N3/N4 corrections and successor CI/companions; it also explicitly leaves N1's monotonic timestamp/insertion assumption unverified. No new exact-head independent reviewer disposition or Formal Validator receipt is claimed. Do not recreate or reopen it.
+- Formal Validator remains the first governance blocker: current repository policy/workflows provide no canonical Formal Validator issuer, terminal receipt schema, or Audit consumer. The GRILL/technical disposition is not Formal validation. Keep #3000 Draft; do not invent a receipt or mark it Ready because Ready can dispatch Audit before Formal validation.
+- Oracle evidence remains historical: no exact-main Release/Host Diagnose/official Convergence receipt exists for `3241c525…`; the reported runtime is at `0209466469…`. Research manifest/session and `TICK_ERROR` cause remain unverified because authorized journal/database read access is unavailable.
+
+Next: complete final AIPOS/diff checks, commit the current-main reconciliation to this existing #3000 branch, push fast-forward only, then verify successor exact-head checks and request/receive a fresh independent technical review. Formal Validator, Audit, Release authorization, governed merge, and post-merge Oracle evidence remain separate gates.
+
+## FORGE P2 watchdog repair successor — 2026-11-07
+
+- Fresh protected main and PR base: `3241c525ab9575271a1150d8635d87ef9764c069`; existing PR #3000 remains OPEN/Draft/mergeable.
+- P2 implementation and test predecessor: `4f03fb2f046fc3ab6bf661edaead35f950b65c3e`. Current final head must be re-read after documentation commits.
+- Watchdog now downloads the artifact of a successful exact-main Receipt run before deduping. It requires schema 3, exact source/main and Oracle/host SHA alignment, and CONVERGED at the top level and Oracle level. Missing, stale, malformed or inaccessible artifacts cannot prove completion.
+- All completed receipt runs (even a workflow SUCCESS with invalid semantic evidence) consume the per-main budget of three; queued/in-progress runs block duplicate dispatch. GitHub run history is the durable cross-restart counter.
+- Tests added to assert semantic proof, exact-run artifact binding, active-run guard and retry cap. No successful current-successor CI, independent validation, or runtime Convergence receipt is claimed before verification.
+- PR body refreshed to distinguish prior head results from current successor. This is not a Formal Validator receipt, Audit, Release authorization, governed merge or Oracle deployment.
+- FIRST_BROKEN_TRANSITION under repair: `Receipt Actions SUCCESS -> semantic receipt CONVERGED -> watchdog deduplication`. Separately, Formal Validator issuance and Audit consumption are not proven and must remain fail-closed.
+- Next: exact-head CI + companions, updated independent review, canonical Formal Validator evidence, deterministic Audit, Release authority and governed merge; post-merge exact-main Oracle Release / Host Diagnose / machine receipt only with proper external authorization.
+- Safety unchanged: PAPER_ONLY; liveAuthority=NONE; productionMutationAllowed=false; realOrderAuthority=false; realTransferAuthority=false; aiAuthority=ZERO_AUTHORITY.
+
+## AIPOS state.d CI failure repair — 2026-11-07
+
+- Fresh PR successor at investigation: `23697c576841fab4cd9c99034bdff186c56e41f6`; exact-head CI run `42361773233` failed in `coverage-core-2` at `tests/aipos-state-dir.test.js`.
+- Root cause: `.aipos/state.d/current_ops_oracle_convergence_1816_20261105.yaml` contained both `current_ops_oracle_convergence_1816_20261105` and `forge_watchdog_p2_20261107`, violating the canonical one-key-per-file invariant. No production or Oracle behavior failed.
+- Minimal repair: split `forge_watchdog_p2_20261107` into `.aipos/state.d/forge_watchdog_p2_20261107.yaml`; regenerate `.aipos/CURRENT_TRUTH.md` with the repository generator. Existing untracked security/audit reports remain excluded from the PR.
+- Verification on the repair tree: focused state-dir/current-truth/convergence tests 20/20 PASS; `pnpm test` PASS (1,336 isolated test files); `pnpm run validate:full` PASS; `pnpm run security:gate` PASS (0 findings/secrets); `pnpm run lint:scripts` 0 errors / 47 baseline warnings; AIPOS YAML, provenance, generated CURRENT_TRUTH and `git diff --check` PASS. `pnpm test` used dependencies installed from the frozen lockfile in the isolated temporary worktree; the original workspace dependency symlink was preserved.
+- This repair tree's successor SHA still requires exact-head CI/companions and fresh independent review. PR remains Draft. Formal Validator, Audit, Release authorization, merge, Oracle operation and canonical Convergence receipt remain unverified/not authorized.
+
+## Fresh independent review finding — retry attempts — 2026-11-07
+
+- Exact reviewed SHA: `4e9553b331f9488ef8dc963e2d5c1f07ba9d5eba`; exact-head CI `42363133880` and five companions passed. Conditional causal jobs were skipped and are not positive causal evidence.
+- Separate read-only Validator disposition: `CHANGES_REQUIRED`, P0=0/P1=0/P2=1. The reviewer found that counting completed run records with `length` does not enforce a three-attempt budget when GitHub reruns increment `run_attempt` on one record.
+- Minimal correction in the existing #3000 branch: sum each completed exact-main receipt run's `run_attempt` (default 1) rather than count run records. The focused convergence test now asserts the attempt-sum query and rejects the old record-count query; focused suite 15/15 PASS.
+- The review applies only to `4e9553b3…`; a fresh independent review is required after successor validation. Full suite and all affected checks remain pending for the code successor. Keep Draft; no Formal Validator/Audit/Release/merge or Oracle operation is implied.
+
+## Retry-cap attempt aggregation repair — 2026-11-07
+
+- Addressed the exact-head independent review P2 on `4e9553b331f9488ef8dc963e2d5c1f07ba9d5eba` in the existing PR #3000 branch. The receipt budget now sums each completed exact-main run's `run_attempt` value (defaulting to 1) so rerunning one GitHub workflow run consumes the same three-attempt budget as separate runs.
+- Regression contract now requires the completed `run_attempt` sum and rejects the previous completed-record `length` count. The jq expression was exercised with a fixture representing two attempts in one run plus one separate run; the result was 3.
+- On the patch tree before commit: focused convergence tests 15/15 PASS; `pnpm test` PASS (1,336 isolated files); `validate:full` PASS; `security:gate` PASS (0 high/critical, 0 secrets); lint 0 errors / 47 baseline warnings; workflow action pins/inputs/authority map PASS (41 workflows); AIPOS YAML/provenance/generated truth PASS; `git diff --check` PASS. The earlier workspace `node_modules` symlink was left intact; validation used the isolated worktree's lockfile-installed dependencies.
+- The next commit changes the SHA; exact-head CI/companions and a fresh independent review must run on that successor. PR #3000 remains Draft and all Formal Validator/Audit/Release/merge/Oracle operations remain separate and unauthorized here.

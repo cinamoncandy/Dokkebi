@@ -1,0 +1,95 @@
+id: WO-OPS-20261105-ORACLE-CONVERGENCE-1816
+title: "Bind Deployment Convergence to exact Oracle Release and host read-back evidence"
+status: IN_PROGRESS
+owner: nusa-development
+repository: cinamoncandy/NUSA
+base_branch: main
+base_commit: 3241c525ab9575271a1150d8635d87ef9764c069
+branch: fix/oracle-convergence-host-evidence-1816
+issues: [1816]
+authority_impact: deployment-evidence-only; no release, runtime, or execution authority change
+objective: "Prevent the deployment watchdog and machine-readable receipt from treating an absent or stale Oracle Release as converged; bind the Oracle result to a successful exact-main Release attempt and a later read-only host observation of /opt/nusa/current."
+root_cause: "The Watchdog dispatched the global receipt without checking Oracle PAPER Release. The Receipt treated any successful Release run on the requested head as sufficient and did not include a server-verified post-release Oracle host SHA, run attempt, artifact identity, or host identity."
+scope:
+  - "The watchdog gates receipt dispatch on exact-main Release and later read-only Diagnose success, then runs the shared server-side host-SHA verifier; it never dispatches a Release or Host Diagnose."
+  - "The receipt verifier reads GitHub run, attempt-specific job, live artifact, and job-log evidence using existing actions:read and contents:read permissions."
+  - "Require the Release run, protected-main source SHA, deployed currentRelease read-back, read-only Host Diagnose /opt/nusa/current read-back, and runtime /health sourceCommitSha to agree. Require the same self-hosted runner identity for Release and Diagnose."
+  - "Download and SHA-256 verify the bounded, unexpired GitHub release artifact ZIP; record artifact id/digest and the Release/Diagnose job-log digests."
+  - "Keep source approval provenance RELEASE_PROVENANCE_UNKNOWN unless its separate approval chain is actually reconstructed."
+  - "Add regression coverage for missing/active/failed Release, stale or absent host SHA, pre-release diagnosis, mismatched run/attempt/artifact/host, and main movement."
+exclusions:
+  - "No Oracle Release dispatch, deployment, restart, host mutation, new host permissions, LIVE authority, real order/transfer authority, or change to Risk/readiness/lease policy."
+  - "No client-provided Oracle SHA is accepted as trusted host evidence."
+  - "This change does not claim independent review, Formal Validator, Audit, Release authorization, merge, or post-change Oracle convergence."
+acceptance:
+  - "The latest exact-main Oracle PAPER Release must be completed/successful with a valid current-attempt job and a non-expired, bounded artifact whose downloaded bytes match the GitHub SHA-256 digest."
+  - "A successful workflow_dispatch Host Diagnose started after that Release must be exact-main, read-only, run on the same identified self-hosted runner, and provide a fresh health observedAt, runtime.sourceCommitSha, and /opt/nusa/current resolved path."
+  - "Protected main == Release head/deployed currentRelease == Host Diagnose path SHA == runtime sourceCommitSha is required for oracle_convergence_status=CONVERGED."
+  - "Receipt provenance records Release/Diagnose run, attempt and job IDs, log SHA-256 values, artifact ID/digest, host identity and observation timestamps."
+  - "Missing, malformed, stale, failed, active, cross-attempt, cross-host, cross-artifact, expired, digest-mismatched, API-unavailable, or changed-main evidence stays INCOMPLETE."
+  - "The receipt keeps RELEASE_PROVENANCE_UNKNOWN and all PAPER_ONLY/ZERO_AUTHORITY invariants."
+  - "Exact-head CI and fresh independent validation precede any governed inclusion; post-change Oracle convergence remains a separate later evidence step."
+verification_commands:
+  - "node --test tests/deployment-convergence-oracle.test.js tests/deployment-rollback-governance.test.js tests/release-convergence-orthogonality.test.js"
+  - "node scripts/validate-workflow-action-inputs.js"
+  - "node scripts/validate-workflow-action-pins.js"
+  - "node scripts/validate-workflow-authority-map.js"
+  - "pnpm run validate:full"
+  - "pnpm run typecheck"
+  - "pnpm run build"
+  - "pnpm run security:gate"
+  - "pnpm run lint:scripts"
+  - "git diff --check"
+evidence_at_2026_11_05:
+  protected_main: 185c52c22691a5a35b13fe024cb39d810719a833
+  release_run: "41966440881 attempt 1 SUCCESS; exact main SHA; release artifact 13387348034 sha256:248a777eaa072c9a3f4cd5760c9d28e53abbc5eb4a055d90c601ece05301946d"
+  host_diagnose_run: "41969155063 attempt 1 SUCCESS after release; observed /opt/nusa/current -> /opt/nusa/releases/185c52c22691a5a35b13fe024cb39d810719a833 at 2026-11-05T04:39:33Z; runner_id 24, runner nusa-paper-host-datascale"
+  evaluator: "Read-only local evaluation of those GitHub run/job/artifact/log records returns Oracle CONVERGED; this is not a canonical receipt from the new workflow."
+  prior_convergence_run: "41958436826 FAILURE, started before Release 41966440881; historical incomplete receipt is not post-release evidence."
+  local_validation: "pnpm test PASS (1,328 isolated test files); focused Oracle/governance tests 23/23 PASS; pnpm run validate:full PASS; pnpm run typecheck PASS; pnpm run security:gate PASS; pnpm run lint:scripts PASS (0 errors / 47 baseline warnings); workflow YAML/Bash/action input/action pin/authority-map checks and git diff --check PASS."
+evidence_at_2026_11_07:
+  protected_main: 0209466469fe45b7f90dbeefb96d4a9e27cfb3b2
+  release_run: "42310426982 attempt 1 SUCCESS; exact protected-main SHA 0209466469fe45b7f90dbeefb96d4a9e27cfb3b2"
+  release_artifact: "13547234011 nusa-paper-release; 25,098,146 bytes; unexpired at lookup; sha256:73741e5ce29c2b856e4b45390bd88ac3c36b11569683d5ed66101a4d1082abd1; workflow_run id/head SHA match release"
+  host_diagnose_run: "42313636735 attempt 1 SUCCESS after Release; read-only /health observedAt 2026-11-06T23:42:13.591Z; runtime.sourceCommitSha 0209466469fe45b7f90dbeefb96d4a9e27cfb3b2; current_release points to the same release SHA; runner id 24, nusa-paper-host-datascale"
+  prior_convergence_run: "42312068928 FAILED CONVERGENCE_INCOMPLETE before Oracle Release completed; not a post-release receipt"
+  post_release_receipt: "No canonical post-release Convergence receipt exists yet; logs and read-only evaluator inputs are evidence only."
+  implementation_commit: "10689b51e818dc98918accb5d447145635b72bb4 pushed to the existing Draft PR #3000; generated-current-truth successor e1c2a8c710bf91eac099a00791dc0cc622fac23a is the latest exact-head validation target recorded here."
+  local_validation: "pnpm test PASS (1,336 isolated test files; one transient EADDRINUSE attempt followed by a bounded full-suite PASS); focused Oracle tests 14/14 PASS; validate:full, typecheck, build, security gate, workflow action input/pin/authority-map validation, modified YAML parse, and diff checks PASS; lint 0 errors / 47 baseline warnings. Security scanner's single test-only credential-placeholder finding was removed by using the repository's safe test placeholder; final security gate reported zero findings."
+  exact_head_checks: "Implementation SHA 10689b51e818dc98918accb5d447145635b72bb4: CI run 42321553420 SUCCESS; Actual PAPER 42321553418, bridge 42321550467, read-only broker 42321553425, activation rehearsal 42321553590, capability guard 42321553440, and transport readiness 42321553554 SUCCESS. causal-regression-contract and attest-causal-regression were SKIPPED; not positive evidence."
+  separate_session_technical_disposition: "PASS_WITH_NOTES; 0 P0, 0 P1, 1 P2 for stale handoff/work-order status. Addressed by the 2026-11-07 documentation successor. Not a non-author GitHub review, Formal Validator, Audit, Release authorization, or merge approval."
+  documentation_successor_ci: "Exact-head CI run 42322787479 at SHA 109a2e0862cce6c640a9f22d102dd2edbc2aeb83 ended FAIL: coverage-core-3 failed because tests/aipos-current-truth.test.js found generated .aipos/CURRENT_TRUTH.md stale after the handoff subsection heading changed; coverage aggregation was skipped and downstream test gate failed because coverage was incomplete. Core shards 0-2, UI coverage, CI validation, and all companions passed. Do not promote this SHA to PASS."
+  documentation_successor_local_recheck: "Ran pnpm run aipos:truth; tests/aipos-current-truth.test.js plus tests/deployment-convergence-oracle.test.js passed 18/18; AIPOS_YAML passed; NUSA_TEST_SHARD_COUNT=4 NUSA_TEST_SHARD_INDEX=3 node scripts/run-tests-isolated.js passed all 335 files. Exact-head CI for the generated-current-truth successor is still required."
+  final_generated_truth_successor_ci: "Exact-head CI run 42323677036 on e1c2a8c710bf91eac099a00791dc0cc622fac23a SUCCESS; Actual PAPER 42323677064, bridge 42323675211, read-only broker 42323677171, activation rehearsal 42323676928, capability guard 42323676987, and transport readiness 42323676947 SUCCESS. causal-regression-contract and attest-causal-regression were SKIPPED because no mismatch was observed; they are not positive evidence."
+  final_separate_session_technical_disposition: "Fresh read-only review on ca8bf7f6bbd2e88c3d60fb7200da6443502a3b02: PASS_WITH_NOTES, P0=0/P1=0/P2=0. The repository ADR allows a separate fresh VALIDATOR session on the owner GitHub account; exact head, review scope, work, and disposition are in the existing PR handoff comment. This is technical review, not Formal Validator acceptance, Audit, Release authorization, or merge approval."
+  formal_validator_gate: "NOT_AVAILABLE_IN_CHECKOUT: no dedicated Formal Validator workflow/script found. The existing PR-ready event replays exact-head CI into the Autopilot PR_CI_SUCCEEDED path, whose planner emits AUDIT_REQUEST. Keep Draft to preserve required Formal Validator -> Audit order until the canonical Formal Validator receipt is obtained."
+  governance: "PR #3000 remains OPEN/Draft; author cinamoncandy has 0 submitted reviews. Formal Validator, Audit, Release authorization, and merge are not complete. No post-change canonical Convergence receipt exists."
+reconciliation_checkpoint_2026_11_07:
+  protected_main: 3241c525ab9575271a1150d8635d87ef9764c069
+  prior_pr_head: 2d7b6c7d8ac804961ec150c308311eede2d24995
+  local_reconciliation: "The existing #3000 branch was reconciled locally with current protected main using a no-commit merge. The only merge conflict was generated .aipos/CURRENT_TRUTH.md; it was regenerated from canonical inputs. No protected-main or Oracle mutation was performed."
+  pr_3010: "PR #3010 is CLOSED/MERGED and its changes are present in current main. Its final PR description records successor exact-head CI and companion success; N1 remains an explicit known proof limitation because monotonic insertion timestamps are unverified. No new independent exact-head review or Formal Validator disposition is claimed. Do not recreate or reopen the work."
+  local_validation: "After main reconciliation: pnpm test PASS (1,336 isolated test files), pnpm run typecheck PASS, pnpm run validate:full PASS, pnpm run security:gate PASS (0 findings/secrets), pnpm run lint:scripts PASS (0 errors / 47 baseline warnings), git diff --check PASS. Exact-head CI and fresh independent review for the reconciled successor remain pending."
+  formal_validator_contract: "BLOCKED: current checkout defines no canonical Formal Validator issuer/workflow/receipt schema or Audit consumer. GRILL/technical Validator evidence is explicitly not Formal/Audit/Release. Keep Draft; do not invent a receipt or trigger the Ready-to-Audit path."
+  oracle_runtime: "No new exact-main Oracle Release, Host Diagnose, or canonical post-change Convergence receipt. Existing runtime SHA 0209466469fe45b7f90dbeefb96d4a9e27cfb3b2 is stale against protected main 3241c525ab9575271a1150d8635d87ef9764c069. Research manifest/session and TICK_ERROR root cause remain unverified; journal/DB read access is unavailable."
+  safety: PAPER_ONLY_LIVE_NONE_PRODUCTION_MUTATION_FALSE_REAL_ORDER_FALSE_REAL_TRANSFER_FALSE_AI_ZERO_AUTHORITY_FAIL_CLOSED
+  next: "Finish final diff and AIPOS validation, commit the validated reconciliation to the existing #3000 branch, non-force push only that branch, then verify new exact-head CI and obtain a fresh independent technical review. Formal Validator remains blocked until the authorized owner defines/executes the canonical receipt path."
+safety:
+  PAPER_ONLY: true
+  liveAuthority: NONE
+  productionMutationAllowed: false
+  realOrderAuthority: false
+  realTransferAuthority: false
+  aiAuthority: ZERO_AUTHORITY
+  fail_closed: true
+next: "The latest recorded exact-head CI/companions and separate-session technical disposition are on ca8bf7f6bbd2e88c3d60fb7200da6443502a3b02. A status-only successor follows; recheck exact-head CI before any governance transition. Obtain the canonical Formal Validator terminal receipt first. Keep PR #3000 Draft because ready_for_review replays CI into the Audit-request path, which would invert Formal Validator -> Audit. After Formal acceptance, proceed to deterministic Audit, Release authorization, and governed merge. Only after governed inclusion may an authorized new Oracle Release and post-release Host Diagnose produce the official Convergence receipt. Do not dispatch Release, deploy, restart, merge, or claim canonical convergence from local evaluation."
+
+forge_watchdog_p2_successor_2026_11_07:
+  scope: "Existing PR #3000 P2-1 and P2-2 convergence; no new PR."
+  implementation_head: 4f03fb2f046fc3ab6bf661edaead35f950b65c3e
+  protected_main_at_verification: 3241c525ab9575271a1150d8635d87ef9764c069
+  semantic_dedupe: "Inspect exact-run receipt artifact; require CONVERGED, matching main SHA, Oracle and host evidence."
+  retry_budget: "At most 3 completed receipt runs per exact-main SHA, including nominal SUCCESS with invalid artifact; active run suppresses duplicate dispatch. GitHub run records survive watchdog restart."
+  validation: "The 4e9553b331f9488ef8dc963e2d5c1f07ba9d5eba successor passed exact-head CI 42363133880 and all five companions; local pnpm test passed 1,336 isolated test files, validate:full and security passed, lint had 0 errors / 47 baseline warnings, focused AIPOS/convergence tests passed, and the state.d one-key-per-file repair is included. Fresh independent review found P2: retry cap summed completed run records rather than run_attempt values, so reruns could evade the cap. The query now sums run_attempt; focused convergence suite passes 15/15; full validation for the repair successor is pending. Previous 4a31b407 review is historical."
+  next: "Non-force push the committed state.d one-key-per-file repair to the existing PR branch; verify successor exact-head CI/companions, refresh handoff, obtain fresh independent review, then Formal Validator gate; keep Draft."
+  authority: "PAPER_ONLY liveAuthority=NONE productionMutationAllowed=false realOrderAuthority=false realTransferAuthority=false aiAuthority=ZERO_AUTHORITY"
