@@ -1,29 +1,32 @@
 # CORE handoff — 2026-11-07 — #1816 Exact-Main Oracle Convergence
 
-## Fresh canonical state
+## Canonical state at handoff update
 
-- Protected main was fetched as `0209466469fe45b7f90dbeefb96d4a9e27cfb3b2`.
-- Existing PR #3000 is OPEN/Draft, current remote head `3966f8ba1bc192ffd3d80ff8429d129c4733df48`, base `2224d7f8e2f58081cf3edcd2597ea7048e07f70a`; PR and Issue #1816 were reused.
-- Local implementation branch `fix/oracle-convergence-host-evidence-1816` was fast-forwarded to that remote PR head and current protected main was merged. The only textual conflict was generated `.aipos/CURRENT_TRUTH.md`; it was regenerated with the repository generator. The merge and repair are still uncommitted.
-- Four untracked `docs/audits/*2026-11-05*` artifacts are preserved and excluded from the change.
+- Protected main was freshly verified as `0209466469fe45b7f90dbeefb96d4a9e27cfb3b2`.
+- Existing PR #3000 is OPEN/Draft and remains the sole implementation PR for Issue #1816. Its implementation commit `10689b51e818dc98918accb5d447145635b72bb4` was pushed to `fix/oracle-convergence-host-evidence-1816`; the PR base is `main` and the branch is mergeable.
+- The current PR author is `cinamoncandy`. No submitted GitHub review exists; the separate-session technical disposition below is not a non-author GitHub review.
+- The current documentation successor updates stale pre-commit handoff statements. Exact-head checks for that successor are pending until push; checks recorded below apply only to implementation SHA `10689b51…`.
+- Four pre-existing untracked `docs/audits/*2026-11-05*` reports and locally generated `*2026-11-07*` security reports are preserved outside the PR diff.
 
-## Current repair
+## Repair and validation completed at implementation SHA
 
-- The receipt verifier now requires both the deployed `/opt/nusa/current` SHA and `runtime.sourceCommitSha` from the successful Host Diagnose `/health` response to equal protected main and the successful Release SHA.
-- It downloads the current, non-expired, bounded release artifact and verifies the downloaded ZIP SHA-256 against GitHub's artifact digest. It records run/attempt/job IDs and hashes of the Release and Host Diagnose job-log archives.
-- The Watchdog invokes the same read-only verifier before dispatching the existing receipt workflow. It refuses if the checked-out watchdog source differs from main, the Oracle evidence is incomplete, or protected main moved. It still never dispatches a Release or accesses/mutates the host.
-- `RELEASE_PROVENANCE_UNKNOWN` remains unchanged. No readiness, trading, risk, or authority policy was changed.
+- The receipt verifier requires protected main, successful exact-main Oracle Release, deployed `current_release`, read-only post-release Host Diagnose `/opt/nusa/current`, and runtime `/health` `sourceCommitSha` to agree.
+- It binds the Release run/attempt to its jobs and a current, unexpired, bounded release artifact; downloads the ZIP and compares its SHA-256 with GitHub's artifact digest. It records Release and Diagnose run/attempt/job identifiers and raw job-log archive digests.
+- The Watchdog calls the same read-only verifier before dispatching the existing Receipt workflow. It blocks when its checked-out source is not current main, verification is incomplete, or main moves. It never dispatches Release or Host Diagnose and does not mutate the Oracle host.
+- `RELEASE_PROVENANCE_UNKNOWN` remains unchanged. No readiness, trading, risk, writer-lease, or execution authority changed.
+- Local validation on the implementation tree: `pnpm test` PASS (1,336 isolated test files); Oracle focused tests 14/14 PASS; `validate:full`, typecheck, build, security gate, workflow action input/pin/authority-map validation, modified-workflow YAML parse, and diff checks PASS. Lint: 0 errors / 47 baseline warnings. One first full-suite attempt hit transient `EADDRINUSE`; the affected test passed alone and a bounded full-suite rerun passed.
+- Security gate initially flagged a long test-only `token` placeholder. The fixture was changed to the repository's safe `test` placeholder; focused tests and the security gate then passed with zero secret findings.
+- Exact-head checks for implementation SHA `10689b51…`: CI run `42321553420` SUCCESS; Actual PAPER `42321553418`, bridge `42321550467`, read-only broker `42321553425`, activation rehearsal `42321553590`, capability guard `42321553440`, and transport readiness `42321553554` SUCCESS. CI's `causal-regression-contract` and `attest-causal-regression` jobs were SKIPPED and are not positive causal evidence.
+- A fresh separate-session read-only technical Validator returned `PASS_WITH_NOTES`: 0 P0, 0 P1, 1 P2. The P2 was stale handoff/work-order wording and is addressed by this documentation successor. This is not a GitHub non-author review, Formal Validator, Audit, Release authorization, or merge approval.
 
-## Read-only runtime evidence
+## Read-only Oracle evidence (unchanged)
 
-- Exact-main Oracle PAPER Release `42310426982`, attempt 1, succeeded for `0209466469fe45b7f90dbeefb96d4a9e27cfb3b2`; its non-expired `nusa-paper-release` artifact was ID `13547234011`, 25,098,146 bytes, digest `sha256:73741e5ce29c2b856e4b45390bd88ac3c36b11569683d5ed66101a4d1082abd1`.
-- Read-only Host Diagnose `42313636735`, attempt 1, succeeded later on runner ID 24. Its `/health` response at `2026-11-06T23:42:13.591Z` reported `runtime.sourceCommitSha=0209466469fe45b7f90dbeefb96d4a9e27cfb3b2`; the `current_release` read-link named the same SHA.
-- The older Convergence run `42312068928` failed before the Release completed. No post-Release machine-readable Convergence receipt has been issued; the read-only records above are not a canonical receipt.
+- Exact-main Oracle PAPER Release `42310426982`, attempt 1, succeeded for `0209466469fe45b7f90dbeefb96d4a9e27cfb3b2`; artifact `13547234011` (`nusa-paper-release`) was unexpired at lookup, size 25,098,146 bytes, digest `sha256:73741e5ce29c2b856e4b45390bd88ac3c36b11569683d5ed66101a4d1082abd1`.
+- Read-only Host Diagnose `42313636735`, attempt 1, succeeded later on runner ID 24. `/health` observed at `2026-11-06T23:42:13.591Z` reported `runtime.sourceCommitSha=0209466469fe45b7f90dbeefb96d4a9e27cfb3b2`; `current_release` resolved to the same SHA.
+- Older Convergence run `42312068928` failed before Release completed. No post-change canonical machine-readable Convergence receipt exists. The evidence above predates the repair and is not a receipt for it.
 
-## Validation and next step
+## Next canonical transition
 
-- Focused Oracle convergence tests: 14/14 PASS, including artifact digest/expiry, runtime SHA mismatch, wrong/stale Host Diagnose, run-attempt mismatch, API failure redaction, main movement, and Watchdog ordering.
-- Full suite, typecheck, build, `validate:full`, security, lint, workflow/AIPOS checks and exact-head CI have not yet been run on this merged repair state.
-- Complete the specified validation, inspect the exact diff, commit and push only to the existing #3000 branch, then verify exact-head CI/companions. A fresh separate Validator must review that successor SHA; no Review, Formal Validator, Audit, Release authorization, merge, new deployment, or readiness PASS is claimed here.
+Push this documentation-only successor to the existing Draft PR #3000, verify exact-head CI and companions, and obtain fresh independent technical review. Then obtain an eligible non-author GitHub disposition and proceed only through the repository's distinct Formal Validator, Audit, Release-authority, and governed-merge gates. After governed inclusion, a new authorized Oracle Release and post-release Host Diagnose are required before the official Convergence receipt can be issued. Do not dispatch Release, deploy, restart, merge, or claim canonical Convergence from local evaluation.
 
-Safety remains `PAPER_ONLY`, `liveAuthority=NONE`, `productionMutationAllowed=false`, `realOrderAuthority=false`, `realTransferAuthority=false`, `aiAuthority=ZERO_AUTHORITY`.
+Safety remains `PAPER_ONLY`, `liveAuthority=NONE`, `productionMutationAllowed=false`, `realOrderAuthority=false`, `realTransferAuthority=false`, and `aiAuthority=ZERO_AUTHORITY`.
