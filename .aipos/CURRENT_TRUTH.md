@@ -7,9 +7,9 @@ Everything below is what the repository's records *claim*. Re-verify on GitHub b
 
 ## Newest handoff
 
-[`.aipos/handoffs/2026-11-06-wo-0059-observation.md`](handoffs/2026-11-06-wo-0059-observation.md) — WO-0059 PAPER Observation Handoff — 2026-11-06
+[`.aipos/handoffs/2026-11-07-forge-p0-p1-3010.md`](handoffs/2026-11-07-forge-p0-p1-3010.md) — CORE handoff — 2026-11-07 — #3000 Formal Validation and WO-0059 P2
 
-> ## Successor follow-up — 2026-11-06T15:16Z
+> Observed at `2026-11-07T03:59Z`.
 
 ## Work orders
 
@@ -39,7 +39,7 @@ Most common statuses among the open files (new orders use only `READY_FOR_REVIEW
 | `WO-0010` | BLOCKED | Resolve remaining repository P0/P1 gaps before release-target changes |
 | `WO-0051` | IN_PROGRESS | Constitutional Production Transition Human/Environment Gate |
 | `WO-0059-PAPER-OBSERVATION-20261106` | IN_PROGRESS | Bounded observation of natural PAPER decision and execution outcomes |
-| `WO-0059-PROJECTION-CONTINUITY-20261107` | IN_PROGRESS | Bounded PAPER evidence projection continuity under saturated read-only windows |
+| `WO-0059-PROJECTION-CONTINUITY-20261107` | IN_PROGRESS | Bounded PAPER evidence projection anchors under saturated read-only windows |
 | `WO-20260924-MOBILE-DELIVERY-RESIDUAL-GATES` | BLOCKED | Residual Android delivery and device gates from closed mobile UI work orders |
 | `WO-20260927-AUTOPILOT-CODING-RECEIPT-RECONCILIATION` | IN_PROGRESS | Autopilot coding receipt reconciliation |
 | `WO-20260927-AUTOPILOT-SCHEDULED-RECEIPT-RECOVERY` | IN_PROGRESS | Recover malformed scheduled runtime receipt state |
