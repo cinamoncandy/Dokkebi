@@ -25,6 +25,7 @@ import { readCloudRuntimeConfig } from "./cloudRuntimeConfig";
 import { readCanonicalPaperTickerBenchmark } from "./paperMarketBenchmark";
 import { readClosedLearningBlocked, recordClosedLearningBlocked } from "./closedLearningBlockedRecord";
 import { PaperBaselineShadow } from "./paperBaselineShadow";
+import { SHADOW_STRATEGY_IDS, readShadowStrategyRecord, shadowStrategySpec, writeShadowStrategyRecord } from "./paperShadowStrategies";
 import { readBaselineShadowRecord, writeBaselineShadowRecord } from "./paperBaselineShadowRecord";
 import { PaperNullComparators } from "./paperNullComparators";
 import { readNullComparatorsRecord, writeNullComparatorsRecord } from "./paperNullComparatorsRecord";
@@ -125,11 +126,16 @@ export function startClosedLearningProductionRuntime(env: NodeJS.ProcessEnv = pr
     const restoredNulls = readNullComparatorsRecord(config.cloudStateDbPath);
     nullComparators = new PaperNullComparators({ feeRate: 0.0005, now: Date.now, baselineTotals: () => baselineShadow.summary(), ...(restoredNulls === undefined ? {} : { restore: restoredNulls }) });
   }
+  // Pre-registered RSI and Donchian shadows on the same bars and fee model (display/analysis only; see paperShadowStrategies.ts).
+  const extraShadows = baselineShadow == null ? [] : SHADOW_STRATEGY_IDS.map((id) => {
+    const restored = readShadowStrategyRecord(config.cloudStateDbPath, id);
+    return { id, name: id === "rsi" ? "Rsi" as const : "Donchian" as const, shadow: new PaperBaselineShadow({ spec: shadowStrategySpec(id), feeRate: 0.0005, now: Date.now, ...(restored === undefined ? {} : { restore: restored }) }) };
+  });
   const dashboardHydrator = new CloudRuntimeDashboardHydrator({
     paperCandidateBindingProvider,
     paperCandidateMinuteCloses: (market, now) => {
       const bars = minuteBars.read(market, now);
-      nullComparators?.observe(market, bars); // before the baseline shadow, so a round trip it completes is matched on bars already seen
+      nullComparators?.observe(market, bars); for (const extra of extraShadows) extra.shadow.observe(market, bars); // before the baseline shadow, so a round trip it completes is matched on bars already seen
       baselineShadow?.observe(market, bars);
       return bars;
     },
@@ -481,6 +487,11 @@ export function startClosedLearningProductionRuntime(env: NodeJS.ProcessEnv = pr
         loopStatus.observeShadow(baselineShadow.summary());
         const persistable = baselineShadow.takePersistable();
         if (persistable != null && !writeBaselineShadowRecord(config.cloudStateDbPath, persistable)) baselineShadow.markUnpersisted();
+      }
+      for (const extra of extraShadows) {
+        loopStatus.observeExtraShadow(extra.name, extra.shadow.summary());
+        const persistable = extra.shadow.takePersistable();
+        if (persistable != null && !writeShadowStrategyRecord(config.cloudStateDbPath, extra.id, persistable)) extra.shadow.markUnpersisted();
       }
       if (nullComparators != null) {
         loopStatus.observeNullComparators(nullComparators.summary());
