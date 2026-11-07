@@ -1,0 +1,61 @@
+id: WO-0059-PROJECTION-CONTINUITY-20261107
+title: "Bounded PAPER evidence projection continuity under saturated read-only windows"
+status: IN_PROGRESS
+priority: P0
+owner: nusa-development
+repository: cinamoncandy/NUSA
+base_branch: main
+base_commit: 0209466469fe45b7f90dbeefb96d4a9e27cfb3b2
+implementation_branch: wo-0059-evidence-projection-continuity-20261107
+source_work_order: .aipos/work-orders/WO-0059-PAPER-OBSERVATION-20261106.yaml
+related_issues:
+  - 1605
+objective: "Keep bounded natural PAPER observation from being marked truncated solely because a trustworthy 250-event newest-first projection is full, without accepting unknown gaps or relaxing semantic readiness."
+scope:
+  - "Only the existing scripts/actual-paper-runtime-e2e.js observer and its regression tests."
+  - "Validate unique event IDs and descending timestamp / ascending equal-timestamp ID order per canonical read-only projection."
+  - "When a window is saturated, require the prior window's newest event ID to remain present to anchor newly emitted events; older shared IDs alone do not establish continuity."
+  - "Preserve EVENT_EVIDENCE_TRUNCATED/INCOMPLETE on missing newest anchor, invalid order, duplicated IDs, or bounded collector overflow."
+  - "Record counts and ORDERED_PROJECTION_WINDOWS_ONLY proof scope without recording raw IDs or confidential details."
+  - "Keep visible ERROR/HALT failures fail-closed and bounded risk reason codes; upstream omission of unrecorded critical events remains UNVERIFIED."
+acceptance:
+  - "Saturated adjacent newest-first 250-event projections with valid unique IDs and a retained newest anchor may complete observation after the existing 60s and three natural Decision cycle requirements."
+  - "Saturated projection with overlap but a lost newest anchor, duplicate IDs, or inverted timestamps is INCOMPLETE."
+  - "Absent genuine Decision cycles remains INCOMPLETE even if windows overlap."
+  - "Any visible HALT/ERROR FAIL still fails closed."
+  - "Autonomous order/fill/PnL absence remains readiness INCOMPLETE, independent of observer status."
+  - "Upstream source omission and missing-event count remain UNKNOWN; no certification is inferred from projection continuity alone."
+exclusions:
+  - "No changes to the canonical runtime recorder, 250-event projection cap, 5000-event collector cap, market selector, Risk, writer lease, order/fill or readiness classifier."
+  - "No modification to #3005 Canary, #2996 callback, #3002 Research, merged #3006, protected main, deployed Oracle, or LIVE authority."
+architecture_impact:
+  acknowledged: true
+  analysis: "Conservative change to a read-only evidence consumer; prevents false truncation when consecutive sorted and unique rolling projections retain their newest-window anchor. It is not an independent audit of upstream event completeness or proof of autonomous trading."
+  references:
+    - .aipos/architecture.md
+    - .aipos/AI_HANDOFF_CONTRACT.md
+    - .aipos/work-orders/WO-0059-PAPER-OBSERVATION-20261106.yaml
+safety:
+  paper_only: true
+  liveAuthority: NONE
+  productionMutationAllowed: false
+  realOrderAuthority: false
+  realTransferAuthority: false
+  aiAuthority: ZERO_AUTHORITY
+  fail_closed: "Unverified projection gaps, invalid ordering, missing Decision cycles, runtime faults, and missing autonomous order/fill/PnL never certify readiness."
+verification_commands:
+  - "node --test tests/actual-paper-runtime-observation.test.js"
+  - "node --test tests/actual-paper-runtime-e2e-chaos-boundary.test.js"
+  - "pnpm run preflight"
+  - "pnpm test"
+  - "pnpm run typecheck"
+  - "pnpm run validate:full"
+  - "pnpm run security:gate"
+  - "git diff --check"
+validation:
+  status: PENDING_EXACT_HEAD_CI
+  prior_head: "e7bf8129dd159298ae4c52f517125bdae4d0ca7b failed CI: test fixture nested cycleEvents arrays were sorted without flattening; independent review HOLD."
+  successor_changes: "Flatten capped-window fixture arrays before sorting; reject missing latest anchor, duplicate or unsorted projections; add negative and visible HALT tests."
+  local_full_suite: NOT_RUN_IN_CONNECTOR_ENVIRONMENT
+  reviewer_disposition: PENDING
+  runtime_readiness: INCOMPLETE
