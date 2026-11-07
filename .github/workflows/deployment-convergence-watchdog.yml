@@ -143,13 +143,54 @@ jobs:
             fi
           }
 
+          # A successful Actions conclusion is not proof of a CONVERGED receipt.
+          # Read the artifact attached to that exact run and fail closed on any
+          # missing, stale or semantically incomplete evidence.
+          receipt_success() {
+            local run_id tmp
+            while IFS= read -r run_id; do
+              [ -n "$run_id" ] || continue
+              tmp="$(mktemp -d "$RUNNER_TEMP/receipt-verify.XXXXXX")"
+              if gh run download "$run_id" --repo "$GITHUB_REPOSITORY" \
+                  --name "deployment-convergence-receipt-$MAIN_SHA" --dir "$tmp" >/dev/null 2>&1 \
+                && jq -e --arg sha "$MAIN_SHA" '
+                    .schema_version == 3 and
+                    .source_sha == $sha and .expected_main_sha == $sha and
+                    .observed_main_sha == $sha and
+                    .convergence_status == "CONVERGED" and
+                    .oracle_convergence_status == "CONVERGED" and
+                    .components.protected_main.exact == true and
+                    .components.oracle_paper_release.pass == true and
+                    .components.oracle_host.observed_sha == $sha and
+                    .components.oracle_host.runtime_source_sha == $sha
+                  ' "$tmp/receipt.json" >/dev/null 2>&1; then
+                rm -rf -- "$tmp"
+                return 0
+              fi
+              rm -rf -- "$tmp"
+            done < <(printf '%s' "$RUNS_JSON" | jq -r --arg sha "$MAIN_SHA" '
+              [.workflow_runs[] |
+                select(.name == "Deployment Convergence Receipt" and
+                  .path == ".github/workflows/deployment-convergence-receipt.yml" and
+                  .head_sha == $sha and .status == "completed" and
+                  .conclusion == "success")] |
+                sort_by(.created_at) | reverse | .[].id
+            ')
+            return 1
+          }
+
           dispatch_bounded() {
             local component="$1"
             local workflow_name="$2"
             local workflow_file="$3"
             shift 3
 
-            if workflow_success "$workflow_name"; then
+            if [ "$workflow_name" = "Deployment Convergence Receipt" ]; then
+              if receipt_success; then
+                echo "$component already has a verified exact-main CONVERGED receipt."
+                return 0
+              fi
+            elif workflow_success "$workflow_name"; then
               echo "$component already has exact-main SUCCESS."
               return 0
             fi
@@ -159,7 +200,18 @@ jobs:
             fi
 
             local failures
-            failures="$(workflow_failures "$workflow_name")"
+            if [ "$workflow_name" = "Deployment Convergence Receipt" ]; then
+              # Count every completed attempt (including nominal SUCCESS with an
+              # invalid receipt), so restart/replay cannot reset retry budget.
+              failures="$(printf '%s' "$RUNS_JSON" | jq -r --arg sha "$MAIN_SHA" '
+                [.workflow_runs[] |
+                  select(.name == "Deployment Convergence Receipt" and
+                    .path == ".github/workflows/deployment-convergence-receipt.yml" and
+                    .head_sha == $sha and .status == "completed")] | length
+              ')"
+            else
+              failures="$(workflow_failures "$workflow_name")"
+            fi
             if [ "$failures" -ge 3 ]; then
               surface_incident "$component" "Observed $failures failed/timed-out/cancelled exact-main runs."
               echo "$component retry budget exhausted; remaining fail-closed."
