@@ -178,7 +178,8 @@ const CONTROL_PLANE_HOLD_STORAGE_KEY = "control-plane-hold-v1";
 const ACTIVE_WIP_COORDINATOR_KEY = "evolve-active-wip-v1";
 const ACTIVE_WIP_STORAGE_KEY = "evolve-active-wip-v1";
 const ACTIVE_WIP_COMPLETION_HISTORY_KEY = "evolve-active-wip-completions-v1";
-const MAX_ACTIVE_WIP = 8;
+// FORGE L1 has one canonical two-slot WIP budget; callers may request fewer, never more.
+const MAX_ACTIVE_WIP = 2;
 const MAX_ACTIVE_WIP_COMPLETIONS = 120;
 /**
  * A claim is released only by a successful coding completion. A dispatch that fails closed, is
