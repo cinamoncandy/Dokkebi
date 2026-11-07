@@ -9,7 +9,7 @@ Everything below is what the repository's records *claim*. Re-verify on GitHub b
 
 [`.aipos/handoffs/2026-11-07-oracle-convergence-1816.md`](handoffs/2026-11-07-oracle-convergence-1816.md) — CORE handoff — 2026-11-07 — #1816 Exact-Main Oracle Convergence
 
-> ## Fresh canonical state
+> ## Canonical state at handoff update
 
 ## Work orders
 

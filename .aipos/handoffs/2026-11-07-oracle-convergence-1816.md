@@ -3,9 +3,9 @@
 ## Canonical state at handoff update
 
 - Protected main was freshly verified as `0209466469fe45b7f90dbeefb96d4a9e27cfb3b2`.
-- Existing PR #3000 is OPEN/Draft and remains the sole implementation PR for Issue #1816. Its implementation commit `10689b51e818dc98918accb5d447145635b72bb4` was pushed to `fix/oracle-convergence-host-evidence-1816`; the PR base is `main` and the branch is mergeable.
+- Existing PR #3000 is OPEN/Draft and remains the sole implementation PR for Issue #1816. Implementation commit `10689b51e818dc98918accb5d447145635b72bb4` was pushed to `fix/oracle-convergence-host-evidence-1816`; documentation-only successor `109a2e0862cce6c640a9f22d102dd2edbc2aeb83` was pushed afterward. The PR base is `main` and the branch is mergeable.
 - The current PR author is `cinamoncandy`. No submitted GitHub review exists; the separate-session technical disposition below is not a non-author GitHub review.
-- The current documentation successor updates stale pre-commit handoff statements. Exact-head checks for that successor are pending until push; checks recorded below apply only to implementation SHA `10689b51…`.
+- The documentation successor corrects the earlier handoff's stale pre-commit statements. Exact-head CI run `42322787479` for `109a2e08…` ended FAIL: `coverage-core-3` found a generated-document mismatch in `tests/aipos-current-truth.test.js` because `.aipos/CURRENT_TRUTH.md` had not been regenerated after the handoff heading changed. Core shards 0–2, UI coverage, validation, and companions passed; coverage aggregation was skipped and the downstream `test` gate failed because coverage was incomplete. This is a documentation-generation failure, not an Oracle verifier failure.
 - Four pre-existing untracked `docs/audits/*2026-11-05*` reports and locally generated `*2026-11-07*` security reports are preserved outside the PR diff.
 
 ## Repair and validation completed at implementation SHA
@@ -18,6 +18,7 @@
 - Security gate initially flagged a long test-only `token` placeholder. The fixture was changed to the repository's safe `test` placeholder; focused tests and the security gate then passed with zero secret findings.
 - Exact-head checks for implementation SHA `10689b51…`: CI run `42321553420` SUCCESS; Actual PAPER `42321553418`, bridge `42321550467`, read-only broker `42321553425`, activation rehearsal `42321553590`, capability guard `42321553440`, and transport readiness `42321553554` SUCCESS. CI's `causal-regression-contract` and `attest-causal-regression` jobs were SKIPPED and are not positive causal evidence.
 - A fresh separate-session read-only technical Validator returned `PASS_WITH_NOTES`: 0 P0, 0 P1, 1 P2. The P2 was stale handoff/work-order wording and is addressed by this documentation successor. This is not a GitHub non-author review, Formal Validator, Audit, Release authorization, or merge approval.
+- The generated truth mismatch at `109a2e08…` was corrected with `pnpm run aipos:truth`. The affected AIPOS test plus Oracle suite passed 18/18, AIPOS YAML validation passed, and the exact CI-equivalent local shard passed 335/335 files. These local results do not replace the new successor's exact-head CI.
 
 ## Read-only Oracle evidence (unchanged)
 
@@ -27,6 +28,6 @@
 
 ## Next canonical transition
 
-Push this documentation-only successor to the existing Draft PR #3000, verify exact-head CI and companions, and obtain fresh independent technical review. Then obtain an eligible non-author GitHub disposition and proceed only through the repository's distinct Formal Validator, Audit, Release-authority, and governed-merge gates. After governed inclusion, a new authorized Oracle Release and post-release Host Diagnose are required before the official Convergence receipt can be issued. Do not dispatch Release, deploy, restart, merge, or claim canonical Convergence from local evaluation.
+The generated-current-truth fix is a successor to failed CI run `42322787479`; verify that successor's exact-head CI and companions, then obtain fresh independent technical review and an eligible non-author GitHub disposition. Continue only through the repository's distinct Formal Validator, Audit, Release-authority, and governed-merge gates. After governed inclusion, a new authorized Oracle Release and post-release Host Diagnose are required before the official Convergence receipt can be issued. Do not dispatch Release, deploy, restart, merge, or claim canonical Convergence from local evaluation.
 
 Safety remains `PAPER_ONLY`, `liveAuthority=NONE`, `productionMutationAllowed=false`, `realOrderAuthority=false`, `realTransferAuthority=false`, and `aiAuthority=ZERO_AUTHORITY`.
