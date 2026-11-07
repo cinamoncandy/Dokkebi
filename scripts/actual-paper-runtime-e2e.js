@@ -388,6 +388,37 @@ async function observeAutomaticRuntime({
   const fillsById = new Map();
   const stageCounts = Object.fromEntries(OBSERVATION_STAGES.map((stage) => [stage, 0]));
   const accountObservationTimes = [];
+  // The read-only projection is newest-first and capped at 250. An overlap
+  // alone does NOT establish continuity: the previous newest ID must survive
+  // into the next correctly ordered, duplicate-free window. Under the canonical
+  // newest-first projection contract, this anchors every newer emitted event
+  // within the current window. It does not attest to upstream events never
+  // recorded by the source; that remains a separate evidence limitation.
+  // A late event backdated below the 250-event cutoff is also invisible:
+  // this conditional proof assumes projection timestamps are monotonic with
+  // insertion order. Without upstream sequence evidence, such gaps are UNKNOWN.
+  const validProjectionOrder = (events) => {
+    if (!Array.isArray(events)) return false;
+    const ids = new Set();
+    let previousTime = Infinity;
+    let previousId = "";
+    for (const event of events) {
+      const time = observationTimestamp(event?.occurredAt);
+      if (typeof event?.id !== "string" || event.id.length === 0 || event.id.length > 256 || time == null || ids.has(event.id)) return false;
+      if (time > previousTime || (time === previousTime && previousId.localeCompare(event.id) > 0)) return false;
+      ids.add(event.id);
+      previousTime = time;
+      previousId = event.id;
+    }
+    return true;
+  };
+  const initialProjection = initialSnapshot?.paperLearning?.events ?? [];
+  let previousProjectionValid = validProjectionOrder(initialProjection);
+  let previousProjectionNewestId = previousProjectionValid ? initialProjection[0]?.id ?? null : null;
+  let previousProjectionFull = initialProjection.length >= 250;
+  let cappedProjectionSamples = 0;
+  let overlappingCappedSamples = 0;
+  let movingAnchoredCappedSamples = 0;
   let eventEvidenceTruncated = false;
   let finalSnapshot = initialSnapshot ?? null;
   let failureCode = null;
@@ -399,7 +430,27 @@ async function observeAutomaticRuntime({
 
   const collectSnapshot = (snapshot, observedAtMs) => {
     const learningEvents = snapshot.paperLearning.events;
-    if (learningEvents.length >= 250) eventEvidenceTruncated = true;
+    const currentProjectionValid = validProjectionOrder(learningEvents);
+    const currentProjectionIds = new Set(learningEvents.map((event) => event?.id));
+    const newestAnchorPresent = previousProjectionNewestId != null && currentProjectionIds.has(previousProjectionNewestId);
+    const windowContinuityVerified = previousProjectionValid && currentProjectionValid && newestAnchorPresent;
+    const windowMoved = windowContinuityVerified && learningEvents[0]?.id !== previousProjectionNewestId;
+    // Uncapped views do not depend on a rolling-window continuity proof;
+    // their individual events are still validated below as before.
+    if (!currentProjectionValid && learningEvents.length >= 250) eventEvidenceTruncated = true;
+    if (learningEvents.length >= 250) {
+      cappedProjectionSamples += 1;
+      if (windowContinuityVerified) {
+        overlappingCappedSamples += 1;
+        if (windowMoved) movingAnchoredCappedSamples += 1;
+      } else eventEvidenceTruncated = true;
+    }
+    // A prior saturated window can roll out events between reads even if the
+    // current response is below the cap. Mere overlap with older IDs is unsafe.
+    if (previousProjectionFull && !windowContinuityVerified) eventEvidenceTruncated = true;
+    previousProjectionValid = currentProjectionValid;
+    previousProjectionNewestId = currentProjectionValid ? learningEvents[0]?.id ?? null : null;
+    previousProjectionFull = learningEvents.length >= 250;
     for (const event of learningEvents) {
       if (event == null || typeof event !== "object") return "PAPER_LEARNING_EVENT_INVALID";
       const occurredAt = observationTimestamp(event.occurredAt);
@@ -594,6 +645,14 @@ async function observeAutomaticRuntime({
     stop_reason: eventEvidenceTruncated && failureCode == null ? "EVENT_EVIDENCE_TRUNCATED" : stopReason,
     ...(failureCode == null ? {} : { failure_code: failureCode }),
     event_evidence_truncated: eventEvidenceTruncated,
+    projection_window: {
+      maximum_events: 250,
+      capped_samples: cappedProjectionSamples,
+      newest_anchor_verified_capped_samples: overlappingCappedSamples,
+      moving_anchored_capped_samples: movingAnchoredCappedSamples,
+      adjacent_windows_anchored: !eventEvidenceTruncated && movingAnchoredCappedSamples > 0,
+      proof_scope: "ORDERED_PROJECTION_WINDOWS_ONLY",
+    },
     stage_evidence: stageEvidence,
     decision_cycles: decisionCycles,
     timeline,
