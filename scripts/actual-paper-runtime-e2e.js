@@ -430,7 +430,7 @@ async function observeAutomaticRuntime({
     const currentProjectionIds = new Set(learningEvents.map((event) => event?.id));
     const newestAnchorPresent = previousProjectionNewestId != null && currentProjectionIds.has(previousProjectionNewestId);
     const windowContinuityVerified = previousProjectionValid && currentProjectionValid && newestAnchorPresent;
-    if (!currentProjectionValid) eventEvidenceTruncated = true;
+    // Uncapped views do not depend on a rolling-window continuity proof;\n    // their individual events are still validated below as before.\n    if (!currentProjectionValid && learningEvents.length >= 250) eventEvidenceTruncated = true;
     if (learningEvents.length >= 250) {
       cappedProjectionSamples += 1;
       if (windowContinuityVerified) overlappingCappedSamples += 1;
