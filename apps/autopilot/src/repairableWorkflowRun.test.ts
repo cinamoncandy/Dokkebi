@@ -6,7 +6,7 @@ const run = (overrides: Record<string, unknown>) => ({ name: "CI", conclusion: "
 
 test("canonical code checks that failed on main are repair targets", () => {
   assert.equal(isRepairableMainWorkflowFailure(run({})), true);
-  assert.equal(isRepairableMainWorkflowFailure(run({ conclusion: "timed_out" })), true);
+  assert.equal(isRepairableMainWorkflowFailure(run({ conclusion: "timed_out" })), false); // CANARY C': narrowed, never widened
   assert.equal(isRepairableMainWorkflowFailure(run({ event: "workflow_dispatch" })), true);
   assert.equal(isRepairableMainWorkflowFailure(run({ name: "Autopilot Sandbox New-File Guard" })), true);
 });
