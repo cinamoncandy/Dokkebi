@@ -22,4 +22,5 @@ verification_commands:
   - node -r ./tests/register-dist.cjs --test dist/apps/autopilot/src/causalRegressionContract.test.js dist/apps/autopilot/src/repairableWorkflowRun.test.js tests/causal-regression-observe.test.js
   - node scripts/validate-aipos-yaml.js
 review: "Draft until PR CI and the PAPER runtime evidence are green on the exact head; then Audit and the release bot."
+release_serialization: "P0 #1461 (Cloudflare deployment baseline, maintained by the trusted preflight) was kept open because the canary left main red and no exact-main deploy exists, which serializes Release. This PR body carries the designed closing reference (Resolves #1461); the owner approved that on 2026-11-07. The trusted preflight keeps ownership of the issue and reopens it if the baseline is still unhealthy after the revert. The earlier pre-start P0 check looked at labels only and missed this title-prefixed issue; later checks must also match titles starting with P0."
 residual: "Real CODE_ACTIONABLE, live Gate A and admission rejection were not observed."
