@@ -1,0 +1,23 @@
+id: WO-RESEARCH-20261107-LEARNING-LOOP-NEXT-DESIGN
+title: "Learning loop next-step design: what the server reports, a correction, and the horizon bottleneck (proposal only)"
+status: READY_FOR_REVIEW
+owner: nusa-development
+repository: cinamoncandy/NUSA
+base_branch: main
+implementation_branch: claude/design-learning-loop-next
+authority_impact: none
+objective: "Owner asked to work on the learning loop on 2026-11-07. Record the read-only server facts (1,553 ticks, 138 realized periods, 0 holdout passes, baseline shadow and null comparators), correct an earlier suggestion (research is already cost-aware: fee 0.05% plus 5 bp slippage, cost_stress gate) and name the actual bottleneck: only 1-minute bars are researched because 15m/60m manifests are missing (#3002)."
+scope:
+  - "docs/DESIGN_LEARNING_LOOP_NEXT_20261107.md"
+exclusions:
+  - "Proposal only: no code, workflow, pin, gate, threshold, limit, capital or server change. No proposal is approved."
+safety:
+  paper_only: true
+  liveAuthority: NONE
+  productionMutationAllowed: false
+  aiAuthority: ZERO_AUTHORITY
+  fail_closed: "Nothing here changes behaviour."
+verification_commands:
+  - node scripts/validate-aipos-yaml.js
+review: "Draft PR; a non-author review of the claims is requested."
+residual: "Current 15m/60m skip counters were not read; a longer bar is a hypothesis, not evidence of edge."
