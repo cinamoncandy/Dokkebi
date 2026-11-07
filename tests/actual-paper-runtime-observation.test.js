@@ -1,7 +1,7 @@
 const assert = require("node:assert/strict");
 const { spawnSync } = require("node:child_process");
 const test = require("node:test");
-const { observeAutomaticRuntime, waitForHealth } = require("../scripts/actual-paper-runtime-e2e.js");
+const { observeAutomaticRuntime, waitForHealth, waitForStablePaperObservationStart } = require("../scripts/actual-paper-runtime-e2e.js");
 const { classify } = require("../scripts/classify-actual-paper-runtime-readiness.js");
 
 const BASE_TIME = Date.parse("2026-11-06T12:00:00.000Z");
@@ -418,6 +418,95 @@ test("known locally generated runtime failure codes survive strict heartbeat nor
     assert.equal(result.status, "FAIL");
     assert.equal(result.evidence.failure_code, lastError);
   }
+});
+
+test("startup orderbook synchronization errors are retained and observation starts only after consecutive clean snapshots", async () => {
+  let wall = BASE_TIME;
+  let reads = 0;
+  const startupError = snapshot([], {
+    operations: {
+      runtimeState: "DEGRADED",
+      heartbeat: { startedAt: BASE_TIME - 1_000, lastHeartbeatAt: BASE_TIME, lastError: "PAPER_ORDERBOOK_UNRECONCILED" },
+    },
+  });
+  const stabilized = await waitForStablePaperObservationStart({
+    initialSnapshot: startupError,
+    startupBudgetMs: 5_000,
+    pollIntervalMs: 1_000,
+    wallNow: () => wall,
+    delay: async (duration) => { wall += duration; },
+    readSnapshot: async () => {
+      reads += 1;
+      return { httpStatus: 200, body: snapshot([], {}, wall) };
+    },
+  });
+
+  assert.equal(stabilized.status, "PASS");
+  assert.equal(reads, 2);
+  assert.equal(stabilized.evidence.status, "SYNCHRONIZATION_RECOVERED");
+  assert.equal(stabilized.evidence.error_occurrence_count, 1);
+  assert.deepEqual(stabilized.evidence.error_codes, ["PAPER_ORDERBOOK_UNRECONCILED"]);
+  assert.equal(stabilized.evidence.first_error_at, new Date(BASE_TIME).toISOString());
+  assert.equal(stabilized.evidence.consecutive_clean_snapshots, 2);
+  assert.equal(stabilized.snapshot.operations.heartbeat.lastError, null);
+});
+
+test("persistent startup synchronization error exhausts its bounded budget without opening observation", async () => {
+  let wall = BASE_TIME;
+  let reads = 0;
+  const persistent = snapshot([], {
+    operations: { heartbeat: { startedAt: BASE_TIME - 1_000, lastHeartbeatAt: BASE_TIME, lastError: "PUBLIC_ORDERBOOK_SNAPSHOT_UNAVAILABLE" } },
+  });
+  const result = await waitForStablePaperObservationStart({
+    initialSnapshot: persistent,
+    startupBudgetMs: 2_000,
+    pollIntervalMs: 1_000,
+    wallNow: () => wall,
+    delay: async (duration) => { wall += duration; },
+    readSnapshot: async () => { reads += 1; return { httpStatus: 200, body: persistent }; },
+  });
+
+  assert.equal(result.status, "FAIL");
+  assert.equal(result.failureCode, "AUTOMATIC_RUNTIME_STARTUP_TIMEOUT");
+  assert.equal(result.evidence.error_occurrence_count, 3);
+  assert.equal(result.evidence.consecutive_clean_snapshots, 0);
+  assert.equal(reads, 2);
+});
+
+test("lease, unknown, and suffixed runtime startup errors fail immediately", async () => {
+  for (const lastError of ["PAPER_WRITER_LEASE_LOST", "UNRECOGNIZED_RUNTIME_ERROR", "PAPER_ORDERBOOK_UNRECONCILED: detail"]) {
+    let reads = 0;
+    const initialSnapshot = snapshot([], {
+      operations: { heartbeat: { startedAt: BASE_TIME - 1_000, lastHeartbeatAt: BASE_TIME, lastError } },
+    });
+    const result = await waitForStablePaperObservationStart({
+      initialSnapshot,
+      wallNow: () => BASE_TIME,
+      readSnapshot: async () => { reads += 1; return { httpStatus: 200, body: snapshot([]) }; },
+      delay: async () => {},
+    });
+    assert.equal(result.status, "FAIL", lastError);
+    assert.equal(reads, 0, lastError);
+    assert.equal(result.evidence.consecutive_clean_snapshots, 0, lastError);
+  }
+});
+
+test("a stale heartbeat cannot make an orderbook diagnostic waitable", async () => {
+  const stale = snapshot([], {
+    operations: {
+      runtimeState: "DEGRADED",
+      heartbeat: { startedAt: BASE_TIME - 60_000, lastHeartbeatAt: BASE_TIME - 45_000, lastError: "PAPER_ORDERBOOK_UNRECONCILED" },
+    },
+  });
+  const result = await waitForStablePaperObservationStart({
+    initialSnapshot: stale,
+    wallNow: () => BASE_TIME,
+    readSnapshot: async () => { throw new Error("must fail before polling stale evidence"); },
+    delay: async () => {},
+  });
+  assert.equal(result.status, "FAIL");
+  assert.equal(result.failureCode, "PAPER_RUNTIME_HEARTBEAT_INVALID");
+  assert.equal(result.evidence.error_occurrence_count, 0);
 });
 
 test("allowlisted runtime code prefixes with untrusted suffixes fail closed", async () => {
