@@ -7,9 +7,9 @@ Everything below is what the repository's records *claim*. Re-verify on GitHub b
 
 ## Newest handoff
 
-[`.aipos/handoffs/2026-11-07-forge-p0-p1-3010.md`](handoffs/2026-11-07-forge-p0-p1-3010.md) — CORE handoff — 2026-11-07 — #3000 Formal Validation and WO-0059 P2
+[`.aipos/handoffs/2026-11-07-main-handoff.md`](handoffs/2026-11-07-main-handoff.md) — CORE handoff — 2026-11-07 — #2772 completed consumer proof
 
-> Observed at `2026-11-07T03:59Z`.
+> Observed at `2026-11-07T15:42Z`.
 
 ## Work orders
 

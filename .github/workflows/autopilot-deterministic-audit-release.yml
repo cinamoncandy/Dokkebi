@@ -107,14 +107,22 @@ jobs:
 
           # Fresh non-author VALIDATOR evidence is an immutable artifact emitted by the canonical
           # default-branch execution-consumer run. PR comments and Draft -> Ready state have no authority.
-          validator_run="$(gh api "repos/$GITHUB_REPOSITORY/actions/runs/$VALIDATOR_EXECUTION_RUN_ID")"
-          validator_attempt="$(jq -r '.run_attempt // 0' <<<"$validator_run")"
-          jq -e --arg repo "$GITHUB_REPOSITORY" --arg base "$current_main" --argjson run "$VALIDATOR_EXECUTION_RUN_ID" '
-            .id == $run and .name == "Autopilot Execution Consumer" and .path == ".github/workflows/autopilot-execution-consumer.yml" and
-            .event == "repository_dispatch" and .repository.full_name == $repo and .head_sha == $base and
-            (.status == "in_progress" or (.status == "completed" and .conclusion == "success"))
-          ' <<<"$validator_run" >/dev/null
-          test "$validator_attempt" -ge 1
+          validator_run_file="$RUNNER_TEMP/nusa-deterministic-audit/consumer-run.json"
+          validator_run_script="$RUNNER_TEMP/nusa-deterministic-audit/validate-completed-audit-consumer-run.js"
+          gh api "repos/$GITHUB_REPOSITORY/contents/scripts/validate-completed-audit-consumer-run.js?ref=$current_main" --jq '.content' | base64 --decode > "$validator_run_script"
+          validator_run=""
+          for poll in $(seq 1 30); do
+            validator_run="$(gh api "repos/$GITHUB_REPOSITORY/actions/runs/$VALIDATOR_EXECUTION_RUN_ID")"
+            validator_status="$(jq -r '.status // empty' <<<"$validator_run")"
+            if [ "$validator_status" = "completed" ]; then break; fi
+            if [ "$validator_status" != "queued" ] && [ "$validator_status" != "pending" ] && [ "$validator_status" != "in_progress" ]; then
+              echo "Unexpected VALIDATOR consumer run status: ${validator_status:-missing}" >&2
+              exit 1
+            fi
+            if [ "$poll" -lt 30 ]; then sleep 5; fi
+          done
+          printf '%s' "$validator_run" > "$validator_run_file"
+          validator_attempt="$(node "$validator_run_script" "$validator_run_file" "$GITHUB_REPOSITORY" "$VALIDATOR_EXECUTION_RUN_ID" "$current_main")"
           validator_artifact_name="autopilot-audit-request-$VALIDATOR_EXECUTION_RUN_ID"
           validator_artifacts="$(gh api "repos/$GITHUB_REPOSITORY/actions/runs/$VALIDATOR_EXECUTION_RUN_ID/artifacts?per_page=100")"
           validator_artifact="$(jq -c --arg name "$validator_artifact_name" --argjson run "$VALIDATOR_EXECUTION_RUN_ID" '[.artifacts[] | select(.name == $name and .expired == false and (.workflow_run.id // 0) == $run and (.digest | type == "string" and test("^sha256:[a-fA-F0-9]{64}$")))] | sort_by(.updated_at) | reverse | .[0] // empty' <<<"$validator_artifacts")"
@@ -247,17 +255,29 @@ jobs:
       - name: Load and verify trusted fresh VALIDATOR evidence
         run: |
           set -euo pipefail
-          validator_run="$(gh api "repos/$GITHUB_REPOSITORY/actions/runs/$VALIDATOR_EXECUTION_RUN_ID")"
-          validator_attempt="$(jq -r '.run_attempt // 0' <<<"$validator_run")"
-          jq -e --arg repo "$GITHUB_REPOSITORY" --arg base "$AUDITED_BASE" --argjson run "$VALIDATOR_EXECUTION_RUN_ID" '.id == $run and .name == "Autopilot Execution Consumer" and .path == ".github/workflows/autopilot-execution-consumer.yml" and .event == "repository_dispatch" and .repository.full_name == $repo and .head_sha == $base and (.status == "in_progress" or (.status == "completed" and .conclusion == "success"))' <<<"$validator_run" >/dev/null
-          test "$validator_attempt" -ge 1
+          rm -rf "$RUNNER_TEMP/nusa-release-validator"
+          mkdir -p "$RUNNER_TEMP/nusa-release-validator/evidence"
+          validator_run_file="$RUNNER_TEMP/nusa-release-validator/consumer-run.json"
+          validator_run_script="$RUNNER_TEMP/nusa-release-validator/validate-completed-audit-consumer-run.js"
+          gh api "repos/$GITHUB_REPOSITORY/contents/scripts/validate-completed-audit-consumer-run.js?ref=$AUDITED_BASE" --jq '.content' | base64 --decode > "$validator_run_script"
+          validator_run=""
+          for poll in $(seq 1 30); do
+            validator_run="$(gh api "repos/$GITHUB_REPOSITORY/actions/runs/$VALIDATOR_EXECUTION_RUN_ID")"
+            validator_status="$(jq -r '.status // empty' <<<"$validator_run")"
+            if [ "$validator_status" = "completed" ]; then break; fi
+            if [ "$validator_status" != "queued" ] && [ "$validator_status" != "pending" ] && [ "$validator_status" != "in_progress" ]; then
+              echo "Unexpected VALIDATOR consumer run status: ${validator_status:-missing}" >&2
+              exit 1
+            fi
+            if [ "$poll" -lt 30 ]; then sleep 5; fi
+          done
+          printf '%s' "$validator_run" > "$validator_run_file"
+          validator_attempt="$(node "$validator_run_script" "$validator_run_file" "$GITHUB_REPOSITORY" "$VALIDATOR_EXECUTION_RUN_ID" "$AUDITED_BASE")"
           validator_artifact_name="autopilot-audit-request-$VALIDATOR_EXECUTION_RUN_ID"
           validator_artifacts="$(gh api "repos/$GITHUB_REPOSITORY/actions/runs/$VALIDATOR_EXECUTION_RUN_ID/artifacts?per_page=100")"
           validator_artifact="$(jq -c --arg name "$validator_artifact_name" --argjson run "$VALIDATOR_EXECUTION_RUN_ID" '[.artifacts[] | select(.name == $name and .expired == false and (.workflow_run.id // 0) == $run and (.digest | type == "string" and test("^sha256:[a-fA-F0-9]{64}$")))] | sort_by(.updated_at) | reverse | .[0] // empty' <<<"$validator_artifacts")"
           test -n "$validator_artifact"
           validator_artifact_id="$(jq -r '.id' <<<"$validator_artifact")"
-          rm -rf "$RUNNER_TEMP/nusa-release-validator"
-          mkdir -p "$RUNNER_TEMP/nusa-release-validator/evidence"
           gh api "repos/$GITHUB_REPOSITORY/actions/artifacts/$validator_artifact_id/zip" > "$RUNNER_TEMP/nusa-release-validator/validator.zip"
           unzip -q "$RUNNER_TEMP/nusa-release-validator/validator.zip" -d "$RUNNER_TEMP/nusa-release-validator/evidence"
           find "$RUNNER_TEMP/nusa-release-validator/evidence" -type f -name 'trusted-validator-evidence.json' -print -quit > "$RUNNER_TEMP/nusa-release-validator/evidence-path.txt"

@@ -39,8 +39,9 @@ test("review runner distinguishes VALIDATOR from Audit and binds P0\/P1 blockers
 test("deterministic Audit and Release re-read exact trusted validator artifact before authority or merge", () => {
   assert.match(release, /VALIDATOR_EXECUTION_RUN_ID/);
   assert.match(release, /actions\/runs\/\$VALIDATOR_EXECUTION_RUN_ID\/artifacts/);
+  assert.match(release, /validate-completed-audit-consumer-run\.js/);
   assert.match(release, /validate-fresh-validator-evidence\.js/);
-  assert.match(release, /\.head_sha == \$base/);
+  assert.match(release, /\"\$VALIDATOR_EXECUTION_RUN_ID\" \"\$current_main\"/);
   const auditPass = release.indexOf("authority=DETERMINISTIC_AUDIT_PASS");
   const validatorCheck = release.indexOf("validate-fresh-validator-evidence.js");
   assert.ok(validatorCheck >= 0 && auditPass > validatorCheck, "validator evidence must gate deterministic Audit PASS");

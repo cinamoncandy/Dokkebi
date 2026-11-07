@@ -6,11 +6,12 @@ current_autopilot_validator_gate_sync_candidate_20261107:
   branch: fix/validator-evidence-gate-2760
   protected_main_sha: 01d698b325626e4a2e62b29e8e0b2f99f579ad4a
   observed_pr_head: 5004e87836936e5c236208a3f03abadcc60d7c8c
-  local_candidate: UNCOMMITTED_NON_FORCE_MERGE_OF_PROTECTED_MAIN
+  local_candidate_parent: 84e7ef189f0c439c442719d8d1af5a4710abb417
+  local_candidate: CURRENT_PROTECTED_MAIN_MERGE_PLUS_UNCOMMITTED_P1_REPAIR_AND_AIPOS_RECEIPT
   merge_base: 3e610394ab9441e925769ac66033d3ec9fedc429
   pre_merge_divergence: "46 PR-only commits / 148 main-only commits"
   merge_conflicts: "One worker.ts import conflict resolved by preserving both import sets; zero unresolved conflicts."
-  local_validation_so_far: "typecheck PASS; build PASS; focused emitted tests 78/78; independent-audit contract exact rerun 16/16 with workspace TMPDIR after /tmp ENOSPC. Full suite has not started on this candidate."
-  first_broken_transition: "Current-main local merge candidate -> full isolated test suite."
-  next: "Run pnpm test with workspace TMPDIR, then validate:full, security, lint, AIPOS and diff safety. No commit/push until all local gates and diff review pass; then exact-head CI and independent Validator are required."
+  local_validation_so_far: "Completed consumer status/Audit authority/workflow focused regressions PASS 26/26; pnpm test PASS 1,341 isolated test files; typecheck PASS; validate:full PASS; security:gate PASS; lint 0 errors / 47 warnings; AIPOS preflight/provenance PASS; diff and staged diff checks PASS. These are local validations on the current merge-plus-repair tree, not remote exact-head evidence."
+  first_broken_transition: "Locally validated P1 successor tree -> commit and non-force publish to the unchanged canonical PR branch."
+  next: "Reconfirm the live PR head is 5004e878... and main is 01d698b... immediately before publication; commit only reviewed P1 source/test and AIPOS receipt files, then push without force. Keep Draft and unresolved review threads; require new exact-head CI/companions and a fresh independent VALIDATOR."
   safety: PAPER_ONLY_LIVE_NONE_PRODUCTION_MUTATION_FALSE_REAL_ORDER_FALSE_REAL_TRANSFER_FALSE_AI_ZERO_AUTHORITY_FAIL_CLOSED
