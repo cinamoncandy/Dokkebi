@@ -98,11 +98,11 @@ local_validation: "PASS on d6b991d1554e3c473b2a3fb8306e14a76c9f82fd: focused obs
 diagnostic_followup:
   as_of: "2026-11-08"
   prior_artifact_gap: "PR #3002 returned PAPER_RUNTIME_NOT_RUNNING but its artifact omitted operations.runtimeState, schedulerRunning, and heartbeat.lastError; logs do not establish the cause."
-  root_cause: UNKNOWN
-  implementation: "Same PR #3016 records one sanitized observation failure tuple including allowlisted runtimeHaltReasons; raw heartbeat.lastError is never copied. Runtime classification and startup allowlist are unchanged."
-  current_pr_head_before_followup: 84d9f5e8bb5747c7b9b9b93e58ed5948f6c1eade
+  root_cause: "PAPER_RUNTIME_NOT_RUNNING is caused by runtimeState=HALTED with runtimeHaltReasons=[KILL_SWITCH_ACTIVE]; the precise trigger is not yet known. The runtime locally sets heartbeat.lastError to PUBLIC_MARKET_<finite connection state> on non-CONNECTED feed transitions, but the diagnostic sanitizer previously collapsed those values to RUNTIME_ERROR_PRESENT."
+  implementation: "Same PR #3016 records the sanitized tuple and now allowlists only the five exact non-CONNECTED values from MarketConnectionState (STALE, DISCONNECTED, RECONNECTING, RECOVERED, FAILED). Raw heartbeat.lastError is never copied; runtime classification and startup allowlist are unchanged."
+  current_pr_head_before_followup: faa2effadca0bc7db17cc4c55f3ca99bde8a5bb2
   current_main_before_followup: 01d698b325626e4a2e62b29e8e0b2f99f579ad4a
-  validation: "PASS on current working tree: focused observation/lifecycle/replay/readiness 54/54; full pnpm test 1335 isolated files; typecheck; validate:full; security:gate; lint 0 errors / 47 existing warnings; AIPOS YAML/drift/conformance; workflow pins; diff-check."
-  exact_head_ci: PENDING
-  actual_paper: "Do not rerun #3002 based on diagnostic-only instrumentation; require an identified root-cause fix or justified environment change first."
-  next: "Push the halt-reason tuple on the same Draft PR and use its fresh Actual PAPER artifact to classify the observed HALTED state. Repair only if repository code is implicated; hold for owner/environment action if the reason requires it. Do not rerun #3002 until that classification supports a root-cause fix."
+  validation: "PASS for the new exact-state allowlist: observation/lifecycle/replay/readiness 54/54; git diff --check. Broader gates were previously PASS on faa2effadca0bc7db17cc4c55f3ca99bde8a5bb2 and must be refreshed for the new head."
+  exact_head_ci: "Prior diagnostic head faa2effadca0bc7db17cc4c55f3ca99bde8a5bb2 CI run 42386789300 and companion checks passed except actual-paper-runtime, which failed; run 42386789357 artifact 13579209159 records HALTED/KILL_SWITCH_ACTIVE/scheduler=true/RUNTIME_ERROR_PRESENT. Fresh CI is required after the new allowlist change."
+  actual_paper: "Do not rerun #3002 based on diagnostic-only instrumentation; require an identified root-cause fix or justified environment change first. The next #3016 artifact can distinguish the finite public-market connection state without exposing raw error text."
+  next: "Push the exact-state diagnostic extension on existing Draft PR #3016, obtain fresh exact-head CI and Actual PAPER artifact, then repair only if repository code is implicated. If a market feed/provider failure is confirmed, keep fail-closed and hold for environment recovery; do not rerun #3002 until a genuine root-cause fix or justified environment change is evidenced."
