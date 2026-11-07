@@ -1,0 +1,25 @@
+id: WO-AUTOPILOT-20261107-FORGE-CANARY2-CPRIME
+title: "Canary 2 change C-prime (prepared, NOT approved to merge): narrow timed_out out of the repairable set and adjust the three tests"
+status: READY_FOR_REVIEW
+owner: nusa-development
+repository: cinamoncandy/NUSA
+base_branch: main
+implementation_branch: claude/canary2-c-prime
+authority_impact: none
+objective: "Second controlled PAPER canary. The first canary (2026-11-07 13:03-14:52 KST) observed the contract mismatch and a Sigstore attestation on protected main, but the signed bundle was never retained because bundle-path was passed to actions/attest as an input (fixed in #3013). This is the same one-line narrowing as the first canary (REPAIRABLE_CONCLUSIONS = failure only; nothing becomes newly repairable) with the same three test adjustments, re-applied as a new PR so the new part of the chain can be observed: retained nusa-causal-attestation-N artifact, event bridge delivery, server verification and the admission decision."
+scope:
+  - "apps/autopilot/src/repairableWorkflowRun.ts, apps/autopilot/src/repairableWorkflowRun.test.ts, apps/autopilot/src/causalRegressionContract.test.ts, tests/causal-regression-observe.test.js (identical to the first canary's reviewed diff)."
+exclusions:
+  - "Not to be merged without the owner's explicit window approval. No gate, protection, workflow, pin, limit or server change. A real CODE_ACTIONABLE is not claimed; L1 stays PARTIAL until the owner and an independent review say otherwise."
+  - "Prerequisite: #3013 merged before the window. Revert plan R is a git revert of this PR's merge commit with 'Resolves #<open P0 that serializes Release>' in its body from the start."
+safety:
+  paper_only: true
+  liveAuthority: NONE
+  productionMutationAllowed: false
+  aiAuthority: ZERO_AUTHORITY
+  fail_closed: "A mismatch yields only a bounded observation; admission stays closed unless the full verified chain passes."
+verification_commands:
+  - node -r ./tests/register-dist.cjs --test dist/apps/autopilot/src/causalRegressionContract.test.js dist/apps/autopilot/src/repairableWorkflowRun.test.js tests/causal-regression-observe.test.js
+  - node scripts/validate-aipos-yaml.js
+review: "Draft; a fresh non-author review of the identical diff and of the window plan is required. The first canary's reviews (PASS_WITH_NOTES, no P0/P1) apply to the same code diff."
+residual: "How the server and the admission step behave once the bundle exists is unverified; it is the point of this canary."
