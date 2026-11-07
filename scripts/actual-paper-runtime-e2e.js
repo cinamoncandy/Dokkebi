@@ -388,11 +388,31 @@ async function observeAutomaticRuntime({
   const fillsById = new Map();
   const stageCounts = Object.fromEntries(OBSERVATION_STAGES.map((stage) => [stage, 0]));
   const accountObservationTimes = [];
-  // The read-only projection is a 250-event rolling window, not a 250-event
-  // lifetime limit. Consecutive overlapping snapshots establish continuity;
-  // without an anchor, a full window cannot prove that no events were missed.
-  let previousProjectionIds = new Set((initialSnapshot?.paperLearning?.events ?? [])
-    .map((event) => event?.id).filter((id) => typeof id === "string" && id.length > 0));
+  // The read-only projection is newest-first and capped at 250. An overlap
+  // alone does NOT establish continuity: the previous newest ID must survive
+  // into the next correctly ordered, duplicate-free window. Under the canonical
+  // newest-first projection contract, this anchors every newer emitted event
+  // within the current window. It does not attest to upstream events never
+  // recorded by the source; that remains a separate evidence limitation.
+  const validProjectionOrder = (events) => {
+    if (!Array.isArray(events)) return false;
+    const ids = new Set();
+    let previousTime = Infinity;
+    let previousId = "";
+    for (const event of events) {
+      const time = observationTimestamp(event?.occurredAt);
+      if (typeof event?.id !== "string" || event.id.length === 0 || event.id.length > 256 || time == null || ids.has(event.id)) return false;
+      if (time > previousTime || (time === previousTime && previousId.localeCompare(event.id) > 0)) return false;
+      ids.add(event.id);
+      previousTime = time;
+      previousId = event.id;
+    }
+    return true;
+  };
+  const initialProjection = initialSnapshot?.paperLearning?.events ?? [];
+  let previousProjectionValid = validProjectionOrder(initialProjection);
+  let previousProjectionNewestId = previousProjectionValid ? initialProjection[0]?.id ?? null : null;
+  let previousProjectionFull = initialProjection.length >= 250;
   let cappedProjectionSamples = 0;
   let overlappingCappedSamples = 0;
   let eventEvidenceTruncated = false;
@@ -406,18 +426,22 @@ async function observeAutomaticRuntime({
 
   const collectSnapshot = (snapshot, observedAtMs) => {
     const learningEvents = snapshot.paperLearning.events;
-    const currentProjectionIds = new Set(learningEvents
-      .map((event) => event?.id).filter((id) => typeof id === "string" && id.length > 0));
-    const hasOverlap = [...currentProjectionIds].some((id) => previousProjectionIds.has(id));
+    const currentProjectionValid = validProjectionOrder(learningEvents);
+    const currentProjectionIds = new Set(learningEvents.map((event) => event?.id));
+    const newestAnchorPresent = previousProjectionNewestId != null && currentProjectionIds.has(previousProjectionNewestId);
+    const windowContinuityVerified = previousProjectionValid && currentProjectionValid && newestAnchorPresent;
+    if (!currentProjectionValid) eventEvidenceTruncated = true;
     if (learningEvents.length >= 250) {
       cappedProjectionSamples += 1;
-      if (hasOverlap) overlappingCappedSamples += 1;
+      if (windowContinuityVerified) overlappingCappedSamples += 1;
       else eventEvidenceTruncated = true;
     }
-    // Losing the entire previous rolling window also leaves a gap even if the
-    // next response happens to contain fewer than 250 events (e.g. restart).
-    if (previousProjectionIds.size >= 250 && !hasOverlap) eventEvidenceTruncated = true;
-    previousProjectionIds = currentProjectionIds;
+    // A prior saturated window can roll out events between reads even if the
+    // current response is below the cap. Mere overlap with older IDs is unsafe.
+    if (previousProjectionFull && !windowContinuityVerified) eventEvidenceTruncated = true;
+    previousProjectionValid = currentProjectionValid;
+    previousProjectionNewestId = currentProjectionValid ? learningEvents[0]?.id ?? null : null;
+    previousProjectionFull = learningEvents.length >= 250;
     for (const event of learningEvents) {
       if (event == null || typeof event !== "object") return "PAPER_LEARNING_EVENT_INVALID";
       const occurredAt = observationTimestamp(event.occurredAt);
@@ -615,8 +639,9 @@ async function observeAutomaticRuntime({
     projection_window: {
       maximum_events: 250,
       capped_samples: cappedProjectionSamples,
-      overlap_verified_capped_samples: overlappingCappedSamples,
-      continuity_proven: !eventEvidenceTruncated,
+      newest_anchor_verified_capped_samples: overlappingCappedSamples,
+      continuity_proven: !eventEvidenceTruncated && cappedProjectionSamples > 0,
+      proof_scope: "ORDERED_PROJECTION_WINDOWS_ONLY",
     },
     stage_evidence: stageEvidence,
     decision_cycles: decisionCycles,
