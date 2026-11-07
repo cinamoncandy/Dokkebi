@@ -388,6 +388,13 @@ async function observeAutomaticRuntime({
   const fillsById = new Map();
   const stageCounts = Object.fromEntries(OBSERVATION_STAGES.map((stage) => [stage, 0]));
   const accountObservationTimes = [];
+  // The read-only projection is a 250-event rolling window, not a 250-event
+  // lifetime limit. Consecutive overlapping snapshots establish continuity;
+  // without an anchor, a full window cannot prove that no events were missed.
+  let previousProjectionIds = new Set((initialSnapshot?.paperLearning?.events ?? [])
+    .map((event) => event?.id).filter((id) => typeof id === "string" && id.length > 0));
+  let cappedProjectionSamples = 0;
+  let overlappingCappedSamples = 0;
   let eventEvidenceTruncated = false;
   let finalSnapshot = initialSnapshot ?? null;
   let failureCode = null;
@@ -399,7 +406,18 @@ async function observeAutomaticRuntime({
 
   const collectSnapshot = (snapshot, observedAtMs) => {
     const learningEvents = snapshot.paperLearning.events;
-    if (learningEvents.length >= 250) eventEvidenceTruncated = true;
+    const currentProjectionIds = new Set(learningEvents
+      .map((event) => event?.id).filter((id) => typeof id === "string" && id.length > 0));
+    const hasOverlap = [...currentProjectionIds].some((id) => previousProjectionIds.has(id));
+    if (learningEvents.length >= 250) {
+      cappedProjectionSamples += 1;
+      if (hasOverlap) overlappingCappedSamples += 1;
+      else eventEvidenceTruncated = true;
+    }
+    // Losing the entire previous rolling window also leaves a gap even if the
+    // next response happens to contain fewer than 250 events (e.g. restart).
+    if (previousProjectionIds.size >= 250 && !hasOverlap) eventEvidenceTruncated = true;
+    previousProjectionIds = currentProjectionIds;
     for (const event of learningEvents) {
       if (event == null || typeof event !== "object") return "PAPER_LEARNING_EVENT_INVALID";
       const occurredAt = observationTimestamp(event.occurredAt);
@@ -594,6 +612,12 @@ async function observeAutomaticRuntime({
     stop_reason: eventEvidenceTruncated && failureCode == null ? "EVENT_EVIDENCE_TRUNCATED" : stopReason,
     ...(failureCode == null ? {} : { failure_code: failureCode }),
     event_evidence_truncated: eventEvidenceTruncated,
+    projection_window: {
+      maximum_events: 250,
+      capped_samples: cappedProjectionSamples,
+      overlap_verified_capped_samples: overlappingCappedSamples,
+      continuity_proven: !eventEvidenceTruncated,
+    },
     stage_evidence: stageEvidence,
     decision_cycles: decisionCycles,
     timeline,
