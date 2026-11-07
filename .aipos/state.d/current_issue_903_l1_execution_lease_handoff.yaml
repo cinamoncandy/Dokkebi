@@ -10,8 +10,8 @@ current_issue_903_l1_execution_lease_handoff:
   verified_gap: CAUSAL_HANDOFF_DID_NOT_EXTEND_AUTHENTICATED_CONSUMER_LEASE
   repair_scope: "Persist bounded leaseExpiresAt in both generic and causal handoff paths; retain current-main generic-failure abstention and cap new WIP at two."
   legacy_state: "Former three-to-eight WIP claims remain readable and are TTL-expired; they block new admissions until capacity is safe."
-  local_validation: PENDING
+  local_validation: "PASS: focused 60/60; isolated 1335 test files; build/typecheck/validate:full/security:gate; lint 0 errors/47 baseline warnings; diff-check."
   exact_head_ci: PENDING
   independent_validator: PENDING
-  next: "Focused/full validation, exact-head CI and companions, then fresh non-author Validator. No direct merge or production runtime mutation."
+  next: "Fresh exact-head CI and companions, then fresh non-author Validator. Actual autonomous dogfood remains BLOCKED by disabled Codex owner decision and unverified Workers AI configuration/dispatch. No direct merge or production runtime mutation."
   safety: PAPER_ONLY_LIVE_NONE_PRODUCTION_MUTATION_FALSE_AI_ZERO_AUTHORITY

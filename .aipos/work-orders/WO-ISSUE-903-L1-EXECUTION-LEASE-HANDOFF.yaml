@@ -67,7 +67,7 @@ evidence:
     security_gate: PASS
     lint: "PASS_0_ERRORS_45_EXISTING_WARNINGS"
     git_diff_check: PASS
-  current_local_validation: PENDING
+  current_local_validation: "PASS: preflight, focused coordinator/scheduled regression 60/60, build, typecheck, full isolated suite 1335/1335 test files, validate:full, security:gate, lint 0 errors/47 baseline warnings, and diff-check. Initial suite attempt hit ENOSPC on /tmp; rerun with TMPDIR=/workspace/nusa-2039-tmp passed."
   exact_head_ci: PENDING
   required_companions: PENDING
   fresh_non_author_review: PENDING
@@ -83,9 +83,11 @@ recovery_20261107:
   verified_additional_gap: "The current-main causalAdmissionHandoff branch did not persist the authenticated consumer leaseExpiresAt even though the generic handoff branch did."
   repair: "Both handoff paths now persist request.leaseExpiresAt; causal regression asserts active lease blocks a competing producer and duplicate handoff remains rejected."
   wip_contraction_safety: "Admission cap is 2; legacy stored claims retain the former bound of 8 so existing state is not treated as corrupt, new work is blocked until expired claims age out, and read-back remains truthful."
-  local_validation: PENDING
-  next: "Complete isolated local validation on this aligned candidate, commit/push only after local gates pass, verify exact-head CI and companions, then request one fresh non-author Validator review. Keep Draft and do not self-approve or merge."
-next: "Complete isolated local validation on the current aligned successor; then exact-head CI/companions and fresh independent validation are required before any further governance gate."
+  local_validation: "PASS: preflight, focused coordinator/scheduled regression 60/60, build, typecheck, full isolated suite 1335/1335 test files, validate:full, security:gate, lint 0 errors/47 baseline warnings, and diff-check. Initial suite attempt hit ENOSPC on /tmp; rerun with TMPDIR=/workspace/nusa-2039-tmp passed."
+  autonomous_dogfood: BLOCKED
+  autonomous_dogfood_reason: "Autopilot Codex Coding remains disabled_manually by owner decision. Read-only repository Actions variable lookup for NUSA_AUTOPILOT_CODING_ENABLED returned 403; Workers AI dispatch capability/configuration is therefore unverified. No workflow was enabled or dispatched."
+  next: "Publish only this locally validated successor to the existing branch, verify fresh exact-head CI and companions, then request one fresh non-author Validator review. Keep Draft and do not self-approve or merge."
+next: "Fresh exact-head CI and companions, then one fresh non-author Validator review. Actual autonomous dogfood remains separately BLOCKED until an existing authorized runner, causal admission, WIP slot, and runtime configuration are proven. No Ready transition, self-approval, merge, or production mutation."
 
 historical_first_main_alignment_20261028:
   previous_validated_head: cbb638d5d4d50ca6e290dbb4dcb597a1da44e7f3
