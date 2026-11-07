@@ -125,6 +125,67 @@ test("bounded observation collects several distinct natural Decision cycles with
   assert.equal(readiness.production_readiness.completion_claim_allowed, false);
 });
 
+
+test("a continuously overlapping capped read-only window is not lost evidence", async () => {
+  const baseline = Array.from({ length: 250 }, (_, i) => event(`baseline-${i}`, "MARKET_DATA", BASE_TIME - 30_000 - i));
+  const result = await runObservation({
+    initialSnapshot: snapshot(baseline),
+    currentEvents: (readCount) => [
+      ...baseline,
+      ...Array.from({ length: Math.min(readCount, 3) }, (_, i) => cycleEvents(i + 1, BASE_TIME + i * 1_000)),
+    ].sort((a, b) => b.occurredAt - a.occurredAt || a.id.localeCompare(b.id)).slice(0, 250),
+  });
+
+  assert.equal(result.status, "PASS");
+  assert.equal(result.evidence.stop_reason, "MINIMUM_DURATION_AND_DECISION_CYCLES_REACHED");
+  assert.equal(result.evidence.event_evidence_truncated, false);
+  assert.ok(result.evidence.projection_window.capped_samples >= 3);
+  assert.equal(result.evidence.projection_window.overlap_verified_capped_samples, result.evidence.projection_window.capped_samples);
+  assert.equal(result.evidence.decision_cycles_observed, 3);
+  assert.equal(result.evidence.stage_evidence.PAPER_ORDER.status, "NOT_OBSERVED");
+
+  const readiness = classify({
+    result: result.status,
+    authority: { mode: "PAPER_ONLY", liveAuthority: "NONE", productionMutationAllowed: false },
+    prohibited_capabilities: { real_money_mutation: false },
+    market_data: { channel: "PUBLIC_TICKER" },
+    execution: { order_count: 0, fill_count: 0 },
+  });
+  assert.equal(readiness.runtime_safety_smoke.status, "PASS");
+  assert.equal(readiness.result, "INCOMPLETE", "continuous observations do not manufacture orders or fills");
+  assert.equal(readiness.production_readiness.completion_claim_allowed, false);
+});
+
+test("a full projection without a previous-window overlap remains INCOMPLETE", async () => {
+  const baseline = Array.from({ length: 250 }, (_, i) => event(`prior-${i}`, "MARKET_DATA", BASE_TIME - 90_000 - i));
+  const unrelated = Array.from({ length: 250 }, (_, i) => event(`new-${i}`, "MARKET_DATA", BASE_TIME + i));
+  const result = await runObservation({
+    initialSnapshot: snapshot(baseline),
+    currentEvents: (readCount) => [
+      ...unrelated,
+      ...Array.from({ length: Math.min(readCount, 3) }, (_, i) => cycleEvents(i + 1, BASE_TIME + 1_000 + i * 1_000)),
+    ].sort((a, b) => b.occurredAt - a.occurredAt || a.id.localeCompare(b.id)).slice(0, 250),
+  });
+  assert.equal(result.status, "INCOMPLETE");
+  assert.equal(result.evidence.stop_reason, "EVENT_EVIDENCE_TRUNCATED");
+  assert.equal(result.evidence.event_evidence_truncated, true);
+  assert.equal(result.evidence.projection_window.continuity_proven, false);
+});
+
+test("capped projection continuity does not excuse missing natural Decision cycles", async () => {
+  const baseline = Array.from({ length: 250 }, (_, i) => event(`history-${i}`, "MARKET_DATA", BASE_TIME - 10_000 - i));
+  const result = await runObservation({
+    minimumDurationMs: 2_000,
+    maximumDurationMs: 2_500,
+    initialSnapshot: snapshot(baseline),
+    currentEvents: () => baseline,
+  });
+  assert.equal(result.status, "INCOMPLETE");
+  assert.equal(result.evidence.stop_reason, "MAX_OBSERVATION_BUDGET_EXHAUSTED");
+  assert.equal(result.evidence.decision_cycles_observed, 0);
+  assert.equal(result.evidence.event_evidence_truncated, false);
+});
+
 test("PAPER order and fill evidence uses observed projection timestamps and hashed identities", async () => {
   const fillTime = new Date(BASE_TIME + 1_000).toISOString();
   const result = await runObservation({
