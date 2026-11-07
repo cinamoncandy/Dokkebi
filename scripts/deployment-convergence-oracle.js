@@ -1,6 +1,7 @@
 "use strict";
 
 const { spawnSync } = require("node:child_process");
+const { createHash } = require("node:crypto");
 const fs = require("node:fs");
 const os = require("node:os");
 const path = require("node:path");
@@ -13,6 +14,7 @@ const DIAGNOSE_PATH = ".github/workflows/oracle-host-diagnose.yml";
 const SHA_PATTERN = /^[0-9a-f]{40}$/;
 const ARTIFACT_DIGEST_PATTERN = /^sha256:[0-9a-f]{64}$/;
 const MAX_LOG_BYTES = 16 * 1024 * 1024;
+const MAX_ARTIFACT_BYTES = 160 * 1024 * 1024;
 
 function normalizePath(value) {
   return typeof value === "string" ? value.replace(/^\//, "") : "";
@@ -66,12 +68,29 @@ function parseReleaseObservation(raw, expectedSha) {
 
 function parseHostObservation(raw) {
   const lines = cleanLog(raw).split(/\r?\n/);
-  let observedAt = null;
+  let diagnosticAt = null;
   for (let index = 0; index < lines.length - 1; index += 1) {
     if (stripLogPrefix(lines[index]) !== "== time") continue;
     const next = lines[index + 1].match(/\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?Z\s+(\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z)\s*$/);
-    if (next) observedAt = next[1];
+    if (next) diagnosticAt = next[1];
     break;
+  }
+
+  let healthObservedAt = null;
+  let runtimeSourceSha = null;
+  for (const line of lines) {
+    const jsonStart = line.indexOf('{"ok":');
+    if (jsonStart < 0) continue;
+    try {
+      const health = JSON.parse(line.slice(jsonStart));
+      const sourceSha = health?.runtime?.sourceCommitSha;
+      if (health?.ok === true && validSha(sourceSha) && timestamp(health.observedAt) !== null) {
+        healthObservedAt = health.observedAt;
+        runtimeSourceSha = sourceSha.toLowerCase();
+      }
+    } catch {
+      // An incomplete or malformed health line is not runtime SHA evidence.
+    }
   }
 
   const currentRelease = [...cleanLog(raw).matchAll(/(?:^|\n)current_release=([0-9a-f]{40})(?:\n|$)/g)]
@@ -80,8 +99,10 @@ function parseHostObservation(raw) {
   const resolvedPath = resolvedPaths.at(-1) || null;
   const pathSha = resolvedPath ? resolvedPath.slice("/opt/nusa/releases/".length) : null;
   return {
-    observedAt,
+    observedAt: healthObservedAt,
+    diagnosticAt,
     observedSha: currentRelease,
+    runtimeSourceSha,
     resolvedPath,
     pathSha,
   };
@@ -114,8 +135,16 @@ function artifactForRelease(artifacts, run, buildJob) {
       typeof artifact.workflow_run?.head_sha === "string" && artifact.workflow_run.head_sha.toLowerCase() === run.head_sha.toLowerCase() &&
       ARTIFACT_DIGEST_PATTERN.test(String(artifact.digest || "")) &&
       Number.isInteger(Number(artifact.id)) && buildStarted !== null && buildCompleted !== null &&
+      artifact.expired === false && Number.isSafeInteger(Number(artifact.size_in_bytes)) &&
+      Number(artifact.size_in_bytes) > 0 && Number(artifact.size_in_bytes) <= MAX_ARTIFACT_BYTES &&
       timestamp(artifact.created_at) !== null && timestamp(artifact.created_at) >= buildStarted && timestamp(artifact.created_at) <= buildCompleted)
     .sort((a, b) => (timestamp(b.created_at) || 0) - (timestamp(a.created_at) || 0))[0] || null;
+}
+
+function artifactDigestMatches(artifact, downloadedDigest) {
+  return Boolean(artifact && artifact.expired === false &&
+    ARTIFACT_DIGEST_PATTERN.test(String(artifact.digest || "")) &&
+    artifact.digest === downloadedDigest);
 }
 
 function evaluateOracleEvidence(input) {
@@ -141,10 +170,17 @@ function evaluateOracleEvidence(input) {
     oracle_release_artifact_name: artifact?.name || null,
     oracle_release_artifact_digest: artifact?.digest || null,
     oracle_release_artifact_expired: typeof artifact?.expired === "boolean" ? artifact.expired : null,
+    oracle_release_artifact_digest_verified: input?.artifactDigestVerified === true,
+    oracle_release_job_id: Number.isInteger(Number(releaseJob?.id)) ? Number(releaseJob.id) : null,
+    oracle_release_log_sha256: typeof input?.releaseLogSha256 === "string" && ARTIFACT_DIGEST_PATTERN.test(input.releaseLogSha256) ? input.releaseLogSha256 : null,
     oracle_host_observed_sha: hostObservation.observedSha,
     oracle_host_observed_at: hostObservation.observedAt,
+    oracle_host_runtime_source_sha: hostObservation.runtimeSourceSha,
+    oracle_host_diagnose_observed_at: hostObservation.diagnosticAt,
     oracle_host_diagnose_run_id: Number.isInteger(Number(hostRun?.id)) ? Number(hostRun.id) : null,
     oracle_host_diagnose_attempt: Number.isInteger(Number(hostRun?.run_attempt)) ? Number(hostRun.run_attempt) : null,
+    oracle_host_diagnose_job_id: Number.isInteger(Number(hostJob?.id)) ? Number(hostJob.id) : null,
+    oracle_host_diagnose_log_sha256: typeof input?.hostLogSha256 === "string" && ARTIFACT_DIGEST_PATTERN.test(input.hostLogSha256) ? input.hostLogSha256 : null,
     oracle_host_identity: nonemptyIdentity(hostJob) ? {
       runner_id: Number(hostJob.runner_id),
       runner_name: hostJob.runner_name,
@@ -174,10 +210,15 @@ function evaluateOracleEvidence(input) {
   if (!jobMatchesRun(backupJob, releaseRun)) return finish("RELEASE_BACKUP_JOB_UNVERIFIED");
   if (!jobMatchesRun(buildJob, releaseRun)) return finish("RELEASE_BUILD_JOB_UNVERIFIED");
   if (!artifact) return finish("RELEASE_ARTIFACT_UNVERIFIED");
+  if (!artifactDigestMatches(artifact, input?.downloadedArtifactDigest) || input?.artifactDigestVerified !== true) {
+    return finish("RELEASE_ARTIFACT_DIGEST_UNVERIFIED");
+  }
+  if (!ARTIFACT_DIGEST_PATTERN.test(String(input?.releaseLogSha256 || ""))) return finish("RELEASE_LOG_PROVENANCE_UNVERIFIED");
   if (!releaseObservation.matchesExpected) return finish("RELEASE_HOST_READBACK_MISMATCH");
   if (!hostRun) return finish("POST_RELEASE_HOST_DIAGNOSE_MISSING");
   if (hostRun.name !== DIAGNOSE_NAME || normalizePath(hostRun.path) !== DIAGNOSE_PATH ||
-      hostRun.head_branch !== "main" || hostRun.head_sha?.toLowerCase() !== expectedSha) {
+      hostRun.head_branch !== "main" || hostRun.head_sha?.toLowerCase() !== expectedSha ||
+      hostRun.event !== "workflow_dispatch") {
     return finish("HOST_DIAGNOSE_IDENTITY_MISMATCH");
   }
   if (!Number.isInteger(Number(hostRun.run_attempt)) || Number(hostRun.run_attempt) < 1 ||
@@ -192,6 +233,7 @@ function evaluateOracleEvidence(input) {
   if (!jobMatchesRun(hostJob, hostRun) || !hasHostLabels(hostJob) || !nonemptyIdentity(hostJob)) {
     return finish("HOST_DIAGNOSE_JOB_UNVERIFIED");
   }
+  if (!ARTIFACT_DIGEST_PATTERN.test(String(input?.hostLogSha256 || ""))) return finish("HOST_DIAGNOSE_LOG_PROVENANCE_UNVERIFIED");
   if (Number(hostJob.runner_id) !== Number(releaseJob.runner_id) || hostJob.runner_name !== releaseJob.runner_name ||
       Number(hostJob.runner_group_id) !== Number(releaseJob.runner_group_id)) {
     return finish("HOST_IDENTITY_MISMATCH");
@@ -199,7 +241,8 @@ function evaluateOracleEvidence(input) {
   const observedAt = timestamp(hostObservation.observedAt);
   const hostJobStarted = timestamp(hostJob.started_at);
   const hostJobCompleted = timestamp(hostJob.completed_at);
-  if (!hostObservation.observedSha || !validSha(hostObservation.observedSha) || !hostObservation.resolvedPath ||
+  if (!hostObservation.observedSha || !validSha(hostObservation.observedSha) || !hostObservation.runtimeSourceSha ||
+      !validSha(hostObservation.runtimeSourceSha) || !hostObservation.resolvedPath ||
       hostObservation.pathSha !== hostObservation.observedSha) {
     return finish("HOST_SHA_UNOBSERVED_OR_INCONSISTENT");
   }
@@ -210,6 +253,7 @@ function evaluateOracleEvidence(input) {
   if (hostObservation.observedSha !== expectedSha || hostObservation.pathSha !== expectedSha) {
     return finish("HOST_SHA_MISMATCH");
   }
+  if (hostObservation.runtimeSourceSha !== expectedSha) return finish("HOST_RUNTIME_SHA_MISMATCH");
 
   result.oracle_convergence_status = "CONVERGED";
   result.oracle_convergence_reason = "EXACT_MAIN_RELEASE_AND_POST_RELEASE_HOST_READBACK";
@@ -221,8 +265,8 @@ function parseLinkNext(link) {
   return match?.[1] || null;
 }
 
-async function apiJson(url, token) {
-  const response = await fetch(url, {
+async function apiJson(url, token, fetchImpl = fetch) {
+  const response = await fetchImpl(url, {
     headers: {
       Accept: "application/vnd.github+json",
       Authorization: `Bearer ${token}`,
@@ -233,12 +277,12 @@ async function apiJson(url, token) {
   return { body: await response.json(), next: parseLinkNext(response.headers.get("link")) };
 }
 
-async function listRuns(repo, sha, token) {
+async function listRuns(repo, sha, token, fetchImpl = fetch) {
   const encodedSha = encodeURIComponent(sha);
   let url = `https://api.github.com/repos/${repo}/actions/runs?head_sha=${encodedSha}&per_page=100`;
   const runs = [];
   for (let page = 0; url && page < 10; page += 1) {
-    const response = await apiJson(url, token);
+    const response = await apiJson(url, token, fetchImpl);
     if (!Array.isArray(response.body.workflow_runs)) throw new Error("GITHUB_RUNS_MALFORMED");
     runs.push(...response.body.workflow_runs);
     url = response.next;
@@ -247,9 +291,9 @@ async function listRuns(repo, sha, token) {
   return runs;
 }
 
-async function downloadJobLog(repo, jobId, token) {
+async function downloadJobLog(repo, jobId, token, fetchImpl = fetch) {
   const url = `https://api.github.com/repos/${repo}/actions/jobs/${jobId}/logs`;
-  const response = await fetch(url, {
+  const response = await fetchImpl(url, {
     headers: {
       Accept: "application/vnd.github+json",
       Authorization: `Bearer ${token}`,
@@ -260,6 +304,7 @@ async function downloadJobLog(repo, jobId, token) {
   if (!response.ok) throw new Error(`GITHUB_LOG_${response.status}`);
   const zip = Buffer.from(await response.arrayBuffer());
   if (zip.length === 0 || zip.length > MAX_LOG_BYTES) throw new Error("GITHUB_LOG_SIZE_INVALID");
+  const sha256 = `sha256:${createHash("sha256").update(zip).digest("hex")}`;
 
   const directory = fs.mkdtempSync(path.join(os.tmpdir(), "nusa-convergence-log-"));
   const archive = path.join(directory, "job.zip");
@@ -277,23 +322,54 @@ async function downloadJobLog(repo, jobId, token) {
       if (totalBytes > MAX_LOG_BYTES) throw new Error("GITHUB_LOG_SIZE_INVALID");
       pieces.push(output.stdout);
     }
-    return pieces.join("\n");
+    return { text: pieces.join("\n"), sha256 };
   } finally {
     fs.rmSync(directory, { recursive: true, force: true });
   }
 }
 
-async function runJobs(repo, run, token) {
+async function downloadArtifactDigest(repo, artifact, token, fetchImpl = fetch) {
+  if (!artifact || !Number.isInteger(Number(artifact.id)) || artifact.expired !== false ||
+      !ARTIFACT_DIGEST_PATTERN.test(String(artifact.digest || ""))) {
+    throw new Error("GITHUB_ARTIFACT_IDENTITY_INVALID");
+  }
+  const response = await fetchImpl(`https://api.github.com/repos/${repo}/actions/artifacts/${artifact.id}/zip`, {
+    headers: {
+      Accept: "application/vnd.github+json",
+      Authorization: `Bearer ${token}`,
+      "X-GitHub-Api-Version": API_VERSION,
+    },
+    redirect: "follow",
+  });
+  if (!response.ok) throw new Error(`GITHUB_ARTIFACT_${response.status}`);
+  const declaredLength = Number(response.headers.get("content-length"));
+  if (Number.isFinite(declaredLength) && declaredLength > MAX_ARTIFACT_BYTES) throw new Error("GITHUB_ARTIFACT_SIZE_INVALID");
+  if (!response.body) throw new Error("GITHUB_ARTIFACT_BODY_MISSING");
+  const hash = createHash("sha256");
+  let totalBytes = 0;
+  for await (const chunk of response.body) {
+    totalBytes += chunk.byteLength;
+    if (totalBytes > MAX_ARTIFACT_BYTES) {
+      await response.body.cancel().catch(() => {});
+      throw new Error("GITHUB_ARTIFACT_SIZE_INVALID");
+    }
+    hash.update(chunk);
+  }
+  if (totalBytes === 0) throw new Error("GITHUB_ARTIFACT_EMPTY");
+  return `sha256:${hash.digest("hex")}`;
+}
+
+async function runJobs(repo, run, token, fetchImpl = fetch) {
   if (!run || !Number.isInteger(Number(run.id)) || !Number.isInteger(Number(run.run_attempt))) return [];
   const url = `https://api.github.com/repos/${repo}/actions/runs/${run.id}/attempts/${run.run_attempt}/jobs?per_page=100`;
-  const response = await apiJson(url, token);
+  const response = await apiJson(url, token, fetchImpl);
   if (!Array.isArray(response.body.jobs)) throw new Error("GITHUB_JOBS_MALFORMED");
   return response.body.jobs;
 }
 
-async function runArtifacts(repo, run, token) {
+async function runArtifacts(repo, run, token, fetchImpl = fetch) {
   if (!run || !Number.isInteger(Number(run.id))) return [];
-  const response = await apiJson(`https://api.github.com/repos/${repo}/actions/runs/${run.id}/artifacts?per_page=100`, token);
+  const response = await apiJson(`https://api.github.com/repos/${repo}/actions/runs/${run.id}/artifacts?per_page=100`, token, fetchImpl);
   if (!Array.isArray(response.body.artifacts)) throw new Error("GITHUB_ARTIFACTS_MALFORMED");
   return response.body.artifacts;
 }
@@ -302,7 +378,7 @@ function firstOrNull(jobs, name) {
   return Array.isArray(jobs) ? jobs.find((job) => job?.name === name) || null : null;
 }
 
-async function collectOracleEvidence({ repo, expectedSha, workflowSha, token }) {
+async function collectOracleEvidence({ repo, expectedSha, workflowSha, token, fetchImpl = fetch }) {
   let mainBefore = null;
   let mainAfter = null;
   let runs = [];
@@ -310,23 +386,37 @@ async function collectOracleEvidence({ repo, expectedSha, workflowSha, token }) 
   let releaseJobs = [];
   let artifacts = [];
   let releaseLog = "";
+  let releaseLogSha256 = "";
+  let downloadedArtifactDigest = "";
+  let artifactDigestVerified = false;
   let hostRun = null;
   let hostJobs = [];
   let hostLog = "";
+  let hostLogSha256 = "";
   let collectionError = null;
 
   try {
-    const branch = await apiJson(`https://api.github.com/repos/${repo}/branches/main`, token);
+    const branch = await apiJson(`https://api.github.com/repos/${repo}/branches/main`, token, fetchImpl);
     mainBefore = branch.body?.commit?.sha?.toLowerCase() || null;
-    runs = await listRuns(repo, expectedSha, token);
+    runs = await listRuns(repo, expectedSha, token, fetchImpl);
     releaseRun = selectLatestRun(runs, { name: RELEASE_NAME, workflowPath: RELEASE_PATH, expectedSha });
     if (releaseRun?.status === "completed" && releaseRun?.conclusion === "success") {
       [releaseJobs, artifacts] = await Promise.all([
-        runJobs(repo, releaseRun, token),
-        runArtifacts(repo, releaseRun, token),
+        runJobs(repo, releaseRun, token, fetchImpl),
+        runArtifacts(repo, releaseRun, token, fetchImpl),
       ]);
       const releaseJob = firstOrNull(releaseJobs, "Release exact-main Cloud PAPER runtime");
-      if (releaseJob?.id) releaseLog = await downloadJobLog(repo, Number(releaseJob.id), token);
+      if (releaseJob?.id) {
+        const evidence = await downloadJobLog(repo, Number(releaseJob.id), token, fetchImpl);
+        releaseLog = evidence.text;
+        releaseLogSha256 = evidence.sha256;
+      }
+      const buildJob = firstOrNull(releaseJobs, "Build exact-main Cloud PAPER release");
+      const releaseArtifact = artifactForRelease(artifacts, releaseRun, buildJob);
+      if (releaseArtifact) {
+        downloadedArtifactDigest = await downloadArtifactDigest(repo, releaseArtifact, token, fetchImpl);
+        artifactDigestVerified = artifactDigestMatches(releaseArtifact, downloadedArtifactDigest);
+      }
       hostRun = selectLatestRun(runs, {
         name: DIAGNOSE_NAME,
         workflowPath: DIAGNOSE_PATH,
@@ -334,16 +424,21 @@ async function collectOracleEvidence({ repo, expectedSha, workflowSha, token }) 
         after: releaseRun.updated_at,
       });
       if (hostRun?.status === "completed" && hostRun?.conclusion === "success") {
-        hostJobs = await runJobs(repo, hostRun, token);
+        hostJobs = await runJobs(repo, hostRun, token, fetchImpl);
         const hostJob = firstOrNull(hostJobs, "Read-only PAPER host diagnosis");
-        if (hostJob?.id) hostLog = await downloadJobLog(repo, Number(hostJob.id), token);
+        if (hostJob?.id) {
+          const evidence = await downloadJobLog(repo, Number(hostJob.id), token, fetchImpl);
+          hostLog = evidence.text;
+          hostLogSha256 = evidence.sha256;
+        }
       }
     }
   } catch (error) {
-    collectionError = error instanceof Error ? error.message.replace(/[^A-Z0-9_]/g, "") : "GITHUB_API_UNAVAILABLE";
+    const errorCode = error instanceof Error ? error.message.match(/^[A-Z0-9_]+$/)?.[0] : null;
+    collectionError = errorCode || "GITHUB_API_UNAVAILABLE";
   } finally {
     try {
-      const branch = await apiJson(`https://api.github.com/repos/${repo}/branches/main`, token);
+      const branch = await apiJson(`https://api.github.com/repos/${repo}/branches/main`, token, fetchImpl);
       mainAfter = branch.body?.commit?.sha?.toLowerCase() || null;
     } catch {
       mainAfter = null;
@@ -360,9 +455,13 @@ async function collectOracleEvidence({ repo, expectedSha, workflowSha, token }) 
     releaseJobs,
     artifacts,
     releaseLog,
+    releaseLogSha256,
+    downloadedArtifactDigest,
+    artifactDigestVerified,
     hostRun,
     hostJobs,
     hostLog,
+    hostLogSha256,
   });
   if (collectionError && evaluation.oracle_convergence_status !== "CONVERGED") {
     evaluation.oracle_convergence_reason = "EVIDENCE_COLLECTION_UNAVAILABLE";
@@ -395,10 +494,17 @@ if (require.main === module) {
       oracle_release_artifact_name: null,
       oracle_release_artifact_digest: null,
       oracle_release_artifact_expired: null,
+      oracle_release_artifact_digest_verified: false,
+      oracle_release_job_id: null,
+      oracle_release_log_sha256: null,
       oracle_host_observed_sha: null,
       oracle_host_observed_at: null,
+      oracle_host_runtime_source_sha: null,
+      oracle_host_diagnose_observed_at: null,
       oracle_host_diagnose_run_id: null,
       oracle_host_diagnose_attempt: null,
+      oracle_host_diagnose_job_id: null,
+      oracle_host_diagnose_log_sha256: null,
       oracle_host_identity: null,
     })}\n`);
   });
@@ -406,6 +512,7 @@ if (require.main === module) {
 
 module.exports = {
   artifactForRelease,
+  artifactDigestMatches,
   collectOracleEvidence,
   evaluateOracleEvidence,
   parseHostObservation,

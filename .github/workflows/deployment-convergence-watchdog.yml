@@ -313,11 +313,29 @@ jobs:
                 surface_incident "Oracle Host Diagnose" "No successful post-Release read-only Host Diagnose is available after Oracle Release run $RELEASE_ID attempt $RELEASE_ATTEMPT. The watchdog does not dispatch or access the host."
               fi
             else
-              dispatch_bounded \
-                "Deployment Receipt" \
-                "Deployment Convergence Receipt" \
-                "deployment-convergence-receipt.yml" \
-                -f "inputs[source_sha]=$MAIN_SHA"
+              WATCHDOG_SHA="$(git rev-parse HEAD)"
+              if [ "$WATCHDOG_SHA" != "$MAIN_SHA" ]; then
+                echo "Checked-out watchdog source $WATCHDOG_SHA is not the current protected main $MAIN_SHA; refusing receipt dispatch."
+                exit 0
+              fi
+
+              ORACLE_EVIDENCE_PATH="$RUNNER_TEMP/oracle-convergence-evidence.json"
+              EXPECTED_SHA="$MAIN_SHA" WORKFLOW_SHA="$WATCHDOG_SHA" \
+                node scripts/deployment-convergence-oracle.js > "$ORACLE_EVIDENCE_PATH"
+              ORACLE_STATUS="$(jq -r '.oracle_convergence_status // "INCOMPLETE"' "$ORACLE_EVIDENCE_PATH")"
+              ORACLE_REASON="$(jq -r '.oracle_convergence_reason // "UNKNOWN"' "$ORACLE_EVIDENCE_PATH")"
+              if [ "$ORACLE_STATUS" != "CONVERGED" ]; then
+                echo "HOST_SHA_VERIFIED=false status=$ORACLE_STATUS reason=$ORACLE_REASON; receipt dispatch remains blocked."
+                surface_incident "Oracle Host Evidence" "The server-side Release/Host SHA verifier returned $ORACLE_STATUS ($ORACLE_REASON) for exact-main $MAIN_SHA. No Convergence receipt was dispatched."
+              else
+                echo "HOST_SHA_VERIFIED=true source=$MAIN_SHA; dispatching the existing receipt validator."
+                assert_still_current
+                dispatch_bounded \
+                  "Deployment Receipt" \
+                  "Deployment Convergence Receipt" \
+                  "deployment-convergence-receipt.yml" \
+                  -f "inputs[source_sha]=$MAIN_SHA"
+              fi
             fi
           else
             echo "Convergence receipt waits for all exact-main runtime and stable distribution proofs."

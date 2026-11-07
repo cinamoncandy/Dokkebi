@@ -7,9 +7,9 @@ Everything below is what the repository's records *claim*. Re-verify on GitHub b
 
 ## Newest handoff
 
-[`.aipos/handoffs/2026-11-06-wo-0059-observation.md`](handoffs/2026-11-06-wo-0059-observation.md) — WO-0059 PAPER Observation Handoff — 2026-11-06
+[`.aipos/handoffs/2026-11-07-oracle-convergence-1816.md`](handoffs/2026-11-07-oracle-convergence-1816.md) — CORE handoff — 2026-11-07 — #1816 Exact-Main Oracle Convergence
 
-> ## Successor follow-up — 2026-11-06T15:16Z
+> ## Fresh canonical state
 
 ## Work orders
 

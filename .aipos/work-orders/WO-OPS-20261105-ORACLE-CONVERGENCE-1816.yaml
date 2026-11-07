@@ -4,16 +4,17 @@ status: IN_PROGRESS
 owner: nusa-development
 repository: cinamoncandy/NUSA
 base_branch: main
-base_commit: 185c52c22691a5a35b13fe024cb39d810719a833
+base_commit: 0209466469fe45b7f90dbeefb96d4a9e27cfb3b2
 branch: fix/oracle-convergence-host-evidence-1816
 issues: [1816]
 authority_impact: deployment-evidence-only; no release, runtime, or execution authority change
 objective: "Prevent the deployment watchdog and machine-readable receipt from treating an absent or stale Oracle Release as converged; bind the Oracle result to a successful exact-main Release attempt and a later read-only host observation of /opt/nusa/current."
 root_cause: "The Watchdog dispatched the global receipt without checking Oracle PAPER Release. The Receipt treated any successful Release run on the requested head as sufficient and did not include a server-verified post-release Oracle host SHA, run attempt, artifact identity, or host identity."
 scope:
-  - "The watchdog gates receipt dispatch on the latest exact-main Oracle PAPER Release success and a later successful read-only Oracle Host Diagnose; it never dispatches a Release or Host Diagnose."
-  - "The receipt verifier reads GitHub run, attempt-specific job, artifact, and job-log evidence using existing actions:read and contents:read permissions."
-  - "Require the successful Release run, protected-main source SHA, release artifact identity, deployed currentRelease read-back, and later host Diagnose /opt/nusa/current read-back to agree. Require the same self-hosted runner identity for Release and Diagnose."
+  - "The watchdog gates receipt dispatch on exact-main Release and later read-only Diagnose success, then runs the shared server-side host-SHA verifier; it never dispatches a Release or Host Diagnose."
+  - "The receipt verifier reads GitHub run, attempt-specific job, live artifact, and job-log evidence using existing actions:read and contents:read permissions."
+  - "Require the Release run, protected-main source SHA, deployed currentRelease read-back, read-only Host Diagnose /opt/nusa/current read-back, and runtime /health sourceCommitSha to agree. Require the same self-hosted runner identity for Release and Diagnose."
+  - "Download and SHA-256 verify the bounded, unexpired GitHub release artifact ZIP; record artifact id/digest and the Release/Diagnose job-log digests."
   - "Keep source approval provenance RELEASE_PROVENANCE_UNKNOWN unless its separate approval chain is actually reconstructed."
   - "Add regression coverage for missing/active/failed Release, stale or absent host SHA, pre-release diagnosis, mismatched run/attempt/artifact/host, and main movement."
 exclusions:
@@ -21,10 +22,11 @@ exclusions:
   - "No client-provided Oracle SHA is accepted as trusted host evidence."
   - "This change does not claim independent review, Formal Validator, Audit, Release authorization, merge, or post-change Oracle convergence."
 acceptance:
-  - "The latest exact-main Oracle PAPER Release must be completed/successful with a valid current-attempt release job and an artifact id/digest tied to that run and SHA."
-  - "A successful Oracle Host Diagnose started after that Release must be exact-main, read-only, run on the same identified self-hosted runner, and log the actual /opt/nusa/current resolved release path and observation timestamp."
-  - "Protected main == Release head/deployed currentRelease == Host Diagnose observed SHA is required for oracle_convergence_status=CONVERGED."
-  - "Missing, malformed, stale, failed, active, cross-attempt, cross-host, cross-artifact, API-unavailable, or changed-main evidence stays INCOMPLETE."
+  - "The latest exact-main Oracle PAPER Release must be completed/successful with a valid current-attempt job and a non-expired, bounded artifact whose downloaded bytes match the GitHub SHA-256 digest."
+  - "A successful workflow_dispatch Host Diagnose started after that Release must be exact-main, read-only, run on the same identified self-hosted runner, and provide a fresh health observedAt, runtime.sourceCommitSha, and /opt/nusa/current resolved path."
+  - "Protected main == Release head/deployed currentRelease == Host Diagnose path SHA == runtime sourceCommitSha is required for oracle_convergence_status=CONVERGED."
+  - "Receipt provenance records Release/Diagnose run, attempt and job IDs, log SHA-256 values, artifact ID/digest, host identity and observation timestamps."
+  - "Missing, malformed, stale, failed, active, cross-attempt, cross-host, cross-artifact, expired, digest-mismatched, API-unavailable, or changed-main evidence stays INCOMPLETE."
   - "The receipt keeps RELEASE_PROVENANCE_UNKNOWN and all PAPER_ONLY/ZERO_AUTHORITY invariants."
   - "Exact-head CI and fresh independent validation precede any governed inclusion; post-change Oracle convergence remains a separate later evidence step."
 verification_commands:
@@ -45,6 +47,13 @@ evidence_at_2026_11_05:
   evaluator: "Read-only local evaluation of those GitHub run/job/artifact/log records returns Oracle CONVERGED; this is not a canonical receipt from the new workflow."
   prior_convergence_run: "41958436826 FAILURE, started before Release 41966440881; historical incomplete receipt is not post-release evidence."
   local_validation: "pnpm test PASS (1,328 isolated test files); focused Oracle/governance tests 23/23 PASS; pnpm run validate:full PASS; pnpm run typecheck PASS; pnpm run security:gate PASS; pnpm run lint:scripts PASS (0 errors / 47 baseline warnings); workflow YAML/Bash/action input/action pin/authority-map checks and git diff --check PASS."
+evidence_at_2026_11_07:
+  protected_main: 0209466469fe45b7f90dbeefb96d4a9e27cfb3b2
+  release_run: "42310426982 attempt 1 SUCCESS; exact protected-main SHA 0209466469fe45b7f90dbeefb96d4a9e27cfb3b2"
+  release_artifact: "13547234011 nusa-paper-release; 25,098,146 bytes; unexpired at lookup; sha256:73741e5ce29c2b856e4b45390bd88ac3c36b11569683d5ed66101a4d1082abd1; workflow_run id/head SHA match release"
+  host_diagnose_run: "42313636735 attempt 1 SUCCESS after Release; read-only /health observedAt 2026-11-06T23:42:13.591Z; runtime.sourceCommitSha 0209466469fe45b7f90dbeefb96d4a9e27cfb3b2; current_release points to the same release SHA; runner id 24, nusa-paper-host-datascale"
+  prior_convergence_run: "42312068928 FAILED CONVERGENCE_INCOMPLETE before Oracle Release completed; not a post-release receipt"
+  post_release_receipt: "No canonical post-release Convergence receipt exists yet; logs and read-only evaluator inputs are evidence only."
 safety:
   PAPER_ONLY: true
   liveAuthority: NONE
@@ -53,4 +62,4 @@ safety:
   realTransferAuthority: false
   aiAuthority: ZERO_AUTHORITY
   fail_closed: true
-next: "Inspect the final diff, commit, and open a Draft PR for exact-head CI and independent review. Do not dispatch Oracle Release, deploy, restart, or claim canonical convergence from the local evaluator."
+next: "Finish current-main merge, regenerate CURRENT_TRUTH, complete focused/full validation, then commit/push only to existing PR #3000 for fresh exact-head CI and independent validation. Do not dispatch Oracle Release, deploy, restart, or claim canonical convergence from local evaluation."

@@ -5,6 +5,8 @@ const test = require("node:test");
 const fs = require("node:fs");
 const path = require("node:path");
 const {
+  artifactDigestMatches,
+  collectOracleEvidence,
   evaluateOracleEvidence,
   parseHostObservation,
   parseReleaseObservation,
@@ -20,6 +22,9 @@ const RELEASE_UPDATED = "2026-11-05T04:35:56Z";
 const HOST_STARTED = "2026-11-05T04:39:31Z";
 const HOST_OBSERVED = "2026-11-05T04:39:33Z";
 const HOST_COMPLETED = "2026-11-05T04:39:43Z";
+const RELEASE_ARTIFACT_DIGEST = `sha256:${"c".repeat(64)}`;
+const RELEASE_LOG_DIGEST = `sha256:${"d".repeat(64)}`;
+const HOST_LOG_DIGEST = `sha256:${"e".repeat(64)}`;
 
 function fixture(overrides = {}) {
   const releaseRun = {
@@ -78,6 +83,7 @@ function fixture(overrides = {}) {
     id: 789,
     name: "nusa-paper-release",
     digest: `sha256:${"c".repeat(64)}`,
+    size_in_bytes: 1024,
     created_at: "2026-11-05T04:14:04Z",
     expired: false,
     workflow_run: { id: releaseRun.id, head_sha: SHA },
@@ -88,6 +94,7 @@ function fixture(overrides = {}) {
     `2026-11-05T04:39:33.6854029Z ${HOST_OBSERVED}`,
     `2026-11-05T04:39:33.6873436Z /opt/nusa/releases/${SHA}`,
     `current_release=${SHA}`,
+    `2026-11-05T04:39:33.6900000Z ${JSON.stringify({ ok: true, observedAt: HOST_OBSERVED, runtime: { sourceCommitSha: SHA } })}`,
   ].join("\n");
 
   return {
@@ -102,6 +109,10 @@ function fixture(overrides = {}) {
     hostRun,
     hostJobs: [hostJob],
     hostLog,
+    releaseLogSha256: RELEASE_LOG_DIGEST,
+    hostLogSha256: HOST_LOG_DIGEST,
+    downloadedArtifactDigest: RELEASE_ARTIFACT_DIGEST,
+    artifactDigestVerified: true,
     ...overrides,
   };
 }
@@ -116,10 +127,17 @@ test("Oracle convergence passes only with current successful release and post-re
   assert.equal(result.oracle_release_conclusion, "success");
   assert.equal(result.oracle_release_artifact_id, 789);
   assert.match(result.oracle_release_artifact_digest, /^sha256:[0-9a-f]{64}$/);
+  assert.equal(result.oracle_release_artifact_digest_verified, true);
+  assert.equal(result.oracle_release_job_id, 12);
+  assert.equal(result.oracle_release_log_sha256, RELEASE_LOG_DIGEST);
   assert.equal(result.oracle_host_observed_sha, SHA);
   assert.equal(result.oracle_host_observed_at, HOST_OBSERVED);
+  assert.equal(result.oracle_host_runtime_source_sha, SHA);
+  assert.equal(result.oracle_host_diagnose_observed_at, "2026-11-05T04:39:33Z");
   assert.equal(result.oracle_host_diagnose_run_id, 456);
   assert.equal(result.oracle_host_diagnose_attempt, 1);
+  assert.equal(result.oracle_host_diagnose_job_id, 20);
+  assert.equal(result.oracle_host_diagnose_log_sha256, HOST_LOG_DIGEST);
   assert.deepEqual(result.oracle_host_identity, {
     runner_id: 24,
     runner_name: "nusa-paper-host-datascale",
@@ -144,11 +162,70 @@ test("stale or missing host observation cannot be replaced by the Release input 
   assert.equal(missing.oracle_convergence_reason, "HOST_SHA_UNOBSERVED_OR_INCONSISTENT");
 
   const mismatch = fixture({
-    hostLog: `2026-11-05T04:39:33.6854029Z == time\n2026-11-05T04:39:33.6854029Z ${HOST_OBSERVED}\n2026-11-05T04:39:33.6873436Z /opt/nusa/releases/${OTHER_SHA}\ncurrent_release=${OTHER_SHA}`,
+    hostLog: fixture().hostLog
+      .replace(`/opt/nusa/releases/${SHA}`, `/opt/nusa/releases/${OTHER_SHA}`)
+      .replace(`current_release=${SHA}`, `current_release=${OTHER_SHA}`),
   });
   const result = evaluateOracleEvidence(mismatch);
   assert.equal(result.oracle_host_observed_sha, OTHER_SHA);
   assert.equal(result.oracle_convergence_reason, "HOST_SHA_MISMATCH");
+});
+
+test("release artifact must be live, bounded, and match the downloaded GitHub digest", () => {
+  assert.equal(artifactDigestMatches(fixture().artifacts[0], RELEASE_ARTIFACT_DIGEST), true);
+  assert.equal(artifactDigestMatches(fixture().artifacts[0], `sha256:${"f".repeat(64)}`), false);
+  assert.equal(evaluateOracleEvidence(fixture({
+    artifacts: [{ ...fixture().artifacts[0], expired: true }],
+  })).oracle_convergence_reason, "RELEASE_ARTIFACT_UNVERIFIED");
+  assert.equal(evaluateOracleEvidence(fixture({
+    downloadedArtifactDigest: `sha256:${"f".repeat(64)}`,
+  })).oracle_convergence_reason, "RELEASE_ARTIFACT_DIGEST_UNVERIFIED");
+});
+
+test("receipt requires an exact SHA read back from runtime health as well as current_release", () => {
+  const otherHealth = fixture({
+    hostLog: fixture().hostLog.replace(`"sourceCommitSha":"${SHA}"`, `"sourceCommitSha":"${OTHER_SHA}"`),
+  });
+  const result = evaluateOracleEvidence(otherHealth);
+  assert.equal(result.oracle_host_observed_sha, SHA);
+  assert.equal(result.oracle_host_runtime_source_sha, OTHER_SHA);
+  assert.equal(result.oracle_convergence_reason, "HOST_RUNTIME_SHA_MISMATCH");
+
+  const noHealth = evaluateOracleEvidence(fixture({
+    hostLog: fixture().hostLog.split("\n").filter((line) => !line.includes('"runtime"')).join("\n"),
+  }));
+  assert.equal(noHealth.oracle_convergence_status, "INCOMPLETE");
+  assert.equal(noHealth.oracle_convergence_reason, "HOST_SHA_UNOBSERVED_OR_INCONSISTENT");
+});
+
+test("missing, wrong-source, and stale Host Diagnose runs cannot complete convergence", () => {
+  assert.equal(evaluateOracleEvidence(fixture({ hostRun: null })).oracle_convergence_reason, "POST_RELEASE_HOST_DIAGNOSE_MISSING");
+  assert.equal(evaluateOracleEvidence(fixture({ hostRun: { ...fixture().hostRun, head_sha: OTHER_SHA } })).oracle_convergence_reason, "HOST_DIAGNOSE_IDENTITY_MISMATCH");
+  assert.equal(evaluateOracleEvidence(fixture({ hostRun: { ...fixture().hostRun, event: "schedule" } })).oracle_convergence_reason, "HOST_DIAGNOSE_IDENTITY_MISMATCH");
+  assert.equal(evaluateOracleEvidence(fixture({
+    hostRun: { ...fixture().hostRun, run_started_at: "2026-11-05T04:35:00Z" },
+  })).oracle_convergence_reason, "HOST_DIAGNOSE_NOT_AFTER_RELEASE");
+});
+
+test("missing log provenance and wrong source attempt fail closed", () => {
+  assert.equal(evaluateOracleEvidence(fixture({ releaseLogSha256: "" })).oracle_convergence_reason, "RELEASE_LOG_PROVENANCE_UNVERIFIED");
+  assert.equal(evaluateOracleEvidence(fixture({ hostLogSha256: "" })).oracle_convergence_reason, "HOST_DIAGNOSE_LOG_PROVENANCE_UNVERIFIED");
+  assert.equal(evaluateOracleEvidence(fixture({
+    releaseJobs: fixture().releaseJobs.map((job) => job.id === 12 ? { ...job, run_attempt: 2 } : job),
+  })).oracle_convergence_reason, "RELEASE_HOST_JOB_UNVERIFIED");
+});
+
+test("GitHub API failure yields an incomplete receipt and exposes no untrusted error text", async () => {
+  const result = await collectOracleEvidence({
+    repo: "cinamoncandy/NUSA",
+    expectedSha: SHA,
+    workflowSha: SHA,
+    token: "test",
+    fetchImpl: async () => { throw new Error("network secret detail"); },
+  });
+  assert.equal(result.oracle_convergence_status, "INCOMPLETE");
+  assert.equal(result.oracle_convergence_reason, "EVIDENCE_COLLECTION_UNAVAILABLE");
+  assert.equal(result.oracle_evidence_collection_error, "GITHUB_API_UNAVAILABLE");
 });
 
 test("pre-release diagnose, wrong host, wrong attempt, wrong artifact, and main movement fail closed", () => {
@@ -196,6 +273,9 @@ test("watchdog gates receipt dispatch on exact-main Release and later read-only 
   assert.match(watchdog, /\.github\/workflows\/oracle-paper-release\.yml/);
   assert.match(watchdog, /oracle_release_success/);
   assert.match(watchdog, /oracle_host_diagnose_success/);
+  assert.match(watchdog, /deployment-convergence-oracle\.js/);
+  assert.match(watchdog, /HOST_SHA_VERIFIED/);
+  assert.match(watchdog, /if workflow_success "\$workflow_name"/);
   assert.match(watchdog, /Host Diagnose remains read-only and manual/);
   assert.doesNotMatch(watchdog, /actions\/workflows\/oracle-paper-release\.yml\/dispatches/);
   const releaseGate = watchdog.indexOf("if ! oracle_release_success; then", watchdog.indexOf("# A single machine-readable convergence receipt"));
@@ -220,8 +300,14 @@ test("receipt consumes server-read Release and Host Diagnose evidence, not a cli
     "oracle_release_conclusion",
     "oracle_host_observed_sha",
     "oracle_host_observed_at",
+    "oracle_host_runtime_source_sha",
+    "oracle_release_artifact_digest_verified",
+    "oracle_release_job_id",
+    "oracle_release_log_sha256",
     "oracle_host_diagnose_run_id",
     "oracle_host_diagnose_attempt",
+    "oracle_host_diagnose_job_id",
+    "oracle_host_diagnose_log_sha256",
     "oracle_host_identity",
   ]) assert.match(receipt, new RegExp(field));
   assert.match(receipt, /RELEASE_STATUS=RELEASE_PROVENANCE_UNKNOWN/);

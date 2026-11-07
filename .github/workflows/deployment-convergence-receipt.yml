@@ -162,19 +162,26 @@ jobs:
                   reason: ($oracle[0].oracle_convergence_reason // "UNKNOWN"),
                   run_id: ($oracle[0].oracle_release_run_id // null),
                   run_attempt: ($oracle[0].oracle_release_run_attempt // null),
+                  job_id: ($oracle[0].oracle_release_job_id // null),
+                  log_sha256: ($oracle[0].oracle_release_log_sha256 // null),
                   head_sha: ($oracle[0].oracle_release_head_sha // null),
                   conclusion: ($oracle[0].oracle_release_conclusion // "UNKNOWN"),
                   artifact_id: ($oracle[0].oracle_release_artifact_id // null),
                   artifact_name: ($oracle[0].oracle_release_artifact_name // null),
                   artifact_digest: ($oracle[0].oracle_release_artifact_digest // null),
                   artifact_expired: ($oracle[0].oracle_release_artifact_expired // null),
+                  artifact_digest_verified: ($oracle[0].oracle_release_artifact_digest_verified // false),
                   evidence_collection_error: ($oracle[0].oracle_evidence_collection_error // null)
                 },
                 oracle_host: {
                   observed_sha: ($oracle[0].oracle_host_observed_sha // null),
                   observed_at: ($oracle[0].oracle_host_observed_at // null),
+                  runtime_source_sha: ($oracle[0].oracle_host_runtime_source_sha // null),
+                  diagnose_observed_at: ($oracle[0].oracle_host_diagnose_observed_at // null),
                   diagnose_run_id: ($oracle[0].oracle_host_diagnose_run_id // null),
                   diagnose_attempt: ($oracle[0].oracle_host_diagnose_attempt // null),
+                  diagnose_job_id: ($oracle[0].oracle_host_diagnose_job_id // null),
+                  diagnose_log_sha256: ($oracle[0].oracle_host_diagnose_log_sha256 // null),
                   identity: ($oracle[0].oracle_host_identity // null)
                 },
                 android_stable: { pass: $android_ok, run_id: $android_run_id, target_sha: $android_target },
@@ -188,10 +195,17 @@ jobs:
              .oracle_release_run_attempt = .components.oracle_paper_release.run_attempt |
              .oracle_release_head_sha = .components.oracle_paper_release.head_sha |
              .oracle_release_conclusion = .components.oracle_paper_release.conclusion |
+             .oracle_release_job_id = .components.oracle_paper_release.job_id |
+             .oracle_release_log_sha256 = .components.oracle_paper_release.log_sha256 |
+             .oracle_release_artifact_digest_verified = .components.oracle_paper_release.artifact_digest_verified |
              .oracle_host_observed_sha = .components.oracle_host.observed_sha |
              .oracle_host_observed_at = .components.oracle_host.observed_at |
+             .oracle_host_runtime_source_sha = .components.oracle_host.runtime_source_sha |
+             .oracle_host_diagnose_observed_at = .components.oracle_host.diagnose_observed_at |
              .oracle_host_diagnose_run_id = .components.oracle_host.diagnose_run_id |
              .oracle_host_diagnose_attempt = .components.oracle_host.diagnose_attempt |
+             .oracle_host_diagnose_job_id = .components.oracle_host.diagnose_job_id |
+             .oracle_host_diagnose_log_sha256 = .components.oracle_host.diagnose_log_sha256 |
              .oracle_host_identity = .components.oracle_host.identity' \
             artifacts/deployment-convergence/receipt.json > "$RUNNER_TEMP/receipt.json"
           mv "$RUNNER_TEMP/receipt.json" artifacts/deployment-convergence/receipt.json
