@@ -242,3 +242,36 @@ Safety stays: PAPER_ONLY, liveAuthority=NONE, productionMutationAllowed=false, a
 - 서버 점검은 창 직전, 병합 직후 한 번, 종료 후 한 번 읽는다.
 
 **아직 오너가 정할 것:** 창 날짜·시각(KST), #3013을 창 며칠 전에 병합할지, 창 중 병합 금지 합의 방식, 중단 한도(제안 60분).
+
+## 카나리 2 결과 (2026-11-07 22:08~22:26 KST, 실행·되돌림 완료)
+**한 줄:** 첫 카나리가 남긴 결함(#3013, 증명서 묶음 업로드)이 고쳐졌고, 묶음이 보존되어 이벤트 브리지를 거쳐 서버까지 전달되었다. 서버는 3번 모두 닫힌 거절(`CAUSAL_EVIDENCE_REJECTED`)로 답했다. `CODE_ACTIONABLE`은 관찰하지 못했고 주장하지 않는다. L1은 PARTIAL이다.
+
+### 타임라인 (KST)
+| 시각 | 사건 |
+|---|---|
+| 19:25 | 오너가 "밤 10시"로 결정. 사전 조건: #3013 병합 승인, 22:00~23:00 연락 가능, 다른 PR 병합 금지. |
+| 19:44 | P0 `#1461`(Release 직렬화)이 열려 있음을 발견. 오너 승인으로 Cloudflare 점검(`workflow_dispatch`)을 main에서 한 번 실행해 설계대로 닫음. |
+| 19:54 | `#3013`(묶음 경로 수정) 병합. |
+| 21:31~21:38 | 사전 재확인과 `#3015`(C′ 재적용) main 합류. CI 전체 첫 시도 성공, PAPER 증거 PASS. 독립 검토 PASS_WITH_NOTES. |
+| 22:08:54 | 봇이 `#3015` 병합(`38c70bb`). 감시 시작. |
+| 22:09~22:17 | main CI(run `42375619284`) 시도 1~3(Release 자동 재실행). 매 시도 `causal-regression-contract` 실패, `attest-causal-regression` 성공, 산출물 `nusa-causal-attestation-N` 보존. Cloudflare 배포는 "CI 성공 대기" 후 건너뜀. |
+| 22:15~22:17 | 이벤트 브리지 3회: 산출물 내려받기 성공, OIDC로 웹훅 전달(HTTP 202, `DELIVERED`), 서버 `executorStatus: NOOP`, `executorReason: CAUSAL_EVIDENCE_REJECTED`. |
+| 22:17 | 해시 기록, 되돌리기 `#3017`(R) 준비. |
+| 22:25:42 | 봇이 R 병합(`01d698b`). blob `865c7fb4…` 복원, main CI 성공. 빨간 main은 약 17분. |
+
+### 관찰된 것
+- 출처는 하나: `cinamoncandy/NUSA`, `ci.yml@refs/heads/main`, push, sha `38c70bb`, 시도 1~3. 모두 `OBSERVED_MISMATCH`(`main-ci-timeout`).
+- 해시 sha256 앞 16자: 증명서 1/2/3 = `7f84937de4834bb7` / `b5a83276d056b368` / `0551355d24a28552`; 영수증 1/2/3 = `c2d5c4ad4ea24b0e` / `1538693cbd92cc8c` / `4928716a4920dce9`. `scripts/canary-evidence-hash.js`: 3 attempts, one identity, no stop condition.
+- 자율 개발이 만든 PR 없음, Cloudflare 배포 건너뜀, 서버·Oracle 영향 없음, 창 동안 다른 병합 없음.
+
+### 확인하지 못한 것
+- 서버 안의 검증 단계별 세부 판정(서명·출처 검증이 통과했는지)과 승인 규칙이 거절한 정확한 이유는 서버 응답의 요약 코드만 보았다. 독립 검토의 코드 읽기와 일치하는 결과이나 서버 로그로 확인한 것은 아니다.
+- 양성 경로(승인 허가, 초안 PR 생성, 소비 검증기 전 항목 통과)와 라이브 Gate A.
+
+### 교훈 (첫 카나리 이후 추가)
+- 창 전 처리가 잘 먹혔다: P0는 제목·본문(`Refs #903`)으로 확인, R 본문에 처음부터 `Resolves #1461`, Audit는 한 head·한 CI 실행에 한 번이라는 점을 반영해 R을 완성본으로 열었다.
+- `#1461`은 R 병합 전후 CI의 Cloudflare 점검 실패로 다시 열린다. 수동 `workflow_dispatch` 점검이 닫는 설계이다. 이 절차를 운영 문서에 적을 것.
+- 서버 일일 매수 한도(3배)는 오후 중에 소진되었다(체결은 14:18 KST 이후 없음). 한도 변경은 제안하지 않았다.
+
+### 다음
+- 다음 시도의 목표는 "서버가 증명서를 받아 승인(`CODE_ACTIONABLE`)할 수 있는 사례"이다. 지금 사례(`main-ci-timeout`)는 원본 실행 결론이 `failure`라 구조적으로 거절된다(`causalRegressionAdmission.ts:149-150`). 사례와 승인 요구의 단일 출처 표(설계 제안 C1)와 `failure` 사례에 대한 별도 검토가 필요하다.
