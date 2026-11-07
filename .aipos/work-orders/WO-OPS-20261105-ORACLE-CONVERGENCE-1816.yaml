@@ -83,3 +83,13 @@ safety:
   aiAuthority: ZERO_AUTHORITY
   fail_closed: true
 next: "The latest recorded exact-head CI/companions and separate-session technical disposition are on ca8bf7f6bbd2e88c3d60fb7200da6443502a3b02. A status-only successor follows; recheck exact-head CI before any governance transition. Obtain the canonical Formal Validator terminal receipt first. Keep PR #3000 Draft because ready_for_review replays CI into the Audit-request path, which would invert Formal Validator -> Audit. After Formal acceptance, proceed to deterministic Audit, Release authorization, and governed merge. Only after governed inclusion may an authorized new Oracle Release and post-release Host Diagnose produce the official Convergence receipt. Do not dispatch Release, deploy, restart, merge, or claim canonical convergence from local evaluation."
+
+forge_watchdog_p2_successor_2026_11_07:
+  scope: "Existing PR #3000 P2-1 and P2-2 convergence; no new PR."
+  implementation_head: 4f03fb2f046fc3ab6bf661edaead35f950b65c3e
+  protected_main_at_verification: 3241c525ab9575271a1150d8635d87ef9764c069
+  semantic_dedupe: "Inspect exact-run receipt artifact; require CONVERGED, matching main SHA, Oracle and host evidence."
+  retry_budget: "At most 3 completed receipt runs per exact-main SHA, including nominal SUCCESS with invalid artifact; active run suppresses duplicate dispatch. GitHub run records survive watchdog restart."
+  validation: "PENDING current exact-head CI, full tests and fresh independent review; older PASS_WITH_NOTES applies to 4a31b407 only."
+  next: "Verify successor CI/companions, refresh exact-head handoff, fresh independent review, then Formal Validator gate; keep Draft."
+  authority: "PAPER_ONLY liveAuthority=NONE productionMutationAllowed=false realOrderAuthority=false realTransferAuthority=false aiAuthority=ZERO_AUTHORITY"
