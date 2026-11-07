@@ -1,0 +1,28 @@
+id: WO-AUTOPILOT-20261107-ATTEST-BUNDLE-PATH
+title: "Retain the signed causal attestation bundle: bundle-path is an output of actions/attest, not an input"
+status: READY_FOR_REVIEW
+owner: nusa-development
+repository: cinamoncandy/NUSA
+base_branch: main
+implementation_branch: claude/attest-bundle-path-fix
+authority_impact: workflow_changed_requires_independent_review
+objective: "During the owner-approved canary (2026-11-07) attest-causal-regression created and Sigstore-signed an attestation but its 'Upload signed observation bundle' step failed three times: artifacts/causal-regression/attestation.json did not exist. The job log shows the warning \"Unexpected input(s) 'bundle-path'\": in actions/attest v4.2.2 (pinned 1e69f48a...) bundle-path is an OUTPUT, so passing it under with: was ignored and the bundle stayed at a temporary path. No nusa-causal-attestation-N artifact existed, so a consumer verifier would have had nothing to read. The isolated harness causal-verification.yml uses the same invalid input."
+scope:
+  - ".github/workflows/ci.yml (attest-causal-regression): id: attest, drop the invalid input, add a step that copies steps.attest.outputs.bundle-path to artifacts/causal-regression/attestation.json (fails if the output is empty or the file is empty)."
+  - ".github/workflows/causal-verification.yml: the same change for the isolated attestor."
+  - "tests/causal-attestation-workflow.test.js: the test pinned the ignored input; it now asserts the invalid input is gone and the output is copied."
+exclusions:
+  - "No permission, trigger, condition, action pin, predicate type, subject, artifact name or retention change. Not a LIVE or production path. No claim that CODE_ACTIONABLE works; the consumer verifier path stays unverified."
+safety:
+  paper_only: true
+  liveAuthority: NONE
+  productionMutationAllowed: false
+  aiAuthority: ZERO_AUTHORITY
+  fail_closed: "The new step fails the job if the bundle output is empty."
+verification_commands:
+  - node --test tests/causal-attestation-workflow.test.js
+  - node scripts/validate-workflow-action-pins.js
+  - node scripts/validate-workflow-authority-map.js
+  - node scripts/validate-aipos-yaml.js
+review: "Draft PR: a non-author review is required because workflows are changed. The fix can only be proven by a main-push run of the real attestor (a future canary), which this PR does not run."
+residual: "scripts/validate-workflow-action-inputs.js only checks required inputs; it does not detect unknown inputs, so it passed on the broken workflow. A follow-up could validate with: keys against each action's action.yml."
