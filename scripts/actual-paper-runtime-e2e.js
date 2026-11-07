@@ -394,6 +394,9 @@ async function observeAutomaticRuntime({
   // newest-first projection contract, this anchors every newer emitted event
   // within the current window. It does not attest to upstream events never
   // recorded by the source; that remains a separate evidence limitation.
+  // A late event backdated below the 250-event cutoff is also invisible:
+  // this conditional proof assumes projection timestamps are monotonic with
+  // insertion order. Without upstream sequence evidence, such gaps are UNKNOWN.
   const validProjectionOrder = (events) => {
     if (!Array.isArray(events)) return false;
     const ids = new Set();
@@ -415,6 +418,7 @@ async function observeAutomaticRuntime({
   let previousProjectionFull = initialProjection.length >= 250;
   let cappedProjectionSamples = 0;
   let overlappingCappedSamples = 0;
+  let movingAnchoredCappedSamples = 0;
   let eventEvidenceTruncated = false;
   let finalSnapshot = initialSnapshot ?? null;
   let failureCode = null;
@@ -430,11 +434,16 @@ async function observeAutomaticRuntime({
     const currentProjectionIds = new Set(learningEvents.map((event) => event?.id));
     const newestAnchorPresent = previousProjectionNewestId != null && currentProjectionIds.has(previousProjectionNewestId);
     const windowContinuityVerified = previousProjectionValid && currentProjectionValid && newestAnchorPresent;
-    // Uncapped views do not depend on a rolling-window continuity proof;\n    // their individual events are still validated below as before.\n    if (!currentProjectionValid && learningEvents.length >= 250) eventEvidenceTruncated = true;
+    const windowMoved = windowContinuityVerified && learningEvents[0]?.id !== previousProjectionNewestId;
+    // Uncapped views do not depend on a rolling-window continuity proof;
+    // their individual events are still validated below as before.
+    if (!currentProjectionValid && learningEvents.length >= 250) eventEvidenceTruncated = true;
     if (learningEvents.length >= 250) {
       cappedProjectionSamples += 1;
-      if (windowContinuityVerified) overlappingCappedSamples += 1;
-      else eventEvidenceTruncated = true;
+      if (windowContinuityVerified) {
+        overlappingCappedSamples += 1;
+        if (windowMoved) movingAnchoredCappedSamples += 1;
+      } else eventEvidenceTruncated = true;
     }
     // A prior saturated window can roll out events between reads even if the
     // current response is below the cap. Mere overlap with older IDs is unsafe.
@@ -640,7 +649,8 @@ async function observeAutomaticRuntime({
       maximum_events: 250,
       capped_samples: cappedProjectionSamples,
       newest_anchor_verified_capped_samples: overlappingCappedSamples,
-      continuity_proven: !eventEvidenceTruncated && cappedProjectionSamples > 0,
+      moving_anchored_capped_samples: movingAnchoredCappedSamples,
+      adjacent_windows_anchored: !eventEvidenceTruncated && movingAnchoredCappedSamples > 0,
       proof_scope: "ORDERED_PROJECTION_WINDOWS_ONLY",
     },
     stage_evidence: stageEvidence,
