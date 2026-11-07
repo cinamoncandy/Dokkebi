@@ -11,7 +11,7 @@
  */
 export const REPAIRABLE_WORKFLOW_NAMES: ReadonlySet<string> = new Set(["CI", "Autopilot Sandbox New-File Guard"]);
 
-const REPAIRABLE_CONCLUSIONS: ReadonlySet<string> = new Set(["failure", "timed_out"]);
+const REPAIRABLE_CONCLUSIONS: ReadonlySet<string> = new Set(["failure"]);
 const REPAIRABLE_EVENTS: ReadonlySet<string> = new Set(["push", "workflow_dispatch"]);
 
 export function isRepairableMainWorkflowFailure(run: Readonly<Record<string, unknown>>): boolean {

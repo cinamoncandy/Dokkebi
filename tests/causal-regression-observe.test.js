@@ -8,7 +8,7 @@ const env = { GITHUB_REPOSITORY: "cinamoncandy/NUSA", GITHUB_SHA: sha, GITHUB_RU
 
 test("producer observes the actual predicate and binds fixed contract fingerprints", () => {
   const receipt = produceReceipt(env, sha, isRepairableMainWorkflowFailure);
-  assert.equal(receipt.observation.status, "MATCH");
+  assert.equal(receipt.observation.status, "OBSERVED_MISMATCH"); // CANARY C': the narrowed predicate no longer matches the contract
   assert.equal(receipt.source.sha, sha);
   assert.equal(receipt.source.runId, "456");
   assert.equal(receipt.contractId, "REPAIRABLE_WORKFLOW_POLICY_V1");
