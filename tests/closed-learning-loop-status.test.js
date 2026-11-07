@@ -61,6 +61,7 @@ test("evidence correlates the open period, the latest realized period and the la
   t.observePeriods(open, realized);
   assert.deepEqual(t.snapshot().evidence, {
     openPeriodId: open.periodId, openMarket: "KRW-XRP", openCandidateId: "owner-baseline-sma-5-20", openPeriodStartAt: 1791331979980, openObservations: 2, openFilledObservations: 1,
+    openWaitObservations: 1, openBlockedObservations: 0, openRejectedObservations: 0, openFailedObservations: 0, openDuplicateObservations: 0,
     realizedPeriods: 2, baselineObservations: 0, realizedPeriodId: "owner-baseline:KRW-BTC:1", realizedPeriodEndAt: 20, realizedOutcomeFingerprint: hex("a"), realizedCostEvidenceFingerprint: hex("c"),
   });
   t.observeRollover({ status: "CLOSED_AND_EVALUATED", cycle: { status: "EXECUTED", record: { cycleId: "closed-learning:c1", evidenceId: "closed-learning-paper:x", evidenceFingerprintSha256: hex("d"), decision: { decisionId: "decision-1", outcome: "INSUFFICIENT", decisionReference: "research:decision-1" } } } }, 2);
@@ -389,4 +390,60 @@ test("tickErrorClass never throws, accepts only conventional codes, and a later 
   t.observeRollover({ status: "BLOCKED", reason: "REASON_X" }, 2);
   assert.equal(t.snapshot().lastBlockedReason, "REASON_X");
   assert.equal(t.snapshot().lastErrorClass, undefined, "the class is not paired with a different block reason");
+});
+
+test("null comparator figures appear as counts and signed bp, absent fields stay absent, and a malformed or inconsistent value withdraws them", () => {
+  const t = new ClosedLearningLoopStatusTracker();
+  t.observeRollover({ status: "WAITING_FOR_KST_DAY_ROLLOVER" }, 1);
+  const full = { since: 5, seed: 20261030, baselineTrades: 3, baselineNetBp: -40, holdMarkets: 2, holdNetBp: -15, randomTrades: 3, randomWins: 1, randomNetBp: -55, randomSkipped: 0 };
+  t.observeNullComparators(full);
+  assert.deepEqual({ ...t.snapshot().evidence }, { nullSince: 5, nullSeed: 20261030, nullBaseTrades: 3, nullBaseNetBp: -40, nullHoldMarkets: 2, nullHoldNetBp: -15, nullRandTrades: 3, nullRandWins: 1, nullRandNetBp: -55, nullRandSkipped: 0 });
+  t.observeNullComparators({ since: 5, seed: 20261030, randomTrades: 0, randomWins: 0, randomNetBp: 0, randomSkipped: 2 });
+  const sparse = { ...t.snapshot().evidence };
+  assert.equal(sparse.nullHoldNetBp, undefined, "no measurable hold span: absent, not zero");
+  assert.equal(sparse.nullBaseNetBp, undefined, "baseline not comparable: absent, not zero");
+  for (const bad of [{ ...full, randomWins: 4 }, { ...full, since: 0 }, { ...full, baselineNetBp: undefined }, { ...full, holdMarkets: 0 }, { ...full, randomNetBp: 1.5 }, { ...full, baselineTrades: -1 }, undefined]) {
+    t.observeNullComparators(full);
+    t.observeNullComparators(bad);
+    assert.equal(t.snapshot().evidence, undefined, `withdrawn for ${JSON.stringify(bad)}`);
+  }
+});
+
+test("the runtime publishes the null comparators beside the shadow and persists them on change", () => {
+  const src = require("node:fs").readFileSync(require("node:path").join(__dirname, "..", "apps", "cloud", "src", "closedLearningProductionRuntime.ts"), "utf8");
+  assert.match(src, /loopStatus\.observeNullComparators\(nullComparators\.summary\(\)\)/);
+  assert.match(src, /writeNullComparatorsRecord\(config\.cloudStateDbPath, persistableNulls\)\) nullComparators\.markUnpersisted\(\)/);
+});
+
+test("the cycle count the first time this process reads the ledger is kept as the boot count and never moves", () => {
+  const t = new ClosedLearningLoopStatusTracker();
+  t.observeRollover({ status: "WAITING_FOR_REALIZED_FILL", periodId: "p" }, 1000);
+  t.observeDurableCycles({ cyclesRecorded: 3, latest: cycleRecord("c", "REJECTED", 9_000) });
+  t.observeDurableCycles({ cyclesRecorded: 4, latest: cycleRecord("d", "REJECTED", 12_000) });
+  const s = t.snapshot();
+  assert.equal(s.evidence.cyclesRecordedAtBoot, 3, "the first read in this process");
+  assert.equal(s.evidence.cyclesRecorded, 4, "the current durable count still advances");
+  const fresh = new ClosedLearningLoopStatusTracker();
+  fresh.observeRollover({ status: "WAITING_FOR_REALIZED_FILL", periodId: "p" }, 1000);
+  assert.equal(fresh.snapshot()?.evidence?.cyclesRecordedAtBoot, undefined, "no read yet, no boot count");
+});
+
+test("a ledger failure withdraws the boot count and a later read is never taken for the boot read", () => {
+  const t = new ClosedLearningLoopStatusTracker();
+  t.observeRollover({ status: "WAITING_FOR_REALIZED_FILL", periodId: "p" }, 1000);
+  t.clearDurableCycles();
+  t.observeDurableCycles({ cyclesRecorded: 5, latest: cycleRecord("c", "REJECTED", 9_000) });
+  assert.equal(t.snapshot().evidence.cyclesRecordedAtBoot, undefined);
+  assert.equal(t.snapshot().evidence.cyclesRecorded, 5);
+});
+
+test("the open period's status counts tell waiting from blocked from rejected, and sum to the observations", () => {
+  const t = new ClosedLearningLoopStatusTracker();
+  t.observeRollover({ status: "WAITING_FOR_CANONICAL_BOUNDARY", periodId: "p" }, 1);
+  const statuses = ["WAIT", "WAIT", "WAIT", "BLOCKED", "REJECTED", "REJECTED", "FAILED", "DUPLICATE", "FILLED"];
+  const open = { periodId: "owner-baseline:KRW-XRP:1", market: "KRW-XRP", periodStartAt: 1, candidateProvenance: [{ candidateId: "owner-baseline-sma-5-20" }], observations: statuses.map((status) => ({ status })) };
+  t.observePeriods(open, []);
+  const e = t.snapshot().evidence;
+  assert.deepEqual([e.openWaitObservations, e.openBlockedObservations, e.openRejectedObservations, e.openFailedObservations, e.openDuplicateObservations, e.openFilledObservations], [3, 1, 2, 1, 1, 1]);
+  assert.equal(e.openWaitObservations + e.openBlockedObservations + e.openRejectedObservations + e.openFailedObservations + e.openDuplicateObservations + e.openFilledObservations, e.openObservations);
 });

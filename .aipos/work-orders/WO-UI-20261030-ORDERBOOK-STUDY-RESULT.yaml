@@ -1,0 +1,33 @@
+id: WO-UI-20261030-ORDERBOOK-STUDY-RESULT
+title: "Show the real result of the pre-registered ORDERBOOK study on the 학습 tab"
+status: COMPLETED
+owner: nusa-development
+repository: cinamoncandy/NUSA
+base_branch: main
+implementation_branch: claude/orderbook-study-result-display
+authority_impact: none
+objective: "The 호가 연구(ML) 10-29 row only showed a date-derived text; the app never learned the result the host Research service writes to orderbook-study-result.json. Expose that parsed result read-only through the heartbeat and render it in plain Korean, never claiming pass/fail without the server object."
+scope:
+  - "apps/cloud/src/researchStudyResult.ts: shared validation plus readOrderBookStudyDisplay(stateDbPath) returning { schemaVersion 1, studyId, status, eligible, discoveryPass, resultFileMtimeMs? } or null (absent/malformed => null). parseOrderBookStudyResult behaviour is unchanged."
+  - "packages/contracts/src/personalPaperOperations.ts: PersonalPaperOrderBookStudy type, optional heartbeat field orderBookStudy, and a validator that drops a malformed value on its own."
+  - "apps/cloud/src/runtime.ts: orderBookStudyHeartbeat() spread next to learningFunnel/learningLoop (display only, errors swallowed)."
+  - "apps/mobile: parseStudyResult + buildStudyTimeline(nowMs, studies, orderBookStudy) in learningPanelsModel.ts; the object is passed App.tsx -> LearningView -> StudyTimeline."
+  - "Rows: HOLDOUT_PASS => '합격 · 앞으로 모의로만 검증할 후보예요 (실전 아님)'; HOLDOUT_FAIL => '불합격 · 그대로 기록해요'; no valid object after the verdict time => '판정 시점이 지났는데 서버가 결과를 아직 안 보냈어요'; before the verdict time unchanged. Eligible market count appended when present. FAIL/none stay ATTENTION."
+exclusions:
+  - "No qualification-pinned module touched (MODULE_QUALIFICATION_SOURCE_BLOB_BY_STAGE_V1 and every pinned canonical entrypoint unchanged; runtime.ts and personalPaperOperations.ts are not canonical entrypoints)."
+  - "No gate, threshold, risk limit or capital change; no study rerun; no synthetic evidence; the study result is not an input to Risk, qualification or Research from this path."
+  - "No deploy and no host change."
+safety:
+  paper_only: true
+  liveAuthority: NONE
+  productionMutationAllowed: false
+  aiAuthority: ZERO_AUTHORITY
+  fail_closed: "Absent, unreadable or malformed result => null on the server and 'treated as absent' in the app; PASS text says paper-only and not live."
+verification_commands:
+  - node_modules/.bin/tsc -p tsconfig.json
+  - node -r ./tests/register-dist.cjs --test dist/apps/cloud/src/researchStudyResult.test.js tests/mobile-*.test.js tests/uiux-*.test.js
+  - node scripts/lint-mobile.js
+  - node scripts/validate-platform-independent-tests.js
+  - node scripts/validate-aipos-yaml.js
+review: "Draft PR; a separate non-author session reviews it under docs/GRILL_ME_PROTOCOL.md."
+residual: "Device and live-server rendering of the row are not verified from the cloud sandbox."

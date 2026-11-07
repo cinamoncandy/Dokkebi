@@ -12,8 +12,8 @@ const rowColor = (kind: "GAIN" | "LOSS" | "COST" | "RESULT", bp: number): string
   kind === "RESULT" ? (bp < 0 ? calmColors.attention : calmColors.text) : kind === "GAIN" ? calmColors.text : calmColors.muted;
 
 /** Registered studies: a vertical line, one dot per study, the next verdict highlighted. Dates are the frozen designs' verdict times. */
-export function StudyTimeline({ nowMs }: { readonly nowMs: number }) {
-  const rows = buildStudyTimeline(nowMs);
+export function StudyTimeline({ nowMs, orderBookStudy }: { readonly nowMs: number; /** Server heartbeat orderBookStudy (display only); untrusted, null when absent. */ readonly orderBookStudy?: unknown }) {
+  const rows = buildStudyTimeline(nowMs, undefined, orderBookStudy);
   return <View style={styles.block} testID="learning-studies" accessibilityLabel={rows.map((r) => `${r.id} ${r.dateLabel} ${r.status}`).join(". ")}>
     <SectionLabel left="사전 등록 연구" right="사전 등록" />
     <View style={styles.tl}>
@@ -55,6 +55,27 @@ export function CostWaterfall({ raw }: { readonly raw: unknown }) {
       </View>)}
     </View>
     <Text style={styles.note}>{cost.summary}{cost.winRatePercent == null ? "" : ` 이긴 비율은 ${cost.winRatePercent.toFixed(0)}%예요.`}</Text>
+  </View>;
+}
+
+/** The baseline shadow next to two rules with no signal (hold, random entry): baseline minus each, or "no data" instead of a zero. Not PAPER evidence. */
+export function NullComparison({ raw }: { readonly raw: unknown }) {
+  const { comparison } = buildLearningLoopPanels(raw);
+  if (comparison == null) return <Missing title="아무 규칙 없이 한 것과 비교" />;
+  return <View style={styles.block} testID="learning-null-comparison" accessibilityLabel={`아무 규칙 없이 한 것과 비교. 모의투자 증거가 아니에요. ${comparison.rows.map((r) => `${r.label} ${r.diffBp == null ? "데이터 없음" : `${r.diffBp > 0 ? "+" : ""}${r.diffBp}bp`}. ${r.detail}`).join(" ")} ${comparison.summary}`}>
+    <Deco />
+    <SectionLabel left="아무 규칙 없이 한 것과 비교" right="모의투자 증거 아님 · bp" />
+    <View style={styles.rows}>
+      {comparison.rows.map((r) => <View key={r.label} style={styles.row}>
+        <View style={styles.rowHead}>
+          <Text style={styles.rowLabel}>{r.label}</Text>
+          <Text style={[styles.rowValue, { color: r.diffBp == null ? calmColors.muted : r.diffBp < 0 ? calmColors.attention : calmColors.text }]}>{r.diffBp == null ? "데이터 없음" : r.diffBp > 0 ? `+${r.diffBp}` : `${r.diffBp}`}</Text>
+        </View>
+        {r.diffBp == null ? null : <SignedBar bp={r.diffBp} scaleBp={comparison.scaleBp} color={r.diffBp < 0 ? calmColors.attention : calmColors.text} />}
+        <Text style={styles.note}>{r.detail}</Text>
+      </View>)}
+    </View>
+    <Text style={styles.note}>{comparison.summary}</Text>
   </View>;
 }
 

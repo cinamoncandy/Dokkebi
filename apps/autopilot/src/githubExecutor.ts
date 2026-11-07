@@ -54,6 +54,7 @@ function githubClientPayload(request: AutopilotExecutionRequest): Record<string,
     execution_id: request.executionId ?? null,
     dedupe_key: request.dedupeKey ?? null,
     ...(request.contractFingerprintSha256 ? { contract_fingerprint_sha256: request.contractFingerprintSha256.toLowerCase() } : {}),
+    ...(request.causalDispatchCapability ? { causal_dispatch_capability: request.causalDispatchCapability, causal_source_run_attempt: request.causalSourceRunAttempt } : {}),
     live_authority: "NONE",
     production_mutation_allowed: false,
     ai_authority: "ZERO_AUTHORITY",
@@ -167,6 +168,14 @@ export async function executeGithubDispatch(
   }
   if (request.contractFingerprintSha256 != null && !SHA256.test(request.contractFingerprintSha256)) {
     return result("REJECTED", "github-executor-contract-fingerprint-invalid");
+  }
+  if (request.causalDispatchCapability != null || request.causalSourceRunAttempt != null) {
+    if (request.kind !== "REPOSITORY_AUTOPILOT" || typeof request.causalDispatchCapability !== "string"
+      || !/^[a-f0-9]{64}$/.test(request.causalDispatchCapability)
+      || !Number.isSafeInteger(request.causalSourceRunAttempt) || Number(request.causalSourceRunAttempt) <= 0
+      || Number(request.causalSourceRunAttempt) > 9_999_999_999) {
+      return result("REJECTED", "github-executor-causal-dispatch-invalid");
+    }
   }
   if (request.kind === "AUDIT_REQUEST" && (!Number.isSafeInteger(request.prNumber) || (request.prNumber ?? 0) <= 0)) {
     return result("REJECTED", "github-executor-pr-number-required");

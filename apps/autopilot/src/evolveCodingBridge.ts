@@ -1,4 +1,4 @@
-import { validateCodingRunnerRequest, type CodingRunnerRequest } from "./codingRunner";
+import { isWorkflowFailureCodingReason, validateCodingRunnerRequest, type CodingRunnerRequest } from "./codingRunner";
 import { selectNextEvolutionOpportunity, type EvolutionAutonomousSelectionInput } from "./evolveAutonomousSelector";
 import { discoverEvolutionOpportunities, type EvolutionDiscoverySignal } from "./evolveOpportunityDiscovery";
 import type { EvolutionLearningRecord } from "./evolveLearningMemory";
@@ -62,12 +62,30 @@ export function prepareDiscoveredCodingRequest(input: EvolutionCodingBridgeInput
     });
   }
 
+  // A workflow opportunity and the separately supplied runner run ID must
+  // identify the same source. Selection ranking can choose a different signal
+  // from the one the scheduler used to derive workflowRunId.
+  if (selection.selectedOpportunity.source === "github-actions") {
+    const expected = `workflow:${input.workflowRunId}@${input.headSha.toLowerCase()}`;
+    const references = selection.selectedOpportunity.evidence.filter((item) => item.source === "github-actions");
+    if (references.length !== 1 || references[0]?.reference !== expected) {
+      return Object.freeze({ status: "ABSTAINED", reason: "selected-workflow-source-mismatch", rejectedSignalIds: discovery.rejectedSignalIds, request: null, authority: AUTHORITY });
+    }
+  }
+
+  // Keep descriptive EVOLVE context distinct from the strict `gha:<run>:<sha>:<conclusion>`
+  // causal-request grammar. Signal IDs/problems can contain workflow evidence strings, but that
+  // text is not a server-verified run binding and must not be parsed as one.
+  const descriptiveReason = `evolve:${selection.selectedOpportunity.id}:${selection.selectedOpportunity.problem}`;
+  const reason = isWorkflowFailureCodingReason(descriptiveReason)
+    ? `evolve:${encodeURIComponent(selection.selectedOpportunity.id)}:${encodeURIComponent(selection.selectedOpportunity.problem)}`
+    : descriptiveReason;
   const request = validateCodingRunnerRequest({
     kind: "REPOSITORY_AUTOPILOT",
     repository: input.repository,
     headSha: input.headSha,
     workflowRunId: input.workflowRunId,
-    reason: `evolve:${selection.selectedOpportunity.id}:${selection.selectedOpportunity.problem}`,
+    reason,
     executionId: input.executionId,
     dedupeKey: input.dedupeKey,
     mutationAllowed: false,

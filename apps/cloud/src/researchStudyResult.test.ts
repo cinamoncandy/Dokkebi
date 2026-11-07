@@ -3,7 +3,7 @@ import { describe, it } from "node:test";
 import { mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { ORDERBOOK_STUDY_RESULT_FILE, parseOrderBookStudyResult, readOrderBookStudyResult } from "./researchStudyResult";
+import { ORDERBOOK_STUDY_RESULT_FILE, parseOrderBookStudyResult, readOrderBookStudyDisplay, readOrderBookStudyResult } from "./researchStudyResult";
 import { buildMetaLearningStatus } from "./researchMetaLearningRuntime";
 import { RESEARCH_LEDGER_SNAPSHOT } from "./researchLedgerSnapshot";
 
@@ -34,5 +34,21 @@ describe("autonomous study result handoff", () => {
     assert.equal(before.recommended, "ORDERBOOK+INTRADAY+ALL_KRW+ML");
     assert.notEqual(after.recommended, "ORDERBOOK+INTRADAY+ALL_KRW+ML", "the tried combination is no longer recommended");
     assert.equal(after.configurations, before.configurations + 3);
+  });
+
+  it("projects the result read-only for the app and is null for anything absent or malformed", () => {
+    const dir = mkdtempSync(join(tmpdir(), "nusa-study-display-"));
+    const db = join(dir, "cloud-state.db");
+    assert.equal(readOrderBookStudyDisplay(db), null);
+    writeFileSync(join(dir, ORDERBOOK_STUDY_RESULT_FILE), "{not json");
+    assert.equal(readOrderBookStudyDisplay(db), null);
+    writeFileSync(join(dir, ORDERBOOK_STUDY_RESULT_FILE), JSON.stringify({ ...result, eligible: 2 }));
+    assert.equal(readOrderBookStudyDisplay(db), null);
+    writeFileSync(join(dir, ORDERBOOK_STUDY_RESULT_FILE), JSON.stringify(result));
+    const shown = readOrderBookStudyDisplay(db);
+    assert.deepEqual({ ...shown, resultFileMtimeMs: typeof shown?.resultFileMtimeMs }, { schemaVersion: 1, studyId: "ML_ORDERBOOK_60M_20261029", status: "HOLDOUT_FAIL", eligible: 180, discoveryPass: true, resultFileMtimeMs: "number" });
+    assert.equal("datasetFingerprint" in (shown ?? {}), false);
+    writeFileSync(join(dir, ORDERBOOK_STUDY_RESULT_FILE), JSON.stringify({ ...result, status: "HOLDOUT_PASS" }));
+    assert.equal(readOrderBookStudyDisplay(db)?.status, "HOLDOUT_PASS");
   });
 });

@@ -12,6 +12,7 @@ import { createEventLoopStallMonitor } from "./eventLoopStallMonitor";
 import { PaperTradingExecutionLoop, SqliteCloudPaperAccountRepository, paperAccountIdForCapital, type PaperAccountRepository } from "./paperTradingExecutionLoop";
 import { CloudPaperCanonicalRiskGateway } from "./cloudPaperCanonicalRiskGateway";
 import { cloudPaperRiskLimitsForCapital } from "./paperRiskLimitScaling";
+import { configurePaperExitOrderNotionalCap } from "./paperExecutionIntent";
 import { attributeTodayLosses, type PaperLossAttribution } from "./paperLossAttribution";
 import { classifyPaperWait } from "./paperWaitReason";
 import { CloudPaperExecutionBoundary } from "./cloudPaperExecutionBoundary";
@@ -44,7 +45,9 @@ import {
   type PersonalPaperRuntimeHeartbeat,
   type PersonalPaperLossLimit,
   type PersonalPaperLearningFunnel,
+  type PersonalPaperLearningLoopVerdict,
   type PersonalPaperLearningLoop,
+  type PersonalPaperOrderBookStudy,
   type PersonalPaperTodayRealized
 } from "../../../packages/contracts/src/personalPaperOperations";
 import type { PersonalPaperOrderCommand, PersonalPaperOrderCommandResult } from "../../../packages/contracts/src/personalPaperOrderCommand";
@@ -96,6 +99,10 @@ import {
   type NusaEngineeringOperatingSource,
 } from "./engineeringOperatingReadModel";
 import { composeResearchExperiments } from "./researchExperimentComposition";
+import { readOrderBookStudyDisplay } from "./researchStudyResult";
+import { learningLoopVerdict } from "./learningLoopVerdict";
+import { learningPipelineProjection } from "./learningPipelineStage";
+import { OrderBookCoverageWatch } from "./orderBookCoverage";
 
 export interface CloudRuntimeDashboardHydratorLike { hydrate(provider: CloudDashboardStateProvider, observations?: readonly IntelligenceObservation[]): void; }
 export interface CloudRuntimeMarketDataClientLike { subscribe(markets: readonly string[]): void; start(): void; stop(): void; }
@@ -327,6 +334,17 @@ export function startCloudRuntime(
       return realizedPnlKrw == null ? {} : { todayRealized: Object.freeze({ realizedPnlKrw, evaluatedAt: now }) };
     } catch { return {}; }
   };
+  // Display only: the same loop verdict /health publishes, for the 학습 tab. Computed from the liveness snapshot the dashboard server also uses
+  // (assigned where that snapshot is defined); fixed labels only, and nothing at all when it cannot be built.
+  let livenessSnapshotForApp: (() => Readonly<Record<string, unknown>>) | undefined;
+  const loopVerdictForApp = (): { loopVerdict?: PersonalPaperLearningLoopVerdict } => {
+    try {
+      const liveness = livenessSnapshotForApp?.();
+      if (liveness === undefined) return {};
+      const v = learningLoopVerdict(liveness, learningPipelineProjection(liveness, Date.now()));
+      return { loopVerdict: Object.freeze({ verdict: v.verdict, firstBrokenTransition: v.firstBrokenTransition, firstBrokenCode: v.firstBrokenCode, cycleWaitingFor: v.cycleWaitingFor }) };
+    } catch { return {}; }
+  };
   // Display only: the Research funnel from the closed-learning loop status (meta-learning ledger). Integers only; a failing read is ignored.
   const learningFunnelHeartbeat = (): { learningFunnel?: PersonalPaperLearningFunnel } => {
     try {
@@ -337,7 +355,7 @@ export function startCloudRuntime(
       const [configurations, discoveryPasses, holdoutPasses, cyclesEvaluated] = values as number[];
       // The ledger sums the two separately; a holdout count above discovery cannot be drawn as a funnel, so nothing is sent.
       if (discoveryPasses > configurations || holdoutPasses > discoveryPasses) return {};
-      return { learningFunnel: Object.freeze({ configurations, discoveryPasses, holdoutPasses, cyclesEvaluated, evaluatedAt: Date.now() }) };
+      return { learningFunnel: Object.freeze({ configurations, discoveryPasses, holdoutPasses, cyclesEvaluated, ...loopVerdictForApp(), evaluatedAt: Date.now() }) };
     } catch { return {}; }
   };
   // Display only: measured learning-loop numbers for the app. Each value is copied only when it is a safe integer in range and consistent with its
@@ -358,12 +376,23 @@ export function startCloudRuntime(
       put("paperNetBp", signed(meta?.paperNetBp)); put("paperExcessBp", signed(meta?.paperExcessBp));
       put("shadowSince", nonNeg(evidence?.shadowSince)); put("shadowTrades", nonNeg(evidence?.shadowTrades)); put("shadowWins", nonNeg(evidence?.shadowWins));
       put("shadowGrossGainBp", nonNeg(evidence?.shadowGrossGainBp)); put("shadowGrossLossBp", nonNeg(evidence?.shadowGrossLossBp)); put("shadowFeeBp", nonNeg(evidence?.shadowFeeBp));
+      for (const key of ["nullSince", "nullSeed", "nullBaseTrades", "nullHoldMarkets", "nullRandTrades", "nullRandWins", "nullRandSkipped"] as const) put(key, nonNeg(evidence?.[key]));
+      for (const key of ["nullBaseNetBp", "nullHoldNetBp", "nullRandNetBp"] as const) put(key, signed(evidence?.[key]));
       // Consistency: a part cannot exceed its whole. An inconsistent pair is dropped rather than drawn.
       if (out.discoveryPasses != null && out.configurations != null && out.discoveryPasses > out.configurations) { delete out.discoveryPasses; delete out.holdoutPasses; }
       if (out.holdoutPasses != null && out.discoveryPasses != null && out.holdoutPasses > out.discoveryPasses) delete out.holdoutPasses;
       if (out.shadowWins != null && out.shadowTrades != null && out.shadowWins > out.shadowTrades) { delete out.shadowWins; }
+      if (out.nullRandWins != null && out.nullRandTrades != null && out.nullRandWins > out.nullRandTrades) { delete out.nullRandWins; }
       if (Object.keys(out).length === 0) return {};
       return { learningLoop: Object.freeze({ ...out, evaluatedAt: Date.now() }) as PersonalPaperLearningLoop };
+    } catch { return {}; }
+  };
+  // Display only: the pre-registered ORDERBOOK study result the host wrote next to the state DB. Absent or malformed => nothing is sent.
+  const orderBookStudyHeartbeat = (): { orderBookStudy?: PersonalPaperOrderBookStudy } => {
+    try {
+      if (env.NUSA_CLOUD_STATE_DB_PATH === undefined) return {};
+      const study = readOrderBookStudyDisplay(config.cloudStateDbPath);
+      return study == null ? {} : { orderBookStudy: study };
     } catch { return {}; }
   };
   const readHeartbeat = (): PersonalPaperRuntimeHeartbeat => {
@@ -381,7 +410,7 @@ export function startCloudRuntime(
     const research = researchProgress != null
       ? { researchCollection: researchProgress }
       : { researchCollectionState: researchSettings?.status === "DISABLED" ? "DISABLED" as const : researchSettings?.status === "INVALID" ? "INVALID" as const : "UNAVAILABLE" as const };
-    return Object.freeze({ ...heartbeat, ...paper, ...feed, ...research, ...learningFunnelHeartbeat(), ...learningLoopHeartbeat() });
+    return Object.freeze({ ...heartbeat, ...paper, ...feed, ...research, ...learningFunnelHeartbeat(), ...learningLoopHeartbeat(), ...orderBookStudyHeartbeat() });
   };
   const tokenVerifier = createSharedSecretTokenVerifier(config.dashboardToken, env);
   const durableRepository = snapshotRepository ?? (env.NUSA_CLOUD_STATE_DB_PATH === undefined ? undefined : createSnapshotRepository(config.cloudStateDbPath));
@@ -451,8 +480,9 @@ export function startCloudRuntime(
     : new InMemoryInvestmentAllocationSettingsRepository();
   const readPaperP0State = () => { if (effectiveP0Repository == null) throw new Error("P0 safety repository unavailable"); return effectiveP0Repository.readState(); };
   const readAiP0State = (): CloudRuntimeAiP0State => { if (effectiveP0Repository == null) return "UNAVAILABLE"; try { return effectiveP0Repository.readState().openP0 ? "OPEN" : "CLOSED"; } catch { return "UNVERIFIABLE"; } };
+  configurePaperExitOrderNotionalCap(config.paperInitialCapitalKrw === undefined ? undefined : cloudPaperRiskLimitsForCapital(config.paperInitialCapitalKrw).maxOrderNotional);
   const productionPaperRiskGate = config.paperInitialCapitalKrw !== undefined && durableRepository instanceof SqliteCloudDashboardSnapshotRepository
-    ? new CloudPaperCanonicalRiskGateway({ database: durableRepository.database(), initialCapital: config.paperInitialCapitalKrw, limits: cloudPaperRiskLimitsForCapital(config.paperInitialCapitalKrw), sourceCommitSha: env.NUSA_SOURCE_COMMIT?.trim() || env.GITHUB_SHA?.trim() || "local-paper-build" })
+    ? new CloudPaperCanonicalRiskGateway({ database: durableRepository.database(), initialCapital: config.paperInitialCapitalKrw, limits: cloudPaperRiskLimitsForCapital(config.paperInitialCapitalKrw), accountId: paperAccountIdForCapital(config.paperInitialCapitalKrw), sourceCommitSha: env.NUSA_SOURCE_COMMIT?.trim() || env.GITHUB_SHA?.trim() || "local-paper-build" })
     : undefined;
   effectivePaperLoop = paperExecutionLoop ?? (config.paperInitialCapitalKrw === undefined || effectivePaperRepository === undefined ? undefined : new PaperTradingExecutionLoop({ initialCapital: config.paperInitialCapitalKrw, repository: effectivePaperRepository, readP0State: readPaperP0State }));
   const productionPaperBoundary = effectivePaperLoop != null && productionPaperRiskGate != null
@@ -741,6 +771,9 @@ export function startCloudRuntime(
   const microstructureLiveness = () => { try { return microstructureRecorder == null ? {} : { microstructureRecorder: microstructureRecorder.status() }; } catch { return {}; } };
   // Daily stored-data integrity probe result written by the host Research service (display only; read each /health).
   const dataIntegrityLiveness = () => { try { const value = env.NUSA_CLOUD_STATE_DB_PATH === undefined ? undefined : readDataIntegrityResult(config.cloudStateDbPath); return value == null ? {} : { dataIntegrity: value }; } catch { return {}; } };
+  // Display only: order-book hour coverage over the last 192 hours (the study's own definition), so a gap shows while it can still be repaired.
+  const orderBookCoverageWatch = env.NUSA_CLOUD_STATE_DB_PATH === undefined ? undefined : new OrderBookCoverageWatch(config.cloudStateDbPath, (env.NUSA_RESEARCH_MARKETS ?? "KRW-BTC").split(",").map((m) => m.trim()).find((m) => m !== "") ?? "KRW-BTC");
+  const orderBookCoverageLiveness = () => { try { const value = orderBookCoverageWatch?.snapshot(); return value == null ? {} : { orderBookCoverage: value }; } catch { return {}; } };
   const futuresCollectorLiveness = () => { try { return futuresCollector == null ? {} : { futuresCollector: futuresCollector.status() }; } catch { return {}; } };
   const orderBookCollectorLiveness = () => { try { return orderBookCollector == null ? {} : { orderBookCollector: orderBookCollector.status() }; } catch { return {}; } };
   const closedLearningLiveness = () => { let status = null; try { status = closedLearningStatus?.() ?? null; } catch { status = null; } return status == null ? {} : { closedLearningLoop: status }; };
@@ -809,7 +842,7 @@ export function startCloudRuntime(
     // The PAPER loop runs off a persistent ticker subscription, so its liveness is only visible
     // from these counters. Publishing them makes 24-hour operation something that can be checked
     // rather than assumed from the process being up.
-    runtimeLiveness: () => Object.freeze({
+    runtimeLiveness: (livenessSnapshotForApp = () => Object.freeze({
       // The exact commit this process was built from, so main = deployed = running can be read directly.
       sourceCommitSha: (env.NUSA_SOURCE_COMMIT_SHA ?? env.NUSA_SOURCE_COMMIT ?? "").trim(),
       startedAt: heartbeat.startedAt,
@@ -834,12 +867,13 @@ export function startCloudRuntime(
       ...researchGapFillLiveness(),
       ...microstructureLiveness(),
       ...orderBookCollectorLiveness(),
+      ...orderBookCoverageLiveness(),
       ...futuresCollectorLiveness(),
       ...dataIntegrityLiveness(),
       ...paperLedgerLiveness(),
       ...researchIntervalLiveness(),
       ...closedLearningLiveness()
-    }),
+    })),
     runtimeHealth: () => projectPaperRuntimeHealth(
       Object.freeze({ ...heartbeat }),
       Date.now(),

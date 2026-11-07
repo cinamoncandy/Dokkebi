@@ -283,6 +283,14 @@ export async function runScheduledEvolutionCoding(
   });
   if (bridge.status !== "READY" || !bridge.request) return result("ABSTAINED", bridge.reason);
 
+  // A failed workflow identifies a candidate for investigation, not its cause.
+  // Until a source-bound, server-verified causal receipt is available, do not
+  // acquire a lease or dispatch coding for workflow-failure evidence. Backlog
+  // issue admission continues through its existing independent checks.
+  if (bridge.request.kind === "REPOSITORY_AUTOPILOT" && failureSignals.length > 0) {
+    return result("ABSTAINED", "workflow-failure-causal-evidence-unverified", signals.map((signal) => signal.id));
+  }
+
   const selectedSignal = signals[0];
   if (selectedSignal?.source === "github-issue-backlog") {
     if (!selectedSignal.canonicalOwner || !selectedSignal.conflictKeys?.length) {
@@ -309,6 +317,7 @@ export async function runScheduledEvolutionCoding(
   const persistent = await acquirePersistentExecution(coordinator, {
     dedupeKey: bridge.request.dedupeKey,
     executionId: bridge.request.executionId,
+    headSha: input.mainSha.toLowerCase(),
     now: input.now,
     leaseExpiresAt: input.now + CODING_LEASE_MS,
     maxAcquisitions: MAX_SCHEDULED_CODING_ATTEMPTS,

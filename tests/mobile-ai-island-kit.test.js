@@ -73,3 +73,21 @@ test("tab changes and rolling digits use the one island motion rule", () => {
   assert.match(kit, /key=\{`d\$\{chars\.length - 1 - i\}`\}/, "a digit keeps its place, so a change rolls from the old digit instead of restarting at 0");
   assert.doesNotMatch(kit, /y\.setValue\(0\);\n\s*const anim/, "no reset to zero before rolling");
 });
+
+test("the shell draws only the status chip: the NUSA name and mark are already in the app header", () => {
+  const fs = require("node:fs"), path = require("node:path");
+  const kit = fs.readFileSync(path.resolve(__dirname, "../apps/mobile/src/aiKit.tsx"), "utf8").replace(/\r\n/g, "\n");
+  const shell = kit.slice(kit.indexOf("export function AiShell"), kit.indexOf("const styles = StyleSheet.create"));
+  assert.doesNotMatch(shell, /IslandMark|>NUSA</, "no second NUSA row under the app header");
+  assert.match(shell, /<AiStatusChip /);
+});
+
+test("the 더보기 detail screens, the order and portfolio screens, the notifications and the connection card sit in the shell", () => {
+  const fs = require("node:fs"), path = require("node:path");
+  const read = (f) => fs.readFileSync(path.resolve(__dirname, "../apps/mobile", f), "utf8").replace(/\r\n/g, "\n");
+  for (const [file, chip] of [["src/screenFrame.tsx", 'plainScreenChip\\("MORE"\\)'], ["src/notificationView.tsx", 'plainScreenChip\\("MORE"\\)'], ["src/portfolioView.tsx", 'plainScreenChip\\("MORE"\\)'], ["src/orderHistoryView.tsx", 'plainScreenChip\\("MORE"\\)'], ["App.tsx", 'plainScreenChip\\("PAPER"\\)']]) {
+    assert.match(read(file), new RegExp(`<AiShell chip=\\{${chip}\\}>`), file);
+  }
+  for (const file of ["src/screenFrame.tsx", "src/notificationView.tsx", "src/portfolioView.tsx"]) assert.match(read(file), /backgroundColor: "transparent"/, `${file} lets the backdrop show`);
+  assert.doesNotMatch(read("src/settingsView.tsx"), /<AiShell/, "Settings keeps the user's theme because it holds the theme switch");
+});

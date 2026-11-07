@@ -2,6 +2,10 @@ import { validatePersistedEvolutionLearningMemory, type EvolutionLearningMemoryS
 import { validatePersistedCodingExecutionEvidence, type CodingExecutionEvidence } from "./codingExecutionEvidence";
 import { validateAutopilotExecutionTelemetry, type AutopilotExecutionTelemetry } from "./executionTelemetry";
 import type { ExecutionHold, HoldClearance } from "./autonomousExecutionState";
+import { claimCausalDispatchBinding, consumeClaimedCausalDispatchAdmissionBinding, createCausalDispatchBinding, verifyClaimedCausalDispatchBinding, type CausalDispatchBinding } from "./causalDispatchBinding";
+import { hasValidCausalAdmissionReceiptStructure, type CausalAdmissionReceipt } from "./causalRegressionAdmission";
+import type { SourceExecutionIdentity, VerifiedCodingPublisherIdentity } from "./githubActionsOidc";
+import type { VerifiedIsolatedCausalVerification } from "./sigstoreCausalAttestation";
 
 interface DurableObjectStorageLike {
   get<T>(key: string): Promise<T | undefined>;
@@ -72,6 +76,106 @@ export interface PersistentExecutionAcquireRequest {
   headSha?: string;
   /** Optional ceiling on fresh acquisitions of the same dedupe identity (1-10); absent means unbounded. */
   maxAcquisitions?: number;
+  /** Internal server-authenticated proof required to consume causal workflow-failure admission. */
+  causalAdmissionHandoff?: CausalAdmissionHandoff;
+}
+
+export interface CausalAdmissionHandoff {
+  readonly source: SourceExecutionIdentity;
+  readonly publisher: VerifiedCodingPublisherIdentity;
+  readonly capabilityDigest: string;
+}
+
+/** Internal-only: source is GitHub-verified before registration; digest commits a secret capability. */
+export interface CausalDispatchRegistration {
+  readonly dedupeKey: string;
+  readonly executionId: string;
+  readonly source: SourceExecutionIdentity;
+  readonly capabilityDigest: string;
+  readonly now: number;
+  readonly expiresAt: number;
+  readonly causalAdmission?: CausalAdmissionReceipt | null;
+}
+
+/** Internal-only: publisher OIDC and both GitHub run identities must be verified before claim. */
+export interface CausalDispatchClaim {
+  readonly dedupeKey: string;
+  readonly executionId: string;
+  readonly source: SourceExecutionIdentity;
+  readonly publisher: VerifiedCodingPublisherIdentity;
+  readonly capabilityDigest: string;
+  readonly now: number;
+  /** Recomputed by the Worker from the signed bundle; null for provenance-only claims. */
+  readonly causalAdmission?: CausalAdmissionReceipt | null;
+}
+
+interface IsolatedCausalAttemptClaim {
+  readonly schemaVersion: 1;
+  readonly domain: "NUSA_ISOLATED_CAUSAL_ATTEMPT_CLAIM_V1";
+  readonly sourceIdentityDigest: string;
+  readonly statementDigest: string;
+  readonly claimedAt: number;
+}
+
+const ISOLATED_CAUSAL_CLAIM_STORAGE_PREFIX = "isolated-causal-attempt-v1:";
+const ISOLATED_CAUSAL_CLAIM_OBJECT_PREFIX = "nusa-isolated-causal-attempt-v1:";
+const SHA256_HEX = /^[a-f0-9]{64}$/;
+
+function validIsolatedClaimRequest(value: unknown): value is IsolatedCausalAttemptClaim {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return false;
+  const request = value as Partial<IsolatedCausalAttemptClaim>;
+  return request.schemaVersion === 1
+    && request.domain === "NUSA_ISOLATED_CAUSAL_ATTEMPT_CLAIM_V1"
+    && typeof request.sourceIdentityDigest === "string" && SHA256_HEX.test(request.sourceIdentityDigest)
+    && typeof request.statementDigest === "string" && SHA256_HEX.test(request.statementDigest)
+    && validSafeTimestamp(request.claimedAt);
+}
+
+function validStoredIsolatedClaim(value: unknown, identityDigest: string): value is IsolatedCausalAttemptClaim {
+  return validIsolatedClaimRequest(value)
+    && value.sourceIdentityDigest === identityDigest;
+}
+
+async function isolatedSourceIdentityDigest(source: VerifiedIsolatedCausalVerification["source"]): Promise<string> {
+  const canonicalIdentity = [
+    "NUSA_ISOLATED_CAUSAL_ATTEMPT_CLAIM_V1",
+    source.repository,
+    source.workflowPath,
+    source.sha.toLowerCase(),
+    source.runId,
+    source.runAttempt,
+  ].join("\n");
+  const bytes = new TextEncoder().encode(canonicalIdentity);
+  const digest = await crypto.subtle.digest("SHA-256", bytes);
+  return Array.from(new Uint8Array(digest), (byte) => byte.toString(16).padStart(2, "0")).join("");
+}
+
+interface CausalDispatchHistory {
+  readonly schemaVersion: 1;
+  readonly entries: readonly { readonly generation: number; readonly binding: CausalDispatchBinding }[];
+}
+
+function readCausalDispatchHistory(value: unknown): CausalDispatchHistory | null {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return null;
+  const history = value as CausalDispatchHistory;
+  if (history.schemaVersion !== 1 || !Array.isArray(history.entries) || history.entries.length > 3) return null;
+  let previous = 0;
+  for (const entry of history.entries) {
+    const rawBinding = entry?.binding as CausalDispatchBinding | undefined;
+    const admission = rawBinding?.causalAdmission ?? null;
+    const consumedAt = rawBinding?.causalAdmissionConsumedAt ?? null;
+    if (!entry || !Number.isSafeInteger(entry.generation) || entry.generation <= previous || entry.generation > 3
+      || !entry.binding || !Number.isSafeInteger(entry.binding.expiresAt)
+      || !createCausalDispatchBinding(entry.binding.source, entry.binding.capabilityDigest, entry.binding.expiresAt - 1, entry.binding.expiresAt)
+      || (admission !== null && (!hasValidCausalAdmissionReceiptStructure(admission, entry.binding.source)
+        || admission.expiresAt > entry.binding.expiresAt))
+      || (entry.binding.publisher !== null && (typeof entry.binding.publisher !== "object" || Array.isArray(entry.binding.publisher)))
+      || (consumedAt !== null && (!Number.isSafeInteger(consumedAt) || Number(consumedAt) < 0
+        || Number(consumedAt) >= entry.binding.expiresAt || admission === null || entry.binding.publisher === null
+        || Number(consumedAt) < admission.verifiedAt || Number(consumedAt) >= admission.expiresAt))) return null;
+    previous = entry.generation;
+  }
+  return history;
 }
 
 export interface PersistentExecutionStopRequest extends PersistentExecutionStop {
@@ -180,6 +284,9 @@ const ACTIVE_WIP_STORAGE_KEY = "evolve-active-wip-v1";
 const ACTIVE_WIP_COMPLETION_HISTORY_KEY = "evolve-active-wip-completions-v1";
 // FORGE L1 has one canonical two-slot WIP budget; callers may request fewer, never more.
 const MAX_ACTIVE_WIP = 2;
+// Existing Durable Object state may contain up to the former admission cap (8). Read and
+// expire those claims safely after the policy contraction instead of treating them as corruption.
+const MAX_STORED_ACTIVE_WIP = 8;
 const MAX_ACTIVE_WIP_COMPLETIONS = 120;
 /**
  * A claim is released only by a successful coding completion. A dispatch that fails closed, is
@@ -296,7 +403,25 @@ function validAcquire(value: unknown): value is PersistentExecutionAcquireReques
     && (candidate.taskId === undefined || (typeof candidate.taskId === "string" && SAFE_LIFECYCLE_ID.test(candidate.taskId)))
     && (candidate.provider === undefined || (typeof candidate.provider === "string" && SAFE_LIFECYCLE_ID.test(candidate.provider)))
     && (candidate.headSha === undefined || (typeof candidate.headSha === "string" && SHA40.test(candidate.headSha)))
-    && (candidate.maxAcquisitions === undefined || (Number.isSafeInteger(candidate.maxAcquisitions) && Number(candidate.maxAcquisitions) >= 1 && Number(candidate.maxAcquisitions) <= 10));
+    && (candidate.maxAcquisitions === undefined || (Number.isSafeInteger(candidate.maxAcquisitions) && Number(candidate.maxAcquisitions) >= 1 && Number(candidate.maxAcquisitions) <= 10))
+    && (candidate.causalAdmissionHandoff === undefined || validCausalAdmissionHandoff(candidate.causalAdmissionHandoff));
+}
+
+function validCausalAdmissionHandoff(value: unknown): value is CausalAdmissionHandoff {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return false;
+  const handoff = value as Partial<CausalAdmissionHandoff>;
+  const source = handoff.source as Partial<SourceExecutionIdentity> | undefined;
+  const publisher = handoff.publisher as Partial<VerifiedCodingPublisherIdentity> | undefined;
+  return Boolean(source && typeof source.repository === "string" && REPOSITORY.test(source.repository)
+    && source.workflowPath === ".github/workflows/ci.yml" && typeof source.sha === "string" && SHA40.test(source.sha)
+    && typeof source.runId === "string" && /^[1-9][0-9]{0,19}$/.test(source.runId)
+    && typeof source.runAttempt === "string" && /^[1-9][0-9]{0,9}$/.test(source.runAttempt)
+    && typeof handoff.capabilityDigest === "string" && /^[a-f0-9]{64}$/.test(handoff.capabilityDigest)
+    && publisher && publisher.repository === source.repository && typeof publisher.workflowRef === "string"
+    && publisher.workflowRef === `${publisher.repository}/.github/workflows/autopilot-execution-consumer.yml@refs/heads/main`
+    && publisher.ref === "refs/heads/main" && publisher.sha === source.sha && typeof publisher.runId === "string"
+    && /^[1-9][0-9]{0,19}$/.test(publisher.runId) && typeof publisher.runAttempt === "string"
+    && /^[1-9][0-9]{0,9}$/.test(publisher.runAttempt) && publisher.event === "repository_dispatch");
 }
 
 function validScheduledReceipt(value: unknown): value is ScheduledRuntimeReceipt {
@@ -399,6 +524,10 @@ export class ExecutionCoordinator {
     if (request.method === "GET" && url.pathname === "/provider-capacity-wait") return this.readProviderCapacityWait();
     if (request.method !== "POST") return json({ error: "METHOD_NOT_ALLOWED" }, 405);
     if (url.pathname === "/acquire") return this.acquire(await request.json());
+    if (url.pathname === "/isolated-causal/claim") return this.claimIsolatedCausalAttempt(await request.json());
+    if (url.pathname === "/causal-dispatch/register") return this.registerCausalDispatch(await request.json());
+    if (url.pathname === "/causal-dispatch/claim") return this.claimCausalDispatch(await request.json());
+    if (url.pathname === "/causal-dispatch/verify") return this.verifyCausalDispatch(await request.json());
     if (url.pathname === "/handoff-or-acquire") return this.handoffOrAcquire(await request.json());
     if (url.pathname === "/dispatched") return this.markDispatched(await request.json());
     if (url.pathname === "/audit-dispatch-recovery") return this.recoverAuditDispatch(await request.json());
@@ -417,6 +546,34 @@ export class ExecutionCoordinator {
     if (url.pathname === "/provider-capacity-wait") return this.recordProviderCapacityWait(await request.json());
     if (url.pathname === "/paid-overflow-reserve") return this.reservePaidOverflowCall(await request.json());
     return json({ error: "NOT_FOUND" }, 404);
+  }
+
+  private async claimIsolatedCausalAttempt(value: unknown): Promise<Response> {
+    if (!validIsolatedClaimRequest(value)) return json({ claimed: false, error: "ISOLATED_CAUSAL_CLAIM_INVALID" }, 400);
+    const transactional = this.ctx.storage as DurableObjectStorageLike & Partial<TransactionalDurableObjectStorageLike>;
+    if (typeof transactional.transaction !== "function") {
+      return json({ claimed: false, error: "ISOLATED_CAUSAL_TRANSACTION_REQUIRED" }, 503);
+    }
+
+    const storageKey = `${ISOLATED_CAUSAL_CLAIM_STORAGE_PREFIX}${value.sourceIdentityDigest}`;
+    try {
+      return await transactional.transaction(async (storage) => {
+        const existing = await storage.get<unknown>(storageKey);
+        if (existing !== undefined) {
+          if (!validStoredIsolatedClaim(existing, value.sourceIdentityDigest)) {
+            return json({ claimed: false, error: "ISOLATED_CAUSAL_CLAIM_STATE_CORRUPT" }, 500);
+          }
+          return json({ claimed: false, reason: "ISOLATED_CAUSAL_ATTEMPT_ALREADY_CONSUMED" }, 409);
+        }
+
+        const record: IsolatedCausalAttemptClaim = Object.freeze({ ...value });
+        await storage.put(storageKey, record);
+        return json({ claimed: true, domain: record.domain }, 201);
+      });
+    } catch {
+      // Transaction commit outcome may be uncertain. The caller must never start execution on error.
+      return json({ claimed: false, error: "ISOLATED_CAUSAL_CLAIM_STORAGE_UNAVAILABLE" }, 503);
+    }
   }
 
   private async acquire(value: unknown): Promise<Response> {
@@ -465,6 +622,73 @@ export class ExecutionCoordinator {
   private async readExecution(): Promise<Response> {
     const record = await this.ctx.storage.get<ExecutionRecord>("execution");
     return json({ record: record ?? null });
+  }
+
+  private async registerCausalDispatch(value: unknown): Promise<Response> {
+    if (!value || typeof value !== "object" || Array.isArray(value)) return json({ error: "CAUSAL_DISPATCH_REQUEST_INVALID" }, 400);
+    const request = value as CausalDispatchRegistration;
+    if (!validText(request.dedupeKey) || !validText(request.executionId)) return json({ error: "CAUSAL_DISPATCH_REQUEST_INVALID" }, 400);
+    const pending = createCausalDispatchBinding(request.source, request.capabilityDigest, request.now, request.expiresAt, request.causalAdmission);
+    if (!pending) return json({ error: "CAUSAL_DISPATCH_REQUEST_INVALID" }, 400);
+    return this.mutateExecutionAtomically(async (storage) => {
+      const execution = await storage.get<ExecutionRecord>("execution");
+      if (!execution || execution.dedupeKey !== request.dedupeKey || execution.executionId !== request.executionId
+        || execution.state !== "LEASED" || execution.headSha !== pending.source.sha
+        || execution.leaseExpiresAt <= request.now || pending.expiresAt > execution.leaseExpiresAt) {
+        return json({ registered: false, reason: "CAUSAL_DISPATCH_EXECUTION_MISMATCH" }, 409);
+      }
+      const generation = execution.acquisitionCount ?? 1;
+      if (!Number.isSafeInteger(generation) || generation < 1 || generation > 3) return json({ registered: false, reason: "CAUSAL_DISPATCH_GENERATION_INVALID" }, 409);
+      const stored = await storage.get<unknown>("causal-dispatch-bindings");
+      const history = stored === undefined ? { schemaVersion: 1 as const, entries: [] } : readCausalDispatchHistory(stored);
+      if (!history) return json({ registered: false, reason: "CAUSAL_DISPATCH_STATE_INVALID" }, 409);
+      if (history.entries.some((entry) => entry.generation >= generation || entry.binding.publisher !== null
+        || (pending.causalAdmission != null && entry.binding.causalAdmission?.replayKeySha256 === pending.causalAdmission.replayKeySha256))) {
+        return json({ registered: false, reason: "CAUSAL_DISPATCH_ALREADY_REGISTERED" }, 409);
+      }
+      await storage.put("causal-dispatch-bindings", { schemaVersion: 1, entries: [...history.entries, { generation, binding: pending }] });
+      return json({ registered: true }, 201);
+    });
+  }
+
+  private async claimCausalDispatch(value: unknown): Promise<Response> {
+    if (!value || typeof value !== "object" || Array.isArray(value)) return json({ error: "CAUSAL_DISPATCH_REQUEST_INVALID" }, 400);
+    const request = value as CausalDispatchClaim;
+    if (!validText(request.dedupeKey) || !validText(request.executionId)) return json({ error: "CAUSAL_DISPATCH_REQUEST_INVALID" }, 400);
+    return this.mutateExecutionAtomically(async (storage) => {
+      const execution = await storage.get<ExecutionRecord>("execution");
+      const history = readCausalDispatchHistory(await storage.get<unknown>("causal-dispatch-bindings"));
+      const generation = execution?.acquisitionCount ?? 1;
+      const binding = history?.entries.find((entry) => entry.generation === generation)?.binding;
+      if (!execution || !binding || execution.dedupeKey !== request.dedupeKey || execution.executionId !== request.executionId
+        || (execution.state !== "LEASED" && execution.state !== "HANDED_OFF") || execution.headSha !== binding.source?.sha
+        || !validSafeTimestamp(request.now) || execution.leaseExpiresAt <= request.now) {
+        return json({ claimed: false, reason: "CAUSAL_DISPATCH_EXECUTION_MISMATCH" }, 409);
+      }
+       const claimed = claimCausalDispatchBinding(binding, request.publisher, request.source, request.capabilityDigest, request.now, request.causalAdmission ?? null);
+      if (!claimed) return json({ claimed: false, reason: "CAUSAL_DISPATCH_BINDING_REJECTED" }, 409);
+      await storage.put("causal-dispatch-bindings", { schemaVersion: 1, entries: history!.entries.map((entry) => entry.generation === generation ? { generation, binding: claimed } : entry) });
+       return json({ claimed: true, causalAdmissionGranted: claimed.causalAdmission !== null }, 201);
+    });
+  }
+
+  private async verifyCausalDispatch(value: unknown): Promise<Response> {
+    if (!value || typeof value !== "object" || Array.isArray(value)) return json({ error: "CAUSAL_DISPATCH_REQUEST_INVALID" }, 400);
+    const request = value as CausalDispatchClaim;
+    if (!validText(request.dedupeKey) || !validText(request.executionId)) return json({ error: "CAUSAL_DISPATCH_REQUEST_INVALID" }, 400);
+    return this.mutateExecutionAtomically(async (storage) => {
+      const execution = await storage.get<ExecutionRecord>("execution");
+      const history = readCausalDispatchHistory(await storage.get<unknown>("causal-dispatch-bindings"));
+      const generation = execution?.acquisitionCount ?? 1;
+      const binding = history?.entries.find((entry) => entry.generation === generation)?.binding;
+      if (!execution || !binding || execution.dedupeKey !== request.dedupeKey || execution.executionId !== request.executionId
+        || (execution.state !== "LEASED" && execution.state !== "HANDED_OFF") || execution.headSha !== binding.source?.sha
+        || !validSafeTimestamp(request.now) || execution.leaseExpiresAt <= request.now
+        || !verifyClaimedCausalDispatchBinding(binding, request.publisher, request.source, request.capabilityDigest, request.now)) {
+        return json({ verified: false, reason: "CAUSAL_DISPATCH_BINDING_REJECTED" }, 409);
+      }
+      return json({ verified: true, causalAdmissionGranted: binding.causalAdmission != null }, 200);
+    });
   }
 
   private async markDispatched(value: unknown): Promise<Response> {
@@ -523,6 +747,32 @@ export class ExecutionCoordinator {
     const request = value;
     return this.mutateExecutionAtomically(async (storage) => {
       const current = await storage.get<ExecutionRecord>("execution");
+      if (request.causalAdmissionHandoff) {
+        const proof = request.causalAdmissionHandoff;
+        const history = readCausalDispatchHistory(await storage.get<unknown>("causal-dispatch-bindings"));
+        const generation = current?.acquisitionCount ?? 1;
+        const binding = history?.entries.find((entry) => entry.generation === generation)?.binding;
+        if (!current || !binding || current.dedupeKey !== request.dedupeKey || current.executionId !== request.executionId
+          || current.state !== "LEASED" || current.leaseExpiresAt <= request.now || current.headSha !== proof.source.sha
+          || binding.source.runId !== proof.source.runId || binding.source.runAttempt !== proof.source.runAttempt
+          || binding.source.sha !== request.headSha || binding.publisher === null) {
+          return json({ acquired: false, reason: "CAUSAL_ADMISSION_EXECUTION_MISMATCH" }, 409);
+        }
+        if (current.stop && validPersistentExecutionStop(current.stop) && request.now < current.stop.nextRetryAt) {
+          return json({ acquired: false, reason: "WAITING_RATE_LIMIT", nextRetryAt: current.stop.nextRetryAt, record: current }, 409);
+        }
+        const consumed = consumeClaimedCausalDispatchAdmissionBinding(binding, proof.publisher, proof.source, proof.capabilityDigest, request.now);
+        if (!consumed) return json({ acquired: false, reason: "CAUSAL_ADMISSION_REJECTED" }, 409);
+        const record: ExecutionRecord = Object.freeze({
+          ...current,
+          state: "HANDED_OFF",
+          leaseExpiresAt: request.leaseExpiresAt,
+          updatedAt: request.now,
+        });
+        await storage.put("causal-dispatch-bindings", { schemaVersion: 1, entries: history!.entries.map((entry) => entry.generation === generation ? { generation, binding: consumed } : entry) });
+        await storage.put("execution", record);
+        return json({ acquired: true, handoff: true, record, causalAdmissionConsumed: true }, 201);
+      }
       if (current?.dedupeKey === request.dedupeKey) {
         if (current.state === "DISPATCHED") return json({ acquired: false, reason: "ALREADY_DISPATCHED", record: current }, 409);
         if (current.state === "COMPLETED") return json({ acquired: false, reason: "ALREADY_COMPLETED", record: current }, 409);
@@ -668,7 +918,7 @@ export class ExecutionCoordinator {
       || !Number.isSafeInteger(request.maxConcurrent) || Number(request.maxConcurrent) < 1 || Number(request.maxConcurrent) > MAX_ACTIVE_WIP) return json({ error: "ACTIVE_WIP_REQUEST_INVALID" }, 400);
     return this.mutateExecutionAtomically(async (storage) => {
       const stored = await storage.get<ActiveWipState>(ACTIVE_WIP_STORAGE_KEY) ?? { schemaVersion: 1 as const, claims: [] };
-      if (stored.schemaVersion !== 1 || !Array.isArray(stored.claims) || stored.claims.length > MAX_ACTIVE_WIP) return json({ error: "ACTIVE_WIP_STATE_CORRUPT" }, 500);
+      if (stored.schemaVersion !== 1 || !Array.isArray(stored.claims) || stored.claims.length > MAX_STORED_ACTIVE_WIP) return json({ error: "ACTIVE_WIP_STATE_CORRUPT" }, 500);
       const expiredClaims = stored.claims.filter((claim) => claim.claimedAt + ACTIVE_WIP_CLAIM_MAX_AGE_MS <= Number(request.claimedAt));
       const state: ActiveWipState = expiredClaims.length === 0
         ? stored
@@ -696,7 +946,7 @@ export class ExecutionCoordinator {
       || Number(request.completedAt) < Number(request.startedAt)) return json({ error: "ACTIVE_WIP_REQUEST_INVALID" }, 400);
     return this.mutateExecutionAtomically(async (storage) => {
       const state = await storage.get<ActiveWipState>(ACTIVE_WIP_STORAGE_KEY) ?? { schemaVersion: 1 as const, claims: [] };
-      if (state.schemaVersion !== 1 || !Array.isArray(state.claims) || state.claims.length > MAX_ACTIVE_WIP) return json({ error: "ACTIVE_WIP_STATE_CORRUPT" }, 500);
+      if (state.schemaVersion !== 1 || !Array.isArray(state.claims) || state.claims.length > MAX_STORED_ACTIVE_WIP) return json({ error: "ACTIVE_WIP_STATE_CORRUPT" }, 500);
       const claim = state.claims.find((candidate) => candidate.dedupeKey === request.dedupeKey);
       if (!claim || claim.executionId !== request.executionId) return json({ error: "ACTIVE_WIP_IDENTITY_MISMATCH" }, 409);
       if (Number(request.startedAt) < claim.claimedAt) return json({ error: "ACTIVE_WIP_TIMING_INVALID" }, 409);
@@ -730,7 +980,7 @@ export class ExecutionCoordinator {
     if (!validText(request.dedupeKey) || !validText(request.executionId)) return json({ error: "ACTIVE_WIP_REQUEST_INVALID" }, 400);
     return this.mutateExecutionAtomically(async (storage) => {
       const state = await storage.get<ActiveWipState>(ACTIVE_WIP_STORAGE_KEY) ?? { schemaVersion: 1 as const, claims: [] };
-      if (state.schemaVersion !== 1 || !Array.isArray(state.claims) || state.claims.length > MAX_ACTIVE_WIP) return json({ error: "ACTIVE_WIP_STATE_CORRUPT" }, 500);
+      if (state.schemaVersion !== 1 || !Array.isArray(state.claims) || state.claims.length > MAX_STORED_ACTIVE_WIP) return json({ error: "ACTIVE_WIP_STATE_CORRUPT" }, 500);
       const claim = state.claims.find((candidate) => candidate.dedupeKey === request.dedupeKey);
       if (!claim) return json({ released: false, reason: "CLAIM_NOT_FOUND", claims: state.claims });
       if (claim.executionId !== request.executionId) return json({ released: false, reason: "ACTIVE_WIP_IDENTITY_MISMATCH", claims: state.claims }, 409);
@@ -748,7 +998,7 @@ export class ExecutionCoordinator {
 
   private async readActiveWip(): Promise<Response> {
     const state = await this.ctx.storage.get<ActiveWipState>(ACTIVE_WIP_STORAGE_KEY) ?? { schemaVersion: 1 as const, claims: [] };
-    if (state.schemaVersion !== 1 || !Array.isArray(state.claims) || state.claims.length > MAX_ACTIVE_WIP) return json({ error: "ACTIVE_WIP_STATE_CORRUPT" }, 500);
+    if (state.schemaVersion !== 1 || !Array.isArray(state.claims) || state.claims.length > MAX_STORED_ACTIVE_WIP) return json({ error: "ACTIVE_WIP_STATE_CORRUPT" }, 500);
     return json({ claims: state.claims, activeExecutions: state.claims.length, liveAuthority: "NONE", productionMutationAllowed: false, aiAuthority: "ZERO_AUTHORITY" });
   }
 
@@ -1121,6 +1371,88 @@ function validExecutionTelemetrySummary(value: unknown): value is AutopilotExecu
 export interface ExecutionCoordinatorNamespace {
   idFromName(name: string): DurableObjectIdLike;
   get(id: DurableObjectIdLike): DurableObjectStubLike;
+}
+
+/**
+ * Atomically consumes one validated isolated source identity forever. The DO object name and
+ * storage key are separately domain-separated from production leases and causal-dispatch state.
+ */
+export async function claimIsolatedCausalAttempt(
+  namespace: ExecutionCoordinatorNamespace,
+  verified: VerifiedIsolatedCausalVerification,
+  now = Date.now(),
+): Promise<{ readonly claimed: boolean; readonly sourceIdentityDigest: string }> {
+  const source = verified.source;
+  if (source.repository !== "cinamoncandy/NUSA"
+    || source.workflowPath !== ".github/workflows/causal-verification.yml"
+    || source.workflowRef !== `${source.repository}/${source.workflowPath}@refs/heads/main`
+    || source.ref !== "refs/heads/main" || source.event !== "workflow_dispatch"
+    || source.job !== "verify-causal-positive"
+    || !/^[a-f0-9]{40}$/.test(source.sha)
+    || !/^[1-9][0-9]{0,19}$/.test(source.runId)
+    || !/^[1-9][0-9]{0,9}$/.test(source.runAttempt)
+    || !SHA256_HEX.test(verified.statementDigest)
+    || !validSafeTimestamp(now)) throw new Error("ISOLATED_CAUSAL_CLAIM_IDENTITY_INVALID");
+
+  const sourceIdentityDigest = await isolatedSourceIdentityDigest(source);
+  const objectName = `${ISOLATED_CAUSAL_CLAIM_OBJECT_PREFIX}${sourceIdentityDigest}`;
+  const stub = namespace.get(namespace.idFromName(objectName));
+  let response: Response;
+  try {
+    response = await stub.fetch("https://execution-coordinator/isolated-causal/claim", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        schemaVersion: 1,
+        domain: "NUSA_ISOLATED_CAUSAL_ATTEMPT_CLAIM_V1",
+        sourceIdentityDigest,
+        statementDigest: verified.statementDigest,
+        claimedAt: now,
+      } satisfies IsolatedCausalAttemptClaim),
+    });
+  } catch {
+    throw new Error("ISOLATED_CAUSAL_CLAIM_STORAGE_UNAVAILABLE");
+  }
+
+  if (response.status === 409) return Object.freeze({ claimed: false, sourceIdentityDigest });
+  if (response.status !== 201) throw new Error("ISOLATED_CAUSAL_CLAIM_STORAGE_UNAVAILABLE");
+  const body = await response.json() as { claimed?: unknown; domain?: unknown };
+  if (body.claimed !== true || body.domain !== "NUSA_ISOLATED_CAUSAL_ATTEMPT_CLAIM_V1") {
+    throw new Error("ISOLATED_CAUSAL_CLAIM_RESPONSE_INVALID");
+  }
+  return Object.freeze({ claimed: true, sourceIdentityDigest });
+}
+
+/** Coordinator-only calls; HTTP routes must authenticate and verify GitHub identities before invoking them. */
+export async function registerCausalDispatchBinding(namespace: ExecutionCoordinatorNamespace, input: CausalDispatchRegistration): Promise<boolean> {
+  const stub = namespace.get(namespace.idFromName(input.dedupeKey));
+  const response = await stub.fetch("https://execution-coordinator/causal-dispatch/register", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(input) });
+  if (response.status === 409) return false;
+  if (response.status !== 201) throw new Error("CAUSAL_DISPATCH_REGISTRATION_FAILED");
+  const body = await response.json() as { registered?: unknown };
+  if (body.registered !== true) throw new Error("CAUSAL_DISPATCH_REGISTRATION_FAILED");
+  return true;
+}
+
+export async function claimRegisteredCausalDispatch(namespace: ExecutionCoordinatorNamespace, input: CausalDispatchClaim): Promise<{ claimed: boolean; causalAdmissionGranted: boolean }> {
+  const stub = namespace.get(namespace.idFromName(input.dedupeKey));
+  const response = await stub.fetch("https://execution-coordinator/causal-dispatch/claim", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(input) });
+  if (response.status === 409) return { claimed: false, causalAdmissionGranted: false };
+  if (response.status !== 201) throw new Error("CAUSAL_DISPATCH_CLAIM_FAILED");
+  const body = await response.json() as { claimed?: unknown; causalAdmissionGranted?: unknown };
+  if (body.claimed !== true) throw new Error("CAUSAL_DISPATCH_CLAIM_FAILED");
+  if (typeof body.causalAdmissionGranted !== "boolean") throw new Error("CAUSAL_DISPATCH_CLAIM_FAILED");
+  return { claimed: true, causalAdmissionGranted: body.causalAdmissionGranted };
+}
+
+export async function verifyRegisteredCausalDispatch(namespace: ExecutionCoordinatorNamespace, input: CausalDispatchClaim): Promise<{ verified: boolean; causalAdmissionGranted: boolean }> {
+  const stub = namespace.get(namespace.idFromName(input.dedupeKey));
+  const response = await stub.fetch("https://execution-coordinator/causal-dispatch/verify", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(input) });
+  if (response.status === 409) return { verified: false, causalAdmissionGranted: false };
+  if (response.status !== 200) throw new Error("CAUSAL_DISPATCH_VERIFICATION_FAILED");
+  const body = await response.json() as { verified?: unknown; causalAdmissionGranted?: unknown };
+  if (body.verified !== true || typeof body.causalAdmissionGranted !== "boolean") throw new Error("CAUSAL_DISPATCH_VERIFICATION_FAILED");
+  return { verified: true, causalAdmissionGranted: body.causalAdmissionGranted };
 }
 
 export async function acquirePersistentExecution(namespace: ExecutionCoordinatorNamespace, input: PersistentExecutionAcquireRequest): Promise<{ acquired: boolean; reason?: string; nextRetryAt?: number }> {

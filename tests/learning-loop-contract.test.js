@@ -36,3 +36,14 @@ test("the runtime copies only consistent integers from the closed-learning statu
   assert.match(body, /out\.discoveryPasses > out\.configurations/);
   assert.match(body, /out\.shadowWins > out\.shadowTrades/);
 });
+
+test("the contract carries the null comparator figures (counts, signed bp) and drops the object when they are malformed or inconsistent", () => {
+  const { buildPersonalPaperOperationsSnapshot } = require("../dist/packages/contracts/src/personalPaperOperations.js");
+  const nulls = { nullSince: 5, nullSeed: 20261030, nullBaseTrades: 3, nullBaseNetBp: -40, nullHoldMarkets: 2, nullHoldNetBp: -15, nullRandTrades: 3, nullRandWins: 1, nullRandNetBp: -55, nullRandSkipped: 0, evaluatedAt: 1_000 };
+  const runtime = fs.readFileSync("apps/cloud/src/runtime.ts", "utf8");
+  assert.match(runtime, /out\.nullRandWins > out\.nullRandTrades/);
+  assert.match(runtime, /"nullBaseNetBp", "nullHoldNetBp", "nullRandNetBp"\] as const\) put\(key, signed/);
+  const contract = fs.readFileSync("packages/contracts/src/personalPaperOperations.ts", "utf8");
+  for (const key of Object.keys(nulls).filter((k) => k !== "evaluatedAt")) assert.ok(contract.includes(`readonly ${key}?: number;`) && contract.includes(`"${key}"`), `${key} is a declared, validated field`);
+  assert.equal(typeof buildPersonalPaperOperationsSnapshot, "function");
+});

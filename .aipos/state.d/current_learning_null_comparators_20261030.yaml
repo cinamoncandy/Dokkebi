@@ -1,0 +1,7 @@
+current_learning_null_comparators_20261030:
+  work_order: WO-LEARNING-20261030-NULL-COMPARATORS
+  status: LOCAL_VALIDATED_PENDING_REVIEW_CI
+  branch: claude/null-comparator-shadows
+  validation: "tsc clean; null comparator, baseline shadow, loop status, contract, mobile panel and liveness tests PASS; mobile tsc and lint-mobile PASS; Node 24 checks left to CI."
+  next: "Non-author /grill-me review, CI, release path. Draft PR stays a draft until reviewed."
+  safety: PAPER_ONLY_LIVE_NONE_PRODUCTION_MUTATION_FALSE_AI_ZERO_AUTHORITY

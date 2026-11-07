@@ -1,0 +1,7 @@
+current_test_behaviour_risk_execution_20261030:
+  work_order: WO-TEST-20261030-BEHAVIOUR-RISK-EXECUTION
+  status: LOCAL_VALIDATED_PENDING_REVIEW_CI
+  branch: claude/behavioural-risk-execution-tests
+  validation: "behaviour tests 39 PASS plus existing RISK/EXECUTION tests; mutation spot-check (UTC day, no fingerprint check, ignored lease renewal) fails the new tests as intended."
+  next: "Non-author /grill-me review, CI, merge by release path; owner or reviewer retires the listed redundant regex assertions in a later PR."
+  safety: PAPER_ONLY_LIVE_NONE_PRODUCTION_MUTATION_FALSE_AI_ZERO_AUTHORITY

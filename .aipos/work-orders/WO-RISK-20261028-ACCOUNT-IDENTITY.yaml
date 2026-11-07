@@ -1,6 +1,6 @@
 id: WO-RISK-20261028-ACCOUNT-IDENTITY
 title: Key Cloud PAPER risk state and evidence by the real PAPER account id, not a fixed paper-default label
-status: PROPOSED_NEEDS_REQUALIFICATION_AND_FORMAL_VALIDATOR
+status: COMPLETED
 priority: P1
 owner: nusa-development
 repository: cinamoncandy/NUSA

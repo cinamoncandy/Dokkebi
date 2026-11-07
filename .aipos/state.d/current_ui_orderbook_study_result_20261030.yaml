@@ -1,0 +1,7 @@
+current_ui_orderbook_study_result_20261030:
+  work_order: WO-UI-20261030-ORDERBOOK-STUDY-RESULT
+  status: LOCAL_VALIDATED_PENDING_REVIEW_CI
+  branch: claude/orderbook-study-result-display
+  validation: "see PR body for the exact local runs."
+  next: "Non-author /grill-me review, CI, merge via the release path."
+  safety: PAPER_ONLY_LIVE_NONE_PRODUCTION_MUTATION_FALSE_AI_ZERO_AUTHORITY

@@ -503,11 +503,21 @@ function readDispatchRequest() {
     throw new Error("GITHUB_EVENT_JSON_INVALID");
   }
   const payload = event.client_payload || {};
-  return {
+  const isCausalFailure = typeof payload.reason === "string" && payload.reason.startsWith("gha:");
+  const failure = isCausalFailure ? /^gha:([1-9][0-9]{0,19}):([a-f0-9]{40}):(failure|timed_out)$/.exec(payload.reason) : null;
+  const capability = payload.causal_dispatch_capability;
+  if (isCausalFailure && (!failure || Number(failure[1]) !== payload.workflow_run_id || failure[2] !== payload.head_sha
+    || !Number.isSafeInteger(payload.causal_source_run_attempt) || payload.causal_source_run_attempt < 1
+    || payload.causal_source_run_attempt > 9_999_999_999 || typeof capability !== "string" || !/^[a-f0-9]{64}$/.test(capability))) {
+    throw new Error("CAUSAL_DISPATCH_SOURCE_IDENTITY_INVALID");
+  }
+  if (!isCausalFailure && capability !== undefined) throw new Error("CAUSAL_DISPATCH_CAPABILITY_UNEXPECTED");
+  const request = {
     kind: payload.kind,
     repository: payload.repository,
     headSha: payload.head_sha,
     workflowRunId: payload.workflow_run_id,
+    ...(isCausalFailure ? { workflowRunAttempt: payload.causal_source_run_attempt } : {}),
     reason: payload.reason,
     executionId: payload.execution_id,
     dedupeKey: payload.dedupe_key,
@@ -516,6 +526,7 @@ function readDispatchRequest() {
     productionMutationAllowed: false,
     aiAuthority: "ZERO_AUTHORITY",
   };
+  return { request, causalDispatchCapability: isCausalFailure ? capability : null };
 }
 
 function writeFailureArtifact(reason) {
@@ -609,12 +620,12 @@ function terminalFailureResult(request, error, startedAt, now = () => Date.now()
   };
 }
 
-async function authorizedJsonPost(url, body, fetchImpl = fetch, now = () => Date.now()) {
+async function authorizedJsonPost(url, body, fetchImpl = fetch, now = () => Date.now(), extraHeaders = {}) {
   const token = await oidcToken({ fetchImpl });
   if (!token.ok) throw new Error(token.reason);
   const response = await fetchImpl(url, {
     method: "POST",
-    headers: { authorization: `Bearer ${token.value}`, "content-type": "application/json" },
+    headers: { authorization: `Bearer ${token.value}`, "content-type": "application/json", ...extraHeaders },
     body: JSON.stringify(body),
   });
   let payload = {};
@@ -775,7 +786,10 @@ function initialProposalContextFromGithubRunner(request) {
   } catch {
     return null;
   }
-  const path = requestNamedTarget(request, targets);
+  const path = /^gha:[1-9][0-9]{0,19}:[a-f0-9]{40}:(?:failure|timed_out)$/.test(request?.reason || "")
+    ? "apps/autopilot/src/repairableWorkflowRun.ts"
+    : requestNamedTarget(request, targets);
+  if (path && !targets.includes(path)) return null;
   if (!path) return null;
   let content;
   try {
@@ -910,6 +924,9 @@ function applyPatchWithNormalizedHunkCounts(patchPath = PATCH_PATH) {
 
 function validatePatchOnGithubRunner(request, patch) {
   const expectedPath = assertBoundedPatch(patch);
+  if (String(request.reason || "").startsWith("gha:") && expectedPath !== "apps/autopilot/src/repairableWorkflowRun.ts") {
+    throw new Error("CAUSAL_REPAIR_TARGET_MISMATCH");
+  }
   if (run("git", ["rev-parse", "HEAD"], "GITHUB_RUNNER_HEAD_FAILED").trim().toLowerCase() !== request.headSha.toLowerCase()) {
     throw new Error("CODING_RUNTIME_HEAD_MISMATCH");
   }
@@ -947,6 +964,14 @@ async function executeGithubActionsRunner(request, runnerUrl, fetchImpl = fetch,
   const sleep = options.sleep ?? ((milliseconds) => new Promise((resolve) => setTimeout(resolve, milliseconds)));
   const jitter = options.jitter ?? Math.random;
   const maxProposalAttempts = options.maxProposalAttempts ?? DEFAULT_MAX_ATTEMPTS;
+  const causalCapability = options.causalDispatchCapability ?? null;
+  const causalFailure = String(request.reason || "").startsWith("gha:");
+  const causalHeaders = causalCapability ? { "x-nusa-causal-dispatch-capability": causalCapability } : {};
+  if (causalFailure
+    && (!/^gha:[1-9][0-9]{0,19}:[a-f0-9]{40}:(failure|timed_out)$/.test(request.reason)
+      || !Number.isSafeInteger(request.workflowRunAttempt) || !causalCapability || !/^[a-f0-9]{64}$/.test(causalCapability))) {
+    throw new Error("CAUSAL_DISPATCH_ADMISSION_REQUIRED");
+  }
   const proposalContextForPatch = options.proposalContextForPatch ?? proposalContextFromGithubRunner;
   const initialProposalContext = options.initialProposalContext ?? initialProposalContextFromGithubRunner;
   if (!Number.isSafeInteger(maxProposalAttempts) || maxProposalAttempts < 1 || maxProposalAttempts > DEFAULT_MAX_ATTEMPTS) {
@@ -1014,7 +1039,7 @@ async function executeGithubActionsRunner(request, runnerUrl, fetchImpl = fetch,
       : request;
     let proposal;
     try {
-      proposal = await authorizedJsonPost(proposalUrl, proposalRequest, fetchImpl, now);
+      proposal = await authorizedJsonPost(proposalUrl, proposalRequest, fetchImpl, now, causalHeaders);
       if (proposal.status === "JEV_ROUTING_ABSTAINED") {
         const reason = typeof proposal.reason === "string" && /^[A-Z0-9_:-]{1,160}$/.test(proposal.reason)
           ? proposal.reason
@@ -1042,6 +1067,12 @@ async function executeGithubActionsRunner(request, runnerUrl, fetchImpl = fetch,
       }
       if (proposal.status !== "PROPOSAL_READY" || typeof proposal.patch !== "string") {
         throw new Error("CODING_PROPOSAL_UNAVAILABLE");
+      }
+      if (causalFailure && (proposal.causalRepairTarget !== "apps/autopilot/src/repairableWorkflowRun.ts"
+        || proposal.headSha !== request.headSha || proposal.workflowRunId !== request.workflowRunId
+        || typeof proposal.causalProposalReceipt !== "string" || proposal.causalProposalReceipt.length < 32
+        || proposal.causalProposalReceipt.length > 4096)) {
+        throw new Error("CAUSAL_PROPOSAL_RECEIPT_REQUIRED");
       }
     } catch (error) {
       const reason = error instanceof Error ? error.message : "CODING_PROPOSAL_UNAVAILABLE";
@@ -1263,7 +1294,12 @@ async function executeGithubActionsRunner(request, runnerUrl, fetchImpl = fetch,
     }
 
     fs.rmSync(PATCH_PATH, { force: true });
-    const published = await authorizedJsonPost(publishUrl, { request, validatedFiles }, fetchImpl, now);
+    const publishBody = {
+      request,
+      validatedFiles,
+      ...(causalFailure ? { patch: proposal.patch, causalProposalReceipt: proposal.causalProposalReceipt } : {}),
+    };
+    const published = await authorizedJsonPost(publishUrl, publishBody, fetchImpl, now, causalHeaders);
     if (published.status !== "EXECUTION_ACCEPTED" || published.proposalValidated !== true) {
       throw new Error("CODING_PUBLISH_VALIDATION_REQUIRED");
     }
@@ -1348,11 +1384,14 @@ async function releaseActiveWipClaim(request, runnerUrl, fetchImpl = fetch) {
 async function main() {
   const startedAt = Date.now();
   let request;
+  let causalDispatchCapability = null;
   try {
-    request = readDispatchRequest();
+    const dispatch = readDispatchRequest();
+    request = dispatch.request;
+    causalDispatchCapability = dispatch.causalDispatchCapability;
     const runnerUrl = process.env.NUSA_CODING_RUNNER_URL;
     if (typeof runnerUrl !== "string" || !runnerUrl) throw new Error("AUTOPILOT_CODING_RUNNER_URL_MISSING");
-    const result = await executeGithubActionsRunner(request, runnerUrl);
+    const result = await executeGithubActionsRunner(request, runnerUrl, fetch, { causalDispatchCapability });
     const wipRelease = await releaseActiveWipClaim(request, runnerUrl);
     console.log(`wip_release=${wipRelease.released ? "released" : "not_released"} reason=${wipRelease.reason ?? "none"}`);
     writeArtifacts(request, result);
@@ -1426,6 +1465,7 @@ module.exports = {
   assertGithubRunnerWorkspaceClean,
   filterGithubRunnerWorkspacePaths,
   validatePatchOnGithubRunner,
+  executeGithubActionsRunner,
   normalizeUnifiedDiffHunkCounts,
   applyPatchWithNormalizedHunkCounts,
   endpointFor,

@@ -1,6 +1,7 @@
 import React, { useEffect, useRef, useState } from "react";
-import { Animated, Easing, StyleSheet, View } from "react-native";
+import { Animated, Easing, StyleSheet, Text, View } from "react-native";
 import { calmColors } from "./uiKitModel";
+import { readableFont } from "./designSystem";
 import { restingGlow, shouldPulse } from "./heartbeatPulseModel";
 
 const SWEEP_MS = 650;
@@ -33,14 +34,18 @@ export function HeartbeatPulse({ lastHeartbeatAt, width, reducedMotion }: { read
     return () => { anim.stop(); opacity.setValue(0); };
   }, [lastHeartbeatAt, reducedMotion, width, x, opacity]);
   if (width <= 0) return null;
-  return <View style={[styles.track, { width }]} importantForAccessibility="no-hide-descendants" accessibilityElementsHidden>
-    <View style={[styles.rest, { opacity: restingGlow(lastHeartbeatAt, now) * 0.55 }]} />
-    <Animated.View style={[styles.beam, { opacity, transform: [{ translateX: x }] }]} />
+  return <View style={{ width, alignSelf: "center" }}>
+    <View style={[styles.track, { width }]} importantForAccessibility="no-hide-descendants" accessibilityElementsHidden>
+      <View style={[styles.rest, { opacity: restingGlow(lastHeartbeatAt, now) * 0.55 }]} />
+      <Animated.View style={[styles.beam, { opacity, transform: [{ translateX: x }] }]} />
+    </View>
+    <Text style={styles.caption} importantForAccessibility="no-hide-descendants">서버 신호 · 새 신호가 오면 빛이 지나가요</Text>
   </View>;
 }
 
 const styles = StyleSheet.create({
-  track: { height: 3, overflow: "hidden", alignSelf: "center", borderRadius: 2, backgroundColor: calmColors.line },
+  caption: { color: calmColors.muted, fontSize: readableFont(11), marginTop: 6 },
+  track: { height: 3, marginTop: 14, overflow: "hidden", alignSelf: "center", borderRadius: 2, backgroundColor: calmColors.line },
   rest: { ...StyleSheet.absoluteFill, backgroundColor: calmColors.order },
   beam: { position: "absolute", top: 0, bottom: 0, width: BEAM, borderRadius: 2, backgroundColor: calmColors.text },
 });

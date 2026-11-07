@@ -4,7 +4,6 @@ import { Canvas, Group, LinearGradient, Path, RadialGradient, Rect, Skia, vec } 
 import { aiIslandMotion, aiIslandPalette, readableFont } from "./designSystem";
 import { fieldFonts } from "./fieldFonts";
 import { calmColors } from "./uiKitModel";
-import { IslandMark } from "./islandMark";
 import { AiShellContext } from "./aiShellContext";
 import { ForceDarkTheme } from "./ThemeProvider";
 import { useReducedMotion } from "./instrumentKit";
@@ -102,7 +101,8 @@ export function StageTrace({ steps, testID = "stage-trace" }: { readonly steps: 
 }
 
 /**
- * The common frame of every tab screen: the navy backdrop, a fixed top bar (island mark, NUSA, status chip) and the screen below it.
+ * The common frame of every tab screen: the navy backdrop, a fixed top bar with the status chip, and the screen below it. The NUSA
+ * name and island mark live in the app header (and on 지금), so the shell does not draw them again.
  * Scroll views placed inside must use a transparent background so the backdrop shows through.
  */
 export function AiShell({ chip, children, testID }: { readonly chip: AiChip; readonly children: React.ReactNode; readonly testID?: string }) {
@@ -111,7 +111,6 @@ export function AiShell({ chip, children, testID }: { readonly chip: AiChip; rea
   return <View testID={testID} style={styles.shell} onLayout={(e) => setSize({ width: Math.round(e.nativeEvent.layout.width), height: Math.round(e.nativeEvent.layout.height) })}>
     <AiBackdrop width={size.width} height={size.height} />
     <View style={styles.topBar}>
-      <View style={styles.topBrand}><IslandMark size={18} /><Text style={styles.topBrandText}>NUSA</Text></View>
       <AiStatusChip text={chip.text} live={chip.live} reducedMotion={reduced} />
     </View>
     <View style={styles.shellBody}><AiShellContext.Provider value><ForceDarkTheme>{children}</ForceDarkTheme></AiShellContext.Provider></View>
@@ -121,9 +120,7 @@ export function AiShell({ chip, children, testID }: { readonly chip: AiChip; rea
 const styles = StyleSheet.create({
   shell: { flex: 1, backgroundColor: aiIslandPalette.ground },
   shellBody: { flex: 1 },
-  topBar: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingHorizontal: 20, paddingTop: 14, paddingBottom: 6 },
-  topBrand: { flexDirection: "row", alignItems: "center", gap: 8 },
-  topBrandText: { color: aiIslandPalette.label, fontSize: readableFont(12), letterSpacing: 5 },
+  topBar: { flexDirection: "row", alignItems: "center", justifyContent: "flex-end", paddingHorizontal: 20, paddingTop: 14, paddingBottom: 6 },
   glass: { backgroundColor: aiIslandPalette.glass, borderRadius: 18, borderWidth: StyleSheet.hairlineWidth, borderColor: aiIslandPalette.glassEdge, paddingHorizontal: 16, paddingVertical: 14 },
   glassStrong: { backgroundColor: aiIslandPalette.glassStrong },
   panelLabel: { flexDirection: "row", justifyContent: "space-between", gap: 8 },

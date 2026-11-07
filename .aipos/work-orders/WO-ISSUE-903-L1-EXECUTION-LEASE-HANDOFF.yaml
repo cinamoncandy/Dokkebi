@@ -1,13 +1,13 @@
 id: WO-ISSUE-903-L1-EXECUTION-LEASE-HANDOFF
 title: "Issue #903 close the scheduled producer to consumer lease handoff race"
-status: LIVE_HEAD_INDEPENDENT_GATES_REQUIRED
-priority: P1
+status: IN_PROGRESS
+priority: P0
 owner: codex
 repository: cinamoncandy/NUSA
 issue: 903
 pull_request: 2039
 base_branch: main
-base_commit: e7f8a426a57a08339eae3778ca50de6512d6acd9
+base_commit: 01d698b325626e4a2e62b29e8e0b2f99f579ad4a
 implementation_branch: agent/903-canonical-portfolio-autopilot
 objective: "Preserve one durable execution lease across asynchronous producer-to-consumer handoff so a competing producer cannot reacquire while a consumer is running."
 architecture_impact:
@@ -16,10 +16,13 @@ architecture_impact:
   references:
     - apps/autopilot/src/executionCoordinator.ts
     - apps/autopilot/src/executionCoordinator.test.ts
+    - apps/autopilot/src/causalDispatchCoordinator.test.ts
     - apps/autopilot/src/scheduledEvolutionCoding.attemptCap.test.ts
 scope:
   - reject acquire while an unexpired HANDED_OFF execution lease is active
   - renew the same execution lease to the authenticated consumer's requested bounded expiry during LEASED to HANDED_OFF transition
+  - enforce the logical active-WIP cap at two while safely reading and expiring persisted legacy state within the prior eight-claim storage bound
+  - keep generic workflow failures fail-closed and unable to acquire a lease or dispatch without verified causal evidence
   - prove competing producer and duplicate consumer suppression using the existing coordinator
 prohibited:
   - new_execution_state_or_queue
@@ -37,20 +40,24 @@ safety:
 acceptance:
   - an unexpired HANDED_OFF record blocks another acquire for the same dedupe identity
   - consumer handoff persists the requested consumer execution expiry, not the shorter producer expiry
+  - generic and causal-admission handoff paths both preserve the authenticated consumer lease expiry
+  - callers cannot request more than two active WIP slots; pre-existing three-to-eight claim state remains readable, blocks new admission, and expires under the existing TTL
+  - generic workflow failures remain ABSTAINED without lease acquisition or dispatch
   - duplicate delivery remains fail-closed and does not replace the owner execution identity
   - expired leases retain existing bounded acquisition semantics
   - canonical transition remains LEASED -> HANDED_OFF -> RELEASED or DISPATCHED -> COMPLETED
   - focused coordinator and scheduled attempt-cap tests pass without weakening assertions
 validation:
   - pnpm run preflight
-  - node --test dist/apps/autopilot/src/executionCoordinator.test.js dist/apps/autopilot/src/scheduledEvolutionCoding.attemptCap.test.js
+  - node --test dist/apps/autopilot/src/executionCoordinator.test.js dist/apps/autopilot/src/causalDispatchCoordinator.test.js dist/apps/autopilot/src/scheduledEvolutionCoding.attemptCap.test.js dist/apps/autopilot/src/scheduledEvolutionCoding.test.js
   - pnpm run build
   - pnpm run validate:full
   - pnpm run security:gate
   - pnpm run lint
   - git diff --check
 evidence:
-  local_validation:
+  historical_local_validation:
+    target_head: f68344e08d493a6db1ec1b397ae1feafcfba2c55
     node: "v24.19.0"
     preflight: PASS
     focused_tests: "38/38 PASS via compiled dist tests"
@@ -60,11 +67,25 @@ evidence:
     security_gate: PASS
     lint: "PASS_0_ERRORS_45_EXISTING_WARNINGS"
     git_diff_check: PASS
-  exact_head_ci: "PASS_RUN_40503929579_ON_F68344E0_PREDECESSOR_ONLY; resolve current PR head and its live CI directly at every recovery"
-  required_companions: "5/5 PASS_ON_F68344E0_PREDECESSOR_ONLY; resolve current SHA-bound companion runs directly at every recovery"
-  fresh_non_author_review: "COMPLETED_ON_F68344E0_WITH_FINDINGS; includes AIPOS recovery-record P1; predecessor only"
-  formal_validator: PENDING_CURRENT_SUCCESSOR
-next: "At each recovery, fetch the live PR #2039 head/base and branch ref. Inspect exact-head validation, CI, companions and non-author review; continue from the first genuinely outstanding gate, then require separate Formal Validator, Audit and Release. Previous SHA receipts are historical for successors. Do not begin L2 before governed L1 closure."
+  current_local_validation: PENDING
+  exact_head_ci: PENDING
+  required_companions: PENDING
+  fresh_non_author_review: PENDING
+  formal_validator: PENDING
+recovery_20261107:
+  protected_main_sha: 01d698b325626e4a2e62b29e8e0b2f99f579ad4a
+  predecessor_pr_head: 90726879b4c5dead48327579c59fdfdecda82154
+  method: NON_FORCE_MERGE_CURRENT_MAIN_INTO_EXISTING_PR_BRANCH
+  conflict_files:
+    - apps/autopilot/src/scheduledEvolutionCoding.attemptCap.test.ts
+    - apps/autopilot/src/scheduledEvolutionCoding.test.ts
+  conflict_disposition: "Kept current-main fail-closed generic-workflow-failure assertions and removed stale expectations that generic failures dispatch without causal evidence."
+  verified_additional_gap: "The current-main causalAdmissionHandoff branch did not persist the authenticated consumer leaseExpiresAt even though the generic handoff branch did."
+  repair: "Both handoff paths now persist request.leaseExpiresAt; causal regression asserts active lease blocks a competing producer and duplicate handoff remains rejected."
+  wip_contraction_safety: "Admission cap is 2; legacy stored claims retain the former bound of 8 so existing state is not treated as corrupt, new work is blocked until expired claims age out, and read-back remains truthful."
+  local_validation: PENDING
+  next: "Complete isolated local validation on this aligned candidate, commit/push only after local gates pass, verify exact-head CI and companions, then request one fresh non-author Validator review. Keep Draft and do not self-approve or merge."
+next: "Complete isolated local validation on the current aligned successor; then exact-head CI/companions and fresh independent validation are required before any further governance gate."
 
 historical_first_main_alignment_20261028:
   previous_validated_head: cbb638d5d4d50ca6e290dbb4dcb597a1da44e7f3

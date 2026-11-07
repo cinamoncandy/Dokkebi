@@ -119,6 +119,31 @@
       "secrets": false,
       "environment": null
     },
+    "causal-verification.yml:verify-causal-positive": {
+      "write": [
+        "artifact-metadata",
+        "attestations",
+        "id-token"
+      ],
+      "secrets": false,
+      "environment": null
+    },
+    "causal-verification-consumer.yml:verify-and-exercise-bounded-runner": {
+      "write": [
+        "id-token"
+      ],
+      "secrets": false,
+      "environment": null
+    },
+    "ci.yml:attest-causal-regression": {
+      "write": [
+        "artifact-metadata",
+        "attestations",
+        "id-token"
+      ],
+      "secrets": false,
+      "environment": null
+    },
     "autopilot-execution-consumer.yml:release": {
       "write": [
         "contents",

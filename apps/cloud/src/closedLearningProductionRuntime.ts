@@ -26,6 +26,8 @@ import { readCanonicalPaperTickerBenchmark } from "./paperMarketBenchmark";
 import { readClosedLearningBlocked, recordClosedLearningBlocked } from "./closedLearningBlockedRecord";
 import { PaperBaselineShadow } from "./paperBaselineShadow";
 import { readBaselineShadowRecord, writeBaselineShadowRecord } from "./paperBaselineShadowRecord";
+import { PaperNullComparators } from "./paperNullComparators";
+import { readNullComparatorsRecord, writeNullComparatorsRecord } from "./paperNullComparatorsRecord";
 import { recordRuntimeFailure } from "./runtimeFailureRecord";
 import { ResearchSnapshotRefresher } from "./researchSnapshotRefresher";
 import { retiredPaperAccountIds, retirePaperAccounts } from "./paperAccountRetirement";
@@ -114,13 +116,20 @@ export function startClosedLearningProductionRuntime(env: NodeJS.ProcessEnv = pr
   const shadowSourceCommit = env.NUSA_SOURCE_COMMIT_SHA ?? env.NUSA_SOURCE_COMMIT ?? "";
   const restoredShadow = readBaselineShadowRecord(config.cloudStateDbPath);
   // 0.0005 is the PAPER execution loop's default fee per side, the rate its own fills are charged.
+  // Null comparators (buy-and-hold, fixed-seed random entry) on the same bars and the same fee rate; display/analysis only.
+  let nullComparators: PaperNullComparators | undefined;
   const baselineShadow = ownerBaselineStrategyEnabled(env) && isOwnerBaselineSourceCommitSha(shadowSourceCommit)
-    ? new PaperBaselineShadow({ spec: ownerBaselineStrategySpec(shadowSourceCommit), feeRate: 0.0005, now: Date.now, ...(restoredShadow === undefined ? {} : { restore: restoredShadow }) })
+    ? new PaperBaselineShadow({ spec: ownerBaselineStrategySpec(shadowSourceCommit), feeRate: 0.0005, now: Date.now, onRoundTrip: (trip) => nullComparators?.onBaselineRoundTrip(trip), ...(restoredShadow === undefined ? {} : { restore: restoredShadow }) })
     : undefined;
+  if (baselineShadow != null) {
+    const restoredNulls = readNullComparatorsRecord(config.cloudStateDbPath);
+    nullComparators = new PaperNullComparators({ feeRate: 0.0005, now: Date.now, baselineTotals: () => baselineShadow.summary(), ...(restoredNulls === undefined ? {} : { restore: restoredNulls }) });
+  }
   const dashboardHydrator = new CloudRuntimeDashboardHydrator({
     paperCandidateBindingProvider,
     paperCandidateMinuteCloses: (market, now) => {
       const bars = minuteBars.read(market, now);
+      nullComparators?.observe(market, bars); // before the baseline shadow, so a round trip it completes is matched on bars already seen
       baselineShadow?.observe(market, bars);
       return bars;
     },
@@ -472,6 +481,11 @@ export function startClosedLearningProductionRuntime(env: NodeJS.ProcessEnv = pr
         loopStatus.observeShadow(baselineShadow.summary());
         const persistable = baselineShadow.takePersistable();
         if (persistable != null && !writeBaselineShadowRecord(config.cloudStateDbPath, persistable)) baselineShadow.markUnpersisted();
+      }
+      if (nullComparators != null) {
+        loopStatus.observeNullComparators(nullComparators.summary());
+        const persistableNulls = nullComparators.takePersistable();
+        if (persistableNulls != null && !writeNullComparatorsRecord(config.cloudStateDbPath, persistableNulls)) nullComparators.markUnpersisted();
       }
       refreshDurableCycles();
       try { loopStatus.observePeriods(periods.listOpenPeriods()[0], periods.listRealizedPeriods(), pendingPeriods.dispositions()); } catch { /* display only */ }

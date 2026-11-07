@@ -7,6 +7,7 @@ import type { ClosedLearningCycleRecord } from "./closedLearningLoopCoordinator"
 import type { ClosedLearningCycleFailureReceipt } from "./closedLearningEvolutionLedgerRepository";
 import { tradingDayKey } from "../../../packages/contracts/src/risk-safety-integration";
 import { OWNER_BASELINE_CANDIDATE_ID } from "./ownerBaselinePaperStrategy";
+import type { NullComparatorSummary } from "./paperNullComparators";
 
 /**
  * Display-only status of the production closed-learning loop (bootstrap -> PAPER period -> rollover -> Research
@@ -60,6 +61,8 @@ export type ClosedLearningMetaLearningStatus = Readonly<{
 
 export type ClosedLearningEvidenceCorrelation = Readonly<Partial<{
   openPeriodId: string; openMarket: string; openCandidateId: string; openPeriodStartAt: number; openObservations: number; openFilledObservations: number;
+  /** The open period's other observation statuses, so "no fills" can be told from "waiting" and from "blocked". */
+  openWaitObservations: number; openBlockedObservations: number; openRejectedObservations: number; openFailedObservations: number; openDuplicateObservations: number;
   realizedPeriods: number;
   ineligiblePeriods: number; latestIneligiblePeriodId: string; latestIneligibleFingerprint: string; latestIneligibleReason: string; latestIneligibleRuntimeSha: string;
   /** Realized owner-baseline periods: durable self-observations without Research lineage, never counted as learning cycles. */
@@ -68,6 +71,8 @@ export type ClosedLearningEvidenceCorrelation = Readonly<Partial<{
   cycleId: string; cycleEvidenceId: string; cycleEvidenceFingerprint: string; decisionId: string; decisionReference: string; decisionCandidateId: string; deploymentId: string;
   /** Durable (survives restarts): how many cycles the ledger holds, and when the latest was recorded. */
   cyclesRecorded: number; lastCycleRecordedAt: number;
+  /** The ledger's cycle count the first time THIS process read it: above 0 means records written by an earlier process were found after a restart. */
+  cyclesRecordedAtBoot: number;
   failuresRecorded: number; latestFailureId: string; latestFailurePeriodId: string; latestFailureEvidenceId: string; latestFailureEvidenceFingerprint: string;
   latestFailureSourceCommitSha: string; latestFailureRuntimeSourceCommitSha: string; latestFailureStage: string; latestFailureCode: string; latestFailureRecordedAt: number;
   /**
@@ -81,6 +86,12 @@ export type ClosedLearningEvidenceCorrelation = Readonly<Partial<{
    */
   replayPeriodId: string; replayBars: number; replayTrades: number; replayClosedNetBp: number; replayOpenMarkBp: number; replayPaperNetBp: number;
   shadowSince: number; shadowTrades: number; shadowWins: number; shadowGrossGainBp: number; shadowGrossLossBp: number; shadowFeeBp: number;
+  /**
+   * Null comparators of the baseline shadow (buy-and-hold and fixed-seed random entry, same bars and fee model). Counts and signed basis
+   * points only; a comparison, NOT PAPER evidence and never a promotion input (see paperNullComparators.ts).
+   */
+  nullSince: number; nullSeed: number; nullBaseTrades: number; nullBaseNetBp: number; nullHoldMarkets: number; nullHoldNetBp: number;
+  nullRandTrades: number; nullRandWins: number; nullRandNetBp: number; nullRandSkipped: number;
 }>>;
 
 const CODE = /^[A-Z][A-Z0-9_]{1,63}$/;
@@ -99,6 +110,9 @@ export class ClosedLearningLoopStatusTracker {
   private periods: ClosedLearningEvidenceCorrelation = {};
   private cycle: ClosedLearningEvidenceCorrelation = {};
   private durable: { cyclesRecorded: number; lastCycleRecordedAt?: number } | null = null;
+  private durableAtBoot: number | undefined;
+  /** Set by the first ledger read (or failure) in this process, so a later read can never be mistaken for the boot read. */
+  private bootReadDone = false;
   private durableOutcome: string | undefined;
   /** The outcome of a cycle evaluated by THIS process (wins over the durable copy). */
   private processCycleOutcome: string | undefined;
@@ -107,6 +121,7 @@ export class ClosedLearningLoopStatusTracker {
   private durableCycleIdentity: ClosedLearningEvidenceCorrelation = {};
   private durableFailure: ClosedLearningEvidenceCorrelation = {};
   private shadow: ClosedLearningEvidenceCorrelation = {};
+  private nulls: ClosedLearningEvidenceCorrelation = {};
   private replay: ClosedLearningEvidenceCorrelation = {};
   private metaLearning: ClosedLearningMetaLearningStatus | undefined;
 
@@ -124,6 +139,11 @@ export class ClosedLearningLoopStatusTracker {
         openPeriodStartAt: open.periodStartAt,
         openObservations: open.observations.length,
         openFilledObservations: open.observations.filter((item) => item.status === "FILLED").length,
+        openWaitObservations: open.observations.filter((item) => item.status === "WAIT").length,
+        openBlockedObservations: open.observations.filter((item) => item.status === "BLOCKED").length,
+        openRejectedObservations: open.observations.filter((item) => item.status === "REJECTED").length,
+        openFailedObservations: open.observations.filter((item) => item.status === "FAILED").length,
+        openDuplicateObservations: open.observations.filter((item) => item.status === "DUPLICATE").length,
       }),
       realizedPeriods: realized.length,
       baselineObservations: realized.filter((item) => item.candidateProvenance?.length === 1 && item.candidateProvenance[0]?.candidateId === OWNER_BASELINE_CANDIDATE_ID).length,
@@ -142,6 +162,10 @@ export class ClosedLearningLoopStatusTracker {
    * (cyclesEvaluated, lastCycle*) stay per process; what a cycle in this process observed always wins over the durable copy.
    */
   public observeDurableCycles(summary: { readonly cyclesRecorded: number; readonly latest?: ClosedLearningCycleRecord }): void {
+    if (!this.bootReadDone) {
+      this.bootReadDone = true;
+      if (Number.isSafeInteger(summary.cyclesRecorded) && summary.cyclesRecorded >= 0) this.durableAtBoot = summary.cyclesRecorded;
+    }
     this.durable = Object.freeze({ cyclesRecorded: summary.cyclesRecorded, ...(summary.latest == null ? {} : { lastCycleRecordedAt: summary.latest.recordedAt }) });
     const latest = summary.latest;
     this.durableOutcome = code(latest?.decision?.outcome);
@@ -183,9 +207,28 @@ export class ClosedLearningLoopStatusTracker {
     this.publish();
   }
 
+  /** Display-only null comparator figures; a malformed value withdraws the null keys. Absent optional fields stay absent (never zero). */
+  public observeNullComparators(summary: NullComparatorSummary | undefined): void {
+    const count = (value: unknown): value is number => Number.isSafeInteger(value) && Number(value) >= 0;
+    const signed = (value: unknown): value is number => Number.isSafeInteger(value) && Math.abs(Number(value)) <= 10_000_000;
+    const ok = summary != null && count(summary.since) && summary.since > 0 && count(summary.seed)
+      && count(summary.randomTrades) && count(summary.randomWins) && summary.randomWins <= summary.randomTrades && signed(summary.randomNetBp) && count(summary.randomSkipped)
+      && (summary.baselineTrades === undefined) === (summary.baselineNetBp === undefined) && (summary.baselineTrades === undefined || (count(summary.baselineTrades) && signed(summary.baselineNetBp)))
+      && (summary.holdMarkets === undefined) === (summary.holdNetBp === undefined) && (summary.holdMarkets === undefined || (count(summary.holdMarkets) && summary.holdMarkets > 0 && signed(summary.holdNetBp)));
+    this.nulls = !ok || summary == null ? {} : Object.freeze({
+      nullSince: summary.since, nullSeed: summary.seed,
+      ...(summary.baselineTrades === undefined || summary.baselineNetBp === undefined ? {} : { nullBaseTrades: summary.baselineTrades, nullBaseNetBp: summary.baselineNetBp }),
+      ...(summary.holdMarkets === undefined || summary.holdNetBp === undefined ? {} : { nullHoldMarkets: summary.holdMarkets, nullHoldNetBp: summary.holdNetBp }),
+      nullRandTrades: summary.randomTrades, nullRandWins: summary.randomWins, nullRandNetBp: summary.randomNetBp, nullRandSkipped: summary.randomSkipped,
+    });
+    this.publish();
+  }
+
   /** The durable ledger could not be read: withdraw everything published from it, so /health never presents stale durable evidence as current. */
   public clearDurableCycles(): void {
     this.durable = null;
+    this.durableAtBoot = undefined;
+    this.bootReadDone = true;
     this.durableOutcome = undefined;
     this.durableCycleIdentity = {};
     this.publish();
@@ -209,10 +252,12 @@ export class ClosedLearningLoopStatusTracker {
     const evidence = Object.freeze({
       ...this.durableCycleIdentity,
       ...this.durableFailure,
+      ...(this.durableAtBoot === undefined ? {} : { cyclesRecordedAtBoot: this.durableAtBoot }),
       ...(this.durable == null ? {} : { cyclesRecorded: this.durable.cyclesRecorded, ...(this.durable.lastCycleRecordedAt === undefined || !Number.isSafeInteger(this.durable.lastCycleRecordedAt) ? {} : { lastCycleRecordedAt: this.durable.lastCycleRecordedAt }) }),
       ...this.periods,
       ...this.cycle,
       ...this.shadow,
+      ...this.nulls,
       ...this.replay,
     });
     // lastCycleOutcome and evidence are always rebuilt here from their sources (this process first, then the durable copy), never carried

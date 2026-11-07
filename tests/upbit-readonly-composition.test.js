@@ -14,6 +14,7 @@ test("Upbit relay uses a separate loopback port and MCP points to it", () => {
   assert.match(relay, /server\.listen\(configuredPort, LOOPBACK_HOST/);
   assert.match(mcpEnv, /^NUSA_MCP_UPBIT_READONLY_ORIGIN=http:\/\/127\.0\.0\.1:3001$/m);
   assert.match(relayUnit, /WorkingDirectory=\/opt\/nusa\/current\/services\/upbit-readonly/);
+  assert.match(relayUnit, /LogsDirectory=nusa/);
   assert.match(relayUnit, /ExecStart=\/usr\/bin\/node \/opt\/nusa\/current\/services\/upbit-readonly\/server\.js/);
   assert.match(relayUnit, /EnvironmentFile=\/etc\/nusa\/upbit-readonly\.env/);
   assert.match(mcpUnit, /Requires=nusa-upbit-readonly\.service/);

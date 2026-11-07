@@ -39,6 +39,8 @@ export interface PaperBaselineShadowOptions {
   readonly feeRate: number;
   readonly now: () => number;
   readonly restore?: BaselineShadowPersisted;
+  /** Read-only notification of each completed hypothetical round trip (market and entry/exit minute only). A throwing listener is ignored. */
+  readonly onRoundTrip?: (trip: { readonly market: string; readonly entryMinute: number; readonly exitMinute: number }) => void;
 }
 
 const MARKET = /^KRW-[A-Z0-9]{1,15}$/;
@@ -72,6 +74,7 @@ export class PaperBaselineShadow {
   private totals: { since: number; trades: number; wins: number; grossGainBp: number; grossLossBp: number; feeBp: number };
   private readonly lastBarMinute = new Map<string, number>();
   private readonly entry = new Map<string, number>();
+  private readonly entryMinute = new Map<string, number>();
   private changed = false;
 
   public constructor(private readonly options: PaperBaselineShadowOptions) {
@@ -103,10 +106,13 @@ export class PaperBaselineShadow {
         if (this.totals.since === 0) this.totals.since = Math.max(1, this.options.now());
         const decision = evaluatePaperCandidateStrategy(this.options.spec, [], at, key, valid.slice(0, index + 1));
         const open = this.entry.get(key);
-        if (open === undefined && decision.action === "BUY") this.entry.set(key, close);
+        if (open === undefined && decision.action === "BUY") { this.entry.set(key, close); this.entryMinute.set(key, minute); }
         else if (open !== undefined && decision.action === "SELL") {
+          const entryMinute = this.entryMinute.get(key);
           this.entry.delete(key);
+          this.entryMinute.delete(key);
           this.settle(open, close);
+          if (entryMinute !== undefined) { try { this.options.onRoundTrip?.({ market: key, entryMinute, exitMinute: minute }); } catch { /* display-only listener */ } }
         }
       }
     } catch { /* the shadow must never affect the runtime */ }

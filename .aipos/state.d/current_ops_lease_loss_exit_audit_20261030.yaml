@@ -1,0 +1,7 @@
+current_ops_lease_loss_exit_audit_20261030:
+  work_order: WO-OPS-20261030-LEASE-LOSS-EXIT-AUDIT
+  status: LOCAL_VALIDATED_PENDING_REVIEW_CI
+  branch: claude/lease-loss-exit-audit-20261030
+  validation: "lease-loss behaviour test 8/8 PASS with mutation check; no runtime code changed. Exit latency up to one 30 s poll on the execution-loop path; immediate exit would need the pinned PAPER_ADAPTER module."
+  next: "Non-author review, CI, owner decision on the pinned-module option."
+  safety: PAPER_ONLY_LIVE_NONE_PRODUCTION_MUTATION_FALSE_AI_ZERO_AUTHORITY

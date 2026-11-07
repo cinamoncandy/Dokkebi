@@ -26,7 +26,7 @@ test("the launcher drawables are exactly what the island icon generator writes",
 test("the brand row and learning cards carry the island mark; learning cards keep no aura parts", () => {
   assert.match(read("apps/mobile/src/nowView.tsx"), /<View style=\{styles\.brandLeft\}><IslandMark size=\{18\} \/><Text style=\{styles\.brand\}>NUSA<\/Text><\/View>/);
   const learning = read("apps/mobile/src/learningPanels.tsx");
-  assert.equal((learning.match(/<Deco \/>/g) || []).length, 4);
+  assert.equal((learning.match(/<Deco \/>/g) || []).length, 5);
   assert.match(learning, /<IslandMark size=\{40\} opacity=\{0\.32\} \/>/);
   assert.doesNotMatch(learning, /auraKit|AuraCard/);
 });

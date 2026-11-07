@@ -27,11 +27,20 @@ test("a complete, current series with no future rows passes", () => {
   assert.equal(probe({ db: d, now: NOW }).status, "PASS");
 });
 
-test("clean recent data passes except for a stale 1-minute series, which warns", () => {
+test("a 1-minute series whose newest candle is within two gap-fill cycles is not stale, one older than that warns", () => {
+  const fresh = probe({ db: db(), now: NOW });
+  assert.equal(fresh.candleStaleSeries, 0, "60 minutes old is normal between hourly fills");
+  assert.equal(probe({ db: db(), now: NOW + 56.5 * M }).candleStaleSeries, 0, "116 minutes old: one hourly fill late, still not stale");
+  assert.equal(probe({ db: db(), now: NOW + 60 * M }).candleStaleSeries, 0, "exactly two hours is still the limit, not past it");
+  const late = probe({ db: db(), now: NOW + 61 * M });
+  assert.equal(late.candleStaleSeries, 1, "two hours and a minute means a fill was missed");
+  assert.equal(late.status, "WARN");
+});
+
+test("the stale-series check changes no other count", () => {
   const d = db();
   const r = probe({ db: d, now: NOW });
-  assert.equal(r.status, "WARN", "the newest candle is 60 minutes old");
-  assert.equal(r.candleStaleSeries, 1);
+  assert.equal(r.candleStaleSeries, 0);
   assert.equal(r.candleMissing7d, 0);
   assert.equal(r.candleRows7d, 120);
   assert.equal(r.orderBookMarkets24h, 1);

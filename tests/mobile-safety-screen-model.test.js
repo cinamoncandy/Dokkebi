@@ -49,11 +49,12 @@ test("futures rows always read as not trading yet and show the gate's own limits
   assert.ok(Object.isFrozen(rows) && rows.every((r) => Object.isFrozen(r)));
 });
 
-test("the Safety view passes the futures gate's single source of limits, not copied numbers", () => {
-  const view = fs.readFileSync(path.join(SRC, "safetyView.tsx"), "utf8");
+test("the futures limits come from the futures gate's single source and show on the 선물 tab, not the 실거래 tab", () => {
+  const live = fs.readFileSync(path.join(SRC, "safetyView.tsx"), "utf8");
+  const fut = fs.readFileSync(path.join(SRC, "futuresView.tsx"), "utf8");
   const adapter = fs.readFileSync(path.join(SRC, "futuresSafetyRows.ts"), "utf8");
   assert.match(adapter, /import \{ PAPER_FUTURES_OWNER_LIMITS \} from "\.\.\/\.\.\/\.\.\/packages\/contracts\/src\/paperFutures";/);
   assert.match(adapter, /buildFuturesSafetyRows\(PAPER_FUTURES_OWNER_LIMITS\)/);
-  assert.match(view, /const futuresRows = futuresSafetyRows\(\);/);
-  assert.match(view, /testID="safety-futures"/);
+  assert.doesNotMatch(live, /futuresSafetyRows|safety-futures/);
+  assert.match(fut, /rows: futuresSafetyRows\(\)/);
 });

@@ -23,6 +23,8 @@ export interface CodingRunnerRequest {
   readonly repository: string;
   readonly headSha: string;
   readonly workflowRunId: number;
+  /** Exact source workflow attempt. Required for failure-triggered causal admission. */
+  readonly workflowRunAttempt?: number;
   readonly reason: string;
   readonly proposalFeedback?: string;
   readonly proposalContext?: CodingProposalContext;
@@ -34,6 +36,27 @@ export interface CodingRunnerRequest {
   readonly liveAuthority: "NONE";
   readonly productionMutationAllowed: false;
   readonly aiAuthority: "ZERO_AUTHORITY";
+  /** Internal Worker-only restriction; request parsing rejects caller-supplied values. */
+  readonly causalRepairTarget?: "apps/autopilot/src/repairableWorkflowRun.ts";
+}
+
+/**
+ * Workflow-failure evidence is only an observation. Until a verified causal
+ * admission receipt exists, it must not enter any CodingRunner execution path.
+ * Keep this parser aligned with verifyCodingRunnerRequestAgainstGitHub's two
+ * canonical failure-reason forms.
+ */
+export function isWorkflowFailureCodingReason(reason: string): boolean {
+  const numericReason = reason.match(/(?:^|:)gha:(?:[^:]+:)?(\d+):([0-9a-f]{40}):(failure|cancelled|timed_out)(?::|$)/i);
+  if (numericReason) return true;
+  return /(?:^|:)gha:([A-Za-z][A-Za-z0-9_-]{0,63}):([0-9a-f]{40}):(failure|cancelled|timed_out)(?::|$)/i.test(reason);
+}
+
+export function isEligibleCausalWorkflowFailureRequest(request: Pick<CodingRunnerRequest, "reason" | "workflowRunId" | "workflowRunAttempt" | "headSha">): boolean {
+  const match = /^gha:([1-9][0-9]{0,19}):([0-9a-f]{40}):(failure|timed_out)$/.exec(request.reason);
+  return Boolean(match && Number(match[1]) === request.workflowRunId && match[2] === request.headSha.toLowerCase()
+    && Number.isSafeInteger(request.workflowRunAttempt) && Number(request.workflowRunAttempt) > 0
+    && Number(request.workflowRunAttempt) <= 9_999_999_999);
 }
 
 export interface CodingRunnerEnv {
@@ -312,6 +335,17 @@ export function validateCodingRunnerRequest(value: unknown, allowedRepository = 
   if (request.productionMutationAllowed !== false || request.mutationAllowed !== false) throw new Error("CODING_RUNNER_PRODUCTION_MUTATION_FORBIDDEN");
   if (request.aiAuthority !== "ZERO_AUTHORITY") throw new Error("CODING_RUNNER_AI_AUTHORITY_INVALID");
   if (typeof request.reason !== "string" || !request.reason.trim()) throw new Error("CODING_RUNNER_REASON_REQUIRED");
+  if (request.causalRepairTarget !== undefined) throw new Error("CODING_RUNNER_CAUSAL_TARGET_CALLER_FORBIDDEN");
+  if (request.workflowRunAttempt !== undefined
+    && (!Number.isSafeInteger(request.workflowRunAttempt) || Number(request.workflowRunAttempt) <= 0 || Number(request.workflowRunAttempt) > 9_999_999_999)) {
+    throw new Error("CODING_RUNNER_WORKFLOW_ATTEMPT_INVALID");
+  }
+  if (isWorkflowFailureCodingReason(request.reason) && !isEligibleCausalWorkflowFailureRequest({
+    reason: request.reason,
+    workflowRunId: Number(request.workflowRunId),
+    workflowRunAttempt: Number(request.workflowRunAttempt),
+    headSha: request.headSha,
+  })) throw new Error("CODING_RUNNER_CAUSAL_SOURCE_IDENTITY_INVALID");
   if (request.proposalFeedback !== undefined) {
     if (typeof request.proposalFeedback !== "string"
       || !request.proposalFeedback.trim()
@@ -602,6 +636,21 @@ function materializeCodingProposal(request: CodingRunnerRequest, proposal: Codin
   return Object.freeze({ patch: buildDeterministicCodingPatch(request.proposalContext, proposal.edit) });
 }
 
+function assertCausalRepairProposal(request: CodingRunnerRequest, proposal: CodingProposal): void {
+  const target = request.causalRepairTarget;
+  if (!target) return;
+  if (typeof proposal.patch !== "string") throw new Error("CAUSAL_REPAIR_PATCH_REQUIRED");
+  const diffHeaders = [...proposal.patch.matchAll(/^diff --git a\/([^\r\n]+) b\/([^\r\n]+)$/gm)];
+  const oldPaths = [...proposal.patch.matchAll(/^--- a\/([^\r\n]+)$/gm)];
+  const newPaths = [...proposal.patch.matchAll(/^\+\+\+ b\/([^\r\n]+)$/gm)];
+  if (diffHeaders.length !== 1 || oldPaths.length !== 1 || newPaths.length !== 1
+    || diffHeaders[0]![1] !== target || diffHeaders[0]![2] !== target
+    || oldPaths[0]![1] !== target || newPaths[0]![1] !== target
+    || /^(?:new file mode|deleted file mode|rename from|rename to|copy from|copy to) /m.test(proposal.patch)) {
+    throw new Error("CAUSAL_REPAIR_TARGET_MISMATCH");
+  }
+}
+
 function githubHeaders(token?: string): Record<string, string> {
   const headers: Record<string, string> = {
     Accept: "application/vnd.github+json",
@@ -640,6 +689,10 @@ export async function verifyCodingRunnerRequestAgainstGitHub(
   if (typeof run.head_sha !== "string" || run.head_sha.toLowerCase() !== request.headSha.toLowerCase()) throw new Error("CODING_RUNNER_WORKFLOW_HEAD_MISMATCH");
   if (runRepository.full_name !== request.repository) throw new Error("CODING_RUNNER_WORKFLOW_REPOSITORY_MISMATCH");
   if (run.status !== "completed") throw new Error("CODING_RUNNER_WORKFLOW_NOT_COMPLETED");
+  if (isWorkflowFailureCodingReason(request.reason)
+    && (!Number.isSafeInteger(run.run_attempt) || Number(run.run_attempt) !== request.workflowRunAttempt)) {
+    throw new Error("CODING_RUNNER_WORKFLOW_ATTEMPT_MISMATCH");
+  }
 
   // Two canonical failure-reason identities: `gha:<runId>:<sha>:<conclusion>` (planner) and the evolve discovery
   // observation `gha:<workflow>:<sha>:<conclusion>`, which carries no run id. The cited run id is bound by the GitHub
@@ -660,7 +713,7 @@ export async function verifyCodingRunnerRequestAgainstGitHub(
   if (namedReason && namedReason[2].toLowerCase() !== request.headSha.toLowerCase()) {
     throw new Error("CODING_RUNNER_FAILURE_REASON_IDENTITY_MISMATCH");
   }
-  const allowedConclusions = failureRepair ? ["failure"] : ["success"];
+  const allowedConclusions = failureRepair ? ["failure", "timed_out"] : ["success"];
   if (typeof run.conclusion !== "string" || !allowedConclusions.includes(run.conclusion)
     || (failureReason && run.conclusion !== failureReason[3].toLowerCase())) {
     const code = failureRepair ? "CODING_RUNNER_FAILURE_EVIDENCE_INVALID" : "CODING_RUNNER_WORKFLOW_NOT_SUCCESSFUL";
@@ -868,7 +921,9 @@ function codingProposalPrompt(request: CodingRunnerRequest): string {
     "Propose exactly one minimal, low-risk NUSA repository improvement as a git-compatible unified diff.",
     "Return JSON only with one field named patch.",
     "Do not use Markdown fences or explanatory text around the JSON.",
-    "The patch must contain exactly one diff --git header and exactly one +++ b/apps/autopilot/src/<existing-file>.ts path; do not include any other file or create a new file.",
+    request.causalRepairTarget
+      ? `For this verified workflow regression, modify only the existing file ${request.causalRepairTarget}. Do not change tests, workflows, policy, or any other path.`
+      : "The patch must contain exactly one diff --git header and exactly one +++ b/apps/autopilot/src/<existing-file>.ts path; do not include any other file or create a new file.",
     "Modify exactly one existing .ts file under apps/autopilot/src.",
     "Forbidden target paths include index.ts, worker.ts, any live/live-trading/broker/order/credential/secret(s)/withdraw/transfer/production-authority path, workflows, package files, or authority constants. Never use a forbidden example path as a target.",
     "Do not add dependencies or weaken tests, validation, safety, exact-head verification, dedupe, leases, or fail-closed behavior.",
@@ -1056,6 +1111,7 @@ async function executeProposal(
   const status = httpStatus === undefined ? {} : { httpStatus };
   try {
     const materialized = materializeCodingProposal(request, proposal);
+    assertCausalRepairProposal(request, materialized);
     if (!runtime) return { status: "EXECUTION_ACCEPTED", ...status };
     const runtimeResult = await runtime.execute(request, materialized);
     const safeRuntime = publicRuntimeResult(runtimeResult);
@@ -1080,7 +1136,12 @@ export async function executeCodingRunner(
 ): Promise<CodingRunnerResult> {
   const verifiedWorkflow = await verifyCodingRunnerRequestAgainstGitHub(request, env.NUSA_GITHUB_TOKEN, fetchImpl);
   const zeroCreditMode = isZeroCreditModeEnforced(env.NUSA_AUTOPILOT_ZERO_CREDIT_MODE);
-  const verifiedFailureEvidence = await verifiedJevCodingFailureEvidence(request, verifiedWorkflow, env.NUSA_GITHUB_TOKEN, fetchImpl);
+  // The admitted causal path carries a separately verified Sigstore-backed source receipt and a
+  // server-pinned repair target. Do not require the legacy failed-step allowlist to rediscover the
+  // same cause (it intentionally excludes tests that exercise this fixed predicate contract).
+  const verifiedFailureEvidence = request.causalRepairTarget
+    ? null
+    : await verifiedJevCodingFailureEvidence(request, verifiedWorkflow, env.NUSA_GITHUB_TOKEN, fetchImpl);
   const jevFailureEvidence = !zeroCreditMode && isJevBoundedCodingAdmissionCandidate(request, env)
     ? verifiedFailureEvidence
     : null;

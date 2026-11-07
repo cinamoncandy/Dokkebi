@@ -1,0 +1,7 @@
+current_risk_account_key_peak_persist_20261030:
+  work_order: WO-RISK-20261030-ACCOUNT-KEY-PEAK-PERSIST
+  status: LOCAL_VALIDATED_PENDING_REVIEW_CI
+  branch: risk/WO-RISK-20261030-ACCOUNT-KEY-PEAK-PERSIST
+  validation: "accountPeak, requalification and related risk tests PASS in the Node 22 sandbox; four known main failures unchanged; check-runtime and validate:full left to CI."
+  next: "Non-author /grill-me review, CI, Audit and Release; deploy is a separate operation."
+  safety: PAPER_ONLY_LIVE_NONE_PRODUCTION_MUTATION_FALSE_AI_ZERO_AUTHORITY

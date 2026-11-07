@@ -1,0 +1,7 @@
+current_research_orderbook_coverage_watch_20261031:
+  work_order: WO-RESEARCH-20261031-ORDERBOOK-COVERAGE-WATCH
+  status: LOCAL_VALIDATED_PENDING_REVIEW_CI
+  branch: claude/orderbook-coverage-watch
+  validation: "see the work order"
+  next: "CI, release path, then read /health orderBookCoverage on the host."
+  safety: PAPER_ONLY_LIVE_NONE_PRODUCTION_MUTATION_FALSE_AI_ZERO_AUTHORITY

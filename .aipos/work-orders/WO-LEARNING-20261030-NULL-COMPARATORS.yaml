@@ -1,0 +1,46 @@
+id: WO-LEARNING-20261030-NULL-COMPARATORS
+title: "Null comparators beside the baseline shadow: buy-and-hold and fixed-seed random entry, so edge can be measured"
+status: COMPLETED
+owner: nusa-development
+repository: cinamoncandy/NUSA
+base_branch: main
+branch: claude/null-comparator-shadows
+authority_impact: display-and-analysis-only-no-order-no-ledger-no-risk-input
+owner_approval: "2026-10-30 in chat ('다 승인') for docs/DESIGN_ASSESSMENT_2026-10-28.md section 3 item 5 (assessor B W4/W6)"
+scope_note: "Pure observers on the same completed minute bars and the same 0.0005 fee rate as the baseline shadow. They place no order, write no PAPER ledger, create no fill and feed no Risk, Governance, Research or promotion decision. Their figures are a comparison, NOT PAPER evidence."
+objective: "There was no null comparator, so the baseline's result could not be read as edge. Two zero-authority nulls make 'baseline minus null' a measured difference: (1) buy-and-hold, one hypothetical position per market from the first bar seen; (2) a deterministic random entry, with one random round trip per baseline round trip, same market and same holding time, drawn from a fixed-seed PRNG."
+scope:
+  include:
+    - "paperNullComparators.ts (pure model, seed 20261030 recorded), paperNullComparatorsRecord.ts (atomic best-effort file beside the Cloud state), paperNullComparators.test.ts."
+    - "paperBaselineShadow.ts: only an optional read-only onRoundTrip listener (market, entry minute, exit minute). Totals, rule and persistence of the shadow are unchanged (tested)."
+    - "closedLearningProductionRuntime.ts: comparators see the bars first, then the baseline shadow; summary published to the loop status; persisted on change."
+    - "closedLearningLoopStatus.ts, server.ts, runtime.ts, personalPaperOperations.ts: ten read-only evidence keys (nullSince, nullSeed, nullBaseTrades, nullBaseNetBp, nullHoldMarkets, nullHoldNetBp, nullRandTrades, nullRandWins, nullRandNetBp, nullRandSkipped); counts and signed basis points only."
+    - "apps/mobile learningLoopModel.ts (pure) and learningPanels.tsx/learningView.tsx: a 학습 card with baseline minus each null in plain Korean, labelled 모의투자 증거 아님, with 데이터 없음 states instead of zeros."
+  exclude:
+    - "Any order, fill, ledger write, Risk, threshold, capital, limit or gate change; the SMA 5/20 rule; the risk gateway; any module pinned by MODULE_QUALIFICATION_SOURCE_BLOB_BY_STAGE_V1 (none touched); promotion of any comparator figure; deploy or Oracle access."
+limitations:
+  - "Hypothetical, fills at the bar close with fee only (no spread, slippage, depth or latency), like the baseline shadow."
+  - "Buy-and-hold is one unit per market over the span the comparator has seen; the baseline sums one unit per round trip. Both are sums of single-unit net returns in bp, not a capital-weighted return."
+  - "The random entry is drawn from at most 3 days of bars kept in memory (not persisted). A holding time longer than the history, or a restart, gives an explicit skip count, never an invented trip. The app compares only when the random entry has the same number of trips as the baseline."
+  - "The comparison window starts when the comparators started; the baseline totals at that moment are recorded and subtracted. A restart can leave up to one 60-bar read window of overlap/misalignment."
+  - "One seed, one random path: a single draw is noisy and is not a significance test."
+acceptance:
+  - "Random entry is deterministic for the same bars; the seed is recorded; same number of round trips and holding times as the baseline (or counted skips)."
+  - "Fee parity: the baseline's net result for a real trip equals roundTripNet on the same prices; both use feeRate 0.0005."
+  - "Baseline shadow totals are identical with and without the comparators; /health publishes only the ten integer keys; absent figures are absent, not zero."
+  - "PAPER_ONLY; liveAuthority=NONE; productionMutationAllowed=false; aiAuthority=ZERO_AUTHORITY."
+verification_commands:
+  - "rm -f node_modules/.cache/tsconfig.base.tsbuildinfo; npx tsc -p tsconfig.json"
+  - "node -r ./tests/register-dist.cjs --test dist/apps/cloud/src/paperNullComparators.test.js dist/apps/cloud/src/paperBaselineShadow.test.js tests/closed-learning-loop-status.test.js tests/learning-loop-contract.test.js tests/mobile-learning-panels.test.js tests/cloud-runtime-liveness-health.test.js"
+  - "(cd apps/mobile && npx tsc --noEmit -p .)"
+  - "node scripts/lint-mobile.js"
+evidence:
+  local_validation:
+    environment: "Node 22 sandbox (check-runtime, preflight and validate:full need Node 24 and are left to CI)"
+  remaining: "Exact-head CI, non-author /grill-me review, independent Audit and Release; a deploy restarts the runtime once. Not deployed."
+safety:
+  paper_only: true
+  liveAuthority: NONE
+  productionMutationAllowed: false
+  aiAuthority: ZERO_AUTHORITY
+  fail_closed: true

@@ -512,6 +512,39 @@ describe("persistent control-plane HOLD", () => {
     assert.equal((await full.json() as { reason: string }).reason, "WIP_LIMIT_REACHED");
   });
 
+  it("keeps legacy three-claim WIP state readable while enforcing the new two-claim admission cap", async () => {
+    const storage = new MemoryStorage();
+    const coordinator = new ExecutionCoordinator({ storage });
+    const now = 2_000_000;
+    await storage.put("evolve-active-wip-v1", {
+      schemaVersion: 1,
+      claims: ["one", "two", "three"].map((key) => ({
+        dedupeKey: `work:${key}`,
+        executionId: `exec:${key}`,
+        canonicalOwner: "evolve",
+        conflictKeys: [`module:${key}`],
+        claimedAt: now,
+      })),
+    });
+    const admit = (claimedAt: number, dedupeKey: string) => coordinator.fetch(new Request("https://execution-coordinator/active-wip/admit", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ dedupeKey, executionId: `exec:${dedupeKey}`, canonicalOwner: "evolve", conflictKeys: [`module:${dedupeKey}`], claimedAt, maxConcurrent: 2 }),
+    }));
+
+    const blocked = await admit(now + 1, "work:four");
+    assert.equal(blocked.status, 409);
+    assert.equal((await blocked.json() as { reason?: string }).reason, "WIP_LIMIT_REACHED");
+    const active = await coordinator.fetch(new Request("https://execution-coordinator/active-wip"));
+    assert.equal(active.status, 200);
+    assert.equal((await active.json() as { activeExecutions?: number }).activeExecutions, 3);
+
+    const afterExpiry = now + ACTIVE_WIP_CLAIM_MAX_AGE_MS + 1;
+    const resumed = await admit(afterExpiry, "work:four");
+    assert.equal(resumed.status, 201, "stale legacy claims expire before the new capacity check");
+    assert.equal((await resumed.json() as { claims?: unknown[] }).claims?.length, 1);
+  });
+
   it("rejects overlapping conflict keys and releases capacity only for exact identity", async () => {
     const storage = new MemoryStorage();
     const coordinator = new ExecutionCoordinator({ storage });

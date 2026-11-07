@@ -1,6 +1,7 @@
 const { existsSync, readFileSync } = require("node:fs");
 const { createHash } = require("node:crypto");
 const { join, normalize } = require("node:path");
+const { resolveWorkOrderPath } = require("./lib/aipos-work-order-paths.js");
 const { block, scalar } = require("./validate-aipos-drift.js");
 
 function canonical(value) {
@@ -51,7 +52,8 @@ function validateEvidenceRecord(root, evidencePath, expectedWorkOrderId) {
   if (!subjectPath || typeof subjectPath !== "string") {
     failures.push("EVIDENCE_SUBJECT_PATH_MISSING");
   } else {
-    const absoluteSubjectPath = join(root, normalize(subjectPath));
+    // A closed work order may have moved to .aipos/work-orders/archive/; its recorded path still resolves.
+    const absoluteSubjectPath = join(root, normalize(resolveWorkOrderPath(root, subjectPath)));
     if (!existsSync(absoluteSubjectPath)) {
       failures.push(`EVIDENCE_SUBJECT_PATH_MISSING:${subjectPath}`);
     } else {

@@ -7,8 +7,8 @@ import { paperTradingDayKey, paperTradingDayStartedAt } from "./paperTradingDay"
 import { evaluatePreTradeRisk, type IndependentRiskLimits, type RiskIdentityState } from "./independentRiskGateway";
 import { RUNTIME_EXCHANGE_CAPABILITIES } from "./runtimeExchangeCapabilities";
 import type { PaperAccountState } from "./paperTradingExecutionLoop";
+import { AccountScopedRiskPersistence, SessionPeakStore, resolveRiskAccountId } from "./cloudPaperRiskAccountScope";
 
-const ACCOUNT_ID = "paper-default";
 const MANUAL_APPROVAL_TTL_MS = 60_000;
 
 /** Owner-approved Cloud spot PAPER policy; only the consecutive-loss veto is disabled. */
@@ -172,6 +172,12 @@ function dailyNotional(state: PaperAccountState, now: number): Readonly<{ dailyB
   return Object.freeze({ dailyBuyNotional, dailySellNotional });
 }
 
+// The PAPER ledger keeps position quantities rounded to 8 decimals (PaperTradingExecutionLoop). This replay must follow the same
+// rounding: with raw floats the replayed remainder of a position that was sold in several orders drifts from the ledger's remainder by
+// more than Number.EPSILON once quantities are large, so the final sell looked like an oversell, dailyRealizedPnL became NaN and every
+// later request was halted as INVALID_REQUEST. Rounding like the ledger keeps the oversell check exact at the ledger's precision.
+const ledgerRound8 = (value: number): number => Number(value.toFixed(8));
+
 function realizedLossState(state: PaperAccountState, now: number): Readonly<{ dailyRealizedPnL: number; consecutiveLossCount: number; todayCompletedSells: number; todayLosingSells: number; lastIncrementAt: number | null }> {
   const positions = new Map<string, { quantity: number; averageEntryPrice: number }>();
   const sells: Array<{ pnl: number; filledAt: number }> = [];
@@ -179,14 +185,14 @@ function realizedLossState(state: PaperAccountState, now: number): Readonly<{ da
   for (const order of [...state.fills].reverse().sort((a, b) => a.filledAt - b.filledAt)) {
     const prior = positions.get(order.market) ?? { quantity: 0, averageEntryPrice: 0 };
     if (order.side === "BUY") {
-      const nextQuantity = prior.quantity + order.quantity;
+      const nextQuantity = ledgerRound8(prior.quantity + order.quantity);
       const nextAverage = nextQuantity <= 0 ? 0 : (prior.averageEntryPrice * prior.quantity + order.quantity * order.price + order.fee) / nextQuantity;
       positions.set(order.market, { quantity: nextQuantity, averageEntryPrice: nextAverage });
       continue;
     }
     if (order.quantity > prior.quantity + Number.EPSILON) return Object.freeze({ dailyRealizedPnL: Number.NaN, consecutiveLossCount: Number.MAX_SAFE_INTEGER, todayCompletedSells: 0, todayLosingSells: 0, lastIncrementAt: null });
     const pnl = (order.price - prior.averageEntryPrice) * order.quantity - order.fee;
-    const nextQuantity = Math.max(0, prior.quantity - order.quantity);
+    const nextQuantity = ledgerRound8(Math.max(0, prior.quantity - order.quantity));
     positions.set(order.market, { quantity: nextQuantity, averageEntryPrice: nextQuantity === 0 ? 0 : prior.averageEntryPrice });
     sells.push({ pnl, filledAt: order.filledAt });
     const previous = sellOrders.get(order.orderId);
@@ -212,6 +218,8 @@ export interface CloudPaperCanonicalRiskGatewayOptions {
   readonly initialCapital: number;
   readonly sourceCommitSha: string;
   readonly limits?: IndependentRiskLimits;
+  /** The real PAPER account id the risk rows belong to; defaults to the id derived from the initial capital. */
+  readonly accountId?: string;
 }
 
 /**
@@ -224,7 +232,11 @@ export class CloudPaperCanonicalRiskGateway implements CloudPaperRiskGate {
   private readonly canonical: CanonicalRiskSafetyGate;
   private readonly limits: IndependentRiskLimits;
   private readonly fingerprints: Readonly<{ strategy: string; config: string; runtime: string; riskPolicy: string }>;
+  private readonly accountId: string;
+  private readonly peakStore: SessionPeakStore;
   private peakEquity: number;
+  private persistedPeak = Number.NaN;
+  private peakVerified = false;
   private lastLossSession: CloudPaperLossSessionSnapshot | null = null;
 
   public constructor(private readonly options: CloudPaperCanonicalRiskGatewayOptions) {
@@ -232,15 +244,28 @@ export class CloudPaperCanonicalRiskGateway implements CloudPaperRiskGate {
     if (!options.sourceCommitSha.trim()) throw new Error("cloud PAPER source commit is required");
     this.limits = Object.freeze({ ...(options.limits ?? CLOUD_PAPER_RISK_LIMITS) });
     validateLimits(this.limits);
+    this.accountId = resolveRiskAccountId(options.initialCapital, options.accountId);
     this.persistence = new SqliteRiskSafetyPersistence(options.database);
-    this.canonical = new CanonicalRiskSafetyGate(this.persistence);
+    this.canonical = new CanonicalRiskSafetyGate(new AccountScopedRiskPersistence(this.persistence, this.accountId));
+    this.peakStore = new SessionPeakStore(this.persistence, this.accountId, options.initialCapital);
     this.peakEquity = options.initialCapital;
+    this.restorePeak();
     this.fingerprints = Object.freeze({
       strategy: hash("cloud-paper-cio-v1"),
       config: hash({ initialCapital: options.initialCapital }),
       runtime: hash(options.sourceCommitSha.trim()),
       riskPolicy: hash(this.limits)
     });
+  }
+
+  /** Restores the persisted drawdown peak. Unreadable or invalid means unknown: evaluations halt until a valid peak is read. */
+  private restorePeak(): void {
+    try {
+      const stored = this.peakStore.read();
+      if (stored.status === "INVALID") { this.peakVerified = false; return; }
+      if (stored.status === "OK") { this.peakEquity = Math.max(this.peakEquity, stored.peak); this.persistedPeak = stored.peak; }
+      this.peakVerified = true;
+    } catch { this.peakVerified = false; }
   }
 
   /** The loss-limit counts from the latest evaluation, or null before any. Display only; never used for a decision. */
@@ -252,6 +277,8 @@ export class CloudPaperCanonicalRiskGateway implements CloudPaperRiskGate {
     const persistent = databaseHealthy(this.options.database);
     const reconciled = stateHealthy(input.state);
     if (!reconciled) return Object.freeze({ status: "HALT", reasonCodes: Object.freeze(["RECONCILIATION_FAILED"]) });
+    if (!this.peakVerified) this.restorePeak();
+    if (!this.peakVerified) return Object.freeze({ status: "HALT", reasonCodes: Object.freeze(["PERSISTENCE_UNHEALTHY"]) });
     const payloadFingerprint = input.payloadFingerprintSha256 ?? hash({
       path: input.path,
       commandId: input.commandId,
@@ -281,6 +308,10 @@ export class CloudPaperCanonicalRiskGateway implements CloudPaperRiskGate {
     }
     const currentEquity = input.state.cash + input.state.positions.reduce((sum, item) => sum + item.quantity * (item.market === input.market ? input.price : item.markPrice), 0);
     this.peakEquity = Math.max(this.peakEquity, currentEquity);
+    if (!(this.peakEquity <= this.persistedPeak)) {
+      try { this.peakStore.write(this.peakEquity, input.now); this.persistedPeak = this.peakEquity; }
+      catch { return Object.freeze({ status: "HALT", reasonCodes: Object.freeze(["PERSISTENCE_UNHEALTHY"]) }); }
+    }
     const identity: RiskIdentityState = Object.freeze({
       strategyFingerprint: this.fingerprints.strategy,
       configFingerprint: this.fingerprints.config,
@@ -324,7 +355,7 @@ export class CloudPaperCanonicalRiskGateway implements CloudPaperRiskGate {
     if (!approvedBy || !strategyId) return Object.freeze({ status: "HALT", reasonCodes: Object.freeze(["APPROVAL_MISSING"]) });
     let approvalId: string | undefined;
     {
-      approvalId = `cloud-paper-${hash({ account: ACCOUNT_ID, commandId: input.commandId, approvedBy, strategyId, market: input.market, side: input.side, policy: this.fingerprints.riskPolicy }).slice(0, 32)}`;
+      approvalId = `cloud-paper-${hash({ account: this.accountId, commandId: input.commandId, approvedBy, strategyId, market: input.market, side: input.side, policy: this.fingerprints.riskPolicy }).slice(0, 32)}`;
       try {
         this.canonical.saveApproval({
           approvalId,
@@ -342,7 +373,7 @@ export class CloudPaperCanonicalRiskGateway implements CloudPaperRiskGate {
     }
 
     const canonical = this.canonical.evaluate({
-      accountId: ACCOUNT_ID,
+      accountId: this.accountId,
       requestId: `${input.path}:${input.commandId}`,
       boundary: input.path,
       mode: "PAPER",
@@ -361,7 +392,7 @@ export class CloudPaperCanonicalRiskGateway implements CloudPaperRiskGate {
       persistenceHealthy: persistent,
       maxDailyLoss: this.limits.maxDailyLoss,
       maxOpenOrders: this.limits.maxOpenOrders,
-      idempotency: { accountId: ACCOUNT_ID, commandId: input.commandId, signalId: input.signalId, clientOrderId: input.clientOrderId, payloadFingerprint, createdAtMs: input.now }
+      idempotency: { accountId: this.accountId, commandId: input.commandId, signalId: input.signalId, clientOrderId: input.clientOrderId, payloadFingerprint, createdAtMs: input.now }
     });
     if (approvalId !== undefined) {
       try { this.canonical.revokeApproval(approvalId, "single-use manual approval evaluated"); } catch { return Object.freeze({ status: "HALT", reasonCodes: Object.freeze(["PERSISTENCE_UNHEALTHY"]) }); }

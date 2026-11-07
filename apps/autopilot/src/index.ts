@@ -1,12 +1,12 @@
 import { isZeroCreditModeEnforced } from "./codingRunnerReadiness";
-import { parseGithubWebhookPayload, planGithubWebhookDispatch, type SupportedGithubEvent } from "./dispatchPlanner";
+import { parseGithubWebhookPayload, planGithubWebhookDispatch, type AutopilotDispatchPlan, type SupportedGithubEvent } from "./dispatchPlanner";
 import { resolveOpenPullRequestByHeadSha } from "./githubPrHeadShaResolver";
 import { resolveCanonicalPrCiForReady } from "./githubCanonicalPrCiResolver";
 import { planAutopilotExecution } from "./executionPlanner";
 import { executeGithubDispatch } from "./githubExecutor";
 import { resolveGithubReleaseCompletion } from "./githubReleaseCompletionResolver";
-import { verifyGithubActionsOidcToken, verifyGithubEventBridgeOidcToken } from "./githubActionsOidc";
-import { CodingRunnerEvidenceError, CodingRunnerHttpEvidenceError, executeCodingRunner, validateCodingRunnerRequest, type CodingPublisher, type CodingRuntime, type WorkersAiBinding } from "./codingRunner";
+import { verifyGithubActionsOidcToken, verifyGithubCausalProducerEvidence, verifyGithubCodingSourceRun, verifyGithubEventBridgeOidcToken, type SourceExecutionIdentity } from "./githubActionsOidc";
+import { CodingRunnerEvidenceError, CodingRunnerHttpEvidenceError, executeCodingRunner, isWorkflowFailureCodingReason, validateCodingRunnerRequest, type CodingPublisher, type CodingRuntime, type WorkersAiBinding } from "./codingRunner";
 import { prepareProductionExecution, reconcileCodingExecutionEvidence } from "./productionExecutionSpine";
 import {
   acquirePersistentExecution,
@@ -36,6 +36,9 @@ import { createCodingExecutionEvidence } from "./codingExecutionEvidence";
 import { classifyAutopilotFailure, createAutopilotExecutionTelemetry, type AutopilotExecutionTelemetryInput } from "./executionTelemetry";
 import { workerOutcomeFromTelemetry, workerOutcomeWithReleaseCompletion } from "./workerThroughputEvidence";
 import { observeJevCodingFailureShadow } from "./jevCodingFailureShadow";
+import { dispatchWithCausalBinding } from "./causalAdmissionAuthorization";
+import { createCausalAdmissionReceipt } from "./causalRegressionAdmission";
+import { verifyCausalProducerAttestation } from "./sigstoreCausalAttestation";
 
 export { ExecutionCoordinator } from "./executionCoordinator";
 export * from "./worktreeWorkerPool";
@@ -73,12 +76,37 @@ export interface Env {
 const DEFAULT_REPOSITORY = "cinamoncandy/NUSA";
 const CODING_EXECUTION_LEASE_MS = 20 * 60 * 1000;
 const WEBHOOK_EXECUTION_LEASE_MS = 5 * 60 * 1000;
+const MAX_GITHUB_WEBHOOK_BODY_BYTES = 768 * 1024;
 const RELEASABLE_AUDIT_STATE_DECLINES = new Set([
   "github-executor-pr-draft-hold-active",
   "github-executor-pr-hold-label-active",
 ]);
 const json = (body: unknown, status = 200): Response => new Response(JSON.stringify(body), { status, headers: { "content-type": "application/json; charset=utf-8" } });
 const encoder = new TextEncoder();
+
+async function readBoundedWebhookBody(request: Request): Promise<string> {
+  const declared = request.headers.get("content-length");
+  if (declared !== null && (!/^[0-9]+$/.test(declared) || Number(declared) > MAX_GITHUB_WEBHOOK_BODY_BYTES)) {
+    throw new Error("GITHUB_WEBHOOK_BODY_TOO_LARGE");
+  }
+  if (!request.body) return "";
+  const reader = request.body.getReader();
+  const decoder = new TextDecoder("utf-8", { fatal: true });
+  let bytes = 0;
+  let body = "";
+  try {
+    for (;;) {
+      const chunk = await reader.read();
+      if (chunk.done) break;
+      bytes += chunk.value.byteLength;
+      if (bytes > MAX_GITHUB_WEBHOOK_BODY_BYTES) throw new Error("GITHUB_WEBHOOK_BODY_TOO_LARGE");
+      body += decoder.decode(chunk.value, { stream: true });
+    }
+    return body + decoder.decode();
+  } finally {
+    try { reader.releaseLock(); } catch { /* already released by runtime */ }
+  }
+}
 
 function codingTaskId(request: { readonly reason: string; readonly dedupeKey: string }): string {
   const issue = request.reason.match(/(?:github-issue|issue)-[0-9]+/i)?.[0]?.toLowerCase();
@@ -175,6 +203,88 @@ async function persistScheduledOutcome(env: Env, scheduledTime: number, outcome:
   return observedAt;
 }
 
+function causalSourceForDispatch(dispatch: AutopilotDispatchPlan, allowedRepository: string): SourceExecutionIdentity | null {
+  if (dispatch.kind !== "CI_FAILED" || dispatch.repository !== allowedRepository || !dispatch.headSha
+    || !/^[0-9a-f]{40}$/i.test(dispatch.headSha) || !Number.isSafeInteger(dispatch.workflowRunId)
+    || !dispatch.workflowRunId || !Number.isSafeInteger(dispatch.workflowRunAttempt)
+    || !dispatch.workflowRunAttempt || dispatch.workflowRunAttempt > 9_999_999_999) return null;
+  return Object.freeze({ repository: allowedRepository, workflowPath: ".github/workflows/ci.yml",
+    sha: dispatch.headSha.toLowerCase(), runId: String(dispatch.workflowRunId), runAttempt: String(dispatch.workflowRunAttempt) });
+}
+
+async function dispatchCausallyVerifiedWorkflowFailure(
+  dispatch: AutopilotDispatchPlan,
+  payload: Record<string, unknown>,
+  env: Env,
+  allowedRepository: string,
+  deliveryId: string,
+): Promise<Response> {
+  const authority = { liveAuthority: "NONE", productionMutationAllowed: false, aiAuthority: "ZERO_AUTHORITY" } as const;
+  const source = causalSourceForDispatch(dispatch, allowedRepository);
+  const bundle = payload.nusa_causal_attestation_bundle;
+  if (!source || !bundle || !env.NUSA_EXECUTION_COORDINATOR || !env.NUSA_GITHUB_TOKEN?.trim()) {
+    return json({ accepted: true, status: "NO_ACTION", reason: "CAUSAL_EVIDENCE_UNAVAILABLE", deliveryId, dispatch, ...authority }, 202);
+  }
+
+  const now = Date.now();
+  const expiresAt = now + WEBHOOK_EXECUTION_LEASE_MS;
+  let receipt;
+  try {
+    const sourceRun = await verifyGithubCodingSourceRun(source, allowedRepository, env.NUSA_GITHUB_TOKEN.trim());
+    const producer = await verifyGithubCausalProducerEvidence(source, allowedRepository, env.NUSA_GITHUB_TOKEN.trim());
+    const verified = await verifyCausalProducerAttestation(bundle, source);
+    receipt = await createCausalAdmissionReceipt({ source, verified, producer, now, expiresAt });
+    if (sourceRun.conclusion !== receipt.sourceConclusion) throw new Error("CAUSAL_SOURCE_CONCLUSION_MISMATCH");
+  } catch {
+    return json({ accepted: true, status: "NO_ACTION", reason: "CAUSAL_EVIDENCE_REJECTED", deliveryId, dispatch, ...authority }, 202);
+  }
+
+  const execution = planAutopilotExecution(dispatch);
+  if (execution.kind !== "REPOSITORY_AUTOPILOT" || !execution.executionId || !execution.dedupeKey
+    || execution.workflowRunAttempt !== Number(source.runAttempt)) {
+    return json({ accepted: true, status: "NO_ACTION", reason: "CAUSAL_EXECUTION_IDENTITY_INVALID", deliveryId, dispatch, ...authority }, 202);
+  }
+
+  let lease: Awaited<ReturnType<typeof acquirePersistentExecution>>;
+  try {
+    lease = await acquirePersistentExecution(env.NUSA_EXECUTION_COORDINATOR, {
+      dedupeKey: execution.dedupeKey,
+      executionId: execution.executionId,
+      now,
+      leaseExpiresAt: expiresAt,
+      taskId: `autopilot:ci-failure-${source.runId}`,
+      provider: "workers-ai",
+      headSha: source.sha,
+      maxAcquisitions: 3,
+    });
+  } catch {
+    return json({ accepted: false, status: "NO_ACTION", reason: "CAUSAL_EXECUTION_LEASE_UNAVAILABLE", deliveryId, dispatch, ...authority }, 503);
+  }
+  if (!lease.acquired) {
+    return json({ accepted: true, status: "NO_ACTION", reason: lease.reason ?? "CAUSAL_EXECUTION_DUPLICATE", deliveryId, dispatch, ...authority }, 202);
+  }
+
+  const executor = await dispatchWithCausalBinding({
+    coordinator: env.NUSA_EXECUTION_COORDINATOR,
+    allowedRepository,
+    githubToken: env.NUSA_GITHUB_TOKEN.trim(),
+    dedupeKey: execution.dedupeKey,
+    executionId: execution.executionId,
+    source,
+    now,
+    causalAdmission: receipt,
+  }, execution, expiresAt);
+  if (!executor || executor.status !== "DISPATCHED") {
+    try {
+      await releasePersistentExecution(env.NUSA_EXECUTION_COORDINATOR, { dedupeKey: execution.dedupeKey, executionId: execution.executionId, now: Date.now() });
+    } catch { /* retain the lease on reconciliation failure; do not dispatch without a binding */ }
+    return json({ accepted: true, status: "NO_ACTION", reason: executor?.reason ?? "CAUSAL_DISPATCH_NOT_ACCEPTED", deliveryId, dispatch, executor, ...authority }, 202);
+  }
+
+  return json({ accepted: true, status: "CAUSAL_DISPATCHED", decision: receipt.decision,
+    classification: receipt.classification, deliveryId, dispatch, execution, executor, ...authority }, 202);
+}
+
 function verifyAutopilotRuntimeAuthorization(request: Request, configured: string | undefined): boolean {
   const expected = configured?.trim();
   const provided = request.headers.get("authorization")?.match(/^Bearer\s+(.+)$/i)?.[1]?.trim();
@@ -210,6 +320,9 @@ export async function handleCodingExecute(
   if (!await verifyCodingRunnerAuthorization(provided, configured, allowedRepository)) return json({ error: "CODING_RUNNER_UNAUTHORIZED" }, 401);
   try {
     const runnerRequest = validateCodingRunnerRequest(await request.json(), allowedRepository);
+    if (isWorkflowFailureCodingReason(runnerRequest.reason)) {
+      return json({ accepted: false, status: "CODING_EXECUTION_FAILED_CLOSED", error: "CAUSAL_ACTIONABILITY_UNVERIFIED", liveAuthority: "NONE", productionMutationAllowed: false, aiAuthority: "ZERO_AUTHORITY" }, 409);
+    }
     if (!env.NUSA_EXECUTION_COORDINATOR) return json({ error: "PERSISTENT_EXECUTION_COORDINATOR_REQUIRED", status: "INTERFACE_READY" }, 503);
     const lease = await handoffOrAcquirePersistentExecution(env.NUSA_EXECUTION_COORDINATOR, {
       dedupeKey: runnerRequest.dedupeKey,
@@ -503,7 +616,9 @@ export default {
     if (!deliveryId?.trim()) return json({ error: "GITHUB_DELIVERY_ID_REQUIRED" }, 400);
     const event = classifyGithubEvent(request.headers.get("x-github-event"));
     if (!event) return json({ error: "GITHUB_EVENT_UNSUPPORTED" }, 422);
-    const body = await request.text();
+    let body: string;
+    try { body = await readBoundedWebhookBody(request); }
+    catch { return json({ error: "GITHUB_WEBHOOK_BODY_INVALID_OR_TOO_LARGE" }, 413); }
     if (!await verifyGithubWebhookAuthorization(request, env, body, allowedRepository)) return json({ error: "GITHUB_WEBHOOK_UNAUTHORIZED" }, 401);
     let dispatch;
     let payload: Record<string, unknown>;
@@ -579,6 +694,12 @@ export default {
         allowedRepository,
       });
       if (resolution.resolved) dispatch = { ...dispatch, prNumber: resolution.prNumber, reason: `${dispatch.reason}:${resolution.reason}` };
+    }
+
+    // A workflow failure is only an observation. It can reach the existing CodingRunner only
+    // after the protected producer's signed, exact-source causal contract creates a durable receipt.
+    if (dispatch.kind === "CI_FAILED") {
+      return dispatchCausallyVerifiedWorkflowFailure(dispatch, payload, env, allowedRepository, deliveryId);
     }
 
     const planned = planAutopilotExecution(dispatch);

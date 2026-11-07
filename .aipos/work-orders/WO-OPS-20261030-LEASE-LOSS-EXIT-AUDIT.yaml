@@ -1,0 +1,37 @@
+id: WO-OPS-20261030-LEASE-LOSS-EXIT-AUDIT
+title: "Audit and pin: a lost PAPER writer lease fails closed and the process exits"
+status: COMPLETED
+owner: nusa
+repository: cinamoncandy/NUSA
+base_branch: main
+base_commit: fcf46e3
+implementation_branch: claude/lease-loss-exit-audit-20261030
+authority_impact: none
+objective: "Design assessment 2026-10-28 section 3 item 2 (assessor A item 3): determine whether every path that can lose the PAPER writer lease stops trading and lets the process exit so systemd / the paper supervisor restarts it, and pin the answer with behaviour tests."
+result: "ALREADY DONE for the production daemon (no runtime code added). One bounded-latency note, below."
+evidence:
+  - "Closed-learning tick (apps/cloud/src/closedLearningProductionRuntime.ts): every serialized tick starts with paperRepository.verifyWriterLease(); a throw reaches failClosedScheduler, which logs 'scheduler failed closed: PAPER_WRITER_LEASE_LOST', records runtime-last-failure.json, sets process.exitCode=1 and requests the bounded fatal shutdown; main() then process.exit(1). The supervisor restarts ('runtime exited code=1 ... restart in 1000ms', host journal 2026-10-29). First tick runs at setTimeout 0, then every CLOSED_LEARNING_ROLLOVER_POLL_INTERVAL_MS = 30000 (= the lease TTL)."
+  - "Repository (SqliteCloudPaperAccountRepository): the heartbeat interval only latches leaseLost (it never exits by itself). After the latch, save, loadLatest, loadHistory, loadFills, clear and verifyWriterLease all throw PAPER_WRITER_LEASE_LOST; a restored clock or row cannot revive the instance."
+  - "Paper execution loop (PaperTradingExecutionLoop): every save() failure, including PAPER_WRITER_LEASE_LOST, returns FAILED 'paper account persistence failed' and leaves in-memory state unchanged. It does not exit by itself. No fill, order or ledger row can be written after the loss."
+  - "Therefore the execution-loop and ledger-write paths fail closed immediately but exit through the closed-learning tick, at most one 30 s poll later, with no trading in between. plain apps/cloud/src/runtime.ts main() has no such scheduler, but it is not a deployed entrypoint (nusa.service -> start-cloud-runtime.js -> closedLearningProductionRuntime.js)."
+gap:
+  description: "Exit latency after a lease loss is up to one 30 s poll, not immediate. Trading is already refused during that window."
+  fix_location: "An immediate exit would have to hook the save() failure or the heartbeat latch inside apps/cloud/src/paperTradingExecutionLoop.ts, which is the PAPER_ADAPTER module bound by MODULE_QUALIFICATION_SOURCE_BLOB_BY_STAGE_V1 (blob 1113297fa143b4e26318e3c57152bdf2d620ddb6) and by paperTradingExecutionLoop.requalification.test.ts."
+  decision: "Not edited. Pinned module and no safety benefit (writes are already refused). Reported to the owner. A separate watcher in a non-pinned file was judged redundant."
+scope:
+  - "Add tests/paper-writer-lease-loss-fail-closed.test.js (behaviour tests; real repository, real execution loop, real production scheduler with a mocked listener)."
+  - "No runtime, lease TTL, heartbeat, takeover, Risk, threshold or capital change. No pinned hash edited."
+acceptance:
+  - "Four loss modes (owner replaced, row deleted, expired, clock regression) latch via the heartbeat; every repository path throws and writes nothing; the execution loop returns FAILED with unchanged state."
+  - "Production scheduler requests fatal shutdown once, sets exit code 1, writes runtime-last-failure.json with CLOSED_LEARNING_SCHEDULER / PAPER_WRITER_LEASE_LOST and a cause code, and does not take the lease back."
+safety:
+  PAPER_ONLY: true
+  liveAuthority: NONE
+  productionMutationAllowed: false
+  aiAuthority: ZERO_AUTHORITY
+verification_commands:
+  - "rm -f node_modules/.cache/tsconfig.base.tsbuildinfo; npx tsc -p tsconfig.json"
+  - "node -r ./tests/register-dist.cjs --test tests/paper-writer-lease-loss-fail-closed.test.js tests/closed-learning-daemon-fatal-exit.test.js tests/paper-startup-lease-budget-2770.test.js tests/research-startup-recovery.test.js"
+  - "node scripts/aipos-work-order-index.js --check"
+validation: "New test 8/8 PASS. Mutation check: with verifyWriterLease removed from the tick in dist, the two scheduler tests fail; restored, 8/8 PASS. Sandbox needed the ws package copied into node_modules (untracked) to load runtime.js; CI has it."
+next: "Non-author /grill-me review, CI, owner decision on whether the up-to-30 s exit latency needs the pinned-module change (would need fresh PAPER_ADAPTER requalification)."

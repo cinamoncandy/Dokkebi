@@ -1,0 +1,19 @@
+id: WO-RESEARCH-20261031-ORDERBOOK-COVERAGE-WATCH
+title: "Show order-book hour coverage in /health so a data gap is seen while it can still be repaired"
+status: READY_FOR_REVIEW
+created: 2026-10-31
+trigger: "The pre-registered ORDERBOOK study ended INSUFFICIENT_DATA: 115 of 192 training hours had a book (59.9%, rule >= 90%). The gap was found only after the window closed (handoff 2026-10-31-orderbook-study-insufficient-data.md)."
+change:
+  - "apps/cloud/src/orderBookCoverage.ts: summarizeCoverage (pure), readOrderBookCoverage (read-only, one indexed lookup per hour over the last 192 hours, the study's own definition: a stored sample in the 2 minutes up to each full hour) and OrderBookCoverageWatch (cached for one hour, never throws)."
+  - "apps/cloud/src/runtime.ts: /health gains orderBookCoverage { schemaVersion, market, windowHours, coveredHours, ratio, longestGapHours, meetsStudyBar, asOfMs } for the first market in NUSA_RESEARCH_MARKETS (default KRW-BTC); absent when the database cannot be read."
+not_changed:
+  - "No study rule, threshold or window. No gap is filled or generated. No writes (the database is opened read-only). No qualification-pinned module, risk, execution or ledger path. meetsStudyBar is only the coverage condition, not a verdict."
+safety:
+  paper_only: true
+  liveAuthority: NONE
+  productionMutationAllowed: false
+  aiAuthority: ZERO_AUTHORITY
+validation:
+  - "tsc clean; orderBookCoverage.test (5 behaviour tests incl. the 2-minute definition, other markets not counted, invalid inputs); module10XS, researchStudyResult, cloud-runtime-*, learning-loop-contract, mobile-learning-* pass (149); platform-independent tests PASS."
+unverified: "Cost and output on the real 1.3 GB state.sqlite (the test databases are tiny); the lookups are indexed by the primary key (market, captured_at_ms) so each is a point range scan, but it was not timed on the host. The app does not show the field yet."
+next: "CI and the release path; after deploy read /health orderBookCoverage on the host. A later step can raise an alarm like learningPipelineAlarm when meetsStudyBar is false for a pre-registered study window."

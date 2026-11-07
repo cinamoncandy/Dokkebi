@@ -36,6 +36,8 @@
     "aipos:conformance": "node scripts/validate-aipos-cross-ai-conformance.js",
     "aipos:provenance": "node scripts/validate-aipos-work-order-provenance.js",
     "aipos:index": "node scripts/aipos-work-order-index.js",
+    "aipos:archive": "node scripts/aipos-archive-work-orders.js",
+    "aipos:truth": "node scripts/generate-aipos-current-truth.js",
     "aipos:state-add": "node scripts/aipos-state-insert.js",
     "aipos:yaml": "node scripts/validate-aipos-yaml.js",
     "capability:check": "node scripts/validate-capability-registry.js",
@@ -106,7 +108,11 @@
     "jsdom": "26.0.0",
     "storybook": "8.6.19",
     "typescript": "5.9.3",
-    "vitest": "4.1.11"
+    "vitest": "4.1.11",
+    "@sigstore/bundle": "5.0.0",
+    "@sigstore/core": "4.0.1",
+    "@sigstore/protobuf-specs": "0.5.0",
+    "@sigstore/verify": "4.1.2"
   },
   "dependencies": {
     "ws": "8.21.3"

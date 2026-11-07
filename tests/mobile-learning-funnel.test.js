@@ -13,7 +13,7 @@ test("the heartbeat carries the Research funnel as integers from the closed-lear
   assert.match(runtime, /const learningFunnelHeartbeat = \(\): \{ learningFunnel\?: PersonalPaperLearningFunnel \} =>/);
   assert.match(runtime, /holdoutPasses > discoveryPasses\) return \{\};/);
   assert.match(runtime, /Number\.isSafeInteger\(v\) && \(v as number\) >= 0/);
-  assert.match(runtime, /\.\.\.research, \.\.\.learningFunnelHeartbeat\(\), \.\.\.learningLoopHeartbeat\(\) \}\)/);
+  assert.match(runtime, /\.\.\.research, \.\.\.learningFunnelHeartbeat\(\), \.\.\.learningLoopHeartbeat\(\), \.\.\.orderBookStudyHeartbeat\(\) \}\)/);
 });
 
 test("the Learning screen shows the funnel only from a live snapshot, and its motion respects reduce-motion", () => {

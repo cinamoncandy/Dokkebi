@@ -55,6 +55,6 @@ test("the production composition wires minute closes from the persisted ticker s
   const fs = require("node:fs"), path = require("node:path");
   const src = fs.readFileSync(path.join(__dirname, "..", "apps", "cloud", "src", "closedLearningProductionRuntime.ts"), "utf8");
   assert.match(src, /new PaperMinuteBarSource\(\(market, startAt, endAt\) => minuteObservationReader\.readWindow\(market, startAt, endAt\)\)/);
-  // The strategy still receives exactly the bars the minute-bar source returns; the baseline shadow only observes them on the way (no mutation, no extra read).
-  assert.match(src, /paperCandidateMinuteCloses: \(market, now\) => \{\s*const bars = minuteBars\.read\(market, now\);\s*baselineShadow\?\.observe\(market, bars\);\s*return bars;\s*\}/);
+  // The strategy still receives exactly the bars the minute-bar source returns; the baseline shadow and the null comparators only observe them on the way (no mutation, no extra read).
+  assert.match(src, /paperCandidateMinuteCloses: \(market, now\) => \{\s*const bars = minuteBars\.read\(market, now\);\s*nullComparators\?\.observe\(market, bars\);[^\n]*\n\s*baselineShadow\?\.observe\(market, bars\);\s*return bars;\s*\}/);
 });

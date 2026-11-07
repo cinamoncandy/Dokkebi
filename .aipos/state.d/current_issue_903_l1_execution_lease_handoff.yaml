@@ -1,0 +1,17 @@
+current_issue_903_l1_execution_lease_handoff:
+  work_order: WO-ISSUE-903-L1-EXECUTION-LEASE-HANDOFF
+  status: IN_PROGRESS
+  issue: 903
+  pull_request: 2039
+  branch: agent/903-canonical-portfolio-autopilot
+  protected_main_sha: 01d698b325626e4a2e62b29e8e0b2f99f579ad4a
+  predecessor_head: 90726879b4c5dead48327579c59fdfdecda82154
+  recovery: NON_FORCE_MAIN_ALIGNMENT_WITH_TWO_FAIL_CLOSED_TEST_CONFLICTS
+  verified_gap: CAUSAL_HANDOFF_DID_NOT_EXTEND_AUTHENTICATED_CONSUMER_LEASE
+  repair_scope: "Persist bounded leaseExpiresAt in both generic and causal handoff paths; retain current-main generic-failure abstention and cap new WIP at two."
+  legacy_state: "Former three-to-eight WIP claims remain readable and are TTL-expired; they block new admissions until capacity is safe."
+  local_validation: PENDING
+  exact_head_ci: PENDING
+  independent_validator: PENDING
+  next: "Focused/full validation, exact-head CI and companions, then fresh non-author Validator. No direct merge or production runtime mutation."
+  safety: PAPER_ONLY_LIVE_NONE_PRODUCTION_MUTATION_FALSE_AI_ZERO_AUTHORITY

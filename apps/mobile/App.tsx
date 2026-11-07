@@ -6,8 +6,8 @@ import { AuthContext, useAuth, type AuthStatus } from "./src/authContext";
 // Screen presenters come only from the presentation boundary (docs/UI_ARCHITECTURE.md).
 import {
   FuturesView, HomeView, LiveReadinessMonitorView, MoreDetailView, MoreMenuView, NotificationView, NusaButton, NusaCard, OrderHistoryView,
-  EventBanner, PaperShadowMonitorView, PerformanceView, PortfolioView, PrimaryNavigation, SafetyLine, SettingsView, StatusChip, StrategiesView, TabTransition, ThemeProvider, useTheme, WaveMark,
-  type HomeDestination, type ThemePreference, type TruthfulMoreDetail,
+  AiShell, EventBanner, PaperShadowMonitorView, PerformanceView, PortfolioView, PrimaryNavigation, SafetyLine, SettingsView, StatusChip, StrategiesView, TabTransition, ThemeProvider, useTheme, WaveMark,
+  plainScreenChip, type HomeDestination, type ThemePreference, type TruthfulMoreDetail,
 } from "./src/presentation";
 import { getHomeVisualProfile } from "./src/homeVisualProfile";
 import { WatchlistRepository } from "./src/watchlist";
@@ -98,12 +98,12 @@ function PersistedThemeBridge({ children }: Readonly<{ children: React.ReactNode
 
 function DashboardConnectionRequired({ reason, onGoSettings }: Readonly<{ reason: string; onGoSettings: () => void }>) {
   const { theme: appTheme } = useTheme();
-  return <View style={styles.connectionState} testID="dashboard-connection-required"><View style={styles.connectionStateInner}><NusaCard raised>
+  return <AiShell chip={plainScreenChip("PAPER")}><View style={styles.connectionState} testID="dashboard-connection-required"><View style={styles.connectionStateInner}><NusaCard raised>
     <View style={styles.cardHeader}><View><Text style={[styles.cardEyebrow, { color: appTheme.colors.warning }]}>PAPER CONNECTION</Text><Text style={[styles.cardTitle, { color: appTheme.colors.text }]}>PAPER 서버 연결 필요</Text></View><StatusChip label="연결 안 됨" tone="warning" /></View>
     <Text style={[styles.body, { color: appTheme.colors.textMuted }]}>{reason}</Text>
     <Text style={[styles.meta, { color: appTheme.colors.textMuted }]}>Settings에서 Cloud endpoint와 메모리 전용 세션 토큰을 검증한 뒤 PAPER 데이터와 운용 감독 기능을 사용할 수 있습니다.</Text>
     <NusaButton label="설정에서 연결" onPress={onGoSettings} testID="dashboard-open-settings" />
-  </NusaCard></View></View>;
+  </NusaCard></View></View></AiShell>;
 }
 
 export default function App() { return <SafeAreaProvider><ThemeProvider initialMode="system"><PersistedThemeBridge><AuthContextProvider><AuthenticatedApp /></AuthContextProvider></PersistedThemeBridge></ThemeProvider></SafeAreaProvider>; }
@@ -569,7 +569,7 @@ function AuthenticatedApp() {
 
     <SafetyLine line={buildSafetyLine({ sessionState: paperSessionState, resuming: shownSessionState !== paperSessionState, runtimeHalted: snapshot?.paperLearning?.runtimeStatus === "HALTED", dataUnconfirmed: !paperProjectionPending && (snapshot == null || snapshot.health !== "HEALTHY") })} />
     <EventBanner ready={!paperProjectionPending && snapshot?.paperLearning != null} sourceKey={getConfiguredPaperEndpoint() ?? ""} events={snapshot?.paperLearning?.events ?? EMPTY_EVENTS} halted={snapshot?.paperLearning?.runtimeStatus === "HALTED"} />
-    <TabTransition transitionKey={`${activeTab}:${detailSurface ?? ""}:${utilityView ?? ""}:${paperLearningOpen ? "learning" : ""}`}>{paperLearningOpen ? <PaperShadowMonitorView paper={paperLearningState} learningFunnel={snapshot?.operations.heartbeat?.learningFunnel ?? null} learningLoop={snapshot?.operations.heartbeat?.learningLoop ?? null} shadow={shadowOperations.status === "READY" ? shadowOperations.snapshot : null} shadowReason={shadowOperations.status === "READY" ? undefined : paperProjectionPending ? PENDING_REASON : shadowOperations.reason} real={realReadOnlyOperations.status === "READY" ? realReadOnlyOperations.snapshot : null} realReason={realReadOnlyOperations.status === "READY" ? undefined : paperProjectionPending ? PENDING_REASON : realReadOnlyOperations.reason} refreshing={refreshing} onRefresh={onRefresh} onClose={() => setPaperLearningOpen(false)} />
+    <TabTransition transitionKey={`${activeTab}:${detailSurface ?? ""}:${utilityView ?? ""}:${paperLearningOpen ? "learning" : ""}`}>{paperLearningOpen ? <PaperShadowMonitorView paper={paperLearningState} learningFunnel={snapshot?.operations.heartbeat?.learningFunnel ?? null} learningLoop={snapshot?.operations.heartbeat?.learningLoop ?? null} orderBookStudy={snapshot?.operations.heartbeat?.orderBookStudy ?? null} shadow={shadowOperations.status === "READY" ? shadowOperations.snapshot : null} shadowReason={shadowOperations.status === "READY" ? undefined : paperProjectionPending ? PENDING_REASON : shadowOperations.reason} real={realReadOnlyOperations.status === "READY" ? realReadOnlyOperations.snapshot : null} realReason={realReadOnlyOperations.status === "READY" ? undefined : paperProjectionPending ? PENDING_REASON : realReadOnlyOperations.reason} refreshing={refreshing} onRefresh={onRefresh} onClose={() => setPaperLearningOpen(false)} />
       : requiresDashboardConnection ? <DashboardConnectionRequired reason={notConfigured ?? "PAPER 서버 연결이 필요합니다."} onGoSettings={goSettings} />
       : utilityView === "NOTIFICATIONS" ? <NotificationView repository={settingsRepository} />
       : utilityView === "SETTINGS" ? <SettingsView canonicalEndpoint={getConfiguredPaperEndpoint()} credentialSession={credentialSession} exchangeCash={accountCash} onCloudInvestmentPercentSave={investmentAllocationClient.save} onInvestmentPercentChanged={setInvestmentPercent} onSignOut={handleSignOut} repository={settingsRepository} />
@@ -578,7 +578,7 @@ function AuthenticatedApp() {
       : detailSurface === "Order" ? <OrderHistoryView error={readOnlyError} onRefresh={onRefresh} rawOrders={snapshot?.orders ?? null} refreshing={refreshing} />
       : detailSurface === "Performance" ? <PerformanceView screen={buildPerformanceScreen(paperLearningState.performance, paperLearningState.dataSource === "SERVER_STREAM")} onClose={() => setDetailSurface(null)} />
       : detailSurface === "Risk" || detailSurface === "SystemStatus" || detailSurface === "Help" ? <MoreDetailView destination={detailSurface} onClose={() => setDetailSurface(null)} />
-      : activeTab === "Paper" ? <PaperShadowMonitorView paper={paperLearningState} learningFunnel={snapshot?.operations.heartbeat?.learningFunnel ?? null} learningLoop={snapshot?.operations.heartbeat?.learningLoop ?? null} shadow={shadowOperations.status === "READY" ? shadowOperations.snapshot : null} shadowReason={shadowOperations.status === "READY" ? undefined : paperProjectionPending ? PENDING_REASON : shadowOperations.reason} real={realReadOnlyOperations.status === "READY" ? realReadOnlyOperations.snapshot : null} realReason={realReadOnlyOperations.status === "READY" ? undefined : paperProjectionPending ? PENDING_REASON : realReadOnlyOperations.reason} refreshing={refreshing} onRefresh={onRefresh} onClose={() => setActiveTab("Home")} />
+      : activeTab === "Paper" ? <PaperShadowMonitorView paper={paperLearningState} learningFunnel={snapshot?.operations.heartbeat?.learningFunnel ?? null} learningLoop={snapshot?.operations.heartbeat?.learningLoop ?? null} orderBookStudy={snapshot?.operations.heartbeat?.orderBookStudy ?? null} shadow={shadowOperations.status === "READY" ? shadowOperations.snapshot : null} shadowReason={shadowOperations.status === "READY" ? undefined : paperProjectionPending ? PENDING_REASON : shadowOperations.reason} real={realReadOnlyOperations.status === "READY" ? realReadOnlyOperations.snapshot : null} realReason={realReadOnlyOperations.status === "READY" ? undefined : paperProjectionPending ? PENDING_REASON : realReadOnlyOperations.reason} refreshing={refreshing} onRefresh={onRefresh} onClose={() => setActiveTab("Home")} />
       : activeTab === "Futures" ? <FuturesView futures={stale ? null : (snapshot?.operations.heartbeat as { readonly futures?: unknown } | null | undefined)?.futures ?? null} />
       : activeTab === "Live" ? <LiveReadinessMonitorView snapshot={liveReadinessOperations.status === "READY" ? liveReadinessOperations.snapshot : null} unavailableReason={liveReadinessOperations.status === "READY" ? undefined : paperProjectionPending ? PENDING_REASON : liveReadinessOperations.reason} unavailableKind={paperProjectionPending ? "PENDING" : liveReadinessOperations.status === "NOT_CONFIGURED" ? "SETUP" : "FAILED"} refreshing={refreshing} onRefresh={onRefresh} />
       : activeTab === "More" ? <MoreMenuView heartbeat={stale ? null : snapshot?.operations.heartbeat ?? null} onOpen={(destination: MoreDestination) => {
