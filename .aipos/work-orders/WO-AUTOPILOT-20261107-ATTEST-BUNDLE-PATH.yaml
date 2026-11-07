@@ -25,4 +25,5 @@ verification_commands:
   - node scripts/validate-workflow-authority-map.js
   - node scripts/validate-aipos-yaml.js
 review: "Draft PR: a non-author review is required because workflows are changed. The fix can only be proven by a main-push run of the real attestor (a future canary), which this PR does not run."
+release_note: "The first Audit of this PR ended with NO_ACTION Release serialized before Audit: blocked_by=P0#1461 (the Cloudflare baseline P0 that the trusted preflight maintains). The preflight only closes that issue on a manual workflow_dispatch. With the owner approval of 2026-11-07 the preflight was dispatched once on main (run 42365223296, deployment status ready) and it closed #1461 as designed. Audit accepts one run per head and CI run, so this record change gives the PR a new head. No limit, gate, workflow or authority change."
 residual: "scripts/validate-workflow-action-inputs.js only checks required inputs; it does not detect unknown inputs, so it passed on the broken workflow. A follow-up could validate with: keys against each action's action.yml."
