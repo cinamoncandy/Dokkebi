@@ -61,7 +61,7 @@ verification_commands:
   - "pnpm run security:gate"
   - "git diff --check"
 validation:
-  status: COMMITTED_PENDING_SUCCESSOR_EXACT_HEAD_CI_AND_REVIEW
+  status: PR_OPEN_DRAFT_PENDING_FINAL_EXACT_HEAD_CI_AND_REVIEW
   p2_dispositions:
     N1: "UNKNOWN retained: the recorder orders/prunes by occurredAt and event_id and provides no verified monotonic insertion sequence; events backdated below the top-250 cutoff remain outside this observer's proof."
     N2: "FIXED: the literal-newline comment defect is absent on protected main; the redundant standalone invalid-projection assignment is removed in this successor, while the shared saturated-window gate fails closed and the reverse-timestamp regression asserts INCOMPLETE plus event_evidence_truncated=true."
@@ -81,9 +81,10 @@ validation:
   local_full_suite: "PASS after current-main synchronization: node scripts/run-tests-isolated.js completed 1335 isolated test files on the candidate source tree based on 96e8b8bab0580b353541ec6acadf6c080bd0b14b. Only AIPOS evidence text changed after this run; targeted CURRENT_TRUTH/AIPOS validators are rerun after metadata updates. The runner's tracked sentinel was restored byte-for-byte from HEAD."
   local_validation: "After rebasing onto 96e8b8bab0580b353541ec6acadf6c080bd0b14b: focused observer+chaos 33/33; preflight PASS; root/mobile typecheck PASS; build PASS (changed-test fast gate skipped outside primary CI); validate:full PASS; security PASS (0 high/critical, 0 secrets); lint 0 errors / 47 warnings. Candidate full suite 1335 files PASS. Final AIPOS YAML/provenance/drift/conformance/current-truth tests and diff-check PASS after the latest metadata update."
   successor_commit: CREATED_UNPUBLISHED_ON_IMPLEMENTATION_BRANCH
-  successor_pr: NOT_CREATED
-  successor_exact_head_ci: PENDING
-  reviewer_disposition: "PASS_WITH_NOTES on predecessor b2398342440a9d36abdc43bf41ca1ff32549785f only. No fresh submitted disposition for the successor candidate; pending."
+  successor_pr: 3011
+  successor_published_initial_head: "f469aa74a703125c4025be5a0d2e99fd7d7347bb; superseded by the AIPOS PR-number recording commit, so do not reuse its CI. Resolve the current exact head from PR #3011 metadata."
+  successor_exact_head_ci: PENDING_FINAL_METADATA_HEAD
+  reviewer_disposition: "PASS_WITH_NOTES on predecessor b2398342440a9d36abdc43bf41ca1ff32549785f only. No fresh disposition for the final PR #3011 head; pending."
   prior_head: "e7bf8129dd159298ae4c52f517125bdae4d0ca7b failed CI: test fixture nested cycleEvents arrays were sorted without flattening; independent review HOLD."
   successor_changes: "N1 disclosed as UNKNOWN because occurredAt is not insertion-order proof; N2 restored executable saturated invalid-order guard; N3 narrowed adjacent_windows_anchored to moving validated saturated windows; the emitted evidence now says ADJACENT_WINDOW_ANCHORS_ONLY and late_backdated_event_coverage=UNKNOWN. N4 AIPOS work order/state/current truth record prior and candidate validation separately."
   dependency_provenance: "The isolated suite and first local gates used the previously verified node_modules symlink targets, whose lockfile hash matched this worktree. After those symlinks were removed, pnpm run aipos:truth detected no node_modules and restored 916 packages from the repository lockfile using the local content-addressed store (0 downloaded); package.json and pnpm-lock.yaml remain unchanged."

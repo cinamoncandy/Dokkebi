@@ -2,13 +2,14 @@ current_wo0059_projection_continuity_20261107:
   work_order: WO-0059-PROJECTION-CONTINUITY-20261107
   status: IN_PROGRESS
   branch: wo-0059-projection-scope-clarification-20261107
-  pr: null
+  pr: 3011
+  pr_initial_head_superseded: f469aa74a703125c4025be5a0d2e99fd7d7347bb
   predecessor_pr: 3010
   predecessor_pr_status: MERGED
   predecessor_pr_head: 8e3a105501d02fc489eaa1adbf6704b5ee132a8d
   base_sha: 96e8b8bab0580b353541ec6acadf6c080bd0b14b
   objective: "Preserve the 250-event read-only projection safety cap while reporting only validated adjacent-window anchors and keeping late/backdated-event coverage UNKNOWN."
-  first_broken_transition: "Committed current-main-based successor -> exact-head CI and fresh-session technical disposition."
+  first_broken_transition: "PR #3011 AIPOS publication update -> final exact-head CI and fresh-session technical disposition."
   correction: "Flatten the fixtures. Verify each saturated newest-first window has unique IDs and canonical order. Require its preceding window's newest ID to be retained; a shared older ID alone never proves continuity. Reject duplicate IDs, reversed order, missing anchor, or collector cap overflow as incomplete. Emit only a moving adjacent-window anchor claim, explicitly leave late/backdated-event coverage UNKNOWN, and keep visible runtime HALT/ERROR fail-closed."
   proof_scope: "ADJACENT_WINDOW_ANCHORS_ONLY; this does not prove insertion order or source completeness. Events omitted before the upstream recorder or backdated below the top-250 occurredAt cutoff cannot be attested by this harness. Their coverage remains UNKNOWN."
   safety_limit: "No event cap, Strategy, Risk, or semantic readiness threshold is changed. Actual missing autonomous order/fill/PnL always remains INCOMPLETE."
@@ -19,6 +20,6 @@ current_wo0059_projection_continuity_20261107:
   reviewer: "PASS_WITH_NOTES on predecessor b239834 only; no review receipt on merged head 8e3a105 or local successor candidate"
   evidence_limitation: "Late/backdated events below the top-250 occurredAt cutoff are not detectable; the recorder has no verified insertion-order timestamp or durable sequence guarantee. Coverage remains UNKNOWN."
   correction_latest: "The executable invalid-saturated-projection guard and moving adjacent-window metric are already on protected main. The local follow-up narrows proof_scope and emits late_backdated_event_coverage=UNKNOWN; AIPOS records PR #3010's merged state and the absence of review on merged head. CURRENT_TRUTH is generator-produced."
-  validation: "Protected main a3ed1608caa355371825006ba0e710bab5026c40 and merged #3010 head 8e3a105501d02fc489eaa1adbf6704b5ee132a8d shared identical source trees; main advanced to 96e8b8bab0580b353541ec6acadf6c080bd0b14b and the successor was rebased. On the current base, focused observer+chaos 33/33, full suite 1335 isolated files, preflight, root/mobile typecheck, build, validate:full, security, and lint (0 errors / 47 baseline warnings) pass. The unchanged source/test patch hash is 5a7dc534d9b96bc551b15014c8e9a267e6f96f51407dbf6f9dbda60f378da02f. Final AIPOS validators/diff check run after the latest metadata update; remote exact-head CI and fresh-session review are pending."
-  next: "Complete final AIPOS validation on this current-main-based committed candidate, publish one Draft successor PR for the still-open WO, then verify exact-head CI and obtain a fresh-session technical disposition. Do not reopen or push to merged PR #3010. Keep readiness INCOMPLETE."
+  validation: "Protected main a3ed1608caa355371825006ba0e710bab5026c40 and merged #3010 head 8e3a105501d02fc489eaa1adbf6704b5ee132a8d shared identical source trees; main advanced to 96e8b8bab0580b353541ec6acadf6c080bd0b14b and the successor was rebased. Local exact-source validation on that base: focused observer+chaos 33/33, full suite 1335 isolated files, preflight, root/mobile typecheck, build, validate:full, security, and lint (0 errors / 47 baseline warnings) pass. Source/test patch hash 5a7dc534d9b96bc551b15014c8e9a267e6f96f51407dbf6f9dbda60f378da02f. PR #3011 opened at initial head f469aa74; a metadata update supersedes that head and starts a new exact-head CI requirement."
+  next: "Commit/push the AIPOS PR-number update once; then use PR #3011 live metadata as the exact head, wait for terminal exact-head CI/companions, and obtain a fresh-session technical disposition. Keep readiness INCOMPLETE."
   safety: PAPER_ONLY_LIVE_NONE_PRODUCTION_MUTATION_FALSE_REAL_ORDER_FALSE_REAL_TRANSFER_FALSE_AI_ZERO_AUTHORITY_FAIL_CLOSED
