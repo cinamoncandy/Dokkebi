@@ -1,0 +1,17 @@
+forge_watchdog_p2_20261107:
+  work_order: WO-OPS-20261105-ORACLE-CONVERGENCE-1816
+  issue: 1816
+  pr: 3000
+  state: IN_PROGRESS
+  main_verified: 3241c525ab9575271a1150d8635d87ef9764c069
+  implementation_head_before_documentation: 4f03fb2f046fc3ab6bf661edaead35f950b65c3e
+  first_broken_transition: "Receipt workflow success was mistaken for semantic convergence in watchdog dedupe"
+  patch: "Exact-run receipt artifact evidence gate with 3-completed-attempt persistent cap"
+  exact_head_ci: PENDING_NEW_SUCCESSOR_SHA
+  independent_validator: PENDING_NEW_SUCCESSOR_SHA
+  formal_validator: UNVERIFIED
+  audit: NOT_AUTHORIZED
+  release: NOT_AUTHORIZED
+  merge: PROHIBITED_FOR_AI
+  next: "Verify exact-head CI and companions for the state-key-split successor, obtain fresh independent technical validation, then continue to Formal Validator contract resolution; keep Draft."
+  safety: PAPER_ONLY_LIVE_NONE_PRODUCTION_MUTATION_FALSE_AI_ZERO_AUTHORITY

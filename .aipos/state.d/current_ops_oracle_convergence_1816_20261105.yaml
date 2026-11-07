@@ -48,22 +48,4 @@ current_ops_oracle_convergence_1816_20261105:
   l1: PARTIAL
   l2: HOLD
   safety: PAPER_ONLY_LIVE_NONE_PRODUCTION_MUTATION_FALSE_REAL_ORDER_FALSE_REAL_TRANSFER_FALSE_AI_ZERO_AUTHORITY_FAIL_CLOSED
-  next: "After final diff inspection and AIPOS validation, commit and non-force push the reconciled successor to the existing Draft #3000 branch; await exact-head CI and fresh independent review. Formal Validator remains blocked until its canonical receipt route is defined. Never dispatch a new Oracle Release from the watchdog."
-
-forge_watchdog_p2_20261107:
-  work_order: WO-OPS-20261105-ORACLE-CONVERGENCE-1816
-  issue: 1816
-  pr: 3000
-  state: IN_PROGRESS
-  main_verified: 3241c525ab9575271a1150d8635d87ef9764c069
-  implementation_head_before_documentation: 4f03fb2f046fc3ab6bf661edaead35f950b65c3e
-  first_broken_transition: "Receipt workflow success was mistaken for semantic convergence in watchdog dedupe"
-  patch: "Exact-run receipt artifact evidence gate with 3-completed-attempt persistent cap"
-  exact_head_ci: PENDING
-  independent_validator: PENDING_NEW_HEAD
-  formal_validator: UNVERIFIED
-  audit: NOT_AUTHORIZED
-  release: NOT_AUTHORIZED
-  merge: PROHIBITED_FOR_AI
-  next: "Verify exact-head checks and independent technical validation; do not advance Draft before Formal Validator."
-  safety: PAPER_ONLY_LIVE_NONE_PRODUCTION_MUTATION_FALSE_AI_ZERO_AUTHORITY
+  next: "Exact-head CI 42361773233 exposed a state.d one-key-per-file violation. The P2 state is split into its own file and committed locally on a fast-forward successor; full suite and validation pass. Exact-head CI and fresh independent review remain pending after push to the existing Draft #3000 branch. Formal Validator remains blocked until its canonical receipt route is defined. Never dispatch a new Oracle Release from the watchdog."

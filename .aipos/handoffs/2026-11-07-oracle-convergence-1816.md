@@ -58,3 +58,11 @@ Next: complete final AIPOS/diff checks, commit the current-main reconciliation t
 - FIRST_BROKEN_TRANSITION under repair: `Receipt Actions SUCCESS -> semantic receipt CONVERGED -> watchdog deduplication`. Separately, Formal Validator issuance and Audit consumption are not proven and must remain fail-closed.
 - Next: exact-head CI + companions, updated independent review, canonical Formal Validator evidence, deterministic Audit, Release authority and governed merge; post-merge exact-main Oracle Release / Host Diagnose / machine receipt only with proper external authorization.
 - Safety unchanged: PAPER_ONLY; liveAuthority=NONE; productionMutationAllowed=false; realOrderAuthority=false; realTransferAuthority=false; aiAuthority=ZERO_AUTHORITY.
+
+## AIPOS state.d CI failure repair — 2026-11-07
+
+- Fresh PR successor at investigation: `23697c576841fab4cd9c99034bdff186c56e41f6`; exact-head CI run `42361773233` failed in `coverage-core-2` at `tests/aipos-state-dir.test.js`.
+- Root cause: `.aipos/state.d/current_ops_oracle_convergence_1816_20261105.yaml` contained both `current_ops_oracle_convergence_1816_20261105` and `forge_watchdog_p2_20261107`, violating the canonical one-key-per-file invariant. No production or Oracle behavior failed.
+- Minimal repair: split `forge_watchdog_p2_20261107` into `.aipos/state.d/forge_watchdog_p2_20261107.yaml`; regenerate `.aipos/CURRENT_TRUTH.md` with the repository generator. Existing untracked security/audit reports remain excluded from the PR.
+- Verification on the repair tree: focused state-dir/current-truth/convergence tests 20/20 PASS; `pnpm test` PASS (1,336 isolated test files); `pnpm run validate:full` PASS; `pnpm run security:gate` PASS (0 findings/secrets); `pnpm run lint:scripts` 0 errors / 47 baseline warnings; AIPOS YAML, provenance, generated CURRENT_TRUTH and `git diff --check` PASS. `pnpm test` used dependencies installed from the frozen lockfile in the isolated temporary worktree; the original workspace dependency symlink was preserved.
+- This repair tree's successor SHA still requires exact-head CI/companions and fresh independent review. PR remains Draft. Formal Validator, Audit, Release authorization, merge, Oracle operation and canonical Convergence receipt remain unverified/not authorized.
