@@ -66,3 +66,17 @@ Next: complete final AIPOS/diff checks, commit the current-main reconciliation t
 - Minimal repair: split `forge_watchdog_p2_20261107` into `.aipos/state.d/forge_watchdog_p2_20261107.yaml`; regenerate `.aipos/CURRENT_TRUTH.md` with the repository generator. Existing untracked security/audit reports remain excluded from the PR.
 - Verification on the repair tree: focused state-dir/current-truth/convergence tests 20/20 PASS; `pnpm test` PASS (1,336 isolated test files); `pnpm run validate:full` PASS; `pnpm run security:gate` PASS (0 findings/secrets); `pnpm run lint:scripts` 0 errors / 47 baseline warnings; AIPOS YAML, provenance, generated CURRENT_TRUTH and `git diff --check` PASS. `pnpm test` used dependencies installed from the frozen lockfile in the isolated temporary worktree; the original workspace dependency symlink was preserved.
 - This repair tree's successor SHA still requires exact-head CI/companions and fresh independent review. PR remains Draft. Formal Validator, Audit, Release authorization, merge, Oracle operation and canonical Convergence receipt remain unverified/not authorized.
+
+## Fresh independent review finding — retry attempts — 2026-11-07
+
+- Exact reviewed SHA: `4e9553b331f9488ef8dc963e2d5c1f07ba9d5eba`; exact-head CI `42363133880` and five companions passed. Conditional causal jobs were skipped and are not positive causal evidence.
+- Separate read-only Validator disposition: `CHANGES_REQUIRED`, P0=0/P1=0/P2=1. The reviewer found that counting completed run records with `length` does not enforce a three-attempt budget when GitHub reruns increment `run_attempt` on one record.
+- Minimal correction in the existing #3000 branch: sum each completed exact-main receipt run's `run_attempt` (default 1) rather than count run records. The focused convergence test now asserts the attempt-sum query and rejects the old record-count query; focused suite 15/15 PASS.
+- The review applies only to `4e9553b3…`; a fresh independent review is required after successor validation. Full suite and all affected checks remain pending for the code successor. Keep Draft; no Formal Validator/Audit/Release/merge or Oracle operation is implied.
+
+## Retry-cap attempt aggregation repair — 2026-11-07
+
+- Addressed the exact-head independent review P2 on `4e9553b331f9488ef8dc963e2d5c1f07ba9d5eba` in the existing PR #3000 branch. The receipt budget now sums each completed exact-main run's `run_attempt` value (defaulting to 1) so rerunning one GitHub workflow run consumes the same three-attempt budget as separate runs.
+- Regression contract now requires the completed `run_attempt` sum and rejects the previous completed-record `length` count. The jq expression was exercised with a fixture representing two attempts in one run plus one separate run; the result was 3.
+- On the patch tree before commit: focused convergence tests 15/15 PASS; `pnpm test` PASS (1,336 isolated files); `validate:full` PASS; `security:gate` PASS (0 high/critical, 0 secrets); lint 0 errors / 47 baseline warnings; workflow action pins/inputs/authority map PASS (41 workflows); AIPOS YAML/provenance/generated truth PASS; `git diff --check` PASS. The earlier workspace `node_modules` symlink was left intact; validation used the isolated worktree's lockfile-installed dependencies.
+- The next commit changes the SHA; exact-head CI/companions and a fresh independent review must run on that successor. PR #3000 remains Draft and all Formal Validator/Audit/Release/merge/Oracle operations remain separate and unauthorized here.

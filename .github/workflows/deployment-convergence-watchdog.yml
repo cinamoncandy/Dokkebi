@@ -201,19 +201,20 @@ jobs:
 
             local failures
             if [ "$workflow_name" = "Deployment Convergence Receipt" ]; then
-              # Count every completed attempt (including nominal SUCCESS with an
-              # invalid receipt), so restart/replay cannot reset retry budget.
+              # One GitHub run record can represent multiple reruns. Sum run_attempt
+              # for every completed exact-head receipt run so reruns consume budget too.
               failures="$(printf '%s' "$RUNS_JSON" | jq -r --arg sha "$MAIN_SHA" '
                 [.workflow_runs[] |
                   select(.name == "Deployment Convergence Receipt" and
                     .path == ".github/workflows/deployment-convergence-receipt.yml" and
-                    .head_sha == $sha and .status == "completed")] | length
+                    .head_sha == $sha and .status == "completed") |
+                  (.run_attempt // 1)] | add // 0
               ')"
             else
               failures="$(workflow_failures "$workflow_name")"
             fi
             if [ "$failures" -ge 3 ]; then
-              surface_incident "$component" "Observed $failures failed/timed-out/cancelled exact-main runs."
+              surface_incident "$component" "Observed $failures completed exact-main receipt attempts."
               echo "$component retry budget exhausted; remaining fail-closed."
               return 0
             fi

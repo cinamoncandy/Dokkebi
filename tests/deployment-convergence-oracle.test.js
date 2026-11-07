@@ -295,7 +295,10 @@ test("watchdog dedupes only semantically verified exact-main receipts and bounds
   assert.match(receiptGate, /\.path == "\.github\/workflows\/deployment-convergence-receipt\.yml"/);
   const bounded = watchdog.slice(watchdog.indexOf("dispatch_bounded() {"), watchdog.indexOf('CI_CONCLUSION="'));
   assert.match(bounded, /if receipt_success; then/);
-  assert.match(bounded, /\.status == "completed"\)\] \| length/);
+  assert.match(bounded, /\.status == "completed"/);
+  assert.match(bounded, /\.run_attempt \/\/ 1/);
+  assert.match(bounded, /\| add \/\/ 0/);
+  assert.doesNotMatch(bounded, /\.status == "completed"\)\] \| length/);
   assert.match(bounded, /if \[ "\$failures" -ge 3 \]; then/);
   assert.match(bounded, /if workflow_active "\$workflow_name"; then/);
 });
