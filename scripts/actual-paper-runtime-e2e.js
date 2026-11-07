@@ -437,13 +437,16 @@ async function observeAutomaticRuntime({
     const windowMoved = windowContinuityVerified && learningEvents[0]?.id !== previousProjectionNewestId;
     // Uncapped views do not depend on a rolling-window continuity proof;
     // their individual events are still validated below as before.
-    if (!currentProjectionValid && learningEvents.length >= 250) eventEvidenceTruncated = true;
     if (learningEvents.length >= 250) {
       cappedProjectionSamples += 1;
       if (windowContinuityVerified) {
         overlappingCappedSamples += 1;
         if (windowMoved) movingAnchoredCappedSamples += 1;
-      } else eventEvidenceTruncated = true;
+      } else {
+        // Invalid order/identity or a missing prior newest anchor makes a
+        // saturated projection incomplete through the same fail-closed gate.
+        eventEvidenceTruncated = true;
+      }
     }
     // A prior saturated window can roll out events between reads even if the
     // current response is below the cap. Mere overlap with older IDs is unsafe.
@@ -651,7 +654,8 @@ async function observeAutomaticRuntime({
       newest_anchor_verified_capped_samples: overlappingCappedSamples,
       moving_anchored_capped_samples: movingAnchoredCappedSamples,
       adjacent_windows_anchored: !eventEvidenceTruncated && movingAnchoredCappedSamples > 0,
-      proof_scope: "ORDERED_PROJECTION_WINDOWS_ONLY",
+      proof_scope: "ADJACENT_WINDOW_ANCHORS_ONLY",
+      late_backdated_event_coverage: "UNKNOWN",
     },
     stage_evidence: stageEvidence,
     decision_cycles: decisionCycles,

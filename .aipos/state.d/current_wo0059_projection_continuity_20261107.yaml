@@ -1,21 +1,24 @@
 current_wo0059_projection_continuity_20261107:
   work_order: WO-0059-PROJECTION-CONTINUITY-20261107
   status: IN_PROGRESS
-  branch: wo-0059-evidence-projection-continuity-20261107
-  pr: 3010
-  base_sha: 0209466469fe45b7f90dbeefb96d4a9e27cfb3b2
-  objective: "Preserve the 250-event read-only projection safety cap while distinguishing a fully overlapping rolling window from a possible missed-event gap."
-  first_broken_transition: "CI 42324825505 failed on e7bf8129dd159298ae4c52f517125bdae4d0ca7b because two new regression fixtures sorted nested cycleEvents arrays instead of flattening. Independent reviewer HOLD also found mere-ID-overlap insufficient for continuity."
-  correction: "Flatten the fixtures. Verify each saturated newest-first window has unique IDs and canonical order. Require its preceding window's newest ID to be retained; a shared older ID alone never proves continuity. Reject duplicate IDs, reversed order, missing anchor, or collector cap overflow as incomplete. Visible runtime HALT/ERROR must still fail closed."
-  proof_scope: "ORDERED_PROJECTION_WINDOWS_ONLY; depends on completeness of the upstream read-only projection contract. Events omitted before the upstream recorder or already evicted before first observation cannot be attested by this harness. Their absence remains UNKNOWN."
+  branch: wo-0059-projection-scope-clarification-20261107
+  pr: null
+  predecessor_pr: 3010
+  predecessor_pr_status: MERGED
+  predecessor_pr_head: 8e3a105501d02fc489eaa1adbf6704b5ee132a8d
+  base_sha: 96e8b8bab0580b353541ec6acadf6c080bd0b14b
+  objective: "Preserve the 250-event read-only projection safety cap while reporting only validated adjacent-window anchors and keeping late/backdated-event coverage UNKNOWN."
+  first_broken_transition: "Committed current-main-based successor -> exact-head CI and fresh-session technical disposition."
+  correction: "Flatten the fixtures. Verify each saturated newest-first window has unique IDs and canonical order. Require its preceding window's newest ID to be retained; a shared older ID alone never proves continuity. Reject duplicate IDs, reversed order, missing anchor, or collector cap overflow as incomplete. Emit only a moving adjacent-window anchor claim, explicitly leave late/backdated-event coverage UNKNOWN, and keep visible runtime HALT/ERROR fail-closed."
+  proof_scope: "ADJACENT_WINDOW_ANCHORS_ONLY; this does not prove insertion order or source completeness. Events omitted before the upstream recorder or backdated below the top-250 occurredAt cutoff cannot be attested by this harness. Their coverage remains UNKNOWN."
   safety_limit: "No event cap, Strategy, Risk, or semantic readiness threshold is changed. Actual missing autonomous order/fill/PnL always remains INCOMPLETE."
-  last_verified_head: b2398342440a9d36abdc43bf41ca1ff32549785f
-  last_verified_ci_run: 42326222552
+  last_verified_head: 8e3a105501d02fc489eaa1adbf6704b5ee132a8d
+  last_verified_ci_run: 42331363127
   last_verified_ci: SUCCESS
-  last_verified_companion_workflows: "42326222626,42326222566,42326222655,42326222597,42326222595 SUCCESS"
-  reviewer: "PASS_WITH_NOTES; P0=0 P1=0, N1-N4 pending successor implementation"
-  evidence_limitation: "A late backdated event below the top-250 projection cutoff cannot be detected; monotonic insertion timestamp assumption is UNVERIFIED. This is not full event-stream continuity proof."
-  correction_latest: "Restore real newlines around saturated invalid-order guard; replace continuity_proven by adjacent_windows_anchored requiring moving validated windows; record N1/CI in work order and PR."
-  validation: "Previous exact-head b239834 CI 42326222552 SUCCESS. Successor CI/independent reviewer disposition pending. Full local pnpm suite not run in this connector environment."
-  next: "Run fresh exact-head CI/companions; inspect failing jobs and fix minimal scope; obtain fresh independent validator disposition; then Ready for Review and governed Audit."
+  last_verified_companion_workflows: "42331363044,42331363060,42331363033,42331363112,42331363194 SUCCESS"
+  reviewer: "PASS_WITH_NOTES on predecessor b239834 only; no review receipt on merged head 8e3a105 or local successor candidate"
+  evidence_limitation: "Late/backdated events below the top-250 occurredAt cutoff are not detectable; the recorder has no verified insertion-order timestamp or durable sequence guarantee. Coverage remains UNKNOWN."
+  correction_latest: "The executable invalid-saturated-projection guard and moving adjacent-window metric are already on protected main. The local follow-up narrows proof_scope and emits late_backdated_event_coverage=UNKNOWN; AIPOS records PR #3010's merged state and the absence of review on merged head. CURRENT_TRUTH is generator-produced."
+  validation: "Protected main a3ed1608caa355371825006ba0e710bab5026c40 and merged #3010 head 8e3a105501d02fc489eaa1adbf6704b5ee132a8d shared identical source trees; main advanced to 96e8b8bab0580b353541ec6acadf6c080bd0b14b and the successor was rebased. On the current base, focused observer+chaos 33/33, full suite 1335 isolated files, preflight, root/mobile typecheck, build, validate:full, security, and lint (0 errors / 47 baseline warnings) pass. The unchanged source/test patch hash is 5a7dc534d9b96bc551b15014c8e9a267e6f96f51407dbf6f9dbda60f378da02f. Final AIPOS validators/diff check run after the latest metadata update; remote exact-head CI and fresh-session review are pending."
+  next: "Complete final AIPOS validation on this current-main-based committed candidate, publish one Draft successor PR for the still-open WO, then verify exact-head CI and obtain a fresh-session technical disposition. Do not reopen or push to merged PR #3010. Keep readiness INCOMPLETE."
   safety: PAPER_ONLY_LIVE_NONE_PRODUCTION_MUTATION_FALSE_REAL_ORDER_FALSE_REAL_TRANSFER_FALSE_AI_ZERO_AUTHORITY_FAIL_CLOSED

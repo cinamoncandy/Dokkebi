@@ -141,6 +141,8 @@ test("a continuously overlapping capped read-only window is not lost evidence", 
   assert.equal(result.evidence.event_evidence_truncated, false);
   assert.equal(result.evidence.projection_window.adjacent_windows_anchored, true);
   assert.ok(result.evidence.projection_window.moving_anchored_capped_samples > 0);
+  assert.equal(result.evidence.projection_window.proof_scope, "ADJACENT_WINDOW_ANCHORS_ONLY");
+  assert.equal(result.evidence.projection_window.late_backdated_event_coverage, "UNKNOWN");
   assert.ok(result.evidence.projection_window.capped_samples >= 3);
   assert.equal(result.evidence.projection_window.newest_anchor_verified_capped_samples, result.evidence.projection_window.capped_samples);
   assert.equal(result.evidence.decision_cycles_observed, 3);
@@ -188,6 +190,7 @@ test("capped projection continuity does not excuse missing natural Decision cycl
   assert.equal(result.evidence.event_evidence_truncated, false);
   assert.equal(result.evidence.projection_window.moving_anchored_capped_samples, 0);
   assert.equal(result.evidence.projection_window.adjacent_windows_anchored, false);
+  assert.equal(result.evidence.projection_window.late_backdated_event_coverage, "UNKNOWN");
 });
 
 
@@ -226,6 +229,7 @@ test("reverse timestamp order in a saturated projection cannot prove continuity"
   });
   assert.equal(result.status, "INCOMPLETE");
   assert.equal(result.evidence.stop_reason, "EVENT_EVIDENCE_TRUNCATED");
+  assert.equal(result.evidence.event_evidence_truncated, true);
   assert.equal(result.evidence.projection_window.adjacent_windows_anchored, false);
 });
 
