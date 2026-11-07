@@ -1,0 +1,14 @@
+current_wo0059_projection_continuity_20261107:
+  work_order: WO-0059-PROJECTION-CONTINUITY-20261107
+  status: IN_PROGRESS
+  branch: wo-0059-evidence-projection-continuity-20261107
+  pr: 3010
+  base_sha: 0209466469fe45b7f90dbeefb96d4a9e27cfb3b2
+  objective: "Preserve the 250-event read-only projection safety cap while distinguishing a fully overlapping rolling window from a possible missed-event gap."
+  first_broken_transition: "CI 42324825505 failed on e7bf8129dd159298ae4c52f517125bdae4d0ca7b because two new regression fixtures sorted nested cycleEvents arrays instead of flattening. Independent reviewer HOLD also found mere-ID-overlap insufficient for continuity."
+  correction: "Flatten the fixtures. Verify each saturated newest-first window has unique IDs and canonical order. Require its preceding window's newest ID to be retained; a shared older ID alone never proves continuity. Reject duplicate IDs, reversed order, missing anchor, or collector cap overflow as incomplete. Visible runtime HALT/ERROR must still fail closed."
+  proof_scope: "ORDERED_PROJECTION_WINDOWS_ONLY; depends on completeness of the upstream read-only projection contract. Events omitted before the upstream recorder or already evicted before first observation cannot be attested by this harness. Their absence remains UNKNOWN."
+  safety_limit: "No event cap, Strategy, Risk, or semantic readiness threshold is changed. Actual missing autonomous order/fill/PnL always remains INCOMPLETE."
+  validation: "Two-file syntax and isolated deterministic observer cases were exercised on initial draft. After validator HOLD, regression fixtures and proof logic changed and require fresh focused/full CI verification. No claimed full local test for the successor."
+  next: "Inspect exact-head CI; repair only reproduced failures; independent fresh-session technical review; keep PR #3010 Draft until gates are satisfied."
+  safety: PAPER_ONLY_LIVE_NONE_PRODUCTION_MUTATION_FALSE_REAL_ORDER_FALSE_REAL_TRANSFER_FALSE_AI_ZERO_AUTHORITY_FAIL_CLOSED
