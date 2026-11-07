@@ -328,16 +328,19 @@ export class ClosedLearningLoopStatusTracker {
    * Seeds the last BLOCKED/ERROR reason from the restart-surviving record. A reason observed by THIS process always wins, so the
    * seed only fills the gap after a restart; its own timestamp shows readers that it is older than this process.
    */
-  public seedLastBlocked(record: { readonly reason: string; readonly at: number } | undefined): void {
+  public seedLastBlocked(record: { readonly reason: string; readonly at: number; readonly errorClass?: string } | undefined): void {
     if (record == null || this.lastBlocked !== undefined || !CODE.test(record.reason) || !Number.isSafeInteger(record.at) || record.at < 0) return;
     this.lastBlocked = { reason: record.reason, at: record.at };
-    this.lastErrorClass = undefined;
+    // The class of a failed tick of the previous process survives the restart (bounded code only), but only for TICK_ERROR.
+    this.lastErrorClass = record.reason === "TICK_ERROR" && record.errorClass !== undefined && CODE.test(record.errorClass) ? record.errorClass : undefined;
     this.publish();
   }
 
   /** The most recent BLOCKED/ERROR reason, for persistence by the runtime. */
-  public lastBlockedRecord(): { readonly reason: string; readonly at: number } | undefined {
-    return this.lastBlocked === undefined ? undefined : { reason: this.lastBlocked.reason, at: this.lastBlocked.at };
+  public lastBlockedRecord(): { readonly reason: string; readonly at: number; readonly errorClass?: string } | undefined {
+    if (this.lastBlocked === undefined) return undefined;
+    const base = { reason: this.lastBlocked.reason, at: this.lastBlocked.at };
+    return this.lastBlocked.reason === "TICK_ERROR" && this.lastErrorClass !== undefined ? { ...base, errorClass: this.lastErrorClass } : base;
   }
 
   /** A tick that threw before a rollover result: recorded as ERROR without changing the counts. */
