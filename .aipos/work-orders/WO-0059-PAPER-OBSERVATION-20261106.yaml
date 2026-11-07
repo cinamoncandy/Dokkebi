@@ -1,0 +1,232 @@
+id: WO-0059-PAPER-OBSERVATION-20261106
+title: "Bounded observation of natural PAPER decision and execution outcomes"
+status: IN_PROGRESS
+priority: P0
+owner: nusa-development
+repository: cinamoncandy/NUSA
+base_branch: main
+base_commit: 2224d7f8e2f58081cf3edcd2597ea7048e07f70a
+implementation_branch: WO-0059-PAPER-OBSERVATION-20261106
+source_work_order: .aipos/work-orders/WO-0059-actual-paper-runtime-e2e.yaml
+related_issues:
+  - 2996
+  - 1605
+  - 2770
+objective: "Extend the existing WO-0059 public-market PAPER evidence harness with a bounded observation window that records several natural decision cycles and the observed Decision-to-Risk-to-execution evidence without treating missing outcomes as success."
+scope:
+  - "Keep waitForAutomaticRuntime() as the startup check and add a separate explicit bounded observation window."
+  - "Observe for at least 60 seconds and at most 180 seconds, polling the existing read-only PAPER operations projection, and require at least three distinct natural Decision cycle identities for a complete observation window."
+  - "Do not stop early because no order or fill exists; record actual elapsed time and a stable stop reason."
+  - "Record sanitized event-time/status/reason-code evidence for MARKET_DATA, SIGNAL, DECISION, RISK, PAPER_ORDER, PAPER_FILL, and ACCOUNT/PNL; mark absent stages NOT_OBSERVED or UNKNOWN."
+  - "Treat runtime errors, lease conflicts, malformed observations, and authority invariant violations as fail-closed evidence."
+  - "Retain restart/replay duplicate-fill checks and the existing semantic readiness classifier unchanged."
+acceptance:
+  - "Ticker/startup readiness does not end the observation window before its minimum duration."
+  - "At least three distinct natural Decision cycle IDs are collected when available; reaching the finite maximum without them is INCOMPLETE."
+  - "A completed observation with no natural order/fill/account change remains INCOMPLETE for autonomous PAPER certification."
+  - "Risk rejection preserves only the existing bounded reason code; raw detail, secrets, account identity, and private credentials are never emitted."
+  - "Restart/replay keeps duplicate-fill rejection, and a writer-lease/runtime failure ends observation fail-closed while retaining bounded failure evidence."
+  - "No signal or order is synthesized, and readiness certification thresholds or runtime authority are not changed."
+exclusions:
+  - "No changes to the canonical Cloud runtime, risk policy, writer lease, scheduler, or order path."
+  - "No changes to Research interval collection or manifests in PR #3002."
+  - "No change to PR #2996 readiness callback or its branch."
+  - "No production deployment, restart, database mutation, LIVE activation, real order, withdrawal, or transfer."
+architecture_impact:
+  acknowledged: true
+  analysis: "This is an evidence-harness-only addition over the existing local canonical Cloud PAPER runtime and its read-only operations projection. Startup readiness remains separate from observation completion. It introduces no runtime component, writer, execution path, scheduler, risk policy, or authority and does not satisfy WO-0051's human/environment gate."
+  references:
+    - .aipos/architecture.md
+    - .aipos/AI_HANDOFF_CONTRACT.md
+    - docs/NUSA_CORE_ARCHITECTURE_PRINCIPLE.md
+    - docs/NUSA_INVESTMENT_KNOWLEDGE_PRINCIPLE.md
+    - .aipos/work-orders/WO-0059-actual-paper-runtime-e2e.yaml
+safety:
+  paper_only: true
+  liveAuthority: NONE
+  productionMutationAllowed: false
+  realOrderAuthority: false
+  realTransferAuthority: false
+  aiAuthority: ZERO_AUTHORITY
+  fail_closed: "Incomplete observation, runtime error, lease collision, missing stage, or unknown evidence cannot certify autonomous execution."
+verification_commands:
+  - "node --test tests/actual-paper-runtime-observation.test.js tests/actual-paper-runtime-e2e-chaos-boundary.test.js tests/actual-paper-runtime-persisted-replay.test.js tests/actual-paper-runtime-readiness-classification.test.js tests/exact-head-paper-readiness-certification.test.js"
+  - "node scripts/actual-paper-runtime-e2e.js --working-dir <temporary-path> --output <temporary-path>/actual-paper-runtime-e2e.json"
+  - "pnpm test"
+  - "pnpm run typecheck"
+  - "pnpm run validate:full"
+  - "pnpm run security:gate"
+  - "pnpm run lint"
+  - "node scripts/validate-workflow-action-pins.js"
+  - "git diff --check"
+validation:
+  focused_tests: "38/38 PASS after exact-head e5 P2 sanitizer finding was reproduced and repaired locally"
+  full_tests: "1,335 isolated test files PASS on the local successor worktree"
+  typecheck: PASS
+  validate_full: PASS
+  security_gate: PASS
+  lint: "0 errors / 47 baseline warnings"
+  aipos_provenance: PASS
+  aipos_yaml: "PASS (578 files)"
+  workflow_action_pins: PASS
+  diff_check: PASS
+  prior_exact_head_ci: "PASS at aabfdaa880985f1ec773d794d6e8030393d04bff; historical after local repair"
+  independent_technical_disposition: "CHANGES_REQUIRED on aabfdaa880985f1ec773d794d6e8030393d04bff (COMMENT 5798993398); successor 21b59512a43c687d9b3a123e9abdd9ea9626804e review also CHANGES_REQUIRED, P0=0/P1=0/P2=1 (COMMENT 5799212431). Both were separate validator sessions under the same author account, not non-author approval, Formal Validation, Audit, or Release."
+  successor_exact_head_ci: "537f3d8e48e32c7ca63b01a7610076fa501cffa9: CI 42208707239 and five required companion workflows 42208707210, 42208707179, 42208707184, 42208707263, 42208707379 all terminal SUCCESS (6/6)."
+  successor_independent_review: "Exact-head technical disposition 5799431551: ACCEPTED, P0/P1/P2=0, on 537f3d8e48e32c7ca63b01a7610076fa501cffa9. Fresh read-only NUSA_AGENT_ROLE=validator session; same GitHub author identity cinamoncandy, so this is technical disposition, not non-author APPROVE, Formal Validation, Audit, or Release authorization. Review threads: 0."
+  e5_p2_followup_review: "Exact-head COMMENT 5800280244 on e5c02d97767c212e2f8746102379c5d94dcf0d01 found P2: credential-like runtime ERROR/HALT, heartbeat lastError, and stderr-derived values could be reflected. The repair replaces runtime-provided code reflection with locally owned reason-code allowlists, sanitizes restart-health and CLI errors, and adds regression coverage; commit fbe0662ab5dc53b73a5f2bfaad16129f7cff3291. Fresh separate validator session inspected the fbe code and found no actionable code issue; exact-head CI 42224955455 and five companions are now terminal SUCCESS. A fresh exact-SHA terminal COMMENT is the remaining review gate. This is not non-author approval."
+  pre_metadata_update_remote_pr_head: "Fresh GitHub query: PR #3006 is OPEN/Draft/mergeable at fbe0662ab5dc53b73a5f2bfaad16129f7cff3291, base/protected main 2224d7f8e2f58081cf3edcd2597ea7048e07f70a. Exact-head CI 42224955455 and companions 42224955780, 42224955493, 42224955481, 42224955665, 42224955453 are terminal SUCCESS (6/6). Conditional causal-regression-contract and attest-causal-regression jobs were SKIPPED because no mismatch occurred and are not positive-path evidence."
+  source_run_42199682632:
+    artifact_id: 13494211160
+    artifact_sha256: bc978a415808eb15c8d9ab3d9f808d020c9f3e86404bc4ea0890355a6c958f24
+    result: INCOMPLETE
+    observation: "60.772s; 61 samples; 92 distinct Decision cycles; 459 deduplicated timeline entries (91 MARKET_DATA, 92 each DECISION/ORDER_INTENT/PNL/UNKNOWN); 0 orders/fills/account-PnL changes; SIGNAL and RISK NOT_OBSERVED; paperLearning retained 250 events across restart; event_evidence_truncated=true."
+    root_cause_classification: WARMUP_NOT_COMPLETED
+    first_broken_transition: "Fresh E2E database -> 20 completed market-specific 1m closes -> SMA candidate"
+    artifact_reason_codes: "Each recorded cycle reports NO_ACTIONABLE_PAPER_DECISION, WAIT, INSUFFICIENT_HISTORY. The last observed heartbeat strategy detail at 2026-11-06T10:05:07.595Z is PAPER_CANDIDATE:sma-crossover:INSUFFICIENT_SMA_OBSERVATIONS:1/20. This establishes 1 completed market-specific 1m close at that final observed Decision only; earlier per-Decision counts and truncated rows remain UNKNOWN."
+    canonical_runtime_database_history: UNVERIFIED
+  successor_run_42205762459:
+    artifact_id: 13496063538
+    artifact_sha256: 90867fbf79733b2c6dc35641953fbfca5c8281929d299df3e526774d87874f57
+    source_sha: 21b59512a43c687d9b3a123e9abdd9ea9626804e
+    result: INCOMPLETE
+    observation: "60.525s; 61 samples; 78 recorded natural Decision cycles; 0 orders/fills; SIGNAL and RISK NOT_OBSERVED; PERMISSION now separately represented; 250-event cap encountered"
+    exact_strategy_reason: "INSUFFICIENT_SMA_OBSERVATIONS:1/20"
+    root_cause_classification: WARMUP_NOT_COMPLETED
+    canonical_runtime_database_history: UNVERIFIED
+  historical_exact_head_run_42208707379:
+    head_sha: 537f3d8e48e32c7ca63b01a7610076fa501cffa9
+    artifact_id: 13498272063
+    artifact_sha256: 8f0ba7dfc83bfed04e2a6372a46634a8747d7a54d8adff7d93dfaeb3207079e4
+    result: INCOMPLETE
+    observation: "60.866s; 61 samples; 54 recorded natural Decision cycles; all recorded cycles WAIT/INSUFFICIENT_HISTORY; final strategy reason INSUFFICIENT_SMA_OBSERVATIONS:1/20; 0 orders/fills; 61 account snapshots with no account/PnL change; SIGNAL/RISK NOT_OBSERVED; PERMISSION observed as skipped; event evidence truncated; readiness INCOMPLETE_NO_AUTONOMOUS_ORDER_FILL_PNL."
+    source: "Upbit PUBLIC ticker, KRW-BIRB; GitHub workflow run and artifact are bound to exact head 537f3d8e48e32c7ca63b01a7610076fa501cffa9."
+    root_cause_classification: WARMUP_NOT_COMPLETED_FOR_ISOLATED_E2E
+    first_broken_transition: "Fresh E2E state.sqlite -> 20 completed market-specific one-minute closes -> SMA candidate; the isolated run had 1/20."
+    canonical_runtime_database_history: UNVERIFIED
+  event_cap_analysis: "Run 42199682632 artifact 13494211160 was freshly matched to GitHub digest sha256:bc978a415808eb15c8d9ab3d9f808d020c9f3e86404bc4ea0890355a6c958f24. It records 61 samples, 92 distinct Decision cycles, 459 timeline entries (92 DECISION, 92 ORDER_INTENT, 92 PNL, 92 UNKNOWN, 91 MARKET_DATA); 92 decisions were WAIT/INSUFFICIENT_HISTORY, with zero orders/fills and no account/PnL change. The last observed heartbeat strategy detail at 2026-11-06T10:05:07.595Z was INSUFFICIENT_SMA_OBSERVATIONS:1/20. The 250-event paperLearning projection was durable across restart; event_evidence_truncated=true and stop_reason=EVENT_EVIDENCE_TRUNCATED. Missing-event count remains UNKNOWN because there is no cursor/counter delta; earlier per-Decision candle counts and truncated rows remain UNKNOWN. The isolated E2E recreates state.sqlite and uses a 5/20 SMA over completed market-specific 1m closes; the final observed Decision had 1 of 20 required closes, confirming WARMUP_NOT_COMPLETED for that isolated run. Canonical deployed DB history remains UNVERIFIED. Do not raise the cap or change the strategy threshold."
+  canonical_runtime_readback: "Fresh approved read-only loopback /health GET at 2026-11-06T14:23:11Z reported runtime sourceCommitSha=185c52c22691a5a35b13fe024cb39d810719a833, not protected main 2224d7f8e2f58081cf3edcd2597ea7048e07f70a. It reported aggregate researchCandleCount=63233 and dataIntegrity candleRows7d=10034/candleSeries=1, but no per-market completed 1m count. Embedded dataIntegrity observedAt=2026-11-06T00:18:51Z (about 14h stale), so it cannot establish current deployed PAPER candle history or the 20-close market-specific source needed by SMA. Existing SentinelX read allowlist is /etc, /var/log, /var/www, /opt, /srv and excludes /var/lib/nusa; nusa-paper-codex remains offline. Keep canonical deployed candle-history state UNVERIFIED; do not widen access or inspect/mutate DB directly."
+  successor_eee1db8_exact_head:
+    head_sha: eee1db8c2955a0a8546f69fc9f9771ccfc725060
+    base_sha: 2224d7f8e2f58081cf3edcd2597ea7048e07f70a
+    ci: "42230256050 SUCCESS"
+    companion_runs: "42230255438, 42230255419, 42230255817, 42230255809 SUCCESS; Actual PAPER run 42230255698 is the fifth companion and failed on both attempts. Complete exact-head workflow set is not green."
+    actual_paper_attempt_1:
+      artifact_id: 13506924457
+      artifact_sha256: 76da53871a209656dbe8b26ccd846ca2318336c16f7f721d05cae59f392988f4
+      observation: "FAIL after 4ms; one sample; zero Decision cycles; no orders/fills; event_evidence_truncated=false; sanitized RUNTIME_ERROR_PRESENT."
+    actual_paper_attempt_2:
+      artifact_id: 13507827850
+      artifact_sha256: e731312203ece9f50a885b559c4ac0ef74d0809c5f56fd59b75c6595cdb56d68
+      observation: "FAIL after 5ms; one sample; zero Decision cycles; no orders/fills; event_evidence_truncated=false; sanitized RUNTIME_ERROR_PRESENT."
+    failure_classification: "Both attempts reached the observation loop after startup and public market selection. The initial PAPER heartbeat had a non-empty lastError not in the locally owned allowlist; raw details are intentionally absent from artifact/logs. Specific runtime failure class remains UNKNOWN. One same-SHA retry has already occurred; no more blind retry."
+    validator_comment: "Exact-head technical disposition on eee1db8 is ACCEPTED for scoped observer/AIPOS changes, P0=0/P1=0/P2=0. Review is a separate read-only validator session but GitHub identity cinamoncandy is the PR author; it is not eligible non-author approval, Formal Validation, Audit, or Release authorization."
+    readiness: "INCOMPLETE_NO_AUTONOMOUS_ORDER_FILL_PNL; no positive readiness, order, fill, or account/PnL evidence."
+  successor_21b59512_exact_head:
+    ci: "42205762445 plus five companions 6/6 SUCCESS"
+    actual_paper: "42205762459 SUCCESS workflow; artifact remains INCOMPLETE and is not readiness PASS"
+    conditional_causal_jobs: "causal-regression-contract and attest-causal-regression SKIPPED; no positive-path evidence"
+    independent_technical_disposition: "CHANGES_REQUIRED P0=0/P1=0/P2=1, review 5799212431"
+  historical_e5_paper_run:
+    source_sha: e5c02d97767c212e2f8746102379c5d94dcf0d01
+    workflow_run: 42218870740
+    artifact_id: 13502646550
+    artifact_sha256: a7642cd1aba6d16783d3feda80455661a6c7fa57ce4d94c306958955b5a14930
+    result: INCOMPLETE
+    observation: "60.893s; Upbit PUBLIC KRW-BIRB; 50 recorded natural Decision cycles, all WAIT/INSUFFICIENT_HISTORY; final reason INSUFFICIENT_SMA_OBSERVATIONS:1/20; zero orders/fills and no account/PnL change; SIGNAL/RISK NOT_OBSERVED; 250-event evidence cap reached and marked truncated. This is isolated fresh-database evidence only."
+    canonical_runtime_database_history: UNVERIFIED
+  local_failure_code_sanitizer_followup:
+    state: COMMITTED_PUSHED
+    commit_sha: fbe0662ab5dc53b73a5f2bfaad16129f7cff3291
+    files:
+      - scripts/actual-paper-runtime-e2e.js
+      - tests/actual-paper-runtime-observation.test.js
+    summary: "Strict locally owned writer/runtime/observation reason-code allowlists; ACCESSKEY variant detection; no raw stderr or CLI error reflection; regressions cover ERROR/HALT, heartbeat, failure callback, restart health error, CLI failure, and canonical writer reason retention."
+    focused_tests: "38/38 PASS"
+    local_validator_recheck: "No actionable P0/P1/P2 in local diff; separate read-only review only, not exact successor SHA evidence."
+  pre_metadata_update_exact_head_ci:
+    head_sha: fbe0662ab5dc53b73a5f2bfaad16129f7cff3291
+    ci_run: 42224955455
+    ci_status_at_last_fresh_check: SUCCESS
+    companion_runs: "42224955780,42224955493,42224955481,42224955665,42224955453 — all SUCCESS"
+    validator_review: "Fresh separate read-only validator session inspected the committed fbe code and found no actionable code finding. Exact-head CI and companions are terminal SUCCESS; fresh exact-SHA technical COMMENT remains pending. No non-author APPROVE, Formal Validation, Audit, or Release evidence."
+  pre_metadata_update_actual_paper:
+    run_id: 42224955453
+    head_sha: fbe0662ab5dc53b73a5f2bfaad16129f7cff3291
+    artifact_id: 13504928353
+    artifact_sha256: 0f81f7f1606df5247761f9335f8cd8b69ce494f80312ea519b0e01cf216d78ec
+    downloaded_zip_bytes: 7243
+    downloaded_zip_sha256_matches_github_digest: true
+    workflow_result: SUCCESS
+    semantic_result: INCOMPLETE_NO_AUTONOMOUS_ORDER_FILL_PNL
+    observation: "60.230s; 61 samples; 6 distinct natural Decision cycles; 30 timeline events (six each MARKET_DATA, DECISION, ORDER_INTENT, PERMISSION, PNL); event_evidence_truncated=false; all decisions NO_ACTIONABLE_PAPER_DECISION; SIGNAL/RISK/PAPER_ORDER/PAPER_FILL NOT_OBSERVED; 61 account observations with no account/PnL change; 0 orders/fills."
+    persistence: "35 bounded paperLearning events before restart, at shutdown, and after recovery; no duplicate IDs; recovered window matches persisted window."
+    idempotency_retry: "NOT_APPLICABLE_NO_AUTOMATIC_ORDER; duplicate order/fill replay was not exercised because no automatic order existed."
+    runtime_safety_smoke: PASS
+    readiness_claim_allowed: false
+  local_followup_validation:
+    full_tests: "1,335 isolated test files PASS"
+    typecheck: PASS
+    validate_full: PASS
+    security_gate: PASS
+    workflow_action_pins: PASS
+    lint: "0 errors / 47 baseline warnings"
+    aipos_validation: PASS after inspected-artifact metadata update (AIPOS YAML, provenance, conformance, evidence integrity, validate:full)
+    diff_check: PASS after inspected-artifact metadata update
+  heartbeat_failure_code_diagnostic_patch:
+    status: IMPLEMENTED_LOCAL_UNCOMMITTED
+    base_head_sha: eee1db8c2955a0a8546f69fc9f9771ccfc725060
+    files:
+      - scripts/actual-paper-runtime-e2e.js
+      - tests/actual-paper-runtime-observation.test.js
+    finding: "Source inspection found four fixed codes emitted by apps/cloud/src/runtime.ts but absent from the observer's strict local allowlist: PAPER_ORDERBOOK_OBSERVATION_REJECTED, PAPER_ORDERBOOK_UNRECONCILED, PAPER_PERIOD_EVIDENCE_REJECTED, PUBLIC_ORDERBOOK_SNAPSHOT_UNAVAILABLE. Their omission collapses those locally owned diagnoses into RUNTIME_ERROR_PRESENT."
+    change: "Allow only those four exact locally generated codes through the existing sanitizer. Arbitrary/unknown or sensitive input remains RUNTIME_ERROR_PRESENT and fail-closed; readiness logic and execution authority are unchanged."
+    focused_tests: "39/39 PASS"
+    full_tests: "1,335 isolated test files PASS after this patch"
+    typecheck: PASS
+    validate_full: PASS
+    security_gate: PASS
+    workflow_action_pins: PASS
+    lint: "0 errors / 47 existing baseline warnings"
+    diff_check: PASS
+    exact_head_ci: PENDING successor commit
+    actual_paper_retest: PENDING successor CI; existing eee1db8 failure remains historical and cause UNKNOWN
+    independent_review: PENDING successor exact SHA
+  successor_review_6f71a9fe:
+    head_sha: 6f71a9fe304d61273be5b4076cf73e04105bb739
+    base_and_protected_main: 2224d7f8e2f58081cf3edcd2597ea7048e07f70a
+    exact_head_ci: "42237698690 SUCCESS; four safety companions 42237698637, 42237698640, 42237698717, 42237698705 SUCCESS; Actual PAPER 42237698763 workflow SUCCESS. Conditional causal-regression and attestation jobs were SKIPPED and are not positive-path evidence."
+    actual_paper:
+      artifact_id: 13512578070
+      artifact_sha256: f2106bd65d392be1ecc0924f5fd0806c0a9cf1c0cede44e344353254d9a796bc
+      workflow_result: PASS
+      semantic_result: INCOMPLETE_NO_AUTONOMOUS_ORDER_FILL_PNL
+      observation: "60.357s; 25 natural Decisions; 0 orders/fills/account-PnL changes; SIGNAL/RISK/PAPER_ORDER/PAPER_FILL NOT_OBSERVED; no event truncation. Runtime safety observation does not certify autonomous PAPER readiness."
+    independent_validator:
+      disposition: CHANGES_REQUIRED
+      p0: 0
+      p1: 0
+      p2: 1
+      github_comment: NOT_POSTED
+      finding: "safeRuntimeFailureCode extracted an allowlisted prefix before whitespace/colon/semicolon and could misclassify arbitrary suffix text (including credential-like input) as a locally owned failure code. The value was not emitted, but the cause classification was not trustworthy."
+    local_p2_repair:
+      status: COMMITTED_PENDING_EXACT_HEAD_CI
+      change: "Accept exact allowlisted strings only; preserve writer errors only when the stack starts with an exact locally owned PAPER_WRITER code and the remaining lines are stack frames; all suffix-tainted/unknown values map to RUNTIME_ERROR_PRESENT."
+      regression: "Suffix-tainted examples for three runtime codes and PAPER_WRITER_LEASE_LOST are rejected without reflecting a credential-like value; an anchored writer stack retains its exact code."
+      focused_tests: "41/41 PASS across the five WO-0059 focused test files"
+      full_tests: "PASS 1,335 isolated test files"
+      typecheck: PASS
+      validate_full: PASS
+      security_gate: PASS
+      workflow_action_pins_inputs: PASS
+      aipos_focused_tests: "47/47 PASS"
+      aipos_yaml: "PASS (579 files)"
+      aipos_provenance: PASS
+      aipos_evidence_integrity: PASS
+      current_truth_regenerated: PASS
+      lint: "0 errors / 47 existing baseline warnings"
+      diff_check: PASS
+      exact_head_ci: PENDING_PUSH_AND_CURRENT_COMMIT_CI
+      independent_review: PENDING_PUSH_AND_CURRENT_COMMIT_REVIEW
+  local_public_market_e2e: "Not rerun locally; exact-head GitHub workflows used actual Upbit PUBLIC ticker data. No synthetic evidence was used."
+next: "Push the committed P2 failure-code classification repair to the existing #3006 branch; create no competing PR. Run fresh exact-head CI/companions on the successor, then a separate exact-SHA VALIDATOR review. Keep semantic readiness INCOMPLETE. Separately obtain an approved read-only report for deployed per-market completed 1m candle count/range/gaps/provenance. Do not change SMA warmup, 250-event cap, or readiness semantics; do not widen SentinelX access, read/mutate DB, deploy, restart, or claim readiness. Formal Validator, Audit, Release authorization, and governed merge remain separate pending gates."

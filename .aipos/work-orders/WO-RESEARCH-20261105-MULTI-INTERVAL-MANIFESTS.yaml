@@ -6,7 +6,7 @@ owner: nusa-development
 repository: cinamoncandy/NUSA
 issue: 2815
 base_branch: main
-base_commit: 185c52c22691a5a35b13fe024cb39d810719a833
+base_commit: 3241c525ab9575271a1150d8635d87ef9764c069
 implementation_branch: WO-RESEARCH-20261105-MULTI-INTERVAL-MANIFESTS
 pull_request: 3002
 implementation_commit_before_aipos_handoff: 1ccd50f1e39900c679cceeee133ad1c4acd9aaef
@@ -181,3 +181,30 @@ current_checkpoint_2026_11_06T0748Z:
     issue_2815: OPEN
   safety: PAPER_ONLY_ZERO_AUTHORITY_FAIL_CLOSED
   next: "Complete AIPOS state/handoff checkpoint and full metadata validation; publish as a fast-forward successor to existing PR #3002 using expected head b775b30485f193602ca531db6af7c51fa4e2cfea; verify exact-head CI. Keep Draft and do not resolve #2975 threads."
+
+current_checkpoint_2026_11_07T1053Z:
+  protected_main: 3241c525ab9575271a1150d8635d87ef9764c069
+  pr_3002_prior_head: 146ab98bad911c2eeb03c13d2f42fd502ebd0232
+  pr_3002_prior_base: 2224d7f8e2f58081cf3edcd2597ea7048e07f70a
+  reconciliation: "Current protected main was merged into the existing #3002 head in an isolated detached worktree. The only conflict was generated .aipos/CURRENT_TRUTH.md; it was regenerated with scripts/generate-aipos-current-truth.js. The existing PR branch/WIP and four untracked audit reports in the original worktree were not overwritten."
+  local_validation:
+    focused_research_tests: "49/49 PASS after build"
+    full_suite: "PASS; 1,336 isolated test files"
+    preflight: PASS
+    build: PASS
+    typecheck: PASS
+    validate_full: PASS
+    security_gate: "PASS; 0 high/critical findings and 0 secrets"
+    lint_scripts: "PASS; 0 errors, 47 existing warnings"
+    aipos_yaml_and_generated_truth: PASS
+    diff_check: PASS
+  remote_state: "PR #3002 remains OPEN/Draft at prior head 146ab98; latest main is 34 commits ahead of its old base. Current successor is local and not published; exact-head CI and independent Research/Data review are pending."
+  runtime_acceptance: "UNVERIFIED: code tests do not prove durable current-market candles, 15m/60m manifests, or Research session materialization."
+  issue_2815: OPEN
+  pr_2975: "No thread disposition made; existing P1 remains independently adjudication-owned."
+  formal_validator: PENDING
+  audit: PENDING
+  release_authorization: PENDING
+  governed_merge: NOT_DONE
+  safety: PAPER_ONLY_ZERO_AUTHORITY_FAIL_CLOSED
+  next: "Complete final diff/AIPOS checks, commit a fast-forward successor on the existing #3002 branch, verify exact-head CI and companions, then request one fresh independent Research/Data review. Do not resolve #2975 threads or claim runtime/L1 acceptance."
