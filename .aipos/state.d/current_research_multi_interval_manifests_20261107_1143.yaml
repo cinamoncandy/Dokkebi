@@ -10,8 +10,9 @@ current_research_multi_interval_manifests_20261107_1143:
   local_validation: "Focused Research 50/50; full suite 1,336 isolated test files; typecheck, validate:full, security:gate, full lint (0 errors/47 existing warnings), AIPOS YAML/provenance/drift/conformance, and diff-check PASS."
   actual_paper: "Workflow 42369131267; artifact 13572808292, sha256:f1f3a5209acc4c0a658368572944e573af3057ec65236cb7c9f5b3ca0f5fbc84. INCOMPLETE after 60.291s and 7 natural decisions; no actionable signal, Risk evaluation, order/fill, or account change."
   runtime_acceptance: UNVERIFIED
-  next_sha_exact_head_ci: PENDING
-  successor_independent_review: PENDING
+  checkpoint_scope: "Historical snapshot recorded before metadata successor 1e47fa402872ed0ef5e94fe93577c23295f4c1e7 was published. The following status fields describe the state at this checkpoint only; query GitHub for the current PR SHA and its checks/review."
+  successor_ci_status_at_recorded_checkpoint: "PENDING at the time this state entry was added; exact-head CI/companions later completed on 1e47fa402872ed0ef5e94fe93577c23295f4c1e7."
+  successor_review_status_at_recorded_checkpoint: "PENDING at the time this state entry was added; fresh review is SHA-bound and must be checked for the current PR head."
   formal_validator: PENDING
   audit: PENDING
   release_authorization: PENDING

@@ -57,7 +57,7 @@ verification_commands:
   - "pnpm test"
   - "git diff --check"
 validation: "LOCAL_VALIDATION_PASS on published code successor 0d77d4607dce887d984fd2ce2718cd35a94f7b68 based on protected main 60e4185e7c6abba18fce0c0a80797d0aec4fe92b: focused Research tests 50/50; pnpm test 1,336 isolated test files; typecheck, validate:full (including AIPOS drift/conformance and safety invariants), security:gate (0 high/critical, 0 secrets), full lint (0 errors, 47 existing warnings), and git diff --check PASS. The full-test runner's tracked isolated-test-failure.txt deletion was restored from HEAD. These local results do not apply to the following AIPOS metadata-only successor."
-exact_head_ci: "PR #3002 exact head 0d77d4607dce887d984fd2ce2718cd35a94f7b68: CI run 42369131128 and companion runs 42369131160, 42369131115, 42369131153, 42369131169, 42369131146, and 42369131267 all concluded SUCCESS. The causal-regression-contract and attest-causal-regression jobs were SKIPPED and are not positive causal evidence. This result is historical for any subsequent metadata successor SHA."
+exact_head_ci: "Latest completed successor checked: PR #3002 exact head 1e47fa402872ed0ef5e94fe93577c23295f4c1e7, CI run 42369972344 and companions 42369972318, 42369972312, 42369972365, 42369972346, 42369972307, and 42369972309 all SUCCESS. The causal-regression-contract and attest-causal-regression jobs were SKIPPED and are not positive causal evidence. These are predecessor results if this work order is changed again; check current PR SHA and its own checks before review."
 prepublication_snapshot_2026_11_06:
   protected_main: 185c52c22691a5a35b13fe024cb39d810719a833
   protection: "Branch metadata reports protected=true and required nusa/release-authorized from App 4935691; direct branch-protection endpoint returned 403 to the connected integration."
@@ -72,7 +72,7 @@ formal_validator: PENDING
 audit: PENDING
 release_authorization: PENDING
 runtime_acceptance: PENDING
-next: "The published #3002 successor 0d77d4607dce887d984fd2ce2718cd35a94f7b68 passed exact-head CI 42369131128 and six companions; a fresh independent technical review then identified a P2 stale AIPOS checkpoint. Correct this work order to the published SHA and its terminal evidence on a metadata successor, rerun AIPOS/full-contract validation and exact-head checks for that SHA, then obtain a fresh independent Research/Data review. Preserve #2975 threads and keep Formal Validator, Audit, Release, merge, and runtime acceptance separate."
+next: "The latest published #3002 metadata successor 1e47fa402872ed0ef5e94fe93577c23295f4c1e7 passed exact-head CI 42369972344 and six companions. An independent technical review then found the added checkpoint still represented the completed successor CI as pending. This metadata successor records the completed 1e47fa40 checks and marks earlier state entries explicitly as time-bounded snapshots. After this metadata change, obtain exact-head CI for the new SHA and then a fresh independent Research/Data review. Preserve #2975 threads and keep Formal Validator, Audit, Release, merge, and runtime acceptance separate."
 
 current_checkpoint_2026_11_06T0347Z:
   protected_main: 185c52c22691a5a35b13fe024cb39d810719a833
@@ -243,3 +243,20 @@ current_checkpoint_2026_11_07TLOCAL_REVIEW_REPAIR:
   governed_merge: NOT_DONE
   safety: PAPER_ONLY_ZERO_AUTHORITY_FAIL_CLOSED
   next: "Publish this AIPOS correction as a fast-forward successor to existing PR #3002, rerun exact-head CI/companions, and request a fresh independent exact-SHA review. The prior CI and review apply only to 0d77d460…. Keep PR Draft; runtime acceptance, Formal Validator, Audit, Release, and merge remain separate gates."
+
+current_checkpoint_2026_11_07T1158Z:
+  protected_main: 60e4185e7c6abba18fce0c0a80797d0aec4fe92b
+  pr_3002_head: 1e47fa402872ed0ef5e94fe93577c23295f4c1e7
+  pr_state: OPEN_DRAFT_MERGEABLE
+  exact_head_ci: "CI 42369972344 plus companions 42369972318, 42369972312, 42369972365, 42369972346, 42369972307, 42369972309 all SUCCESS. causal-regression-contract and attest-causal-regression SKIPPED."
+  predecessor_review: "CHANGES_REQUIRED, P0=0/P1=0/P2=1: state.d successor CI and Work Order next-step text were stale. PR body itself correctly reflected the exact head and checks."
+  metadata_repair: "State entry 1143 is labeled as a historical snapshot of the 0d77d460… checkpoint; Work Order now records exact-head CI on 1e47fa40… and the next action is a new exact-head review after any metadata commit."
+  actual_paper: "Run 42369972309; artifact 13573022335; SHA-256 d9ca816e1ee0ab9c640443a489362eef2e38e5ac272afe10ba20bff89efc9608. INCOMPLETE after 60.433s / 38 natural decisions; no actionable signal, Risk evaluation, order/fill, or account change."
+  runtime_acceptance: UNVERIFIED
+  independent_review_for_1e47fa40: "CHANGES_REQUIRED P2; successor review required after this metadata repair."
+  formal_validator: PENDING
+  audit: PENDING
+  release_authorization: PENDING
+  governed_merge: NOT_DONE
+  safety: PAPER_ONLY_ZERO_AUTHORITY_FAIL_CLOSED
+  next: "This AIPOS successor records the completed 1e47fa40 exact-head run and corrects predecessor timestamp semantics. Obtain checks for the new current SHA, then request fresh independent review."
