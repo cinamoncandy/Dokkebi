@@ -71,5 +71,25 @@ verification_commands:
   - "pnpm run lint"
   - "node scripts/validate-workflow-action-pins.js"
   - "git diff --check"
-next: "Implement the bounded pre-observation synchronization gate and regressions on this successor branch; preserve all actual-PAPER readiness failures and require fresh exact-head CI plus review."
-local_validation: "PASS: focused observation 30/30; focused lifecycle/replay/readiness 23/23; pnpm test 1335/1335 isolated test files; TypeScript; validate:full; security gate; workflow action pins; git diff --check. Lint 0 errors / 47 existing warnings; no changed-file warnings. Exact-head CI and independent review for the next commit remain pending."
+latest_candidate:
+  pull_request: 3016
+  head: d6b991d1554e3c473b2a3fb8306e14a76c9f82fd
+  base: 60e4185e7c6abba18fce0c0a80797d0aec4fe92b
+  exact_head_ci_run: 42373896085
+  exact_head_ci: SUCCESS
+  companion_runs:
+    bridge: 42373894015
+    guard: 42373896122
+    readiness: 42373896024
+    rehearsal: 42373895990
+    verify: 42373896015
+  actual_paper_run: 42373896016
+  actual_paper_result: INCOMPLETE_NO_AUTONOMOUS_ORDER_FILL_PNL
+  actual_paper_artifact_id: 13575405166
+  actual_paper_artifact_digest: "sha256:24d7d83296fdbe9ac1088dca5cd8e14e0d19b06866cb0daecb9e7196c963c0e0"
+  observed: "Startup synchronization recovered after one PAPER_ORDERBOOK_UNRECONCILED diagnostic and two consecutive clean snapshots; 60.688s observation, 11 natural decisions, no truncation, zero orders/fills/account-PnL changes. SIGNAL and RISK were not observed; readiness remains INCOMPLETE."
+  isolated_history_finding: "This fresh workflow runtime observed INSUFFICIENT_SMA_OBSERVATIONS:1/20 then 2/20 after restart. This does not establish persistent production database history; production history remains UNVERIFIED."
+  skipped_jobs: "attest-causal-regression and causal-regression-contract were SKIPPED and are not PASS evidence."
+  independent_review: PENDING_FRESH_VALIDATOR_SESSION
+next: "Keep PR #3016 Draft. Obtain a fresh-session VALIDATOR review of exact head d6b991d1554e3c473b2a3fb8306e14a76c9f82fd; do not self-review. Preserve actual PAPER INCOMPLETE and production-history UNVERIFIED. On any code-head change, repeat affected validation and exact-head CI."
+local_validation: "PASS on d6b991d1554e3c473b2a3fb8306e14a76c9f82fd: focused observation 30/30; lifecycle/replay/readiness 23/23; pnpm test 1335 isolated files; typecheck; validate:full; security gate; workflow action pins; AIPOS validators; git diff --check. Lint 0 errors / 47 existing warnings; changed files have no warnings. Exact-head CI run 42373896085 and companions 42373894015, 42373896122, 42373896024, 42373895990, 42373896015 are SUCCESS. Actual PAPER run 42373896016 completed with readiness INCOMPLETE. Fresh-session independent review remains pending."
