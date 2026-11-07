@@ -1,0 +1,25 @@
+id: WO-AUTOPILOT-20261107-WORKFLOW-UNKNOWN-INPUTS
+title: "Workflow guard: reject a with: key that a checked action does not declare (actions/attest first)"
+status: READY_FOR_REVIEW
+owner: nusa-development
+repository: cinamoncandy/NUSA
+base_branch: claude/attest-bundle-path-fix
+implementation_branch: claude/workflow-unknown-inputs
+authority_impact: none
+objective: "Follow-up of PR #3013. The runner ignores a with: key an action does not declare (only a log warning). bundle-path was passed to actions/attest, which declares it as an output, so the signed bundle was never written and the canary's upload step failed. scripts/validate-workflow-action-inputs.js only checked required inputs, so CI passed. Add validateUnknownInputs with an allowlist copied from the pinned action.yml of actions/attest (v4.2.2, commit 1e69f48a), reported as WORKFLOW_ACTION_INPUT_UNKNOWN:<file>:<line>:<action>:<key>. Also fix the step-indent detection so steps that start with '- name:' (uses and with at the same indent) are checked; the existing required-input rule had the same blind spot."
+scope:
+  - "scripts/validate-workflow-action-inputs.js, tests/workflow-action-inputs.test.js."
+exclusions:
+  - "Stacked on #3013 (the repository passes only with that fix). No workflow, permission, pin, limit or authority change. Only actions listed in KNOWN_INPUTS are checked; the list must be updated with the pin."
+safety:
+  paper_only: true
+  liveAuthority: NONE
+  productionMutationAllowed: false
+  aiAuthority: ZERO_AUTHORITY
+  fail_closed: "A key not in the allowlist fails the validator."
+verification_commands:
+  - node --test tests/workflow-action-inputs.test.js
+  - node scripts/validate-workflow-action-inputs.js
+  - node scripts/validate-aipos-yaml.js
+review: "Draft; non-author review before leaving Draft."
+residual: "Only actions/attest is covered; other actions are not checked. The allowlist is copied by hand from action.yml and can go stale when the pin changes."
