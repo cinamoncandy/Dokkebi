@@ -463,6 +463,9 @@ function safeRuntimeFailureDiagnostic(response, observedAtMs) {
     ? operations.runtimeState
     : "UNKNOWN";
   const schedulerRunning = typeof operations?.schedulerRunning === "boolean" ? operations.schedulerRunning : "UNKNOWN";
+  const runtimeHaltReasons = runtimeState !== "HALTED" ? [] : Array.isArray(operations?.runtimeHaltReasons)
+    ? [...new Set(operations.runtimeHaltReasons.map((reason) => ["DASHBOARD_FAULTED", "KILL_SWITCH_ACTIVE", "AI_P0_OPEN", "AI_P0_UNVERIFIABLE"].includes(reason) ? reason : "UNKNOWN"))].slice(0, 4)
+    : ["UNKNOWN"];
   const rawLastError = operations?.heartbeat?.lastError;
   const lastErrorCode = rawLastError == null || (typeof rawLastError === "string" && rawLastError.trim() === "")
     ? "NONE"
@@ -470,6 +473,7 @@ function safeRuntimeFailureDiagnostic(response, observedAtMs) {
   return {
     observed_at: Number.isSafeInteger(observedAtMs) ? new Date(observedAtMs).toISOString() : "UNKNOWN",
     runtime_state: runtimeState,
+    runtime_halt_reasons: runtimeHaltReasons,
     scheduler_running: schedulerRunning,
     last_error_code: lastErrorCode,
   };

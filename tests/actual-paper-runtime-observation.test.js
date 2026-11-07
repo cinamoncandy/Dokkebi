@@ -395,14 +395,15 @@ test("runtime ERROR/HALT, heartbeat, and stderr-like failures emit only locally 
 
 test("non-running PAPER snapshots retain only a bounded sanitized diagnostic tuple", async () => {
   const cases = [
-    { runtimeState: "DEGRADED", schedulerRunning: true, lastError: "PAPER_ORDERBOOK_UNRECONCILED", expected: { runtime_state: "DEGRADED", scheduler_running: true, last_error_code: "PAPER_ORDERBOOK_UNRECONCILED" } },
-    { runtimeState: "RUNNING", schedulerRunning: false, lastError: "private-token-should-not-escape", expected: { runtime_state: "RUNNING", scheduler_running: false, last_error_code: "RUNTIME_ERROR_PRESENT" } },
-    { runtimeState: "RUNNING:private-token", schedulerRunning: "unknown", lastError: { secret: "private-token" }, expected: { runtime_state: "UNKNOWN", scheduler_running: "UNKNOWN", last_error_code: "UNKNOWN" } },
+    { runtimeState: "DEGRADED", schedulerRunning: true, lastError: "PAPER_ORDERBOOK_UNRECONCILED", expected: { runtime_state: "DEGRADED", runtime_halt_reasons: [], scheduler_running: true, last_error_code: "PAPER_ORDERBOOK_UNRECONCILED" } },
+    { runtimeState: "RUNNING", schedulerRunning: false, lastError: "private-token-should-not-escape", expected: { runtime_state: "RUNNING", runtime_halt_reasons: [], scheduler_running: false, last_error_code: "RUNTIME_ERROR_PRESENT" } },
+    { runtimeState: "HALTED", schedulerRunning: true, lastError: "unrecognized-error", runtimeHaltReasons: ["AI_P0_UNVERIFIABLE", "private-token"], expected: { runtime_state: "HALTED", runtime_halt_reasons: ["AI_P0_UNVERIFIABLE", "UNKNOWN"], scheduler_running: true, last_error_code: "RUNTIME_ERROR_PRESENT" } },
+    { runtimeState: "RUNNING:private-token", schedulerRunning: "unknown", lastError: { secret: "private-token" }, expected: { runtime_state: "UNKNOWN", runtime_halt_reasons: [], scheduler_running: "UNKNOWN", last_error_code: "UNKNOWN" } },
   ];
 
   for (const item of cases) {
     const result = await runObservation({
-      snapshotOverrides: () => ({ operations: { runtimeState: item.runtimeState, schedulerRunning: item.schedulerRunning, heartbeat: { startedAt: BASE_TIME - 1_000, lastHeartbeatAt: BASE_TIME, lastError: item.lastError } } }),
+      snapshotOverrides: () => ({ operations: { runtimeState: item.runtimeState, runtimeHaltReasons: item.runtimeHaltReasons, schedulerRunning: item.schedulerRunning, heartbeat: { startedAt: BASE_TIME - 1_000, lastHeartbeatAt: BASE_TIME, lastError: item.lastError } } }),
     });
     assert.equal(result.status, "FAIL");
     assert.equal(result.evidence.failure_code, "PAPER_RUNTIME_NOT_RUNNING");

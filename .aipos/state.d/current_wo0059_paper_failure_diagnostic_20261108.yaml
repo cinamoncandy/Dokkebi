@@ -7,9 +7,9 @@ current_wo0059_paper_failure_diagnostic_20261108:
   prior_head: 84d9f5e8bb5747c7b9b9b93e58ed5948f6c1eade
   related_blocker_pr: 3002
   first_broken_transition: "Actual PAPER observation failed as PAPER_RUNTIME_NOT_RUNNING, but the artifact omitted runtimeState, schedulerRunning, and lastError; root cause remains UNKNOWN."
-  implementation: "Add a single failure-time tuple with timestamp, allowlisted runtime state or UNKNOWN, scheduler boolean or UNKNOWN, and safe last-error code; do not persist raw lastError or change fail-closed classification."
-  validation: "PASS locally: observation 31/31; lifecycle/replay/readiness 23/23; full pnpm test 1335 isolated files; typecheck; validate:full; security:gate; lint 0 errors/47 existing warnings; AIPOS YAML; workflow pins; diff-check."
-  exact_head_ci: PENDING
+  implementation: "Add a single failure-time tuple with timestamp, allowlisted runtime state and runtime halt reasons, scheduler boolean or UNKNOWN, and safe last-error code; do not persist raw lastError or change fail-closed classification."
+  validation: "PASS on current working tree: focused observation/lifecycle/replay/readiness 54/54; full pnpm test 1335 isolated files; typecheck; validate:full; security:gate; lint 0 errors / 47 existing warnings; AIPOS YAML/drift/conformance; workflow pins; diff-check."
+  exact_head_ci: "First diagnostic exact head 2714c913ffc90efa3818c9e1d3ee099a5e564a8b Actual PAPER failed as PAPER_RUNTIME_NOT_RUNNING with HALTED/scheduler=true/RUNTIME_ERROR_PRESENT; artifact 13578943789. New allowlisted halt-reason field requires a fresh exact-head run."
   independent_review: PENDING_FRESH_VALIDATOR_SESSION
-  actual_paper_rerun: "HOLD until a root-cause fix or justified environment change is established."
+  actual_paper_rerun: "#3002 remains HOLD; instrumented #3016 run may identify the HALTED reason, but does not prove #3002 recovery."
   safety: PAPER_ONLY_LIVE_NONE_PRODUCTION_MUTATION_FALSE_REAL_ORDER_FALSE_REAL_TRANSFER_FALSE_AI_ZERO_AUTHORITY_FAIL_CLOSED
