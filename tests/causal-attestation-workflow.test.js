@@ -39,7 +39,11 @@ test("attestation action is immutable-pinned and emits a separately retained bun
   assert.match(attestor, /actions\/attest@1e69f48acb82d1966a394da916b4c1698aa569d6/);
   assert.match(attestor, /predicate-type: https:\/\/github\.com\/cinamoncandy\/NUSA\/attestations\/causal-regression\/v1/);
   assert.match(attestor, /predicate-path: causal-input\/receipt\.json/);
-  assert.match(attestor, /bundle-path: artifacts\/causal-regression\/attestation\.json/);
+  // bundle-path is an output of actions/attest, never an input (the old input was ignored and no bundle was retained).
+  assert.doesNotMatch(attestor, /^\s+bundle-path:/m);
+  assert.match(attestor, /id: attest/);
+  assert.match(attestor, /ATTEST_BUNDLE_PATH: \$\{\{ steps\.attest\.outputs\.bundle-path \}\}/);
+  assert.match(attestor, /cp "\$ATTEST_BUNDLE_PATH" artifacts\/causal-regression\/attestation\.json/);
   assert.match(attestor, /name: nusa-causal-attestation-\$\{\{ github\.run_attempt \}\}/);
 });
 
