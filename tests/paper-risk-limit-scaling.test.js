@@ -5,14 +5,15 @@ const { scalePaperRiskLimitsToCapital, PAPER_RISK_CAPITAL_RATIOS } = require("..
 const { CLOUD_PAPER_RISK_LIMITS } = require("../dist/apps/cloud/src/cloudPaperCanonicalRiskGateway.js");
 const { UPBIT_KRW_MINIMUM_ORDER_KRW } = require("../dist/apps/cloud/src/paperExecutionIntent.js");
 
-test("a KRW 100,000 account gets capital-scaled KRW limits, including a 10% daily-loss limit", () => {
+test("a KRW 100,000 account gets capital-scaled KRW limits: 3x daily buy/sell (owner decision 2026-11-04) and a 10% daily-loss limit", () => {
   const limits = scalePaperRiskLimitsToCapital(CLOUD_PAPER_RISK_LIMITS, 100_000);
   assert.equal(limits.maxOrderNotional, 20_000);
   assert.equal(limits.maxPositionNotional, 50_000);
   assert.equal(limits.maxSymbolExposureNotional, 50_000);
   assert.equal(limits.maxPortfolioExposureNotional, 100_000);
-  assert.equal(limits.maxDailyBuyNotional, 100_000);
-  assert.equal(limits.maxDailySellNotional, 100_000);
+  assert.equal(limits.maxDailyBuyNotional, 300_000);
+  assert.equal(limits.maxDailySellNotional, 300_000);
+  assert.ok(limits.maxDailyBuyNotional < CLOUD_PAPER_RISK_LIMITS.maxDailyBuyNotional && limits.maxDailySellNotional < CLOUD_PAPER_RISK_LIMITS.maxDailySellNotional, "still below the fixed canonical daily limits");
   assert.equal(limits.maxDailyLoss, 10_000);
   assert.ok(limits.maxOrderNotional >= UPBIT_KRW_MINIMUM_ORDER_KRW * 1.01, "the minimum order still fits");
 });

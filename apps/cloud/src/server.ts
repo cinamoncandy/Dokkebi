@@ -114,7 +114,7 @@ export interface CloudRuntimeLivenessSnapshot {
   readonly microstructureRecorder?: { readonly orderBookSamples: number; readonly tradeTicks: number; readonly writeFailures: number; readonly rejectedRows?: number; readonly lastRecordedAt?: number };
   readonly researchExperimentTicks?: { readonly lastTickAt: number; readonly lastStatus: string; readonly ticks: number; readonly sessionsStarted: number; readonly counts: Readonly<Record<string, number>> };
   /** Display-only outcome of the hourly REST gap fill (the candle series head writer): fixed codes and integers. */
-  readonly researchGapFill?: { readonly lastRunAt?: number; readonly runs: number; readonly deferred: number; readonly counts: Readonly<Record<string, number>>; readonly lastErrorCode?: string };
+  readonly researchGapFill?: { readonly lastRunAt?: number; readonly runs: number; readonly deferred: number; readonly counts: Readonly<Record<string, number>>; readonly lastErrorCode?: string; readonly timingsMs?: Readonly<Record<string, number>> };
   /** The same research experiment summaries keyed by bar length ("1m", "15m", "60m", "240m"). */
   readonly researchExperimentTicksByInterval?: Readonly<Record<string, { readonly lastTickAt: number; readonly lastStatus: string; readonly ticks: number; readonly sessionsStarted: number; readonly counts: Readonly<Record<string, number>> }>>;
   /** Canonical PAPER ledger identity: a 64-hex fingerprint of ledger truth and integer counts/times only. */
@@ -405,8 +405,13 @@ function publicRuntimeLiveness(value: CloudRuntimeLivenessSnapshot): CloudRuntim
       if (Object.keys(counts).length >= 12) break;
       if (/^[A-Z][A-Z0-9_]{1,47}$/.test(key) && Number.isSafeInteger(value) && Number(value) >= 0) counts[key] = Number(value);
     }
+    // Optional timings: six non-negative integers (milliseconds), or nothing.
+    const rawTimings = rawGap.timingsMs as Record<string, unknown> | null | undefined;
+    const timingKeys = ["lastFillMs", "lastReadMs", "lastMaterializeMs", "maxFillMs", "maxReadMs", "maxMaterializeMs"] as const;
+    const timingsMs = rawTimings != null && typeof rawTimings === "object" && !Array.isArray(rawTimings) && timingKeys.every((key) => Number.isSafeInteger(rawTimings[key]) && Number(rawTimings[key]) >= 0)
+      ? { timingsMs: Object.fromEntries(timingKeys.map((key) => [key, Number(rawTimings[key])])) } : {};
     researchGapFill = { researchGapFill: {
-      runs: Number(rawGap.runs), deferred: Number(rawGap.deferred), counts,
+      runs: Number(rawGap.runs), deferred: Number(rawGap.deferred), counts, ...timingsMs,
       ...(Number.isSafeInteger(rawGap.lastRunAt) && Number(rawGap.lastRunAt) >= 0 ? { lastRunAt: Number(rawGap.lastRunAt) } : {}),
       ...(typeof rawGap.lastErrorCode === "string" && /^[A-Z][A-Z0-9_]{1,47}$/.test(rawGap.lastErrorCode) ? { lastErrorCode: rawGap.lastErrorCode } : {}),
     } };
@@ -461,6 +466,7 @@ function publicRuntimeLiveness(value: CloudRuntimeLivenessSnapshot): CloudRuntim
         latestFailureStage: (v) => typeof v === "string" && /^(IDENTITY|CYCLE|FINALIZE)$/.test(v), latestFailureCode: (v) => typeof v === "string" && /^[A-Z][A-Z0-9_]{1,63}$/.test(v),
         latestFailureRecordedAt: (v) => Number.isSafeInteger(v) && Number(v) >= 0, failuresRecorded: (v) => Number.isSafeInteger(v) && Number(v) >= 0,
         openPeriodStartAt: (v) => Number.isSafeInteger(v) && Number(v) >= 0, openObservations: (v) => Number.isSafeInteger(v) && Number(v) >= 0,
+        openWaitObservations: (v) => Number.isSafeInteger(v) && Number(v) >= 0, openBlockedObservations: (v) => Number.isSafeInteger(v) && Number(v) >= 0, openRejectedObservations: (v) => Number.isSafeInteger(v) && Number(v) >= 0, openFailedObservations: (v) => Number.isSafeInteger(v) && Number(v) >= 0, openDuplicateObservations: (v) => Number.isSafeInteger(v) && Number(v) >= 0,
         openFilledObservations: (v) => Number.isSafeInteger(v) && Number(v) >= 0, realizedPeriods: (v) => Number.isSafeInteger(v) && Number(v) >= 0,
         baselineObservations: (v) => Number.isSafeInteger(v) && Number(v) >= 0,
         realizedPeriodEndAt: (v) => Number.isSafeInteger(v) && Number(v) >= 0,

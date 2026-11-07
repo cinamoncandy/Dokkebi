@@ -19,7 +19,7 @@ test("gap-fill outcomes are counted by fixed status code, with the last error co
 
 test("the composition records every gap-fill run and every deferral", () => {
   const source = fs.readFileSync("apps/cloud/src/researchExperimentComposition.ts", "utf8");
-  assert.match(source, /finally \{\s*gapFilling = false;\s*try \{ orchestrator\.recordGapFill\(results, now\(\)\); \} catch/);
+  assert.match(source, /finally \{\s*gapFilling = false;\s*try \{ orchestrator\.recordGapFill\(results, now\(\)(?:, \{ fillMs, readMs, materializeMs \})?\); \} catch/);
   assert.match(source, /if \(!retry\) \{ try \{ orchestrator\.noteGapFillDeferred\(\); \} catch/, "one deferral per scheduled attempt, not per one-second retry");
   assert.match(source, /scheduleGapFill\(true\); \}, 1_000\)/);
   assert.match(fs.readFileSync("apps/cloud/src/runtime.ts", "utf8"), /\.\.\.researchGapFillLiveness\(\),/);

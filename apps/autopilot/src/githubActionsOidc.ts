@@ -32,7 +32,9 @@ interface JwtClaims {
   readonly ref?: unknown;
   readonly event_name?: unknown;
   readonly workflow_ref?: unknown;
+  readonly workflow_sha?: unknown;
   readonly sha?: unknown;
+  readonly sub?: unknown;
   readonly run_id?: unknown;
   readonly run_attempt?: unknown;
 }
@@ -56,12 +58,29 @@ export interface SourceExecutionIdentity {
   readonly runAttempt: string;
 }
 
+export interface VerifiedCodingSourceRun {
+  readonly source: SourceExecutionIdentity;
+  readonly conclusion: "failure" | "timed_out";
+  readonly status: "completed";
+  readonly branch: "main";
+  readonly event: "push";
+}
+
+export interface VerifiedCausalProducerEvidence {
+  readonly source: SourceExecutionIdentity;
+  readonly sourceConclusion: "failure" | "timed_out";
+  readonly producerJobId: number;
+  readonly attestationJobId: number;
+  readonly artifact: Readonly<{ id: number; name: string; digest: string; sizeInBytes: number }>;
+  readonly fingerprints: Readonly<Record<"workflow" | "producer" | "contract" | "lockfile" | "implementation", string>>;
+}
+
 interface JsonWebKeySet {
   readonly keys?: unknown;
 }
 
 interface OidcPolicy {
-  readonly errorPrefix: "CODING_RUNNER_OIDC" | "EVENT_BRIDGE_OIDC" | "RELEASE_CONTROL_OIDC";
+  readonly errorPrefix: "CODING_RUNNER_OIDC" | "EVENT_BRIDGE_OIDC" | "RELEASE_CONTROL_OIDC" | "ISOLATED_CONSUMER_OIDC";
   readonly workflowPath: string;
   readonly requireMainRef: boolean;
   readonly allowedEvents: ReadonlySet<string>;
@@ -87,6 +106,39 @@ const RELEASE_CONTROL_POLICY: OidcPolicy = Object.freeze({
   requireMainRef: true,
   allowedEvents: new Set(["repository_dispatch"]),
 });
+
+const ISOLATED_CONSUMER_WORKFLOW = ".github/workflows/causal-verification-consumer.yml";
+const ISOLATED_CONSUMER_AUDIENCE = "nusa-isolated-causal-verification-v1";
+const ISOLATED_CONSUMER_POLICY: OidcPolicy = Object.freeze({
+  errorPrefix: "ISOLATED_CONSUMER_OIDC",
+  workflowPath: ISOLATED_CONSUMER_WORKFLOW,
+  requireMainRef: true,
+  allowedEvents: new Set(["workflow_run"]),
+});
+
+export interface VerifiedIsolatedConsumerIdentity {
+  readonly repository: string;
+  readonly repositoryId: string;
+  readonly workflowRef: string;
+  readonly ref: "refs/heads/main";
+  readonly event: "workflow_run";
+  readonly sha: string;
+  readonly runId: string;
+  readonly runAttempt: string;
+}
+
+export interface VerifiedIsolatedSourceRun {
+  readonly repository: "cinamoncandy/NUSA";
+  readonly workflowPath: ".github/workflows/causal-verification.yml";
+  readonly sha: string;
+  readonly runId: string;
+  readonly runAttempt: string;
+  readonly status: "completed";
+  readonly conclusion: "success";
+  readonly event: "workflow_dispatch";
+  readonly branch: "main";
+  readonly jobId: number;
+}
 
 function decodeBase64Url(value: string): Uint8Array {
   const normalized = value.replace(/-/g, "+").replace(/_/g, "/").padEnd(Math.ceil(value.length / 4) * 4, "=");
@@ -246,16 +298,152 @@ export async function verifyGithubCodingPublisherRun(
   }
 }
 
+/** Authenticates only the protected-main isolated consumer, not its source event or runner result. */
+export async function verifyGithubIsolatedConsumerIdentity(
+  token: string,
+  allowedRepository: string,
+  fetchImpl: FetchImpl = fetch as unknown as FetchImpl,
+  nowSeconds = Math.floor(Date.now() / 1000),
+): Promise<VerifiedIsolatedConsumerIdentity> {
+  if (allowedRepository !== "cinamoncandy/NUSA") fail(ISOLATED_CONSUMER_POLICY, "REPOSITORY_POLICY_INVALID");
+  const claims = await verifyWithPolicy(
+    token, allowedRepository, ISOLATED_CONSUMER_POLICY, fetchImpl, nowSeconds, ISOLATED_CONSUMER_AUDIENCE,
+  );
+  const repositoryId = String(claims.repository_id ?? "");
+  const sha = claims.sha;
+  const workflowSha = claims.workflow_sha;
+  const runId = String(claims.run_id ?? "");
+  const runAttempt = String(claims.run_attempt ?? "");
+  if (repositoryId !== "1296492411") fail(ISOLATED_CONSUMER_POLICY, "REPOSITORY_ID_INVALID");
+  if (typeof sha !== "string" || !/^[a-f0-9]{40}$/i.test(sha)
+    || typeof workflowSha !== "string" || !/^[a-f0-9]{40}$/i.test(workflowSha)
+    || workflowSha.toLowerCase() !== sha.toLowerCase()) fail(ISOLATED_CONSUMER_POLICY, "WORKFLOW_SHA_INVALID");
+  if (claims.sub !== `repo:${allowedRepository}:ref:refs/heads/main`) fail(ISOLATED_CONSUMER_POLICY, "SUBJECT_INVALID");
+  if (!/^[1-9][0-9]{0,19}$/.test(runId)) fail(ISOLATED_CONSUMER_POLICY, "RUN_ID_INVALID");
+  if (!/^[1-9][0-9]{0,9}$/.test(runAttempt)) fail(ISOLATED_CONSUMER_POLICY, "RUN_ATTEMPT_INVALID");
+  return Object.freeze({
+    repository: allowedRepository,
+    repositoryId,
+    workflowRef: claims.workflow_ref as string,
+    ref: "refs/heads/main",
+    event: "workflow_run",
+    sha: sha.toLowerCase(),
+    runId,
+    runAttempt,
+  });
+}
+
+/** Cross-checks the consumer JWT's run identity against GitHub Actions before source verification. */
+export async function verifyGithubIsolatedConsumerRun(
+  identity: VerifiedIsolatedConsumerIdentity,
+  token: string,
+  fetchImpl: FetchImpl = fetch as unknown as FetchImpl,
+): Promise<void> {
+  if (!token.trim() || identity.repository !== "cinamoncandy/NUSA" || identity.repositoryId !== "1296492411"
+    || identity.workflowRef !== `${identity.repository}/${ISOLATED_CONSUMER_WORKFLOW}@refs/heads/main`
+    || !/^[a-f0-9]{40}$/.test(identity.sha)
+    || !/^[1-9][0-9]{0,19}$/.test(identity.runId)
+    || !/^[1-9][0-9]{0,9}$/.test(identity.runAttempt)) {
+    throw new Error("ISOLATED_CONSUMER_RUN_IDENTITY_INVALID");
+  }
+  let response: JsonResponse;
+  try {
+    response = await fetchImpl(`https://api.github.com/repos/${identity.repository}/actions/runs/${identity.runId}/attempts/${identity.runAttempt}`, {
+      headers: { accept: "application/vnd.github+json", authorization: `Bearer ${token}`, "user-agent": "nusa-autopilot-worker", "x-github-api-version": "2022-11-28" },
+    });
+  } catch {
+    throw new Error("ISOLATED_CONSUMER_RUN_UNAVAILABLE");
+  }
+  if (!response.ok) throw new Error("ISOLATED_CONSUMER_RUN_UNAVAILABLE");
+  let run: Record<string, unknown> | null;
+  try { run = object(await response.json()); } catch { throw new Error("ISOLATED_CONSUMER_RUN_UNAVAILABLE"); }
+  const repository = object(run?.repository);
+  if (!run || String(run.id) !== identity.runId || String(run.run_attempt) !== identity.runAttempt
+    || repository?.full_name !== identity.repository || String(repository?.id) !== identity.repositoryId
+    || run.path !== ISOLATED_CONSUMER_WORKFLOW || run.head_sha !== identity.sha
+    || run.head_branch !== "main" || run.event !== "workflow_run" || run.status !== "in_progress") {
+    throw new Error("ISOLATED_CONSUMER_RUN_MISMATCH");
+  }
+}
+
+/** Resolves the event source from GitHub, then verifies its producer job for the exact attempt. */
+export async function verifyGithubIsolatedSourceRun(
+  runId: string,
+  runAttempt: string,
+  token: string,
+  fetchImpl: FetchImpl = fetch as unknown as FetchImpl,
+): Promise<VerifiedIsolatedSourceRun> {
+  const repositoryName = "cinamoncandy/NUSA";
+  const workflowPath = ".github/workflows/causal-verification.yml";
+  if (!token.trim() || !/^[1-9][0-9]{0,19}$/.test(runId) || !/^[1-9][0-9]{0,9}$/.test(runAttempt)) {
+    throw new Error("ISOLATED_SOURCE_RUN_IDENTITY_INVALID");
+  }
+  const headers = {
+    accept: "application/vnd.github+json",
+    authorization: `Bearer ${token}`,
+    "user-agent": "nusa-autopilot-worker",
+    "x-github-api-version": "2022-11-28",
+  };
+  let runResponse: JsonResponse;
+  try {
+    runResponse = await fetchImpl(`https://api.github.com/repos/${repositoryName}/actions/runs/${runId}/attempts/${runAttempt}`, { headers });
+  } catch {
+    throw new Error("ISOLATED_SOURCE_RUN_UNAVAILABLE");
+  }
+  if (!runResponse.ok) throw new Error("ISOLATED_SOURCE_RUN_UNAVAILABLE");
+  let run: Record<string, unknown> | null;
+  try { run = object(await runResponse.json()); } catch { throw new Error("ISOLATED_SOURCE_RUN_UNAVAILABLE"); }
+  const repository = object(run?.repository);
+  if (!run || String(run.id) !== runId || String(run.run_attempt) !== runAttempt
+    || repository?.full_name !== repositoryName || String(repository.id) !== "1296492411"
+    || run.path !== workflowPath || run.name !== "NUSA Isolated Causal Verification"
+    || run.head_branch !== "main" || run.event !== "workflow_dispatch"
+    || run.status !== "completed" || run.conclusion !== "success"
+    || typeof run.head_sha !== "string" || !/^[a-f0-9]{40}$/.test(run.head_sha)) {
+    throw new Error("ISOLATED_SOURCE_RUN_MISMATCH");
+  }
+
+  let jobsResponse: JsonResponse;
+  try {
+    jobsResponse = await fetchImpl(`https://api.github.com/repos/${repositoryName}/actions/runs/${runId}/attempts/${runAttempt}/jobs?per_page=100`, { headers });
+  } catch {
+    throw new Error("ISOLATED_SOURCE_JOB_UNAVAILABLE");
+  }
+  if (!jobsResponse.ok) throw new Error("ISOLATED_SOURCE_JOB_UNAVAILABLE");
+  let jobsPayload: Record<string, unknown> | null;
+  try { jobsPayload = object(await jobsResponse.json()); } catch { throw new Error("ISOLATED_SOURCE_JOB_UNAVAILABLE"); }
+  const jobs = Array.isArray(jobsPayload?.jobs) ? jobsPayload.jobs.map(object).filter((job): job is Record<string, unknown> => Boolean(job)) : [];
+  const matches = jobs.filter((job) => job.name === "verify-causal-positive");
+  if (matches.length !== 1 || String(matches[0]?.run_id) !== runId
+    || String(matches[0]?.run_attempt) !== runAttempt || matches[0]?.head_sha !== run.head_sha
+    || matches[0]?.status !== "completed" || matches[0]?.conclusion !== "success"
+    || !Number.isSafeInteger(matches[0]?.id) || Number(matches[0]?.id) <= 0) {
+    throw new Error("ISOLATED_SOURCE_JOB_MISMATCH");
+  }
+
+  return Object.freeze({
+    repository: repositoryName,
+    workflowPath,
+    sha: run.head_sha,
+    runId,
+    runAttempt,
+    status: "completed",
+    conclusion: "success",
+    event: "workflow_dispatch",
+    branch: "main",
+    jobId: Number(matches[0]!.id),
+  });
+}
+
 /** Source run identity is distinct from publisher identity and carries no causal authority. */
 export async function verifyGithubCodingSourceRun(
   source: SourceExecutionIdentity,
   allowedRepository: string,
   token: string,
   fetchImpl: FetchImpl = fetch as unknown as FetchImpl,
-): Promise<void> {
+): Promise<VerifiedCodingSourceRun> {
   if (!token.trim() || source.repository !== allowedRepository
     || !/^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+$/.test(source.repository)
-    || source.workflowPath !== ".github/workflows/ci.yml"
     || source.workflowPath !== ".github/workflows/ci.yml"
     || !/^[a-f0-9]{40}$/.test(source.sha)
     || !/^[1-9][0-9]{0,19}$/.test(source.runId)
@@ -275,15 +463,61 @@ export async function verifyGithubCodingSourceRun(
     || run.status !== "completed" || (run.conclusion !== "failure" && run.conclusion !== "timed_out")) {
     throw new Error("CODING_SOURCE_RUN_MISMATCH");
   }
+  return Object.freeze({
+    source: Object.freeze({ ...source }),
+    conclusion: run.conclusion,
+    status: "completed",
+    branch: "main",
+    event: "push",
+  });
 }
 
-/** Cross-checks the protected producer jobs and same-run signed artifact through GitHub's API. */
+const CAUSAL_FINGERPRINT_PATHS = Object.freeze({
+  workflow: ".github/workflows/ci.yml",
+  producer: "scripts/causal-regression-observe.js",
+  contract: "apps/autopilot/src/causalRegressionContract.ts",
+  lockfile: "pnpm-lock.yaml",
+  implementation: "apps/autopilot/src/repairableWorkflowRun.ts",
+});
+
+async function readGithubFileSha256(
+  repository: string,
+  sha: string,
+  path: string,
+  token: string,
+  fetchImpl: FetchImpl,
+): Promise<string> {
+  const encodedPath = path.split("/").map(encodeURIComponent).join("/");
+  let response: JsonResponse;
+  try {
+    response = await fetchImpl(`https://api.github.com/repos/${repository}/contents/${encodedPath}?ref=${sha}`, {
+      headers: { accept: "application/vnd.github+json", authorization: `Bearer ${token}`, "user-agent": "nusa-autopilot-worker", "x-github-api-version": "2022-11-28" },
+    });
+  } catch { throw new Error("CODING_CAUSAL_PRODUCER_SOURCE_UNAVAILABLE"); }
+  if (!response.ok) throw new Error("CODING_CAUSAL_PRODUCER_SOURCE_UNAVAILABLE");
+  let file: Record<string, unknown> | null;
+  try { file = object(await response.json()); } catch { throw new Error("CODING_CAUSAL_PRODUCER_SOURCE_INVALID"); }
+  if (!file || file.type !== "file" || file.path !== path || file.encoding !== "base64"
+    || !Number.isSafeInteger(file.size) || Number(file.size) < 1 || Number(file.size) > 1_000_000
+    || typeof file.content !== "string" || file.content.length > 1_400_000
+    || !/^[A-Za-z0-9+/=\s]+$/.test(file.content)) throw new Error("CODING_CAUSAL_PRODUCER_SOURCE_INVALID");
+  let bytes: Uint8Array;
+  try {
+    const binary = atob(file.content.replace(/\s/g, ""));
+    bytes = Uint8Array.from(binary, (character) => character.charCodeAt(0));
+  } catch { throw new Error("CODING_CAUSAL_PRODUCER_SOURCE_INVALID"); }
+  if (bytes.byteLength !== Number(file.size)) throw new Error("CODING_CAUSAL_PRODUCER_SOURCE_INVALID");
+  const digest = await crypto.subtle.digest("SHA-256", toArrayBuffer(bytes));
+  return Array.from(new Uint8Array(digest), (byte) => byte.toString(16).padStart(2, "0")).join("");
+}
+
+/** Cross-checks the protected source, producer jobs, artifact, and exact source-file fingerprints through GitHub's API. */
 export async function verifyGithubCausalProducerEvidence(
   source: SourceExecutionIdentity,
   allowedRepository: string,
   token: string,
   fetchImpl: FetchImpl = fetch as unknown as FetchImpl,
-): Promise<void> {
+): Promise<VerifiedCausalProducerEvidence> {
   if (!token.trim() || source.repository !== allowedRepository
     || !/^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+$/.test(source.repository)
     || !/^[a-f0-9]{40}$/.test(source.sha)
@@ -308,8 +542,13 @@ export async function verifyGithubCausalProducerEvidence(
   const matchesJob = (name: string, conclusion: string) => jobs.filter((job) => job?.name === name
     && String(job.run_id) === source.runId && String(job.run_attempt) === source.runAttempt
     && job.head_sha === source.sha && job.status === "completed" && job.conclusion === conclusion);
-  if (matchesJob("causal-regression-contract", "failure").length !== 1
-    || matchesJob("attest-causal-regression", "success").length !== 1) throw new Error("CODING_CAUSAL_PRODUCER_JOBS_MISMATCH");
+  const producerJobs = matchesJob("causal-regression-contract", "failure");
+  const attestationJobs = matchesJob("attest-causal-regression", "success");
+  if (producerJobs.length !== 1 || attestationJobs.length !== 1
+    || !Number.isSafeInteger(producerJobs[0]?.id) || Number(producerJobs[0]?.id) <= 0
+    || !Number.isSafeInteger(attestationJobs[0]?.id) || Number(attestationJobs[0]?.id) <= 0) {
+    throw new Error("CODING_CAUSAL_PRODUCER_JOBS_MISMATCH");
+  }
 
   let artifactsResponse: JsonResponse;
   try {
@@ -330,6 +569,31 @@ export async function verifyGithubCausalProducerEvidence(
     && artifact.size_in_bytes > 0 && artifact.size_in_bytes <= 2 * 1024 * 1024
     && typeof artifact.digest === "string" && /^sha256:[a-f0-9]{64}$/.test(artifact.digest));
   if (matchingArtifacts.length !== 1) throw new Error("CODING_CAUSAL_PRODUCER_ARTIFACT_MISMATCH");
+
+  const [sourceRun, fingerprintValues] = await Promise.all([
+    verifyGithubCodingSourceRun(source, allowedRepository, token, fetchImpl),
+    Promise.all(Object.values(CAUSAL_FINGERPRINT_PATHS).map((path) => readGithubFileSha256(source.repository, source.sha, path, token, fetchImpl))),
+  ]);
+  const fingerprints = Object.freeze({
+    workflow: fingerprintValues[0]!,
+    producer: fingerprintValues[1]!,
+    contract: fingerprintValues[2]!,
+    lockfile: fingerprintValues[3]!,
+    implementation: fingerprintValues[4]!,
+  });
+  return Object.freeze({
+    source: Object.freeze({ ...source }),
+    sourceConclusion: sourceRun.conclusion,
+    producerJobId: Number(producerJobs[0]!.id),
+    attestationJobId: Number(attestationJobs[0]!.id),
+    artifact: Object.freeze({
+      id: Number(matchingArtifacts[0]!.id),
+      name: expectedName,
+      digest: String(matchingArtifacts[0]!.digest),
+      sizeInBytes: Number(matchingArtifacts[0]!.size_in_bytes),
+    }),
+    fingerprints,
+  });
 }
 
 export async function verifyGithubEventBridgeOidcToken(

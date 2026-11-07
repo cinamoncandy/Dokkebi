@@ -47,6 +47,12 @@ jobs:
           if (payload.repository !== process.env.GITHUB_REPOSITORY) fail(`repository mismatch: ${payload.repository}`);
           if (!/^[0-9a-f]{40}$/i.test(payload.head_sha || '')) fail('head_sha must be an exact 40-character commit SHA');
           if (!Number.isSafeInteger(payload.workflow_run_id) || payload.workflow_run_id <= 0) fail('workflow_run_id must be a positive safe integer');
+          if (String(payload.reason || '').startsWith('gha:')) {
+            const match = /^gha:([1-9][0-9]{0,19}):([0-9a-f]{40}):(failure|timed_out)$/.exec(payload.reason);
+            if (!match || Number(match[1]) !== payload.workflow_run_id || match[2] !== payload.head_sha) fail('causal failure identity is invalid');
+            if (!Number.isSafeInteger(payload.causal_source_run_attempt) || payload.causal_source_run_attempt < 1 || payload.causal_source_run_attempt > 9999999999) fail('causal source attempt is invalid');
+            if (!/^[a-f0-9]{64}$/.test(payload.causal_dispatch_capability || '')) fail('causal dispatch capability is missing');
+          }
           if (!/^[A-Za-z0-9_.:-]{1,160}$/.test(payload.execution_id || '')) fail('execution_id must be a bounded lifecycle identity');
           if (!/^[A-Za-z0-9_.:-]{1,256}$/.test(payload.dedupe_key || '')) fail('dedupe_key must be a bounded lifecycle identity');
           if (payload.contract_fingerprint_sha256 != null && !/^[0-9a-f]{64}$/i.test(payload.contract_fingerprint_sha256)) fail('contract_fingerprint_sha256 must be a SHA-256 identity');
@@ -127,6 +133,7 @@ jobs:
             repository: payload.repository,
             headSha: payload.head_sha,
             workflowRunId: payload.workflow_run_id,
+            ...(Number.isSafeInteger(payload.causal_source_run_attempt) ? { workflowRunAttempt: payload.causal_source_run_attempt } : {}),
             reason: payload.reason,
             executionId: payload.execution_id,
             dedupeKey: payload.dedupe_key,

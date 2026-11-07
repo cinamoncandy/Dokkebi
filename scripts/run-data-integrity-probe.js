@@ -4,12 +4,19 @@
  * inside the daily nusa-research service, opens NUSA_CLOUD_STATE_DB_PATH READ-ONLY and prints one line:
  *   DATA_INTEGRITY {"status":"PASS"|"WARN"|"FAIL", ...integer fields}
  * FAIL: a stored row is stamped in the future, a candle close time is not aligned to its interval, or a candle's OHLC is
- * inconsistent. WARN: missing candles in the last 7 days or a 1-minute series older than 10 minutes. It is evidence about the data
+ * inconsistent. WARN: missing candles in the last 7 days or a 1-minute series older than two hours (two gap-fill cycles). It is evidence about the data
  * only: it changes nothing, gates nothing and grants nothing.
  */
 const M = 60_000;
 const DAY = 24 * 60 * M;
 const FUTURE_SKEW_MS = 5_000;
+/**
+ * A 1-minute series counts as stale when its newest candle is older than two hourly gap-fill cycles. The REST gap fill is the only writer
+ * of the series head and runs once an hour, so a 10-minute limit (the value from when live collection wrote the head) flagged a healthy
+ * series almost every time the daily probe ran (2026-11-02 reading: newest candle 56.5 minutes old, nothing missing). Display only: it
+ * changes no gate and no experiment input.
+ */
+const STALE_SERIES_AFTER_MS = 2 * 60 * M;
 
 function probe({ db, now = Date.now(), currentNow = () => now }) {
   const since = now - 7 * DAY;
@@ -31,7 +38,7 @@ function probe({ db, now = Date.now(), currentNow = () => now }) {
     if (Number(s.i) === M) {
       const age = now - Number(s.b);
       maxLatestAgeMs = Math.max(maxLatestAgeMs, age);
-      if (age > 10 * M) staleSeries += 1;
+      if (age > STALE_SERIES_AFTER_MS) staleSeries += 1;
     }
   }
   const out = {

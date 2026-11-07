@@ -1,10 +1,10 @@
 id: WO-AUTOPILOT-20261017-FRESH-VALIDATOR-GATE
 title: "Machine-enforce fresh non-author VALIDATOR evidence before Audit and Release"
-status: RUNTIME_DEPENDENCY_P1_REPAIR_LOCAL_VALIDATION_PASS_AWAITING_PUBLICATION
+status: IN_PROGRESS
 owner: nusa-development
 repository: cinamoncandy/NUSA
 base_branch: main
-base_commit: e7f8a426a57a08339eae3778ca50de6512d6acd9
+base_commit: 01d698b325626e4a2e62b29e8e0b2f99f579ad4a
 branch: fix/validator-evidence-gate-2760
 issue: 2760
 authority_impact: release_governance_fail_closed
@@ -69,11 +69,11 @@ safety:
   productionMutationAllowed: false
   aiAuthority: ZERO_AUTHORITY
   fail_closed: true
-current_main_sync: "Fresh GitHub verification found protected main 9b6c99cee1750f02ae4dcb9cfe0dba429649dce5 while PR #2772 was e0d1465ba6d50e740c766f1daca02459858b0c48. The branches diverged by 8 PR-only and 12 main-only commits from 7e560405ad15b4eec8a5e46b0ad32873286df525. No changed-path overlap was found; the merge applied cleanly in an isolated worktree. The validated tree was reconstructed through the GitHub Git Database API and its SHA exactly matched the local tree; the existing PR ref was conditionally fast-forwarded from expected e0d1465... to db7fc759de47c620a3220c0f12baea7121e3a2d4 with force=false. GitHub confirms the PR remains OPEN/Draft and based on current protected main 9b6c99.... All six workflows on db7fc759... completed successfully (CI 39395954326, Actual PAPER 39395954357, Capability Guard 39395954343, Activation 39395954362, Transport 39395954331, Read-only Broker 39395954449). This is historical for the forthcoming AIPOS reconciliation successor; that successor needs fresh exact-head workflows and a fresh non-author VALIDATOR."
+current_main_sync: "Fresh verification: protected main 01d698b325626e4a2e62b29e8e0b2f99f579ad4a; PR #2772 remote head 5004e87836936e5c236208a3f03abadcc60d7c8c, OPEN/Draft, mergeability false; PR metadata reports base SHA 3e610394ab9441e925769ac66033d3ec9fedc429. Local existing branch fix/validator-evidence-gate-2760 has an uncommitted, non-ff merge candidate with 01d698...; merge base 3e610..., pre-merge divergence 46 PR-only / 148 main-only, one import conflict resolved by preserving both import sets, zero unresolved conflicts. Candidate remains uncommitted/unpublished; predecessor exact-head evidence is historical. Four untracked security reports remain preserved and excluded from commit. No remote ref update has occurred."
 local_sync_checkpoint: fa83cb282fcee259f568bc7dd95d515d4f0046b8
-remote_update_plan: "The exact verified tree was published by a non-force expected-head update from e0d1465... to db7fc759.... The pending AIPOS reconciliation successor must be published only after the GitHub Git Database API tree SHA exactly matches its local HEAD^{tree}; create it as a child of db7fc759..., then update the existing PR branch with expected_sha=db7fc759de47c620a3220c0f12baea7121e3a2d4 and force=false. On any mismatch or lease rejection, stop without changing the ref."
-validation_after_sync: "Local implementation tree PASS: pnpm run preflight, pnpm run build, pnpm run typecheck, pnpm run validate:full, pnpm run security:gate, git diff --check, and pnpm run test (1263 isolated test files). AIPOS status-only corrections passed preflight, AIPOS drift, cross-AI conformance, and git diff --check. Previous published exact head db7fc759de47c620a3220c0f12baea7121e3a2d4 passed all six workflows (CI 39395954326, Actual PAPER 39395954357, Capability Guard 39395954343, Activation 39395954362, Transport 39395954331, Read-only Broker 39395954449); these are historical for the AIPOS reconciliation successor. Fresh workflows and separate non-author Validator remain pending on that successor."
-next: "Finish local validation for source-ref manifests and exact Node built-ins; verify current remote head before publishing a non-force successor to existing #2772. Require fresh workflows and independent review; keep Draft and unresolved threads."
+remote_update_plan: "Do not update the remote branch until the current-main merge candidate passes local validation and final diff review. Then re-fetch PR #2772; publish only a normal merge commit to the existing branch with an expected-old-head check against the live remote SHA (currently observed as 5004e878...), force=false. Stop on any head mismatch or lease rejection. Keep Draft and all review threads unresolved."
+validation_after_sync: "Current-main merge tree: preflight PASS after changing the invalid custom status to canonical IN_PROGRESS; typecheck PASS; build PASS; emitted worker/audit/validator tests 78/78 PASS; independent-audit JS contract exact rerun with workspace TMPDIR PASS 16/16 after an initial /tmp ENOSPC. Full suite ran but stopped at dist/apps/cloud/src/cloudPaperCanonicalRiskGateway.requalification.test.js because its HEAD-bound blob assertion reads predecessor HEAD blob b43962be while the merged candidate source blob is 2174d4e6. This is expected for an uncommitted merge index and must be validated on the exact candidate commit tree; it is not evidence to weaken or change the test. Full suite remains NOT PASS until rerun on the candidate commit. All historical CI/review receipts above are not evidence for this candidate."
+next: "Re-run preflight after the status enum correction, then full tests with a workspace TMPDIR; complete validate:full, security, lint, AIPOS and diff review. If all pass, refresh the existing PR head and publish a normal merge commit to that same branch; require fresh exact-head CI/companions and a fresh non-author Validator. Keep Draft and threads unresolved."
 latest_repair_2026_10_26:
   repository_verified:
     protected_main: 54cfb2199cee1fdbaf5ea328c8a0940f4101e723

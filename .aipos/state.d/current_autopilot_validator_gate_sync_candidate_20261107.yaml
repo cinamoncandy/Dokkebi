@@ -1,0 +1,16 @@
+current_autopilot_validator_gate_sync_candidate_20261107:
+  work_order: WO-AUTOPILOT-20261017-FRESH-VALIDATOR-GATE
+  status: IN_PROGRESS
+  issue: 2760
+  pull_request: 2772
+  branch: fix/validator-evidence-gate-2760
+  protected_main_sha: 01d698b325626e4a2e62b29e8e0b2f99f579ad4a
+  observed_pr_head: 5004e87836936e5c236208a3f03abadcc60d7c8c
+  local_candidate: UNCOMMITTED_NON_FORCE_MERGE_OF_PROTECTED_MAIN
+  merge_base: 3e610394ab9441e925769ac66033d3ec9fedc429
+  pre_merge_divergence: "46 PR-only commits / 148 main-only commits"
+  merge_conflicts: "One worker.ts import conflict resolved by preserving both import sets; zero unresolved conflicts."
+  local_validation_so_far: "typecheck PASS; build PASS; focused emitted tests 78/78; independent-audit contract exact rerun 16/16 with workspace TMPDIR after /tmp ENOSPC. Full suite has not started on this candidate."
+  first_broken_transition: "Current-main local merge candidate -> full isolated test suite."
+  next: "Run pnpm test with workspace TMPDIR, then validate:full, security, lint, AIPOS and diff safety. No commit/push until all local gates and diff review pass; then exact-head CI and independent Validator are required."
+  safety: PAPER_ONLY_LIVE_NONE_PRODUCTION_MUTATION_FALSE_REAL_ORDER_FALSE_REAL_TRANSFER_FALSE_AI_ZERO_AUTHORITY_FAIL_CLOSED
