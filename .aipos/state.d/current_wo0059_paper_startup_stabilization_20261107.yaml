@@ -1,0 +1,11 @@
+current_wo0059_paper_startup_stabilization_20261107:
+  work_order: WO-0059-PAPER-STARTUP-STABILIZATION-20261107
+  status: IN_PROGRESS
+  branch: WO-0059-PAPER-STARTUP-STABILIZATION-20261107
+  base_sha: 60e4185e7c6abba18fce0c0a80797d0aec4fe92b
+  exact_failure_head: 9288b8b6565e2f8e571aae860115f429d9cc84a4
+  exact_failure_runs: "Actual PAPER 42370741842 failed twice at startup with PAPER_ORDERBOOK_UNRECONCILED; artifacts 13572784047 and 13574080520 are exact-SHA-bound."
+  first_broken_transition: "bounded automatic runtime startup -> fresh reconciled public orderbook -> stable observation start; ticker/scheduler startup can precede REST snapshot reconciliation and current observer aborts on the recoverable synchronization code before the 60s observation begins."
+  validation: "Root-cause code trace confirmed in scripts/actual-paper-runtime-e2e.js and apps/cloud/src/runtime.ts. No source code change or validation has yet been made on this successor."
+  next: "Add a bounded pre-observation stability gate for only PAPER_ORDERBOOK_UNRECONCILED and PUBLIC_ORDERBOOK_SNAPSHOT_UNAVAILABLE, preserve sanitized startup occurrence evidence, and fail closed on all other errors or timeout. Keep readiness INCOMPLETE absent genuine order/fill/account-PnL evidence."
+  safety: PAPER_ONLY_LIVE_NONE_PRODUCTION_MUTATION_FALSE_REAL_ORDER_FALSE_REAL_TRANSFER_FALSE_AI_ZERO_AUTHORITY_FAIL_CLOSED

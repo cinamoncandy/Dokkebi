@@ -1,0 +1,74 @@
+id: WO-0059-PAPER-STARTUP-STABILIZATION-20261107
+title: "Separate PAPER orderbook startup stabilization from bounded observation"
+status: IN_PROGRESS
+priority: P0
+owner: nusa-development
+repository: cinamoncandy/NUSA
+base_branch: main
+base_commit: 60e4185e7c6abba18fce0c0a80797d0aec4fe92b
+implementation_branch: WO-0059-PAPER-STARTUP-STABILIZATION-20261107
+source_work_order: .aipos/work-orders/WO-0059-PAPER-OBSERVATION-20261106.yaml
+related_issues:
+  - 1605
+  - 2770
+related_merged_prs:
+  - 3006
+objective: "Prevent an initial recoverable Upbit orderbook snapshot synchronization diagnostic from aborting the WO-0059 observation before it begins, while preserving the diagnostic and keeping all observation-time runtime errors fail-closed."
+finding:
+  exact_head: 9288b8b6565e2f8e571aae860115f429d9cc84a4
+  workflow_run: 42370741842
+  retry_same_sha: true
+  artifacts:
+    - id: 13572784047
+      sha256: 59b34399fec0893148f26273c08820dda6d1ba8a809a5dcc41e33c2cad43eda9
+      failure: "PAPER_ORDERBOOK_UNRECONCILED before minimum observation duration (1.017s; 0 Decision cycles)."
+    - id: 13574080520
+      sha256: 4c0b377557e77953e7b1c204d8e6583121237934b7a45ee0679a385dc4ea6c93
+      failure: "PAPER_ORDERBOOK_UNRECONCILED before minimum observation duration (13ms; 0 Decision cycles)."
+  code_trace: "waitForAutomaticRuntime returns on scheduler/heartbeat/public ticker; runtime records PAPER_ORDERBOOK_UNRECONCILED when a stream book arrives before a valid fresh REST snapshot. Runtime clears only the two orderbook synchronization codes after fresh reconciled quotes for every configured market. The observer currently fails immediately on any non-empty heartbeat.lastError as soon as the observation window starts."
+scope:
+  - "Add a separate bounded pre-observation synchronization gate; do not change waitForAutomaticRuntime startup semantics or the runtime/orderbook reconciler."
+  - "Permit waiting only for PAPER_ORDERBOOK_UNRECONCILED and PUBLIC_ORDERBOOK_SNAPSHOT_UNAVAILABLE, the exact locally-owned codes that runtime clears after fresh reconciled quotes for all configured markets."
+  - "Require consecutive clean PAPER snapshots before starting the 60-180 second observation window."
+  - "Retain bounded startup error count, first/last observation timestamps, and exact allowlisted codes in the artifact."
+  - "Any writer lease, authority, malformed evidence, unknown error, or unrecovered synchronization error remains fail-closed."
+  - "Keep PAPER readiness semantics and all execution authority unchanged."
+acceptance:
+  - "A recovered startup orderbook synchronization error is explicitly present in evidence, then observation begins only after consecutive clean snapshots."
+  - "A persistent allowed synchronization error exhausts a finite startup budget, returns FAIL, and does not begin the observation clock."
+  - "A writer lease or unknown runtime error fails immediately and cannot be reclassified as recoverable."
+  - "Any runtime error arising after observation begins still ends that observation fail-closed."
+  - "Natural no-order/no-fill/no-account-change observation remains semantically INCOMPLETE; no threshold or classifier changes."
+  - "No synthetic ticker, signal, order, fill, or account mutation is introduced."
+exclusions:
+  - "No change to apps/cloud/src/runtime.ts, orderbook reconciliation policy, Risk, writer lease, scheduler, execution path, or production database."
+  - "No change to PR #3002 Research source or its branch."
+  - "No deployment, restart, readiness certification, LIVE activation, real order, withdrawal, or transfer."
+architecture_impact:
+  acknowledged: true
+  analysis: "A bounded evidence-harness startup phase distinguishes transient source synchronization from the measured observation interval. It neither changes production runtime behavior nor converts an error into successful readiness; it records recovered startup diagnostics and requires fresh runtime health before collecting observation evidence."
+  references:
+    - .aipos/architecture.md
+    - .aipos/AI_HANDOFF_CONTRACT.md
+    - docs/NUSA_CORE_ARCHITECTURE_PRINCIPLE.md
+    - docs/NUSA_INVESTMENT_KNOWLEDGE_PRINCIPLE.md
+    - .aipos/work-orders/WO-0059-PAPER-OBSERVATION-20261106.yaml
+safety:
+  paper_only: true
+  liveAuthority: NONE
+  productionMutationAllowed: false
+  realOrderAuthority: false
+  realTransferAuthority: false
+  aiAuthority: ZERO_AUTHORITY
+  fail_closed: "Only the two exact synchronization codes may be waited out before observation; unknown, authority, lease, malformed, and observation-time errors remain failures."
+verification_commands:
+  - "node --test tests/actual-paper-runtime-observation.test.js"
+  - "node --test tests/actual-paper-runtime-e2e-chaos-boundary.test.js tests/actual-paper-runtime-persisted-replay.test.js tests/actual-paper-runtime-readiness-classification.test.js tests/exact-head-paper-readiness-certification.test.js"
+  - "pnpm test"
+  - "pnpm run typecheck"
+  - "pnpm run validate:full"
+  - "pnpm run security:gate"
+  - "pnpm run lint"
+  - "node scripts/validate-workflow-action-pins.js"
+  - "git diff --check"
+next: "Implement the bounded pre-observation synchronization gate and regressions on this successor branch; preserve all actual-PAPER readiness failures and require fresh exact-head CI plus review."
