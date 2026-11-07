@@ -135,9 +135,8 @@ export function startClosedLearningProductionRuntime(env: NodeJS.ProcessEnv = pr
     paperCandidateBindingProvider,
     paperCandidateMinuteCloses: (market, now) => {
       const bars = minuteBars.read(market, now);
-      nullComparators?.observe(market, bars); // before the baseline shadow, so a round trip it completes is matched on bars already seen
+      nullComparators?.observe(market, bars); for (const extra of extraShadows) extra.shadow.observe(market, bars); // before the baseline shadow, so a round trip it completes is matched on bars already seen
       baselineShadow?.observe(market, bars);
-      for (const extra of extraShadows) extra.shadow.observe(market, bars);
       return bars;
     },
   });
