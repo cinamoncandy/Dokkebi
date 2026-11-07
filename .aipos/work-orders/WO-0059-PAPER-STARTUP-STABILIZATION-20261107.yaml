@@ -5,7 +5,7 @@ priority: P0
 owner: nusa-development
 repository: cinamoncandy/NUSA
 base_branch: main
-base_commit: 60e4185e7c6abba18fce0c0a80797d0aec4fe92b
+base_commit: 01d698b325626e4a2e62b29e8e0b2f99f579ad4a
 implementation_branch: WO-0059-PAPER-STARTUP-STABILIZATION-20261107
 source_work_order: .aipos/work-orders/WO-0059-PAPER-OBSERVATION-20261106.yaml
 related_issues:
@@ -31,6 +31,7 @@ scope:
   - "Permit waiting only for PAPER_ORDERBOOK_UNRECONCILED and PUBLIC_ORDERBOOK_SNAPSHOT_UNAVAILABLE, the exact locally-owned codes that runtime clears after fresh reconciled quotes for all configured markets."
   - "Require consecutive clean PAPER snapshots before starting the 60-180 second observation window."
   - "Retain bounded startup error count, first/last observation timestamps, and exact allowlisted codes in the artifact."
+  - "On observation failure, retain one bounded diagnostic tuple (timestamp, allowlisted runtime-state enum, boolean/UNKNOWN scheduler state, sanitized last-error code); never persist raw error text."
   - "Any writer lease, authority, malformed evidence, unknown error, or unrecovered synchronization error remains fail-closed."
   - "Keep PAPER readiness semantics and all execution authority unchanged."
 acceptance:
@@ -38,6 +39,7 @@ acceptance:
   - "A persistent allowed synchronization error exhausts a finite startup budget, returns FAIL, and does not begin the observation clock."
   - "A writer lease or unknown runtime error fails immediately and cannot be reclassified as recoverable."
   - "Any runtime error arising after observation begins still ends that observation fail-closed."
+  - "PAPER_RUNTIME_NOT_RUNNING evidence distinguishes known runtime states, scheduler true/false/UNKNOWN, and sanitized last-error codes; unknown values and secret-like text are not serialized."
   - "Natural no-order/no-fill/no-account-change observation remains semantically INCOMPLETE; no threshold or classifier changes."
   - "No synthetic ticker, signal, order, fill, or account mutation is introduced."
 exclusions:
@@ -93,3 +95,14 @@ latest_candidate:
   independent_review: PENDING_FRESH_VALIDATOR_SESSION
 next: "Keep PR #3016 Draft. Obtain a fresh-session VALIDATOR review of exact head d6b991d1554e3c473b2a3fb8306e14a76c9f82fd; do not self-review. Preserve actual PAPER INCOMPLETE and production-history UNVERIFIED. On any code-head change, repeat affected validation and exact-head CI."
 local_validation: "PASS on d6b991d1554e3c473b2a3fb8306e14a76c9f82fd: focused observation 30/30; lifecycle/replay/readiness 23/23; pnpm test 1335 isolated files; typecheck; validate:full; security gate; workflow action pins; AIPOS validators; git diff --check. Lint 0 errors / 47 existing warnings; changed files have no warnings. Exact-head CI run 42373896085 and companions 42373894015, 42373896122, 42373896024, 42373895990, 42373896015 are SUCCESS. Actual PAPER run 42373896016 completed with readiness INCOMPLETE. Fresh-session independent review remains pending."
+diagnostic_followup:
+  as_of: "2026-11-08"
+  prior_artifact_gap: "PR #3002 returned PAPER_RUNTIME_NOT_RUNNING but its artifact omitted operations.runtimeState, schedulerRunning, and heartbeat.lastError; logs do not establish the cause."
+  root_cause: UNKNOWN
+  implementation: "Same PR #3016 records one sanitized observation failure tuple; raw heartbeat.lastError is never copied. Runtime classification and startup allowlist are unchanged."
+  current_pr_head_before_followup: 84d9f5e8bb5747c7b9b9b93e58ed5948f6c1eade
+  current_main_before_followup: 01d698b325626e4a2e62b29e8e0b2f99f579ad4a
+  validation: "PASS in local merged-main working tree: observation tests 31/31, lifecycle/replay/readiness tests 23/23, full pnpm test 1335 isolated files, typecheck, validate:full, security:gate, lint (0 errors; 47 existing warnings), AIPOS YAML, workflow pins, diff-check. Exact-head CI and fresh independent Validator remain pending."
+  exact_head_ci: PENDING
+  actual_paper: "Do not rerun #3002 based on diagnostic-only instrumentation; require an identified root-cause fix or justified environment change first."
+  next: "Complete the same-PR update after exact-head CI; keep Draft and do not rerun #3002 Actual PAPER until a root-cause fix or justified environment change is identified."

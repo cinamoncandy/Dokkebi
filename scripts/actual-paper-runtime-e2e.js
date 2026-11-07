@@ -455,6 +455,26 @@ function observationSnapshotFailure(response) {
   return null;
 }
 
+function safeRuntimeFailureDiagnostic(response, observedAtMs) {
+  const operations = response?.httpStatus === 200 && response.body != null && typeof response.body === "object"
+    ? response.body.operations
+    : null;
+  const runtimeState = ["RUNNING", "DEGRADED", "HALTED", "STOPPED", "STOPPING"].includes(operations?.runtimeState)
+    ? operations.runtimeState
+    : "UNKNOWN";
+  const schedulerRunning = typeof operations?.schedulerRunning === "boolean" ? operations.schedulerRunning : "UNKNOWN";
+  const rawLastError = operations?.heartbeat?.lastError;
+  const lastErrorCode = rawLastError == null || (typeof rawLastError === "string" && rawLastError.trim() === "")
+    ? "NONE"
+    : typeof rawLastError === "string" ? safeRuntimeFailureCode(rawLastError) : "UNKNOWN";
+  return {
+    observed_at: Number.isSafeInteger(observedAtMs) ? new Date(observedAtMs).toISOString() : "UNKNOWN",
+    runtime_state: runtimeState,
+    scheduler_running: schedulerRunning,
+    last_error_code: lastErrorCode,
+  };
+}
+
 function accountProjectionChanged(before, after) {
   const left = before?.portfolio?.account;
   const right = after?.portfolio?.account;
@@ -536,6 +556,7 @@ async function observeAutomaticRuntime({
   let eventEvidenceTruncated = false;
   let finalSnapshot = initialSnapshot ?? null;
   let failureCode = null;
+  let failureDiagnostic = null;
   let stopReason = "MAX_OBSERVATION_BUDGET_EXHAUSTED";
 
   const appendSample = (sample) => {
@@ -699,6 +720,7 @@ async function observeAutomaticRuntime({
     const collectionFailure = Array.isArray(response.body?.paperLearning?.events) ? collectSnapshot(response.body, observedAtMs) : null;
     failureCode = snapshotFailure ?? collectionFailure;
     if (failureCode != null) {
+      failureDiagnostic = safeRuntimeFailureDiagnostic(response, observedAtMs);
       stopReason = "RUNTIME_OR_EVIDENCE_FAILURE";
       break;
     }
@@ -761,6 +783,7 @@ async function observeAutomaticRuntime({
     poll_interval_ms: pollIntervalMs,
     stop_reason: eventEvidenceTruncated && failureCode == null ? "EVENT_EVIDENCE_TRUNCATED" : stopReason,
     ...(failureCode == null ? {} : { failure_code: failureCode }),
+    ...(failureDiagnostic == null ? {} : { failure_diagnostic: failureDiagnostic }),
     event_evidence_truncated: eventEvidenceTruncated,
     projection_window: {
       maximum_events: 250,

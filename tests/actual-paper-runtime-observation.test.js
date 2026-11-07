@@ -393,6 +393,27 @@ test("runtime ERROR/HALT, heartbeat, and stderr-like failures emit only locally 
   assert.doesNotMatch(JSON.stringify(stderrLike.evidence), /UPBIT_ACCESSKEY_ABC123/);
 });
 
+test("non-running PAPER snapshots retain only a bounded sanitized diagnostic tuple", async () => {
+  const cases = [
+    { runtimeState: "DEGRADED", schedulerRunning: true, lastError: "PAPER_ORDERBOOK_UNRECONCILED", expected: { runtime_state: "DEGRADED", scheduler_running: true, last_error_code: "PAPER_ORDERBOOK_UNRECONCILED" } },
+    { runtimeState: "RUNNING", schedulerRunning: false, lastError: "private-token-should-not-escape", expected: { runtime_state: "RUNNING", scheduler_running: false, last_error_code: "RUNTIME_ERROR_PRESENT" } },
+    { runtimeState: "RUNNING:private-token", schedulerRunning: "unknown", lastError: { secret: "private-token" }, expected: { runtime_state: "UNKNOWN", scheduler_running: "UNKNOWN", last_error_code: "UNKNOWN" } },
+  ];
+
+  for (const item of cases) {
+    const result = await runObservation({
+      snapshotOverrides: () => ({ operations: { runtimeState: item.runtimeState, schedulerRunning: item.schedulerRunning, heartbeat: { startedAt: BASE_TIME - 1_000, lastHeartbeatAt: BASE_TIME, lastError: item.lastError } } }),
+    });
+    assert.equal(result.status, "FAIL");
+    assert.equal(result.evidence.failure_code, "PAPER_RUNTIME_NOT_RUNNING");
+    assert.deepEqual(result.evidence.failure_diagnostic, {
+      observed_at: new Date(BASE_TIME).toISOString(),
+      ...item.expected,
+    });
+    assert.doesNotMatch(JSON.stringify(result.evidence), /private-token|should-not-escape/);
+  }
+});
+
 test("known locally owned PAPER writer reason codes survive strict reason-code normalization", async () => {
   const result = await runObservation({
     currentEvents: () => [event("known-writer-failure", "HALT", BASE_TIME + 1, { status: "FAIL", reason: "PAPER_WRITER_LEASE_LOST" })],
