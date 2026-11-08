@@ -9,7 +9,7 @@ current_wo2770_late_lease_acquisition_20261108:
   observed_startup: "Historical DataScale observation: synchronous composition-to-first-loop-turn 39898ms; lease TTL 30000ms. Exact database size remains UNKNOWN."
   first_broken_transition: "PAPER writer lease is acquired before synchronous runtime composition finishes; the same-thread heartbeat cannot run during the blocking interval."
   implementation: "Defer the existing PAPER lease until closed-learning composition and read-only research evidence preparation finish; acquire before stateful recovery and scheduler admission; preserve exact-owner checks, 30s TTL and fail-closed behavior."
-  validation: "87 focused tests PASS; build/typecheck, preflight, validate:full, security gate and git diff check PASS; lint:scripts 0 errors with existing repository warnings. Fresh exact-head CI and independent review not yet run."
+  validation: "87 focused tests PASS; build/typecheck, preflight, validate:full, security gate and git diff check PASS; lint:scripts 0 errors with existing repository warnings; follow-up wiring/AIPOS tests 11/11 PASS. Earlier exact head exposed stale generated CURRENT_TRUTH and tests assuming eager PAPER construction; fixed and final-head CI is pending."
   blocker: "Exact-main runtime proof requires separately authorized infrastructure/release execution. No host mutation or deployment was performed; current deployed state remains unverified here."
   next: "PR #3022 is open as Draft. Require fresh CI on the final PR head and fresh independent review; then Audit/Release/merge and runtime evidence remain separate gates."
   safety: PAPER_ONLY_LIVE_NONE_PRODUCTION_MUTATION_FALSE_REAL_ORDER_FALSE_REAL_TRANSFER_FALSE_AI_ZERO_AUTHORITY
