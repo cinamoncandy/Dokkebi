@@ -200,6 +200,29 @@ test("gap fill stops on a rate limit without retrying", async () => {
   assert.equal(calls, 1);
 });
 
+test("gap fill rejects a repeated upstream page before re-recording it or advancing the cursor", async () => {
+  const store = newStore();
+  const first = ANCHOR - 501 * M;
+  store.append(MARKET, M, [stored(first), stored(ANCHOR - M)]);
+  const page = [];
+  for (let start = ANCHOR - 200 * M; page.length < 200; start += M) page.push(candle(start));
+  let calls = 0;
+  const result = await fillRecentGaps({
+    market: MARKET,
+    windowMs: 600 * M,
+    nowMs: NOW,
+    store,
+    maxPages: 2,
+    fetchPage: async () => { calls += 1; return page; },
+    sleep: async () => undefined,
+  });
+  assert.equal(result.status, "ERROR");
+  assert.equal(result.errorCode, "CURSOR_NOT_ADVANCING");
+  assert.equal(result.pages, 2);
+  assert.equal(calls, 2);
+  assert.equal(result.nextCursorStartMs, ANCHOR - 200 * M, "the last advancing cursor is preserved for a later retry");
+});
+
 test("gap fill also fetches the newest closed minutes after the last stored close (the series head is written only by REST candles)", async () => {
   const store = newStore();
   const stale = ANCHOR - 300 * M;

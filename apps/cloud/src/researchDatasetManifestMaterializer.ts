@@ -2,6 +2,7 @@ import { createHash } from "node:crypto";
 import { calculateResearchCandleSha256, calculateResearchDatasetIdV2, type CanonicalResearchCandle, type HistoricalDatasetManifest, type ResearchDatasetProvenanceV2, type ResearchInterval } from "../../../packages/contracts/src/researchDatasetSemantics";
 import { SqliteResearchDatasetManifestStore } from "../../../packages/storage/src/index";
 import { SqliteResearchCandleStore, type StoredResearchCandle } from "../../../packages/storage/src/researchCandleStore";
+import { ResearchDatasetManifestStoreError } from "../../../packages/storage/src/researchDatasetManifest";
 import { UPBIT_CANDLE_SOURCE_FINGERPRINT } from "./researchCandleBackfill";
 import { AggregatedResearchCandleSource } from "./researchCandleAggregation";
 
@@ -46,6 +47,7 @@ export function materializeResearchDatasetManifest(input: {
   if (calculateResearchCandleSha256(derivedCanonical) !== contentSha256) throw Object.assign(new Error("dataset material does not match the verified source candles"), { code: "MANIFEST_CONTENT_MISMATCH" });
   const materials = input.candleStore.listMaterial(input.market, sourceIntervalMs, firstBaseClose, lastBaseClose);
   if (materials.length === 0 || materials.some((material) => material.source !== "UPBIT_PUBLIC_CANDLES" || material.sourceFingerprint !== UPBIT_CANDLE_SOURCE_FINGERPRINT || material.evidenceFingerprintSha256 == null || !SHA256.test(material.evidenceFingerprintSha256))) throw Object.assign(new Error("complete canonical raw-source receipts are required"), { code: "MANIFEST_PROVENANCE_REQUIRED" });
+  if (materials.some((material) => material.rejectedObservations !== 0)) throw Object.assign(new Error("malformed raw-source observations cannot produce a canonical manifest"), { code: "MANIFEST_SOURCE_MALFORMED" });
   const receiptCovered = new Set<number>();
   for (const material of materials) {
     for (const candle of input.candleStore.read(input.market, sourceIntervalMs, material.firstCloseTimeMs, material.lastCloseTimeMs)) receiptCovered.add(candle.closeTimeMs);
@@ -62,6 +64,17 @@ export function materializeResearchDatasetManifest(input: {
     replayRuntimeSha256: hash({ sourceCommitSha: input.sourceCommitSha, nodeVersion: process.version, materializer: "research-dataset-v2-v1" }),
   };
   const manifest: HistoricalDatasetManifest = { schemaVersion: 2, datasetId: calculateResearchDatasetIdV2(input.source, candles, contentSha256, provenance), source: input.source, market: input.market, interval, candleCount: candles.length, startOpenTime: candles[0]!.openTime, endCloseTime: candles.at(-1)!.closeTime, timezone: "UTC", ordering: "OPEN_TIME_ASC", missingCandlePolicy: "REJECT", missingCandleCount: 0, createdAt: input.createdAt, contentSha256, provenance };
+  try {
+    const existing = input.store.read(manifest.datasetId);
+    const existingWithCurrentCreatedAt = { ...existing, createdAt: manifest.createdAt };
+    if (JSON.stringify(existingWithCurrentCreatedAt) !== JSON.stringify(manifest)) {
+      throw new ResearchDatasetManifestStoreError("MANIFEST_CONFLICT", "an existing dataset identity has different canonical manifest content");
+    }
+    // Replays of unchanged, immutable source material keep the original creation timestamp and are no-ops.
+    return existing;
+  } catch (error) {
+    if (!(error instanceof ResearchDatasetManifestStoreError) || error.code !== "MANIFEST_NOT_FOUND") throw error;
+  }
   input.store.persistVerified(manifest, candles);
   return Object.freeze(manifest);
 }
