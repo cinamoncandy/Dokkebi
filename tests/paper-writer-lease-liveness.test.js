@@ -62,3 +62,14 @@ test("PAPER writer lease is renewed between each heavy synchronous startup phase
     cursor = next;
   }
 });
+
+test("the production writer lease is 120 s with the heartbeat, takeover age and clock limits pinned explicitly", () => {
+  const { PAPER_WRITER_LEASE_DURATION_MS, PAPER_WRITER_HEARTBEAT_INTERVAL_MS, PAPER_WRITER_MAX_CLOCK_ADVANCE_MS, PAPER_WRITER_MAX_TAKEOVER_AGE_MS } = require("../dist/apps/cloud/src/paperTradingExecutionLoop.js");
+  assert.equal(PAPER_WRITER_LEASE_DURATION_MS, 120_000);
+  assert.equal(PAPER_WRITER_HEARTBEAT_INTERVAL_MS, 10_000, "renewal cadence is unchanged from the 30 s lease");
+  assert.equal(PAPER_WRITER_MAX_TAKEOVER_AGE_MS, 120_000, "takeover age is unchanged from the 30 s lease (4 x 30 s)");
+  assert.ok(PAPER_WRITER_MAX_CLOCK_ADVANCE_MS >= PAPER_WRITER_LEASE_DURATION_MS && PAPER_WRITER_MAX_CLOCK_ADVANCE_MS <= 120_000, "the clock-advance limit is the smallest value the validation allows");
+  assert.ok(PAPER_WRITER_HEARTBEAT_INTERVAL_MS * 3 <= PAPER_WRITER_LEASE_DURATION_MS);
+  const source = fs.readFileSync(productionRoot, "utf8");
+  assert.match(source, /createLeaseStartupWindow\(PAPER_WRITER_LEASE_DURATION_MS,/, "the startup-window alarm follows the production lease");
+});
