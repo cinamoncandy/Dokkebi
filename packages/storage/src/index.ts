@@ -82,6 +82,8 @@ export { SqlitePaperMarketObservationRepository, PaperMarketObservationStoreErro
 export type { PaperPublicMarketObservation, PaperPublicMarketObservationInput } from "./paperMarketObservationRepository";
 export { SqliteResearchCandleStore, ResearchCandleStoreError } from "./researchCandleStore";
 export { SqliteResearchDatasetManifestStore, ResearchDatasetManifestStoreError } from "./researchDatasetManifest";
+export { SqliteResearchGapFillProgressStore, SqliteResearchManifestRetryStore, ResearchGapFillProgressError } from "./researchGapFillProgress";
+export type { ResearchGapFillProgress, ResearchGapFillPassState, ResearchGapFillNextPass } from "./researchGapFillProgress";
 export { SqliteFuturesPublicStore, type FuturesMarkRow, type FuturesFundingRow, type FuturesKlineRow } from "./futuresPublicStore";
 export { SqliteMarketMicrostructureStore, MarketMicrostructureStoreError, type StoredOrderBookSample, type StoredTradeTick } from "./marketMicrostructureStore";
 export { SqliteResearchHoldoutLedger, ResearchHoldoutLedgerError } from "./researchHoldoutLedger";
