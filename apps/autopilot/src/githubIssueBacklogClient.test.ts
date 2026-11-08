@@ -45,11 +45,11 @@ test("a full page without Link metadata is followed, then stops on a short page"
   const result = await fetchOpenGithubBacklog("cinamoncandy/NUSA", {}, async (input) => {
     if (String(input).includes("/pulls?")) return response([]);
     issuePage += 1;
-    return issuePage === 1
+    return issuePage % 2 === 1
       ? response(Array.from({ length: 100 }, (_, index) => ({ number: index + 1 })))
       : response([{ number: 101 }]);
   });
-  assert.equal(issuePage, 2);
+  assert.equal(issuePage, 4);
   assert.equal(result.issues.length, 101);
 });
 
@@ -104,4 +104,35 @@ test("backlog fetch fails closed on API errors, malformed bodies, duplicate iden
     /exceeds bounded pagination/,
   );
   assert.equal(issuePage, 10);
+});
+
+test("offset page shift caused by an intervening close fails closed rather than silently omitting a linked PR", async () => {
+  let pullScan = 0;
+  await assert.rejects(
+    fetchOpenGithubBacklog("cinamoncandy/NUSA", {}, async (input) => {
+      const url = String(input);
+      if (url.includes("/issues?")) return response([]);
+      const page = Number(new URL(url).searchParams.get("page"));
+      if (page === 1) {
+        pullScan += 1;
+        // A PR ahead of the boundary closes between page one and page two.
+        const firstPage = Array.from({ length: 100 }, (_, index) => ({ number: index + 1 }));
+        return response(pullScan === 1 ? firstPage : firstPage.slice(1).concat({ number: 101 }), '<https://api.github.com/next>; rel="next"');
+      }
+      return response(pullScan === 1 ? [{ number: 102 }] : [{ number: 102 }, { number: 103 }]);
+    }),
+    /backlog changed during pagination/,
+  );
+});
+
+test("changes to selection metadata between complete scans fail closed", async () => {
+  let issueReads = 0;
+  await assert.rejects(
+    fetchOpenGithubBacklog("cinamoncandy/NUSA", {}, async (input) => {
+      if (String(input).includes("/pulls?")) return response([]);
+      issueReads += 1;
+      return response([{ number: 42, title: "Task", body: issueReads === 1 ? "old" : "new" }]);
+    }),
+    /backlog changed during pagination/,
+  );
 });
