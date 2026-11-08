@@ -28,7 +28,7 @@ import { verifyGithubCausalProducerEvidence, verifyGithubCodingPublisherIdentity
 import { createCausalAdmissionReceipt } from "./causalRegressionAdmission";
 import { applyCausalRepairPatch, verifyCausalPublishedFiles } from "./causalRepairPatch";
 import { createCausalProposalReceipt, verifyCausalProposalReceipt, CAUSAL_REPAIR_TARGET as SIGNED_CAUSAL_REPAIR_TARGET } from "./causalProposalReceipt";
-import { selectCodexBacklogTask } from "./evolveGithubIssueBacklog";
+import { codexBacklogTaskSnapshotDigest, selectCodexBacklogTask } from "./evolveGithubIssueBacklog";
 import { fetchOpenGithubBacklog } from "./githubIssueBacklogClient";
 
 export { ExecutionCoordinator };
@@ -411,9 +411,9 @@ export async function handleCodexWipCoordination(
   if (contentLength !== null && (!/^\d+$/.test(contentLength) || Number(contentLength) > 1024)) {
     return json({ accepted: false, error: "CODEX_WIP_REQUEST_INVALID", ...authority }, 400);
   }
-  let body: { action?: unknown; issueNumber?: unknown; headSha?: unknown };
+  let body: { action?: unknown; issueNumber?: unknown; headSha?: unknown; taskDigest?: unknown };
   try {
-    body = await request.json() as { action?: unknown; issueNumber?: unknown; headSha?: unknown };
+    body = await request.json() as { action?: unknown; issueNumber?: unknown; headSha?: unknown; taskDigest?: unknown };
   } catch {
     return json({ accepted: false, error: "CODEX_WIP_REQUEST_INVALID", ...authority }, 400);
   }
@@ -452,6 +452,20 @@ export async function handleCodexWipCoordination(
     }
     if (!selectedTask || selectedTask.issueNumber !== issueNumber || !selectedTask.canonicalOwner || selectedTask.conflictKeys.length === 0) {
       return json({ accepted: false, error: "CODEX_WIP_TASK_NOT_CURRENT_OR_UNCLAIMABLE", ...authority }, 409);
+    }
+    if (typeof body.taskDigest !== "string" || !/^[a-f0-9]{64}$/i.test(body.taskDigest)) {
+      return json({ accepted: false, error: "CODEX_WIP_TASK_DIGEST_INVALID", ...authority }, 400);
+    }
+    const selectedTaskDigest = await codexBacklogTaskSnapshotDigest(selectedTask);
+    if (!constantTimeEqual(selectedTaskDigest, body.taskDigest.toLowerCase())) {
+      return json({ accepted: false, error: "CODEX_WIP_TASK_SNAPSHOT_MISMATCH", ...authority }, 409);
+    }
+    try {
+      await verifyGithubCodexWipCurrentMainSha(identity, env.NUSA_GITHUB_TOKEN.trim(), fetchImpl as never);
+    } catch (error) {
+      const code = error instanceof Error ? error.message : "CODEX_WIP_MAIN_UNAVAILABLE";
+      const unavailable = code.includes("UNAVAILABLE");
+      return json({ accepted: false, error: unavailable ? "CODEX_WIP_MAIN_UNAVAILABLE" : "CODEX_WIP_MAIN_MISMATCH", ...authority }, unavailable ? 503 : 409);
     }
     try {
       const result = await admitActiveWip(env.NUSA_EXECUTION_COORDINATOR, {

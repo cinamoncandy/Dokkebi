@@ -262,6 +262,27 @@ export interface CodexBacklogTask {
 }
 
 /**
+ * Canonical identity for the exact issue snapshot selected in the read-only job. The consumer
+ * claim endpoint recomputes this value from a fresh GitHub read before it admits the WIP slot.
+ */
+export function codexBacklogTaskSnapshot(task: CodexBacklogTask): string {
+  return JSON.stringify({
+    issueNumber: task.issueNumber,
+    title: task.title,
+    body: task.body,
+    capability: task.capability,
+    canonicalOwner: task.canonicalOwner,
+    conflictKeys: [...task.conflictKeys],
+  });
+}
+
+export async function codexBacklogTaskSnapshotDigest(task: CodexBacklogTask): Promise<string> {
+  const bytes = new TextEncoder().encode(codexBacklogTaskSnapshot(task));
+  const digest = await crypto.subtle.digest("SHA-256", bytes);
+  return [...new Uint8Array(digest)].map((byte) => byte.toString(16).padStart(2, "0")).join("");
+}
+
+/**
  * Next owner backlog issue for the ChatGPT Codex coding engine (autopilot-codex-coding.yml).
  *
  * Same eligibility as the Workers AI path (open, owner-authored, not explicitly blocked, priority

@@ -1,7 +1,9 @@
 import assert from "node:assert/strict";
+import { createHash } from "node:crypto";
 import test from "node:test";
 import { handleCodexWipCoordination, type WorkerEnv } from "./worker";
 import { ExecutionCoordinator, admitActiveWip, readActiveWip, type ExecutionCoordinatorNamespace } from "./executionCoordinator";
+import { codexBacklogTaskSnapshot, selectCodexBacklogTask } from "./evolveGithubIssueBacklog";
 import { CODEX_WIP_AUDIENCE } from "./githubActionsOidc";
 
 const REPOSITORY = "cinamoncandy/NUSA";
@@ -81,8 +83,12 @@ const issue = (number = 903) => ({
   updated_at: "2026-11-08T00:00:00Z",
   labels: [],
 });
+const selectedIssue = selectCodexBacklogTask([issue()], []);
+assert.ok(selectedIssue);
+const TASK_DIGEST = createHash("sha256").update(codexBacklogTaskSnapshot(selectedIssue)).digest("hex");
 
-function githubFetch(fixture: Awaited<ReturnType<typeof oidcFixture>>, options: { run?: Record<string, unknown>; issue?: unknown; pulls?: unknown; mainSha?: string | null } = {}) {
+function githubFetch(fixture: Awaited<ReturnType<typeof oidcFixture>>, options: { run?: Record<string, unknown>; issue?: unknown; pulls?: unknown; mainSha?: string | null; mainShas?: Array<string | null> } = {}) {
+  let mainCheck = 0;
   const defaultRun = {
     id: Number(fixture.claims.run_id),
     run_attempt: Number(fixture.claims.run_attempt),
@@ -97,20 +103,25 @@ function githubFetch(fixture: Awaited<ReturnType<typeof oidcFixture>>, options: 
     const url = String(input);
     if (url.endsWith("/.well-known/jwks")) return new Response(JSON.stringify(fixture.jwks), { status: 200 });
     if (url.includes("/actions/runs/")) return new Response(JSON.stringify({ ...defaultRun, ...options.run }), { status: 200 });
-    if (url.endsWith("/git/ref/heads/main")) return options.mainSha === null
+    if (url.endsWith("/git/ref/heads/main")) {
+      const currentSha = options.mainShas !== undefined
+        ? options.mainShas[Math.min(mainCheck++, options.mainShas.length - 1)]
+        : options.mainSha === undefined ? fixture.claims.sha : options.mainSha;
+      return currentSha === null
       ? new Response("unavailable", { status: 503 })
-      : new Response(JSON.stringify({ object: { sha: options.mainSha ?? fixture.claims.sha } }), { status: 200 });
+      : new Response(JSON.stringify({ object: { sha: currentSha } }), { status: 200 });
+    }
     if (url.includes("/issues?")) return new Response(JSON.stringify([options.issue ?? issue()]), { status: 200 });
     if (url.includes("/pulls?")) return new Response(JSON.stringify(options.pulls ?? []), { status: 200 });
     return new Response("not found", { status: 404 });
   };
 }
 
-function request(token: string, action: string, issueNumber = 903, headSha = SHA): Request {
+function request(token: string, action: string, issueNumber = 903, headSha = SHA, taskDigest = TASK_DIGEST): Request {
   return new Request("https://worker.example.test/coding/codex-wip", {
     method: "POST",
     headers: { authorization: `Bearer ${token}`, "content-type": "application/json" },
-    body: JSON.stringify({ action, issueNumber, headSha }),
+    body: JSON.stringify({ action, issueNumber, headSha, ...(taskDigest ? { taskDigest } : {}) }),
   });
 }
 
@@ -219,6 +230,31 @@ test("Codex claim rejects a moved or unavailable protected main before creating 
   });
   assert.equal(unavailableMain.status, 503);
   assert.equal((await unavailableMain.json() as { error: string }).error, "CODEX_WIP_MAIN_UNAVAILABLE");
+  assert.equal((await readActiveWip(coordinator)).claims.length, 0);
+});
+
+test("Codex claim rejects an issue snapshot changed after selection", async () => {
+  const coordinator = namespace();
+  const fixture = await oidcFixture();
+  const changedIssue = { ...issue(), body: `${issue().body}\nchanged after selection` };
+  const response = await handleCodexWipCoordination(request(fixture.token, "claim"), env(coordinator), {
+    now: () => NOW,
+    fetchImpl: githubFetch(fixture, { issue: changedIssue }),
+  });
+  assert.equal(response.status, 409);
+  assert.equal((await response.json() as { error: string }).error, "CODEX_WIP_TASK_SNAPSHOT_MISMATCH");
+  assert.equal((await readActiveWip(coordinator)).claims.length, 0);
+});
+
+test("Codex claim rechecks protected main after task lookup and before admission", async () => {
+  const coordinator = namespace();
+  const fixture = await oidcFixture();
+  const response = await handleCodexWipCoordination(request(fixture.token, "claim"), env(coordinator), {
+    now: () => NOW,
+    fetchImpl: githubFetch(fixture, { mainShas: [SHA, "b".repeat(40)] }),
+  });
+  assert.equal(response.status, 409);
+  assert.equal((await response.json() as { error: string }).error, "CODEX_WIP_MAIN_MISMATCH");
   assert.equal((await readActiveWip(coordinator)).claims.length, 0);
 });
 

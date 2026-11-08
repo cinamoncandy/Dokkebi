@@ -49,19 +49,24 @@ async function coordinate(action, env = process.env, fetchImpl = fetch, writeOut
 }) {
   if (action !== "claim" && action !== "release") throw new Error("CODEX_WIP_ACTION_INVALID");
   const { issueNumber, headSha } = readIdentity(env);
+  const taskDigest = env.TASK_DIGEST;
+  if (action === "claim" && !/^[a-f0-9]{64}$/i.test(taskDigest || "")) throw new Error("CODEX_WIP_TASK_DIGEST_INVALID");
   const token = await requestOidcToken(env, fetchImpl);
   let response;
   try {
     response = await fetchImpl(WORKER_ENDPOINT, {
       method: "POST",
       headers: { authorization: `Bearer ${token}`, "content-type": "application/json", accept: "application/json" },
-      body: JSON.stringify({ action, issueNumber, headSha }),
+      body: JSON.stringify({ action, issueNumber, headSha, ...(taskDigest ? { taskDigest: taskDigest.toLowerCase() } : {}) }),
     });
   } catch {
     throw new Error("CODEX_WIP_COORDINATOR_UNAVAILABLE");
   }
   let result;
   try { result = await response.json(); } catch { throw new Error("CODEX_WIP_COORDINATOR_RESPONSE_INVALID"); }
+  if (action === "release" && response.status === 409 && result?.reason === "CLAIM_NOT_ACTIVE") {
+    return { accepted: true, released: false, reason: "CLAIM_NOT_ACTIVE" };
+  }
   if (!response.ok || result?.accepted !== true) {
     const reason = typeof result?.error === "string" && /^[A-Z0-9_]{1,80}$/.test(result.error) ? result.error : "REJECTED";
     throw new Error(`CODEX_WIP_${reason}`);

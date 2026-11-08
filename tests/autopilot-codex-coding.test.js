@@ -66,6 +66,8 @@ test("the workflow pins Codex to the single dedicated-account runner and publish
   assert.match(workflow, /head:autopilot\/codex\//, "one open autopilot Codex PR at a time");
   assert.match(codexJob, /Claim shared WIP slot/, "WIP admission happens before the coding model runs");
   assert.match(codexJob, /Release shared WIP slot/);
+  assert.match(workflow, /task_digest: \$\{\{ steps\.pick\.outputs\.task_digest \}\}/, "the selected issue snapshot digest follows the prompt into the trusted claim job");
+  assert.match(codexJob, /if: always\(\) && steps\.wip_claim\.outcome != 'skipped'/, "release is attempted after every executed claim step, including an ambiguous response failure");
   assert.match(codexJob, /id-token: write/, "only the Codex job can mint the narrow claim identity");
   assert.match(codexJob, /timeout-minutes: 50/, "the run budget is below the one-hour active-WIP expiry");
   assert.match(codexJob, /-u ACTIONS_ID_TOKEN_REQUEST_URL -u ACTIONS_ID_TOKEN_REQUEST_TOKEN/, "the coding model cannot mint OIDC tokens");

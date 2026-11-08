@@ -5,7 +5,7 @@
  * step outputs (autopilot-codex-coding.yml). Read-only: it only lists issues and pull requests.
  */
 const fs = require("node:fs");
-const { selectCodexBacklogTask } = require("../dist/apps/autopilot/src/evolveGithubIssueBacklog.js");
+const { codexBacklogTaskSnapshotDigest, selectCodexBacklogTask } = require("../dist/apps/autopilot/src/evolveGithubIssueBacklog.js");
 const { fetchOpenGithubBacklog } = require("../dist/apps/autopilot/src/githubIssueBacklogClient.js");
 
 const CONTRACT = [
@@ -33,9 +33,12 @@ async function main(env = process.env) {
     "user-agent": "nusa-autopilot-codex",
   });
   const task = selectCodexBacklogTask(issues, pulls);
-  const lines = task == null
-    ? ["has_task=false"]
-    : ["has_task=true", `issue=${task.issueNumber}`, `task=issue-${task.issueNumber}`];
+  const lines = task == null ? ["has_task=false"] : [
+    "has_task=true",
+    `issue=${task.issueNumber}`,
+    `task=issue-${task.issueNumber}`,
+    `task_digest=${await codexBacklogTaskSnapshotDigest(task)}`,
+  ];
   if (task != null) fs.writeFileSync(env.NUSA_CODEX_PROMPT_FILE || "codex-prompt.txt", buildPrompt(task));
   if (env.GITHUB_OUTPUT) fs.appendFileSync(env.GITHUB_OUTPUT, `${lines.join("\n")}\n`);
   console.log(task == null ? "no eligible owner backlog issue for Codex" : `selected issue #${task.issueNumber}: ${task.title}`);

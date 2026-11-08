@@ -24,7 +24,10 @@ scope:
   - enforce the logical active-WIP cap at two while safely reading and expiring persisted legacy state within the prior eight-claim storage bound
   - add a narrow GitHub Actions OIDC-only Codex claim/release route that reuses atomic active-WIP admission, validates the live run and exact selected main SHA, and requires explicit owner/conflict metadata
   - bind claims and releases to exact repository, workflow, protected ref, run, attempt, SHA, issue, execution identity, and current canonical task selection
+  - bind claim admission to the exact selected issue snapshot that produced the Codex prompt, using a digest verified against a fresh server-side selection
+  - recheck protected main after full task revalidation and immediately before atomic WIP admission
   - keep the Codex WIP claim lifecycle distinct from successful CodingRunner completion evidence
+  - attempt idempotent claim release after every executed claim step, including ambiguous/lost responses
   - require the Codex job timeout to remain shorter than the existing active-WIP claim TTL and remove OIDC mint credentials from the Codex process environment
   - fetch a bounded, complete open-issue and open-PR inventory for both Codex selection and server-side claim revalidation; pagination/API ambiguity must fail closed
   - keep generic workflow failures fail-closed and unable to acquire a lease or dispatch without verified causal evidence
@@ -34,7 +37,7 @@ prohibited:
   - new_scheduler_or_consumer
   - lease_ttl_or_heartbeat_safety_weakening
   - broad_authority_expansion_or_unverified_oidc_claim_release
-  - reactivating_or_dispatching_the_owner-disabled_Codex_workflow
+  - reactivating_or_dispatching_the_Codex_workflow_without_current_explicit_owner_approval
   - changing_repository_coding_variables_or_runner_configuration
   - deploying_the_Worker_or_mutating_production
   - production_or_broker_mutation
@@ -54,6 +57,9 @@ acceptance:
   - missing/malformed/expired/forged/wrong-issuer/wrong-audience/wrong-workflow/wrong-ref/wrong-repository/wrong-SHA/stale-run claims fail closed
   - task selection is repeated server-side and requires explicit canonicalOwner and conflictKeys; linked/stale/unclaimable work is rejected
   - the local Codex selector and Worker claim revalidation use the same stable, bounded pagination; valid work beyond page one cannot be silently omitted and incomplete/duplicate/over-limit results cannot authorize a claim
+  - the claim carries a digest of the exact selected issue prompt/owner/conflict snapshot; any changed snapshot is rejected before admission
+  - protected main is rechecked after the selected-task snapshot is revalidated and immediately before atomic admission
+  - the release client is invoked after every executed claim step, not only after its success output exists, so an ambiguous claim response gets an idempotent release attempt
   - concurrent/shared admission remains atomic and the combined coordinator never admits more than two active WIP claims
   - duplicate/replayed claim and wrong-run release are rejected; only the exact workflow run can release its slot
   - claim release is recorded as CLAIM_RELEASED, not successful coding completion, and cannot satisfy CodingRunner release-status evidence
@@ -159,6 +165,18 @@ codex_selector_pagination_20261108:
   validation: "PASS on the local successor: pnpm test PASS (1,339 isolated test files); focused Codex/claim/coordinator/OIDC/backlog-pagination set 97/97; pnpm run typecheck PASS; pnpm run validate:full PASS; pnpm run security:gate PASS; pnpm run aipos:provenance PASS; pnpm run lint PASS (0 errors / 47 existing warnings); git diff --check PASS. Exact-head CI, independent Validator, Formal Validator, Audit, Release, and runtime integration remain pending."
   current_owner_report: "Owner explicitly confirms reactivation approval and GitHub enablement; Actions workflow API confirms active (369887156). No workflow was manually dispatched."
   next: "Publish this locally validated successor only to existing Draft PR #2039; exact-head CI and fresh independent Validator remain pending. Do not run until protected main contains the claim guard, a genuine eligible task is selected, active WIP claims are read safely, and runner/Codex login are verified."
+codex_claim_review_findings_20261108:
+  predecessor_head: 747460c24b804f68ba23940d0f9cd03243da1511
+  review: "Fresh predecessor Codex review identified P1 release-after-ambiguous-claim, P1 selected-task snapshot mismatch, and P2 protected-main recheck ordering. This predecessor review is not a verdict for any successor SHA."
+  repairs: "The workflow attempts identity-bound release after any executed claim step; selector passes a SHA-256 digest of issue number/title/body/capability/owner/conflict keys and Worker recomputes it from fresh issue data; Worker rechecks protected main after snapshot validation immediately before atomic admission."
+  tests: "Regression tests cover changed issue snapshot and main movement during task lookup; workflow/client tests assert digest propagation and release after failed/ambiguous claim execution."
+  local_validation: "PASS based on local successor worktree over af4cde2f: focused Codex claim/release, workflow, and Worker coordination regression set 100/100; direct targeted rerun 22/22; pnpm test 1,339/1,339 isolated files; typecheck, build (through pnpm test), validate:full, security:gate, AIPOS provenance, lint (0 errors / 47 existing warnings), and git diff --check PASS."
+  exact_head_ci: PENDING
+  independent_disposition: PENDING_SUCCESSOR_REVIEW
+  formal_validator: PENDING_SUCCESSOR_RECEIPT
+  audit_and_release: NOT_AUTHORIZED
+  current_manual_run_gate: "BLOCKED: deployed protected main does not contain the claim guard/digest binding; complete selector returns null; WIP claims UNKNOWN; runner labels and Codex login UNKNOWN/unverified. No dispatch."
+  next: "Commit/push the validated repair only to existing Draft PR #2039, then require exact-head CI/companions and fresh independent review. Existing Formal Validator request targets predecessor 747460c and must not be reused as a successor verdict."
 next: "Fresh exact-head CI and companions, then one fresh non-author Validator review. Actual autonomous dogfood remains separately BLOCKED until an existing authorized runner, causal admission, WIP slot, and runtime configuration are proven. No Ready transition, self-approval, merge, or production mutation."
 
 historical_first_main_alignment_20261028:

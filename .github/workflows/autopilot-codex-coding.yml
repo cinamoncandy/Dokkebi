@@ -38,6 +38,7 @@ jobs:
       has_task: ${{ steps.pick.outputs.has_task }}
       issue: ${{ steps.pick.outputs.issue }}
       task: ${{ steps.pick.outputs.task }}
+      task_digest: ${{ steps.pick.outputs.task_digest }}
       head_sha: ${{ steps.head.outputs.sha }}
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
@@ -113,6 +114,7 @@ jobs:
         env:
           ISSUE: ${{ needs.select.outputs.issue }}
           WORKFLOW_SHA: ${{ needs.select.outputs.head_sha }}
+          TASK_DIGEST: ${{ needs.select.outputs.task_digest }}
         run: node scripts/autopilot-codex-wip.js claim
       - name: Run Codex without commit or push authority
         id: run
@@ -226,10 +228,11 @@ jobs:
           path: ${{ runner.temp }}/out
           retention-days: 7
       - name: Release shared WIP slot
-        if: always() && steps.wip_claim.outputs.admitted == 'true'
+        if: always() && steps.wip_claim.outcome != 'skipped'
         env:
           ISSUE: ${{ needs.select.outputs.issue }}
           WORKFLOW_SHA: ${{ needs.select.outputs.head_sha }}
+          TASK_DIGEST: ${{ needs.select.outputs.task_digest }}
         run: node "${RUNNER_TEMP}/autopilot-codex-wip.js" release
 
   publish:
