@@ -29,6 +29,7 @@ import { createCausalAdmissionReceipt } from "./causalRegressionAdmission";
 import { applyCausalRepairPatch, verifyCausalPublishedFiles } from "./causalRepairPatch";
 import { createCausalProposalReceipt, verifyCausalProposalReceipt, CAUSAL_REPAIR_TARGET as SIGNED_CAUSAL_REPAIR_TARGET } from "./causalProposalReceipt";
 import { selectCodexBacklogTask } from "./evolveGithubIssueBacklog";
+import { fetchOpenGithubBacklog } from "./githubIssueBacklogClient";
 
 export { ExecutionCoordinator };
 
@@ -444,13 +445,7 @@ export async function handleCodexWipCoordination(
     let selectedTask: ReturnType<typeof selectCodexBacklogTask>;
     try {
       const headers = { accept: "application/vnd.github+json", authorization: `Bearer ${env.NUSA_GITHUB_TOKEN.trim()}`, "user-agent": "nusa-autopilot-worker", "x-github-api-version": "2022-11-28" };
-      const [issueResponse, pullResponse] = await Promise.all([
-        fetchImpl(`https://api.github.com/repos/${allowedRepository}/issues?state=open&per_page=100`, { headers }),
-        fetchImpl(`https://api.github.com/repos/${allowedRepository}/pulls?state=open&per_page=100`, { headers }),
-      ]);
-      if (!issueResponse.ok || !pullResponse.ok) throw new Error("CODEX_WIP_TASK_UNAVAILABLE");
-      const [issues, pulls] = await Promise.all([issueResponse.json(), pullResponse.json()]);
-      if (!Array.isArray(issues) || !Array.isArray(pulls)) throw new Error("CODEX_WIP_TASK_UNAVAILABLE");
+      const { issues, pulls } = await fetchOpenGithubBacklog(allowedRepository, headers, fetchImpl);
       selectedTask = selectCodexBacklogTask(issues, pulls);
     } catch {
       return json({ accepted: false, error: "CODEX_WIP_TASK_UNAVAILABLE", ...authority }, 503);

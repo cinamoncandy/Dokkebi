@@ -168,7 +168,7 @@ test("Codex claim is bound to the live OIDC workflow, task selection, and availa
 
   const linkedIssue = await handleCodexWipCoordination(request(valid.token, "claim"), env(coordinator), {
     now: () => NOW,
-    fetchImpl: githubFetch(valid, { pulls: [{ title: "fix", body: "Refs #903" }] }),
+    fetchImpl: githubFetch(valid, { pulls: [{ number: 100, title: "fix", body: "Refs #903" }] }),
   });
   assert.equal(linkedIssue.status, 409);
   assert.equal((await readActiveWip(coordinator)).claims.length, 0);

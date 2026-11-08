@@ -6,6 +6,7 @@
  */
 const fs = require("node:fs");
 const { selectCodexBacklogTask } = require("../dist/apps/autopilot/src/evolveGithubIssueBacklog.js");
+const { fetchOpenGithubBacklog } = require("../dist/apps/autopilot/src/githubIssueBacklogClient.js");
 
 const CONTRACT = [
   "NUSA AUTOPILOT CODEX CONTRACT:",
@@ -18,14 +19,6 @@ const CONTRACT = [
   "- Do NOT run pnpm install, build, typecheck, the test suite or any other heavy command: this runner shares a 1 GB host with the PAPER runtime and a host guard stops the run (discarding your patch) when memory runs low. The workflow runs build, typecheck, validate, the work-order index check, tests/*.test.js and the isolated (co-located) tests on separate hardware after you finish; heavy commands are blocked on this runner and fail immediately. Light reads (git diff, grep, cat) are fine; report truthfully that validation is left to the workflow.",
 ].join("\n");
 
-async function github(path, token) {
-  const response = await fetch(`https://api.github.com${path}`, {
-    headers: { authorization: `Bearer ${token}`, accept: "application/vnd.github+json", "user-agent": "nusa-autopilot-codex" },
-  });
-  if (!response.ok) throw new Error(`GitHub ${path} failed: ${response.status}`);
-  return response.json();
-}
-
 function buildPrompt(task) {
   return `${CONTRACT}\n\nOWNER ISSUE #${task.issueNumber} (${task.capability}): ${task.title}\n\n${task.body}`;
 }
@@ -34,10 +27,11 @@ async function main(env = process.env) {
   const token = env.GITHUB_TOKEN;
   const repository = env.GITHUB_REPOSITORY;
   if (!token || !repository) throw new Error("GITHUB_TOKEN and GITHUB_REPOSITORY are required");
-  const [issues, pulls] = await Promise.all([
-    github(`/repos/${repository}/issues?state=open&per_page=100`, token),
-    github(`/repos/${repository}/pulls?state=open&per_page=100`, token),
-  ]);
+  const { issues, pulls } = await fetchOpenGithubBacklog(repository, {
+    authorization: `Bearer ${token}`,
+    accept: "application/vnd.github+json",
+    "user-agent": "nusa-autopilot-codex",
+  });
   const task = selectCodexBacklogTask(issues, pulls);
   const lines = task == null
     ? ["has_task=false"]

@@ -1,0 +1,23 @@
+current_codex_selector_pagination_20261108:
+  work_order: WO-ISSUE-903-L1-EXECUTION-LEASE-HANDOFF
+  issue: 903
+  pull_request: 2039
+  status: LOCAL_VALIDATED_PENDING_EXACT_HEAD_CI
+  prior_head: 747460c24b804f68ba23940d0f9cd03243da1511
+  protected_main: 54c095daff15bc4ef067e12ed26c666e5fd3d4c0
+  observed_at: "2026-11-08T03:02:02Z"
+  finding: "Codex selection and server-side WIP claim revalidation queried only the first 100 open issues and pulls. Full inventory returned 127 real open issues and 65 open PRs."
+  classification: "#2118 and #2121 were the only eligible records exposed after pagination before reconciliation; both now carry HOLD with evidence comments, remain open, and require canonical-owner refresh before selection. Current exact selector returns null; no synthetic task was created."
+  code: "Shared bounded pagination (10 pages/resource, stable created order, identity validation, fail-closed API/malformed/duplicate/overflow) is used by both Codex selector and Worker claim revalidation."
+  validation: "pnpm test PASS (1339 isolated test files); focused Codex/claim/coordinator/OIDC/backlog-pagination set 97/97; typecheck, validate:full, security:gate, AIPOS provenance, lint (0 errors/47 baseline warnings), and diff-check PASS. Exact-head CI and independent review remain pending for the successor SHA."
+  formal_validator: PENDING
+  audit: PENDING
+  release: PENDING
+  manual_run_ready: BLOCKED
+  runner_status: UNKNOWN_ACTIONS_API_403
+  codex_login: UNKNOWN_RUNNER_READ_ACCESS_UNAVAILABLE
+  active_wip_claims: UNKNOWN_NO_READ_ONLY_ROUTE
+  workflow: ACTIVE_OWNER_REPORTED_ENABLED
+  current_main_safe_to_run: false
+  next: "Update the existing Draft PR #2039 after local validation; obtain fresh exact-head CI and independent review. Do not dispatch until claim guard is in protected main and task, WIP, runner, and login preconditions are verified."
+  safety: PAPER_ONLY_ZERO_AUTHORITY_FAIL_CLOSED

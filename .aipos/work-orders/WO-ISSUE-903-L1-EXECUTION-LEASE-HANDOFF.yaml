@@ -26,6 +26,7 @@ scope:
   - bind claims and releases to exact repository, workflow, protected ref, run, attempt, SHA, issue, execution identity, and current canonical task selection
   - keep the Codex WIP claim lifecycle distinct from successful CodingRunner completion evidence
   - require the Codex job timeout to remain shorter than the existing active-WIP claim TTL and remove OIDC mint credentials from the Codex process environment
+  - fetch a bounded, complete open-issue and open-PR inventory for both Codex selection and server-side claim revalidation; pagination/API ambiguity must fail closed
   - keep generic workflow failures fail-closed and unable to acquire a lease or dispatch without verified causal evidence
   - prove competing producer and duplicate consumer suppression using the existing coordinator
 prohibited:
@@ -52,6 +53,7 @@ acceptance:
   - Codex claim accepts only the signed, allowlisted GitHub OIDC identity and GitHub API run record for the exact selected main SHA, workflow, run, and attempt, and rechecks current protected main before admission
   - missing/malformed/expired/forged/wrong-issuer/wrong-audience/wrong-workflow/wrong-ref/wrong-repository/wrong-SHA/stale-run claims fail closed
   - task selection is repeated server-side and requires explicit canonicalOwner and conflictKeys; linked/stale/unclaimable work is rejected
+  - the local Codex selector and Worker claim revalidation use the same stable, bounded pagination; valid work beyond page one cannot be silently omitted and incomplete/duplicate/over-limit results cannot authorize a claim
   - concurrent/shared admission remains atomic and the combined coordinator never admits more than two active WIP claims
   - duplicate/replayed claim and wrong-run release are rejected; only the exact workflow run can release its slot
   - claim release is recorded as CLAIM_RELEASED, not successful coding completion, and cannot satisfy CodingRunner release-status evidence
@@ -65,6 +67,7 @@ validation:
   - pnpm run preflight
   - node --test dist/apps/autopilot/src/codexWipCoordination.test.js dist/apps/autopilot/src/githubActionsOidc.test.js dist/apps/autopilot/src/activeWipRelease.test.js dist/apps/autopilot/src/executionCoordinator.test.js dist/apps/autopilot/src/causalDispatchCoordinator.test.js dist/apps/autopilot/src/scheduledEvolutionCoding.attemptCap.test.js dist/apps/autopilot/src/scheduledEvolutionCoding.test.js
   - node --test tests/autopilot-codex-coding.test.js tests/autopilot-codex-wip.test.js
+  - node --test dist/apps/autopilot/src/githubIssueBacklogClient.test.js
   - pnpm run build
   - pnpm run validate:full
   - pnpm run security:gate
@@ -130,14 +133,32 @@ codex_wip_coordination_20261108:
   canonical_branch: agent/903-canonical-portfolio-autopilot
   implementation_head_before_commit: b4fd4a40a22bce66215cee6ec537b5717ffc8c66
   change: "The Codex selector now requires explicit canonical owner/conflict metadata; its existing workflow has a narrowly scoped OIDC claim/release lifecycle backed by the same atomic two-slot ExecutionCoordinator. The Worker verifies GitHub OIDC signature/policy and live run, rechecks protected main still equals the selected run SHA, and reselects the exact issue before admission. Release tombstones are explicitly CLAIM_RELEASED and are not CodingRunner success evidence. The workflow timeout remains below the existing 60-minute claim TTL and removes OIDC mint credentials from the Codex child process."
-  workflow_state: "GitHub API reported the Codex workflow as active while the owner decision and work order require it to remain disabled; no state change or dispatch was performed. Treat this activation discrepancy as an unresolved governance/configuration fact."
-  safe_manual_execution: BLOCKED
-  safe_manual_execution_reason: "The owner decision keeps Codex disabled; the deployed Worker does not yet contain this local endpoint; Actions variable and runner status APIs returned 403; no workflow dispatch, Worker deployment, or production mutation is authorized."
+  workflow_state_at_previous_observation: "At the prior checkpoint GitHub API reported the Codex workflow active while the then-current owner decision required it disabled. The current owner report below supersedes that historical decision; this prior record is retained as history."
+  safe_manual_execution_at_previous_observation: BLOCKED
+  safe_manual_execution_reason_at_previous_observation: "At the prior checkpoint the then-current owner decision kept Codex disabled; the deployed Worker did not yet contain this local endpoint; Actions variable and runner status APIs returned 403. No dispatch or production mutation was performed."
   local_validation: "PASS on the worktree based on 2f96efe18dfd9246952349f8ebfbcca6173027a4: pnpm test ran preflight, TypeScript build, and 1338 isolated test files; focused Codex/Coordinator/OIDC tests 58/58 and workflow/client/authority tests 26/26; typecheck, validate:full, security:gate, and git diff --check PASS; lint 0 errors / 47 existing warnings."
   exact_head_ci: PENDING
   independent_validator: PENDING
   validation_scope: "Owner-approved implementation only. Codex task admission now shares the existing atomic ExecutionCoordinator cap of two, rechecks signed run/task/current-main identity, rejects replay/conflicts, and fails closed if GitHub or Coordinator is unavailable. The signed claim does not grant repo-write/production authority."
-  next: "Publish the locally validated successor only to existing Draft PR #2039; exact-head CI and independent Validator remain pending. Do not enable or dispatch the workflow."
+  next_at_previous_observation: "Publish the locally validated successor only to existing Draft PR #2039; exact-head CI and independent Validator remain pending. No workflow dispatch."
+codex_selector_pagination_20261108:
+  observed_at: "2026-11-08T02:52:47Z"
+  issue: 903
+  pull_request: 2039
+  prior_head: 747460c24b804f68ba23940d0f9cd03243da1511
+  protected_main: 54c095daff15bc4ef067e12ed26c666e5fd3d4c0
+  finding: "Both scripts/autopilot-codex-select.js and Worker claim revalidation queried only the first 100 issues and first 100 pulls. The complete API inventory contained 127 open non-PR issues and 65 open PRs; the prior one-page selector returned null, while the complete pre-reconciliation list surfaced only #2118 and #2121."
+  classification: "#2118 is HOLD: its Oct 10 canonical owner record says the bounded implementation increment is complete and residual adaptive-concurrency acceptance belongs to #903; work order WO-ISSUE-2118-CI-SATURATION-WIP is MERGED_INCREMENT_POST_MERGE_VERIFIED. #2121 is HOLD: its parent #2052 is CLOSED with canonical acceptance via #2120 and physical acceptance #2150. Both issues remain OPEN and retain history; neither is treated as completed in this work order."
+  resulting_selection: "After current HOLD labels, the exact source selector over all current GitHub pages returns null. No synthetic issue or task was created."
+  implementation: "Added shared GitHub issue/PR pagination with stable created-time ordering, maximum 10 pages per resource, identity validation/deduplication, malformed-response rejection, and fail-closed API/limit behavior. Wired the Codex selector and authenticated Worker claim revalidation to that helper."
+  workflow_current: "Owner reports explicit approval and that Autopilot Codex Coding was enabled; GitHub workflow API currently reports state=active (workflow id 369887156). The earlier disabled_manually record is historical. This does not authorize dispatch: protected main still lacks the PR's shared-WIP claim guard and helper, so the current-main workflow is unsafe for manual execution."
+  runner_and_login: "Owner reports nusa-codex-dev-2 is Idle. Current Actions runner API returns 403, so runner status/labels and Codex login state are not independently verified. Required workflow labels are self-hosted, Linux, nusa-codex-autopilot."
+  active_wip_claims: "UNKNOWN. Current API permissions return 403 and the Worker exposes no read-only public claim-status route; no mutating claim probe was made."
+  manual_run_ready: BLOCKED
+  manual_run_blockers: "Current protected main does not contain the PR's shared-WIP guard; current selected task is null; active WIP claims are UNKNOWN; runner labels and Codex login are unverified. No workflow was dispatched."
+  validation: "PASS on the local successor: pnpm test PASS (1,339 isolated test files); focused Codex/claim/coordinator/OIDC/backlog-pagination set 97/97; pnpm run typecheck PASS; pnpm run validate:full PASS; pnpm run security:gate PASS; pnpm run aipos:provenance PASS; pnpm run lint PASS (0 errors / 47 existing warnings); git diff --check PASS. Exact-head CI, independent Validator, Formal Validator, Audit, Release, and runtime integration remain pending."
+  current_owner_report: "Owner explicitly confirms reactivation approval and GitHub enablement; Actions workflow API confirms active (369887156). No workflow was manually dispatched."
+  next: "Publish this locally validated successor only to existing Draft PR #2039; exact-head CI and fresh independent Validator remain pending. Do not run until protected main contains the claim guard, a genuine eligible task is selected, active WIP claims are read safely, and runner/Codex login are verified."
 next: "Fresh exact-head CI and companions, then one fresh non-author Validator review. Actual autonomous dogfood remains separately BLOCKED until an existing authorized runner, causal admission, WIP slot, and runtime configuration are proven. No Ready transition, self-approval, merge, or production mutation."
 
 historical_first_main_alignment_20261028:
