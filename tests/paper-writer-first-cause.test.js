@@ -8,6 +8,8 @@ const { SqliteDatabase } = require("../dist/packages/storage/src/index.js");
 const { SqliteCloudPaperAccountRepository } = require("../dist/apps/cloud/src/paperTradingExecutionLoop.js");
 const { recordRuntimeFailure, runtimeFailureRecordPath } = require("../dist/apps/cloud/src/runtimeFailureRecord.js");
 
+// These tests are about first-cause retention, which does not depend on the production lease length, so they pin a short
+// explicit lease (and the limits derived from it) and keep their fake-clock arithmetic.
 function fixture(t) {
   t.mock.timers.enable({ apis: ["setInterval"] });
   const directory = fs.mkdtempSync(path.join(os.tmpdir(), "nusa-writer-cause-"));
@@ -15,7 +17,7 @@ function fixture(t) {
   const db = new SqliteDatabase(file);
   db.connection.exec("PRAGMA busy_timeout=0");
   let now = 100000;
-  const repository = new SqliteCloudPaperAccountRepository(db, { ownerId: "test-owner", now: () => now });
+  const repository = new SqliteCloudPaperAccountRepository(db, { ownerId: "test-owner", now: () => now, leaseDurationMs: 30_000 });
   t.after(() => { repository.close(); db.close(); fs.rmSync(directory, { recursive: true, force: true }); });
   return { db, file, repository, setNow: value => { now = value; } };
 }

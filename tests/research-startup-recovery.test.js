@@ -201,7 +201,7 @@ for (const competingOwner of [false, true]) {
 
 for (const handoff of [
   { name: "valid current owner", advanceAfterStartMs: 0, expected: "renewed" },
-  { name: "expired owner", advanceAfterStartMs: 30_001, expected: "fail-closed" },
+  { name: "expired owner", advanceAfterStartMs: 120_000, expected: "fail-closed" },
   { name: "mismatched owner", advanceAfterStartMs: 0, expected: "fail-closed", replaceOwner: true },
 ]) {
   test(`production renews only a still-valid lease after synchronous runtime composition (${handoff.name})`, async (t) => {
@@ -245,7 +245,7 @@ for (const handoff of [
         assert.ok(acquired, "the runtime acquires the writer lease after its 39.9-second synchronous composition");
         const renewed = db.connection.prepare("SELECT lease_until_ms FROM cloud_paper_writer_leases").get();
         assert.equal(handoffCalls, 7, "the lease is renewed after each of the three lease-start phases and between the four runtime phases");
-        assert.equal(renewed.lease_until_ms, now + 30_000, "the valid lease receives one fresh existing TTL");
+        assert.equal(renewed.lease_until_ms, now + 120_000, "the valid lease receives one fresh production TTL");
         await composition.handle.stop();
         assert.equal(runtimeStopped, 1);
       } else {
@@ -253,7 +253,7 @@ for (const handoff of [
         assert.equal(handoffCalls, 5, "renewal stops at the first renewal that finds the lease expired or taken over");
         assert.equal(runtimeStopped, 1, "a listener/runtime created before failed handoff is stopped");
         const row = db.connection.prepare("SELECT owner_id, lease_until_ms FROM cloud_paper_writer_leases").get();
-        if (handoff.advanceAfterStartMs > 30_000) assert.equal(row.lease_until_ms, 1_069_898, "the lease's startup hydration renewal is retained, but the expired lease is not renewed again");
+        if (handoff.advanceAfterStartMs >= 120_000) assert.equal(row.lease_until_ms, 1_159_898, "the lease's startup hydration renewal is retained, but the expired lease is not renewed again");
         if (handoff.replaceOwner) assert.equal(row.owner_id, "different-owner", "handoff does not take over a different owner");
       }
     } finally {

@@ -37,7 +37,7 @@ import { buildOwnerBaselinePaperPeriodInput, isOwnerBaselinePeriodStartAt } from
 import { CloudRuntimeDashboardHydrator } from "./cloudRuntimeDashboardHydrator";
 import { SqliteCloudDashboardSnapshotRepository } from "./cloudDashboardSnapshotRepository";
 import { PaperChallengerBindingLedger } from "./paperChallengerBindingLedger";
-import { SqliteCloudPaperAccountRepository, paperAccountIdForCapital, type PaperAccountState } from "./paperTradingExecutionLoop";
+import { PAPER_WRITER_LEASE_DURATION_MS, SqliteCloudPaperAccountRepository, paperAccountIdForCapital, type PaperAccountState } from "./paperTradingExecutionLoop";
 import { createCloudAiRuntime } from "./ai/runtime";
 import { registerGracefulShutdown, startCloudRuntimeFromOptions, type CloudRuntimeHandle } from "./runtime";
 import { readClosedLearningProductionConfig } from "./closedLearningProductionConfig";
@@ -160,7 +160,7 @@ export function startClosedLearningProductionRuntime(env: NodeJS.ProcessEnv = pr
   // supply restart-safe candidate performance evidence without opening a second writer lease.
   // The lease starts inside startCloudRuntime immediately before the first PAPER account access.
   // The full runtime's synchronous setup can outlast the 30-second lease before the event loop can heartbeat.
-  const leaseWindow = createLeaseStartupWindow(30_000, (line) => console.log(line));
+  const leaseWindow = createLeaseStartupWindow(PAPER_WRITER_LEASE_DURATION_MS, (line) => console.log(line));
   const paperRepository = config.paperInitialCapitalKrw === undefined
     ? undefined
     : new SqliteCloudPaperAccountRepository(database, {
