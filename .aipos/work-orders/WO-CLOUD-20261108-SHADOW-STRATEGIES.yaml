@@ -1,0 +1,30 @@
+id: WO-CLOUD-20261108-SHADOW-STRATEGIES
+title: "Pre-registered RSI and Donchian shadow strategies beside the SMA baseline shadow (display only)"
+status: READY_FOR_REVIEW
+owner: nusa-development
+repository: cinamoncandy/NUSA
+base_branch: main
+implementation_branch: claude/shadow-strategies
+authority_impact: none
+objective: "Owner approved on 2026-11-08 the fixed shadow candidates RSI(14,30,70) and Donchian(20) from docs/DESIGN_LEARNING_LOOP_NEXT_20261107.md section 5. Run them through the existing PaperBaselineShadow on the same completed minute bars and fee model (0.0005), persist each in its own file, and publish six integers each in closedLearningLoop.evidence."
+scope:
+  - "apps/cloud/src/paperShadowStrategies.ts"
+  - "apps/cloud/src/paperShadowStrategies.test.ts"
+  - "apps/cloud/src/closedLearningLoopStatus.ts"
+  - "apps/cloud/src/closedLearningProductionRuntime.ts"
+  - "apps/cloud/src/server.ts"
+exclusions:
+  - "No order, ledger, fill, Risk, Governance, Research or promotion input. Existing baseline shadow file, null comparators, limits, thresholds, capital and pinned modules are untouched."
+  - "Parameters are fixed and must not be tuned from shadow results."
+  - "No host release; a release needs the existing owner-approved path."
+safety:
+  paper_only: true
+  liveAuthority: NONE
+  productionMutationAllowed: false
+  aiAuthority: ZERO_AUTHORITY
+  fail_closed: "A shadow error is swallowed inside PaperBaselineShadow.observe and never reaches execution; a malformed total withdraws only its own keys."
+verification_commands:
+  - npx tsc -p tsconfig.json
+  - node -r ./tests/register-dist.cjs --test dist/apps/cloud/src/paperShadowStrategies.test.js
+review: "Draft PR; non-author review before Ready."
+residual: "1-minute RSI/Donchian may not clear the roughly 10 bp round-trip fee. Shadow totals are not PAPER evidence. The unpersisted open hypothetical position is dropped on restart, as for the baseline."
