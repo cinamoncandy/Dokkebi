@@ -526,8 +526,13 @@ export function startClosedLearningProductionRuntime(env: NodeJS.ProcessEnv = pr
   try {
     researchExperiments?.prepareRecovery();
     baseHandle.startPaperRuntime();
+    // Renew the writer lease between the synchronous phases: on a slow host their sum can exceed the 30 s lease
+    // before the event loop can run the repository heartbeat. Each call is the existing exact-owner fail-closed check.
+    paperRepository?.verifyWriterLease();
     baseHandle.recoverResearch();
+    paperRepository?.verifyWriterLease();
     researchExperiments?.start();
+    paperRepository?.verifyWriterLease();
     researchExperiments?.finishPreparedRecovery();
     paperRepository?.verifyWriterLease();
   } catch (error) {

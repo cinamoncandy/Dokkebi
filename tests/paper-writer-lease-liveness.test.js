@@ -39,3 +39,26 @@ test("full SQLite integrity remains fail-closed at canonical database open, not 
     assert.ok(risk.includes(table), `Risk health must still require ${table}`);
   }
 });
+
+test("PAPER writer lease is renewed between each heavy synchronous startup phase", () => {
+  const repo = fs.readFileSync("apps/cloud/src/paperTradingExecutionLoop.ts", "utf8");
+  const start = repo.indexOf("public startWriterLease(): void {");
+  const body = repo.slice(start, repo.indexOf("public save(state: PaperAccountState)", start));
+  const order = ["this.acquireLease();", "this.verifyWriterLease();", "this.recoverRecognizedLegacyAccounting();", "this.verifyWriterLease();", "this.backfillFillLedgerFromHistory();", "this.verifyWriterLease();", "setInterval(() => this.heartbeatLease()"];
+  let at = -1;
+  for (const marker of order) {
+    const next = body.indexOf(marker, at + 1);
+    assert.ok(next > at, `${marker} must follow the previous startup step`);
+    at = next;
+  }
+  const source = fs.readFileSync(productionRoot, "utf8");
+  const runtime = source.indexOf("baseHandle.startPaperRuntime();");
+  const tail = source.slice(runtime, source.indexOf("initialTimer = setTimeout(scheduleTick, 0);", runtime));
+  const steps = ["baseHandle.startPaperRuntime();", "paperRepository?.verifyWriterLease();", "baseHandle.recoverResearch();", "paperRepository?.verifyWriterLease();", "researchExperiments?.start();", "paperRepository?.verifyWriterLease();", "researchExperiments?.finishPreparedRecovery();", "paperRepository?.verifyWriterLease();"];
+  let cursor = -1;
+  for (const marker of steps) {
+    const next = tail.indexOf(marker, cursor + 1);
+    assert.ok(next > cursor, `${marker} must follow the previous runtime step`);
+    cursor = next;
+  }
+});

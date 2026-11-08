@@ -238,8 +238,13 @@ export class SqliteCloudPaperAccountRepository implements PaperAccountRepository
     try {
       this.acquireLease();
       this.writerLeaseStarted = true;
+      // Each heavy synchronous phase below can outlast the lease on a slow host before the event loop can run the
+      // heartbeat; renew (exact-owner, conditional update, fail-closed) between phases instead of only at the end.
+      this.verifyWriterLease();
       this.recoverRecognizedLegacyAccounting();
+      this.verifyWriterLease();
       this.backfillFillLedgerFromHistory();
+      this.verifyWriterLease();
       const timer = setInterval(() => this.heartbeatLease(), this.heartbeatIntervalMs);
       timer.unref?.();
       this.heartbeat = timer;
