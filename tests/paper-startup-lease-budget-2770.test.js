@@ -10,6 +10,7 @@ const { SqliteDatabase } = storage;
 const { SqliteAiCalibrationDurableStore } = require("../dist/packages/storage/src/aiCalibrationDurability.js");
 const { SqliteAiOutcomeAttributionMemory } = require("../dist/packages/storage/src/aiOutcomeAttributionMemory.js");
 const { CloudPaperCanonicalRiskGateway, CLOUD_PAPER_RISK_LIMITS } = require("../dist/apps/cloud/src/cloudPaperCanonicalRiskGateway.js");
+const { SqliteCloudPaperAccountRepository } = require("../dist/apps/cloud/src/paperTradingExecutionLoop.js");
 
 // #2770 startup lease budget. Two defects shared one mechanism: work that re-reads the whole
 // database while the renewable PAPER writer lease is held, starving its heartbeat, and work that
@@ -18,6 +19,7 @@ const { CloudPaperCanonicalRiskGateway, CLOUD_PAPER_RISK_LIMITS } = require("../
 
 const root = path.resolve(__dirname, "..");
 const runtimeSource = fs.readFileSync(path.join(root, "apps", "cloud", "src", "closedLearningProductionRuntime.ts"), "utf8");
+const cloudRuntimeSource = fs.readFileSync(path.join(root, "apps", "cloud", "src", "runtime.ts"), "utf8");
 const storageSource = fs.readFileSync(path.join(root, "packages", "storage", "src", "index.ts"), "utf8");
 const integrityBootstrapSource = fs.readFileSync(path.join(root, "packages", "storage", "src", "sqliteIntegrityBootstrap.ts"), "utf8");
 const aiCalibrationSource = fs.readFileSync(path.join(root, "packages", "storage", "src", "aiCalibrationDurability.ts"), "utf8");
@@ -96,21 +98,52 @@ function gatewayFor(database) {
 // (merged #2779), which also pins the runtime composition argument. What that test does not cover
 // is the third link in the same chain: the closed-learning scheduler must not start ticking until
 // the runtime it schedules against is up behind the lease.
-test("the listener and the scheduler both start only after the writer lease is held", () => {
-  const lease = runtimeSource.indexOf("new SqliteCloudPaperAccountRepository(");
-  const listener = runtimeSource.indexOf("startCloudRuntimeFromOptions(");
+test("the runtime acquires its PAPER lease before first account access when activated", () => {
+  const lease = cloudRuntimeSource.indexOf("effectivePaperRepository?.startWriterLease?.();");
+  const paperLoop = cloudRuntimeSource.indexOf("effectivePaperLoop = paperExecutionLoop ??", lease);
+  const firstAccountRead = cloudRuntimeSource.indexOf("dashboardHydrator.hydrate(effectiveProvider)", paperLoop);
+  const listener = cloudRuntimeSource.indexOf("startCloudDashboardServer({", firstAccountRead);
   const scheduler = runtimeSource.indexOf("rolloverTimer = setInterval(scheduleTick,");
-  assert.ok(lease > 0 && listener > lease, "the runtime/listener must not come up before the lease is owned");
-  assert.ok(scheduler > listener, "the closed-learning scheduler must start after the runtime it is scheduled against");
+  assert.ok(lease > 0 && paperLoop > lease && firstAccountRead > paperLoop && listener > firstAccountRead, "lease acquisition must follow bulk runtime composition but precede PAPER account reads and the listener");
+  assert.match(runtimeSource, /deferWriterLease: true/, "the composition root must not own a lease through runtime initialization");
+  assert.ok(scheduler > runtimeSource.indexOf("const baseHandle = startCloudRuntimeFromOptions({"), "the closed-learning scheduler must start after the runtime it is scheduled against");
 });
 
-test("the synchronous runtime-composition handoff renews only an already-valid writer lease", () => {
+test("a deferred lease survives a 39.9-second composition delay without extending its contract", () => {
+  const database = new SqliteDatabase(":memory:");
+  let now = NOW;
+  const repository = new SqliteCloudPaperAccountRepository(database, {
+    accountId: "paper-startup",
+    ownerId: "startup-writer",
+    now: () => now,
+    deferWriterLease: true,
+  });
+  try {
+    assert.equal(database.connection.prepare("SELECT owner_id FROM cloud_paper_writer_leases WHERE account_id = ?").get("paper-startup"), undefined);
+    assert.throws(() => repository.loadLatest(), /PAPER_WRITER_LEASE_NOT_STARTED/);
+    now += 39_898;
+    repository.startWriterLease();
+    const lease = database.connection.prepare("SELECT owner_id, lease_until_ms, heartbeat_at_ms FROM cloud_paper_writer_leases WHERE account_id = ?").get("paper-startup");
+    assert.deepEqual({ ...lease }, { owner_id: "startup-writer", lease_until_ms: now + 30_000, heartbeat_at_ms: now });
+    repository.startWriterLease();
+    assert.deepEqual({ ...database.connection.prepare("SELECT owner_id, lease_until_ms, heartbeat_at_ms FROM cloud_paper_writer_leases WHERE account_id = ?").get("paper-startup") }, { ...lease }, "repeat start must not renew or replace the established owner");
+  } finally {
+    repository.close();
+    database.close();
+  }
+});
+
+test("the delayed PAPER startup and recovery remain before scheduler admission", () => {
   const listener = runtimeSource.indexOf("const baseHandle = startCloudRuntimeFromOptions({");
-  const handoff = runtimeSource.indexOf("paperRepository?.verifyWriterLease();", listener);
+  const start = runtimeSource.indexOf("baseHandle.startPaperRuntime();", listener);
+  const recover = runtimeSource.indexOf("baseHandle.recoverResearch();", start);
+  const experiments = runtimeSource.indexOf("researchExperiments?.start();", recover);
+  const handoff = runtimeSource.indexOf("paperRepository?.verifyWriterLease();", experiments);
   const scheduler = runtimeSource.indexOf("rolloverTimer = setInterval(scheduleTick,", handoff);
-  assert.ok(listener > 0 && handoff > listener, "lease handoff must run after the last large synchronous runtime composition step");
+  assert.ok(listener > 0 && start > listener, "PAPER ownership starts after the last large synchronous composition step");
+  assert.ok(recover > start && experiments > recover, "stateful recovery and interval admission remain behind exclusive PAPER ownership");
+  assert.ok(handoff > experiments, "the exact-owner lease is checked after bounded synchronous recovery startup");
   assert.ok(scheduler > handoff, "lease handoff must complete before closed-learning scheduling begins");
-  assert.match(runtimeSource.slice(listener, handoff + 80), /never revives an expired lease|fails closed if composition already exceeded the TTL/);
 });
 
 // ---- risk hot path ---------------------------------------------------------------------------

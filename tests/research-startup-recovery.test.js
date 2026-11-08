@@ -143,24 +143,23 @@ for (const competingOwner of [false, true]) {
       };
     });
     const accountId = paperAccountIdForCapital(10000000);
-    let now = 1000000;
+    const now = 1000000;
     t.mock.method(Date, "now", () => now);
     const owner = competingOwner ? new SqliteCloudPaperAccountRepository(db, { accountId, ownerId: "owner-a", now: () => now }) : undefined;
     const sessions = new storage.SqliteResearchSessionRepository(db);
     const setupResearch = composeResearchExperiments({ env, database: db, now: () => now });
     setupResearch.orchestrator.recover();
     setupResearch.tickOnce();
-    const sessionsBefore = sessions.list();
     setupResearch.stop();
+    const sessionsBefore = sessions.list();
     const before = db.connection.prepare("SELECT * FROM cloud_paper_writer_leases").all();
     const original = ResearchRecoveryCoordinator.prototype.recover;
     let validations = 0;
     t.mock.method(ResearchRecoveryCoordinator.prototype, "recover", function () {
       validations++;
-      assert.deepEqual(db.connection.prepare("SELECT * FROM cloud_paper_writer_leases").all(), before);
+      if (validations === 1) assert.deepEqual(db.connection.prepare("SELECT * FROM cloud_paper_writer_leases").all(), before, "read-only evidence preparation precedes lease acquisition");
       const aiDurabilityTables = db.connection.prepare("SELECT name FROM sqlite_master WHERE type = 'table' AND name IN ('ai_calibration_durability_meta', 'ai_outcome_attribution_memory_meta') ORDER BY name").all().map((row) => row.name);
       assert.deepEqual(aiDurabilityTables, ["ai_calibration_durability_meta", "ai_outcome_attribution_memory_meta"], "Cloud AI schema initialization must finish before research recovery evidence is prepared");
-      if (!competingOwner) now += 30001;
       return original.call(this);
     });
     t.mock.method(storage, "SqliteDatabase", function () { return db; });
@@ -168,22 +167,32 @@ for (const competingOwner of [false, true]) {
     let repository;
     t.mock.method(runtime, "startCloudRuntimeFromOptions", (options) => {
       repository = options.paperAccountRepository;
-      repository.verifyWriterLease();
-      assert.equal(options.researchAutomation.recover().status, "READY");
-      repository.verifyWriterLease();
-      assert.equal(validations, 1, "legitimate writer/session writes must not replay evidence validation under the lease");
-      throw boundary; // No listener, timers, market connection, or autonomous execution.
+      assert.deepEqual(db.connection.prepare("SELECT * FROM cloud_paper_writer_leases").all(), before, "runtime composition does not modify an existing PAPER lease");
+      return {
+        startPaperRuntime: () => repository.startWriterLease(),
+        recoverResearch: () => {
+          repository.verifyWriterLease();
+          const recovery = options.researchAutomation.recover();
+          assert.equal(recovery.status, "READY", JSON.stringify(recovery));
+          assert.equal(validations, 1, "the prepared read-only evidence is reused once runtime composition is complete");
+          repository.verifyWriterLease();
+          throw boundary;
+        },
+        stop: async () => {},
+        listPaperRealizedPeriods: () => [],
+        nextPaperRealizedPeriodIndex: () => 0,
+      };
     });
     try {
       if (competingOwner) {
         assert.throws(() => startClosedLearningProductionRuntime(env), /PAPER_WRITER_ALREADY_ACTIVE/);
         assert.deepEqual(db.connection.prepare("SELECT * FROM cloud_paper_writer_leases").all(), before);
         assert.deepEqual(sessions.list(), sessionsBefore, "read-only preparation cannot disturb the current owner's sessions");
-        assert.equal(repository, undefined);
+        assert.ok(repository, "deferred repository exists, but its lease acquisition fails closed before runtime starts");
       } else {
         assert.throws(() => startClosedLearningProductionRuntime(env), (error) => error === boundary);
         assert.equal(validations, 1);
-        repository.verifyWriterLease();
+        assert.ok(db.connection.prepare("SELECT owner_id FROM cloud_paper_writer_leases WHERE account_id = ?").get(accountId));
       }
       assert.equal(closedEvidenceTrackers, 5, "every prepared evidence tracker closes when startup aborts");
     } finally { repository?.close(); owner?.close(); db.close(); }
@@ -191,9 +200,9 @@ for (const competingOwner of [false, true]) {
 }
 
 for (const handoff of [
-  { name: "valid current owner", advanceMs: 25_000, expected: "renewed" },
-  { name: "expired owner", advanceMs: 30_001, expected: "fail-closed" },
-  { name: "mismatched owner", advanceMs: 25_000, expected: "fail-closed", replaceOwner: true },
+  { name: "valid current owner", advanceAfterStartMs: 0, expected: "renewed" },
+  { name: "expired owner", advanceAfterStartMs: 30_001, expected: "fail-closed" },
+  { name: "mismatched owner", advanceAfterStartMs: 0, expected: "fail-closed", replaceOwner: true },
 ]) {
   test(`production renews only a still-valid lease after synchronous runtime composition (${handoff.name})`, async (t) => {
     const db = new storage.SqliteDatabase(":memory:");
@@ -212,12 +221,17 @@ for (const handoff of [
     });
     t.mock.method(runtime, "startCloudRuntimeFromOptions", (options) => {
       repository = options.paperAccountRepository;
-      const acquired = db.connection.prepare("SELECT account_id, owner_id, lease_until_ms FROM cloud_paper_writer_leases").get();
-      assert.ok(acquired, "writer lease must be acquired before the listener/runtime composition");
-      assert.equal(acquired.lease_until_ms, 1_030_000);
-      if (handoff.replaceOwner) db.connection.prepare("UPDATE cloud_paper_writer_leases SET owner_id = ? WHERE account_id = ?").run("different-owner", acquired.account_id);
-      now += handoff.advanceMs; // Deterministic synchronous runtime composition delay.
+      assert.equal(db.connection.prepare("SELECT account_id FROM cloud_paper_writer_leases").get(), undefined, "the writer lease must not start before synchronous runtime composition");
       return {
+        startPaperRuntime: () => {
+          now += 39_898;
+          repository.startWriterLease();
+        },
+        recoverResearch: () => {
+          assert.ok(db.connection.prepare("SELECT account_id FROM cloud_paper_writer_leases").get(), "the lease is held before stateful recovery");
+          now += handoff.advanceAfterStartMs;
+          if (handoff.replaceOwner) db.connection.prepare("UPDATE cloud_paper_writer_leases SET owner_id = 'different-owner' WHERE account_id = ?").run(paperAccountIdForCapital(10000000));
+        },
         stop: async () => { runtimeStopped++; },
         listPaperRealizedPeriods: () => [],
         nextPaperRealizedPeriodIndex: () => 0,
@@ -227,6 +241,8 @@ for (const handoff of [
     try {
       if (handoff.expected === "renewed") {
         const composition = startClosedLearningProductionRuntime(runtimeEnv);
+        const acquired = db.connection.prepare("SELECT account_id, owner_id, lease_until_ms FROM cloud_paper_writer_leases").get();
+        assert.ok(acquired, "the runtime acquires the writer lease after its 39.9-second synchronous composition");
         const renewed = db.connection.prepare("SELECT lease_until_ms FROM cloud_paper_writer_leases").get();
         assert.equal(handoffCalls, 1, "the existing lease is verified at the post-composition handoff");
         assert.equal(renewed.lease_until_ms, now + 30_000, "the valid lease receives one fresh existing TTL");
@@ -237,7 +253,7 @@ for (const handoff of [
         assert.equal(handoffCalls, 1);
         assert.equal(runtimeStopped, 1, "a listener/runtime created before failed handoff is stopped");
         const row = db.connection.prepare("SELECT owner_id, lease_until_ms FROM cloud_paper_writer_leases").get();
-        if (handoff.advanceMs > 30_000) assert.equal(row.lease_until_ms, 1_030_000, "expired lease is not revived");
+        if (handoff.advanceAfterStartMs > 30_000) assert.equal(row.lease_until_ms, 1_069_898, "the lease's startup hydration renewal is retained, but the expired lease is not renewed again");
         if (handoff.replaceOwner) assert.equal(row.owner_id, "different-owner", "handoff does not take over a different owner");
       }
     } finally {
