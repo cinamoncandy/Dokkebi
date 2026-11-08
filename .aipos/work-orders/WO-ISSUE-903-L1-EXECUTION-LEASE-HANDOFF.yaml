@@ -12,7 +12,7 @@ implementation_branch: agent/903-canonical-portfolio-autopilot
 objective: "Preserve one durable execution lease across asynchronous producer-to-consumer handoff so a competing producer cannot reacquire while a consumer is running."
 architecture_impact:
   acknowledged: true
-  analysis: "Repairs the existing ExecutionCoordinator state machine used by the #903 scheduled coding producer and authenticated consumer. No queue, scheduler, worker, or authority path is added."
+  analysis: "Repairs the existing ExecutionCoordinator state machine; owner-approved scope now permits a narrowly scoped OIDC-authenticated Codex Claim/Release coordination path. No queue, scheduler, general coding worker, broad execution authority or production mutation is authorized."
   references:
     - apps/autopilot/src/executionCoordinator.ts
     - apps/autopilot/src/executionCoordinator.test.ts
@@ -28,7 +28,7 @@ prohibited:
   - new_execution_state_or_queue
   - new_scheduler_or_consumer
   - lease_ttl_or_heartbeat_safety_weakening
-  - authority_expansion
+  - broad_authority_expansion_or_unverified_oidc_claim_release
   - production_or_broker_mutation
 safety:
   liveAuthority: NONE
@@ -72,6 +72,26 @@ evidence:
   required_companions: PENDING
   fresh_non_author_review: PENDING
   formal_validator: PENDING
+owner_approval_20261108:
+  canonical_issue: 903
+  approval_comment: https://github.com/cinamoncandy/NUSA/issues/903#issuecomment-6714835582
+  status: SCOPE_APPROVED_IMPLEMENTATION_PENDING
+  approved:
+    - reuse_existing_execution_coordinator_atomic_wip_admission_max_two
+    - codex_claim_and_release_only_through_allowlisted_github_actions_oidc
+    - bind_exact_repository_workflow_ref_run_sha_task_execution_id_and_lease_owner
+    - reject_spoofed_replay_duplicate_over_limit_stale_and_wrong_owner_claims
+    - fail_closed_on_invalid_or_missing_oidc_and_coordinator_outage
+    - preserve_lease_ttl_heartbeat_takeover_and_legacy_wip_readback_safeguards
+    - adversarial_focused_full_security_and_exact_head_validation
+  not_approved:
+    - reactivate_disabled_codex_workflow
+    - modify_repository_coding_enabled_variable_or_actions_runner
+    - deploy_cloudflare_worker_or_oracle_or_production
+    - change_live_risk_broker_or_payment_authorities
+    - direct_main_merge_release_or_self_validator_approval
+  evidence_status: "OWNER_SCOPE_APPROVED; code and runtime OIDC integration NOT IMPLEMENTED; no actual Codex E2E proof."
+  next: "Implement minimal authenticated shared-WIP claim/release in the existing Worker and existing Codex workflow only after verifying precise current OIDC policy and runner security constraints; obtain fresh CI, Validator, Audit/Release gates. Keep Codex disabled manually."
 recovery_20261107:
   protected_main_sha: 01d698b325626e4a2e62b29e8e0b2f99f579ad4a
   predecessor_pr_head: 90726879b4c5dead48327579c59fdfdecda82154
