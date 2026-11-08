@@ -39,6 +39,7 @@ Most common statuses among the open files (new orders use only `READY_FOR_REVIEW
 | `WO-0010` | BLOCKED | Resolve remaining repository P0/P1 gaps before release-target changes |
 | `WO-0051` | IN_PROGRESS | Constitutional Production Transition Human/Environment Gate |
 | `WO-0059-PAPER-OBSERVATION-20261106` | IN_PROGRESS | Bounded observation of natural PAPER decision and execution outcomes |
+| `WO-0059-PAPER-STARTUP-STABILIZATION-20261107` | IN_PROGRESS | Separate PAPER orderbook startup stabilization from bounded observation |
 | `WO-0059-PROJECTION-CONTINUITY-20261107` | IN_PROGRESS | Bounded PAPER evidence projection anchors under saturated read-only windows |
 | `WO-20260924-MOBILE-DELIVERY-RESIDUAL-GATES` | BLOCKED | Residual Android delivery and device gates from closed mobile UI work orders |
 | `WO-20260927-AUTOPILOT-CODING-RECEIPT-RECONCILIATION` | IN_PROGRESS | Autopilot coding receipt reconciliation |
