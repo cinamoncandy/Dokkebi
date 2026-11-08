@@ -4,14 +4,18 @@ current_issue_903_l1_execution_lease_handoff:
   issue: 903
   pull_request: 2039
   branch: agent/903-canonical-portfolio-autopilot
-  protected_main_sha: 01d698b325626e4a2e62b29e8e0b2f99f579ad4a
-  predecessor_head: 90726879b4c5dead48327579c59fdfdecda82154
-  recovery: NON_FORCE_MAIN_ALIGNMENT_WITH_TWO_FAIL_CLOSED_TEST_CONFLICTS
-  verified_gap: CAUSAL_HANDOFF_DID_NOT_EXTEND_AUTHENTICATED_CONSUMER_LEASE
-  repair_scope: "Persist bounded leaseExpiresAt in both generic and causal handoff paths; retain current-main generic-failure abstention and cap new WIP at two."
-  legacy_state: "Former three-to-eight WIP claims remain readable and are TTL-expired; they block new admissions until capacity is safe."
-  local_validation: "PASS: focused 60/60; isolated 1335 test files; build/typecheck/validate:full/security:gate; lint 0 errors/47 baseline warnings; diff-check."
-  exact_head_ci: PENDING
+  protected_main_sha: 54c095daff15bc4ef067e12ed26c666e5fd3d4c0
+  predecessor_head: d1acb9a4fe1b090c286a870de8a9d0e62edcff20
+  local_aligned_head: 2f96efe18dfd9246952349f8ebfbcca6173027a4
+  recovery: NON_FORCE_FAST_FORWARD_AND_MERGE_LATEST_CURRENT_MAIN_INTO_EXISTING_PR_BRANCH
+  verified_gap: CODEX_SELECTOR_DID_NOT_CLAIM_SHARED_EXECUTION_COORDINATOR_WIP
+  repair_scope: "Existing Codex job now claims/releases one OIDC-bound slot in the existing atomic two-slot Coordinator; explicit task owner/conflict keys and exact selected main SHA are revalidated server-side."
+  legacy_state: "Former three-to-eight WIP claims remain readable and are TTL-expired; they block new admissions until capacity is safe. New admissions stay capped at two."
+  focused_validation: "PASS after latest main alignment: 58 compiled TS tests (Coordinator/Codex/OIDC/replay) and 26 workflow/client/authority-map tests; build PASS; typecheck PASS."
+  full_validation: "PASS after latest main alignment: pnpm test (preflight + build + 1338 isolated test files), validate:full, security:gate, lint (0 errors / 47 baseline warnings), typecheck, and git diff --check."
+  safe_manual_execution: BLOCKED
+  safe_manual_execution_reason: "Owner decision/work order keep Codex disabled and prohibit dispatch; GitHub API reported workflow state active (unresolved discrepancy); deployed Worker lacks this local route; Actions variable and runner APIs returned 403. No dispatch, configuration change, deploy, or production mutation performed."
+  exact_head_ci: PENDING_AFTER_PUBLISH
   independent_validator: PENDING
-  next: "Fresh exact-head CI and companions, then fresh non-author Validator. Actual autonomous dogfood remains BLOCKED by disabled Codex owner decision and unverified Workers AI configuration/dispatch. No direct merge or production runtime mutation."
+  next: "Publish the validated successor only to existing Draft PR #2039, verify exact-head CI/companions, then obtain fresh non-author Validator review. Keep Codex disabled and do not dispatch."
   safety: PAPER_ONLY_LIVE_NONE_PRODUCTION_MUTATION_FALSE_AI_ZERO_AUTHORITY

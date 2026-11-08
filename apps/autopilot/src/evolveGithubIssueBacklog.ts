@@ -257,6 +257,8 @@ export interface CodexBacklogTask {
   readonly title: string;
   readonly body: string;
   readonly capability: GithubIssueCapability;
+  readonly canonicalOwner: string;
+  readonly conflictKeys: readonly string[];
 }
 
 /**
@@ -278,7 +280,8 @@ export function selectCodexBacklogTask(issues: readonly unknown[], openPulls: re
   }
   const candidate = issues
     .map((issue) => eligibleIssue(issue, linked))
-    .filter((issue): issue is EligibleIssue => issue !== null && issue.capability !== "UNKNOWN")
+    .filter((issue): issue is EligibleIssue => issue !== null && issue.capability !== "UNKNOWN"
+      && Boolean(issue.canonicalOwner) && Boolean(issue.conflictKeys?.length))
     .sort((left, right) => left.priority - right.priority || right.updatedAtMs - left.updatedAtMs || left.number - right.number)[0];
   if (!candidate) return null;
   return Object.freeze({
@@ -286,5 +289,7 @@ export function selectCodexBacklogTask(issues: readonly unknown[], openPulls: re
     title: candidate.title,
     body: text(byNumber.get(candidate.number)?.body) ?? "",
     capability: candidate.capability,
+    canonicalOwner: candidate.canonicalOwner!,
+    conflictKeys: Object.freeze([...candidate.conflictKeys!]),
   });
 }

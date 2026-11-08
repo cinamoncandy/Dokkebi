@@ -7,7 +7,7 @@ const { selectCodexBacklogTask } = require("../dist/apps/autopilot/src/evolveGit
 const { buildPrompt } = require("../scripts/autopilot-codex-select.js");
 
 const SAFE = "liveAuthority=NONE\nproductionMutationAllowed=false\naiAuthority=ZERO_AUTHORITY";
-const issue = (number, title, body, extra = {}) => ({ number, title, body, state: "open", author_association: "OWNER", updated_at: "2026-09-29T00:00:00Z", labels: [], ...extra });
+const issue = (number, title, body, extra = {}) => ({ number, title, body: `${body}\ncanonicalOwner: issue-${number}\nconflictKeys: issue:${number}`, state: "open", author_association: "OWNER", updated_at: "2026-09-29T00:00:00Z", labels: [], ...extra });
 
 test("Codex takes the research and general issues the Workers AI runner cannot, highest priority first", () => {
   const issues = [
@@ -18,6 +18,8 @@ test("Codex takes the research and general issues the Workers AI runner cannot, 
   const task = selectCodexBacklogTask(issues, []);
   assert.equal(task.issueNumber, 11);
   assert.equal(task.capability, "GENERAL");
+  assert.equal(task.canonicalOwner, "issue-11");
+  assert.deepEqual(task.conflictKeys, ["issue:11"]);
 });
 
 test("unsafe, non-owner, blocked or already-linked issues are never selected", () => {
@@ -29,6 +31,11 @@ test("unsafe, non-owner, blocked or already-linked issues are never selected", (
     issue(24, "P0: live enabling", `research\n${SAFE}\nliveAuthority=LIVE`),
   ];
   assert.equal(selectCodexBacklogTask(issues, [{ title: "fix", body: "Refs #23" }]), null);
+});
+
+test("Codex refuses to select backlog work without canonical WIP owner and conflict metadata", () => {
+  const missingMetadata = issue(25, "P0: research work", `Research OOS.\n${SAFE}`, { body: `Research OOS.\n${SAFE}` });
+  assert.equal(selectCodexBacklogTask([missingMetadata], []), null);
 });
 
 test("the Codex prompt carries the CORE/AIPOS contract and forbids commit, push and protected paths", () => {
@@ -57,6 +64,11 @@ test("the workflow pins Codex to the single dedicated-account runner and publish
   assert.deepEqual([...order].sort((a, b) => a - b), order, "validation gates run before the PR is created");
   assert.match(workflow, /group: autopilot-codex-coding/);
   assert.match(workflow, /head:autopilot\/codex\//, "one open autopilot Codex PR at a time");
+  assert.match(codexJob, /Claim shared WIP slot/, "WIP admission happens before the coding model runs");
+  assert.match(codexJob, /Release shared WIP slot/);
+  assert.match(codexJob, /id-token: write/, "only the Codex job can mint the narrow claim identity");
+  assert.match(codexJob, /timeout-minutes: 50/, "the run budget is below the one-hour active-WIP expiry");
+  assert.match(codexJob, /-u ACTIONS_ID_TOKEN_REQUEST_URL -u ACTIONS_ID_TOKEN_REQUEST_TOKEN/, "the coding model cannot mint OIDC tokens");
 });
 
 test("the Codex prompt keeps heavy validation off the shared PAPER host", () => {
@@ -97,7 +109,7 @@ test("the host guard keeps Codex off the shared Oracle host whenever PAPER needs
   assert.match(workflow, /bash "\$guard" start/, "Codex starts only through the host guard");
   assert.match(workflow, /bash "\$guard" watch/, "the host guard watches the whole Codex run");
   assert.match(workflow, /bash "\$guard" reap "\$mark"/, "the whole marked Codex tree is reaped");
-  assert.match(workflow, /env -u GUARD_GH_TOKEN -u GH_TOKEN -u GITHUB_TOKEN NUSA_CODEX_RUN_MARK=/, "Codex never receives the Actions token");
+  assert.match(workflow, /env -u GUARD_GH_TOKEN -u GH_TOKEN -u GITHUB_TOKEN -u ACTIONS_ID_TOKEN_REQUEST_URL -u ACTIONS_ID_TOKEN_REQUEST_TOKEN NUSA_CODEX_RUN_MARK=/, "Codex never receives GitHub or OIDC token-minting authority");
   assert.doesNotMatch(workflow, /^\s+GH_TOKEN: \$\{\{ github\.token \}\}\n\s+run: \|\n\s+# Actions runs bash/m, "no step-wide token for the Codex step");
   assert.match(workflow, /nice -n 19 ionice -c3 codex exec/, "Codex runs at the lowest CPU and IO priority");
   assert.match(workflow, /host_deferred != 'true'/, "a deferred or stopped run never publishes a patch");

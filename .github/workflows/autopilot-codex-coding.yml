@@ -84,7 +84,12 @@ jobs:
     needs: select
     if: needs.select.outputs.has_task == 'true'
     runs-on: [self-hosted, Linux, nusa-codex-autopilot]
-    timeout-minutes: 90
+    permissions:
+      actions: read
+      contents: read
+      id-token: write
+    # The shared coordinator claim expires after one hour; keep the complete runner job below that bound.
+    timeout-minutes: 50
     outputs:
       has_patch: ${{ steps.collect.outputs.has_patch }}
       usage_limited: ${{ steps.run.outputs.usage_limited }}
@@ -98,6 +103,17 @@ jobs:
         with:
           name: autopilot-codex-prompt-${{ github.run_id }}
           path: ${{ runner.temp }}/prompt
+      - name: Preserve the coordinator release client outside Codex's writable workspace
+        run: |
+          set -euo pipefail
+          cp scripts/autopilot-codex-wip.js "${RUNNER_TEMP}/autopilot-codex-wip.js"
+          chmod 0555 "${RUNNER_TEMP}/autopilot-codex-wip.js"
+      - name: Claim shared WIP slot
+        id: wip_claim
+        env:
+          ISSUE: ${{ needs.select.outputs.issue }}
+          WORKFLOW_SHA: ${{ needs.select.outputs.head_sha }}
+        run: node scripts/autopilot-codex-wip.js claim
       - name: Run Codex without commit or push authority
         id: run
         shell: bash
@@ -107,6 +123,8 @@ jobs:
         run: |
           # Actions runs bash with -e; turn it off so a Codex failure reaches the usage-limit check.
           set +e -uo pipefail
+          # The job needs OIDC for its own claim lifecycle; the coding process does not.
+          unset ACTIONS_ID_TOKEN_REQUEST_URL ACTIONS_ID_TOKEN_REQUEST_TOKEN
           codex login status || exit 1
           log="${RUNNER_TEMP}/codex.log"
           # This runner shares the 1 GB Oracle host with the PAPER runtime. PAPER always wins:
@@ -136,7 +154,7 @@ jobs:
           real_node="$(command -v node)"
           printf '#!/bin/sh\nfor a in "$@"; do case "$a" in --test|--test=*) echo "node --test is disabled on the shared PAPER host; the autopilot publish job runs tests." >&2; exit 97;; esac; done\nexec "%s" "$@"\n' "$real_node" > "$blocked/node"
           chmod 0555 "$blocked/node"
-          env -u GUARD_GH_TOKEN -u GH_TOKEN -u GITHUB_TOKEN NUSA_CODEX_RUN_MARK="$mark" PATH="$blocked:$PATH" \
+          env -u GUARD_GH_TOKEN -u GH_TOKEN -u GITHUB_TOKEN -u ACTIONS_ID_TOKEN_REQUEST_URL -u ACTIONS_ID_TOKEN_REQUEST_TOKEN NUSA_CODEX_RUN_MARK="$mark" PATH="$blocked:$PATH" \
             setsid nice -n 19 ionice -c3 codex exec -s workspace-write -C "$GITHUB_WORKSPACE" - < "${RUNNER_TEMP}/prompt/codex-prompt.txt" > "$log" 2>&1 &
           pid=$!
           deferred=false
@@ -207,6 +225,12 @@ jobs:
           name: autopilot-codex-patch-${{ github.run_id }}
           path: ${{ runner.temp }}/out
           retention-days: 7
+      - name: Release shared WIP slot
+        if: always() && steps.wip_claim.outputs.admitted == 'true'
+        env:
+          ISSUE: ${{ needs.select.outputs.issue }}
+          WORKFLOW_SHA: ${{ needs.select.outputs.head_sha }}
+        run: node "${RUNNER_TEMP}/autopilot-codex-wip.js" release
 
   publish:
     name: Validate and open the PR

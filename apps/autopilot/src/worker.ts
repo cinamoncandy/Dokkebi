@@ -1,5 +1,5 @@
 import baseWorker, { globalReleaseFreezeActive, handleCodingExecute, type Env as BaseEnv } from "./index";
-import { acquirePersistentExecution, claimIsolatedCausalAttempt, ExecutionCoordinator, handoffOrAcquirePersistentExecution, markPersistentExecutionDispatched, readPersistentControlPlaneHold, readProviderCapacityWait, recordCodingExecutionEvidence, recordProviderCapacityWait, releaseActiveWip, releasePersistentExecution } from "./executionCoordinator";
+import { acquirePersistentExecution, admitActiveWip, claimIsolatedCausalAttempt, completeActiveWip, ExecutionCoordinator, handoffOrAcquirePersistentExecution, markPersistentExecutionDispatched, readActiveWip, readActiveWipCompletions, readPersistentControlPlaneHold, readProviderCapacityWait, recordCodingExecutionEvidence, recordProviderCapacityWait, releaseActiveWip, releasePersistentExecution } from "./executionCoordinator";
 import { createCodingExecutionEvidence } from "./codingExecutionEvidence";
 import { reconcileCodingExecutionEvidence } from "./productionExecutionSpine";
 import {
@@ -16,7 +16,7 @@ import {
   type CodingRunnerRequest,
 } from "./codingRunner";
 import { GithubValidatedPatchPublisher } from "./githubValidatedPatchPublisher";
-import { verifyGithubActionsOidcToken, verifyGithubIsolatedConsumerIdentity, verifyGithubIsolatedConsumerRun, verifyGithubIsolatedSourceRun, verifyGithubReleaseControlOidcToken } from "./githubActionsOidc";
+import { verifyGithubActionsOidcToken, verifyGithubCodexWipCurrentMainSha, verifyGithubCodexWipIdentity, verifyGithubCodexWipRun, verifyGithubIsolatedConsumerIdentity, verifyGithubIsolatedConsumerRun, verifyGithubIsolatedSourceRun, verifyGithubReleaseControlOidcToken } from "./githubActionsOidc";
 import { AUDIT_PROVIDER, executeIndependentAudit, executeProviderGatedAudit, validateAuditRunnerRequest } from "./auditRunner";
 import { classifyAiBudgetState } from "./aiBudgetState";
 import { decideCodingRunnerNoAction } from "./codingRunnerRemediation";
@@ -28,6 +28,7 @@ import { verifyGithubCausalProducerEvidence, verifyGithubCodingPublisherIdentity
 import { createCausalAdmissionReceipt } from "./causalRegressionAdmission";
 import { applyCausalRepairPatch, verifyCausalPublishedFiles } from "./causalRepairPatch";
 import { createCausalProposalReceipt, verifyCausalProposalReceipt, CAUSAL_REPAIR_TARGET as SIGNED_CAUSAL_REPAIR_TARGET } from "./causalProposalReceipt";
+import { selectCodexBacklogTask } from "./evolveGithubIssueBacklog";
 
 export { ExecutionCoordinator };
 
@@ -197,6 +198,8 @@ async function trustedCausalRepairContext(
 }
 
 const WIP_RELEASE_IDENTITY = /^[A-Za-z0-9_.:|-]{1,512}$/;
+const CODEX_WIP_LIMIT = 2;
+type CodexWipFetch = (input: string, init?: RequestInit) => Promise<Response>;
 
 async function readBoundedCausalClaimBody(request: Request): Promise<string> {
   if (!request.body) throw new Error("CAUSAL_DISPATCH_REQUEST_INVALID");
@@ -372,6 +375,125 @@ export async function handleCodingWipRelease(request: Request, env: WorkerEnv): 
     return json({ ...result, ...authority }, 200);
   } catch {
     return json({ released: false, error: "ACTIVE_WIP_RELEASE_FAILED", ...authority }, 503);
+  }
+}
+
+/**
+ * Claims/releases one slot in the existing two-slot WIP coordinator for the exact
+ * protected-main Codex workflow run. This endpoint conveys no coding or repository-write authority.
+ */
+export async function handleCodexWipCoordination(
+  request: Request,
+  env: WorkerEnv,
+  dependencies: { readonly now?: () => number; readonly fetchImpl?: CodexWipFetch } = {},
+): Promise<Response> {
+  const authority = { liveAuthority: "NONE", productionMutationAllowed: false, aiAuthority: "ZERO_AUTHORITY" } as const;
+  const allowedRepository = env.NUSA_GITHUB_REPOSITORY?.trim() || "cinamoncandy/NUSA";
+  const provided = request.headers.get("authorization")?.replace(/^Bearer\s+/i, "").trim();
+  if (!provided) return json({ accepted: false, error: "CODEX_WIP_OIDC_REQUIRED", ...authority }, 401);
+  if (allowedRepository !== "cinamoncandy/NUSA" || !env.NUSA_GITHUB_TOKEN?.trim() || !env.NUSA_EXECUTION_COORDINATOR) {
+    return json({ accepted: false, error: "CODEX_WIP_COORDINATOR_UNAVAILABLE", ...authority }, 503);
+  }
+  const fetchImpl = dependencies.fetchImpl ?? (fetch as unknown as CodexWipFetch);
+  const now = dependencies.now ?? Date.now;
+  let identity: Awaited<ReturnType<typeof verifyGithubCodexWipIdentity>>;
+  try {
+    identity = await verifyGithubCodexWipIdentity(provided, allowedRepository, fetchImpl as never, Math.floor(now() / 1000));
+    await verifyGithubCodexWipRun(identity, env.NUSA_GITHUB_TOKEN.trim(), fetchImpl as never);
+  } catch (error) {
+    const code = error instanceof Error ? error.message : "CODEX_WIP_IDENTITY_INVALID";
+    const unavailable = /UNAVAILABLE|JWKS_HTTP/.test(code);
+    return json({ accepted: false, error: unavailable ? "CODEX_WIP_IDENTITY_UNAVAILABLE" : "CODEX_WIP_IDENTITY_REJECTED", ...authority }, unavailable ? 503 : 401);
+  }
+
+  const contentLength = request.headers.get("content-length");
+  if (contentLength !== null && (!/^\d+$/.test(contentLength) || Number(contentLength) > 1024)) {
+    return json({ accepted: false, error: "CODEX_WIP_REQUEST_INVALID", ...authority }, 400);
+  }
+  let body: { action?: unknown; issueNumber?: unknown; headSha?: unknown };
+  try {
+    body = await request.json() as { action?: unknown; issueNumber?: unknown; headSha?: unknown };
+  } catch {
+    return json({ accepted: false, error: "CODEX_WIP_REQUEST_INVALID", ...authority }, 400);
+  }
+  if ((body.action !== "claim" && body.action !== "release")
+    || typeof body.issueNumber !== "number" || !Number.isSafeInteger(body.issueNumber) || body.issueNumber < 1 || body.issueNumber > 1_000_000) {
+    return json({ accepted: false, error: "CODEX_WIP_REQUEST_INVALID", ...authority }, 400);
+  }
+  if (typeof body.headSha !== "string" || !/^[a-f0-9]{40}$/i.test(body.headSha)) {
+    return json({ accepted: false, error: "CODEX_WIP_REQUEST_INVALID", ...authority }, 400);
+  }
+  if (body.headSha.toLowerCase() !== identity.sha) {
+    return json({ accepted: false, error: "CODEX_WIP_HEAD_SHA_MISMATCH", ...authority }, 409);
+  }
+  const issueNumber = Number(body.issueNumber);
+  const dedupeKey = `codex-wip:${identity.runId}:${identity.runAttempt}:issue:${issueNumber}:sha:${identity.sha}`;
+  const executionId = `codex-execution:${identity.runId}:${identity.runAttempt}:issue:${issueNumber}:sha:${identity.sha}`;
+  if (!WIP_RELEASE_IDENTITY.test(dedupeKey) || !WIP_RELEASE_IDENTITY.test(executionId)) {
+    return json({ accepted: false, error: "CODEX_WIP_IDENTITY_INVALID", ...authority }, 400);
+  }
+
+  if (body.action === "claim") {
+    try {
+      await verifyGithubCodexWipCurrentMainSha(identity, env.NUSA_GITHUB_TOKEN.trim(), fetchImpl as never);
+    } catch (error) {
+      const code = error instanceof Error ? error.message : "CODEX_WIP_MAIN_UNAVAILABLE";
+      const unavailable = code.includes("UNAVAILABLE");
+      return json({ accepted: false, error: unavailable ? "CODEX_WIP_MAIN_UNAVAILABLE" : "CODEX_WIP_MAIN_MISMATCH", ...authority }, unavailable ? 503 : 409);
+    }
+    let selectedTask: ReturnType<typeof selectCodexBacklogTask>;
+    try {
+      const headers = { accept: "application/vnd.github+json", authorization: `Bearer ${env.NUSA_GITHUB_TOKEN.trim()}`, "user-agent": "nusa-autopilot-worker", "x-github-api-version": "2022-11-28" };
+      const [issueResponse, pullResponse] = await Promise.all([
+        fetchImpl(`https://api.github.com/repos/${allowedRepository}/issues?state=open&per_page=100`, { headers }),
+        fetchImpl(`https://api.github.com/repos/${allowedRepository}/pulls?state=open&per_page=100`, { headers }),
+      ]);
+      if (!issueResponse.ok || !pullResponse.ok) throw new Error("CODEX_WIP_TASK_UNAVAILABLE");
+      const [issues, pulls] = await Promise.all([issueResponse.json(), pullResponse.json()]);
+      if (!Array.isArray(issues) || !Array.isArray(pulls)) throw new Error("CODEX_WIP_TASK_UNAVAILABLE");
+      selectedTask = selectCodexBacklogTask(issues, pulls);
+    } catch {
+      return json({ accepted: false, error: "CODEX_WIP_TASK_UNAVAILABLE", ...authority }, 503);
+    }
+    if (!selectedTask || selectedTask.issueNumber !== issueNumber || !selectedTask.canonicalOwner || selectedTask.conflictKeys.length === 0) {
+      return json({ accepted: false, error: "CODEX_WIP_TASK_NOT_CURRENT_OR_UNCLAIMABLE", ...authority }, 409);
+    }
+    try {
+      const result = await admitActiveWip(env.NUSA_EXECUTION_COORDINATOR, {
+        dedupeKey,
+        executionId,
+        canonicalOwner: selectedTask.canonicalOwner,
+        conflictKeys: selectedTask.conflictKeys,
+        claimedAt: now(),
+        maxConcurrent: CODEX_WIP_LIMIT,
+      });
+      if (!result.admitted) return json({ accepted: false, error: result.reason ?? "CODEX_WIP_ADMISSION_REJECTED", ...authority }, 409);
+      return json({ accepted: true, action: "claim", issueNumber, dedupeKey, executionId, ...authority }, 201);
+    } catch {
+      return json({ accepted: false, error: "CODEX_WIP_ADMISSION_UNAVAILABLE", ...authority }, 503);
+    }
+  }
+
+  try {
+    const active = await readActiveWip(env.NUSA_EXECUTION_COORDINATOR);
+    const claim = active.claims.find((candidate) => candidate.dedupeKey === dedupeKey);
+    if (!claim) {
+      const completions = await readActiveWipCompletions(env.NUSA_EXECUTION_COORDINATOR);
+      const completed = completions.some((entry) => entry.dedupeKey === dedupeKey && entry.executionId === executionId);
+      return json({ accepted: completed, released: false, reason: completed ? "ALREADY_COMPLETED" : "CLAIM_NOT_ACTIVE", ...authority }, completed ? 200 : 409);
+    }
+    if (claim.executionId !== executionId) return json({ accepted: false, error: "CODEX_WIP_OWNER_MISMATCH", ...authority }, 409);
+    await completeActiveWip(env.NUSA_EXECUTION_COORDINATOR, {
+      dedupeKey,
+      executionId,
+      workerId: `github-actions-codex:${identity.runId}`,
+      startedAt: claim.claimedAt,
+      completedAt: now(),
+      kind: "CLAIM_RELEASED",
+    });
+    return json({ accepted: true, action: "release", issueNumber, released: true, ...authority }, 200);
+  } catch {
+    return json({ accepted: false, error: "CODEX_WIP_RELEASE_UNAVAILABLE", ...authority }, 503);
   }
 }
 
@@ -776,6 +898,10 @@ const worker = {
 
     if (request.method === "POST" && url.pathname === "/coding/wip-release") {
       return handleCodingWipRelease(request, env);
+    }
+
+    if (request.method === "POST" && url.pathname === "/coding/codex-wip") {
+      return handleCodexWipCoordination(request, env);
     }
 
     if (request.method === "POST" && url.pathname === "/coding/publish") {

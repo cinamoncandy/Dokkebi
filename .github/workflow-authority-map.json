@@ -82,6 +82,13 @@
       "secrets": false,
       "environment": null
     },
+    "autopilot-codex-coding.yml:codex": {
+      "write": [
+        "id-token"
+      ],
+      "secrets": false,
+      "environment": null
+    },
     "autopilot-deterministic-audit-release.yml:audit": {
       "write": [],
       "secrets": false,

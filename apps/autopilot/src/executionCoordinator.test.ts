@@ -571,10 +571,10 @@ describe("persistent control-plane HOLD", () => {
     assert.equal((await post("/active-wip/complete", { dedupeKey: claim.dedupeKey, executionId: claim.executionId, workerId: "cloud-coding-runner", startedAt: 125, completedAt: 175 })).status, 200);
     const replay = await coordinator.fetch(new Request("https://execution-coordinator/active-wip/completions"));
     assert.equal(replay.status, 200);
-    const body = await replay.json() as { completions: readonly { executionId: string; claimedAt: number; startedAt: number; completedAt: number; claimToStartMs: number; claimToCompleteMs: number; totalMs: number }[] };
+    const body = await replay.json() as { completions: readonly { executionId: string; kind: string; claimedAt: number; startedAt: number; completedAt: number; claimToStartMs: number; claimToCompleteMs: number; totalMs: number }[] };
     assert.deepEqual(body.completions, [{
       dedupeKey: claim.dedupeKey, executionId: claim.executionId, canonicalOwner: claim.canonicalOwner, conflictKeys: claim.conflictKeys,
-      workerId: "cloud-coding-runner", queuedAt: 100, claimedAt: 100, startedAt: 125, completedAt: 175,
+      workerId: "cloud-coding-runner", kind: "CODING_EXECUTION_COMPLETED", queuedAt: 100, claimedAt: 100, startedAt: 125, completedAt: 175,
       queueWaitMs: 0, claimToStartMs: 25, claimToCompleteMs: 75, totalMs: 75,
     }]);
     assert.equal((await coordinator.fetch(new Request("https://execution-coordinator/active-wip"))).status, 200);
@@ -587,6 +587,7 @@ describe("persistent control-plane HOLD", () => {
     assert.equal((await post("/active-wip/admit", claim)).status, 201);
     assert.equal((await post("/active-wip/complete", { dedupeKey: claim.dedupeKey, executionId: "stale", workerId: "cloud-coding-runner", startedAt: 125, completedAt: 175 })).status, 409);
     assert.equal((await post("/active-wip/complete", { dedupeKey: claim.dedupeKey, executionId: claim.executionId, workerId: "cloud-coding-runner", startedAt: 99, completedAt: 175 })).status, 409);
+    assert.equal((await post("/active-wip/complete", { dedupeKey: claim.dedupeKey, executionId: claim.executionId, workerId: "cloud-coding-runner", startedAt: 125, completedAt: 175, kind: "SUCCESS_WITHOUT_CODING_EVIDENCE" })).status, 400);
   });
 
   it("fails closed on malformed WIP ownership and conflict metadata", async () => {

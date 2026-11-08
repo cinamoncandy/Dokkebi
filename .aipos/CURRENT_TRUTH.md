@@ -13,15 +13,15 @@ Everything below is what the repository's records *claim*. Re-verify on GitHub b
 
 ## Work orders
 
-536 total: 507 in `.aipos/work-orders/`, 29 closed and merged in `.aipos/work-orders/archive/`.
-Of the 507 active files, 96 carry a closed status that has not been archived (merge not proven, or the path is still referenced) and 411 are open or unclassified.
+537 total: 508 in `.aipos/work-orders/`, 29 closed and merged in `.aipos/work-orders/archive/`.
+Of the 508 active files, 96 carry a closed status that has not been archived (merge not proven, or the path is still referenced) and 412 are open or unclassified.
 
 Most common statuses among the open files (new orders use only `READY_FOR_REVIEW`, `IN_PROGRESS`, `BLOCKED`, `COMPLETED`, `SUPERSEDED`, `ABANDONED`):
 
 | Status | Files |
 |---|---|
 | READY_FOR_REVIEW | 232 |
-| IN_PROGRESS | 37 |
+| IN_PROGRESS | 38 |
 | LOCAL_VALIDATED_PENDING_CI | 20 |
 | VERIFYING | 14 |
 | LOCAL_VALIDATED_PENDING_EXACT_HEAD_CI | 13 |
@@ -29,7 +29,7 @@ Most common statuses among the open files (new orders use only `READY_FOR_REVIEW
 | COMPLETED_NO_SURVIVOR | 6 |
 | LOCAL_VALIDATED_PENDING_REVIEW_CI | 6 |
 
-### In progress or blocked (44)
+### In progress or blocked (45)
 
 | Work order | Status | Title |
 |---|---|---|
@@ -73,9 +73,8 @@ Most common statuses among the open files (new orders use only `READY_FOR_REVIEW
 | `WO-RESEARCH-20261016-CLOUD-IDENTITY` | IN_PROGRESS | Preserve and verify qualification identity across Cloud worker response |
 | `WO-RESEARCH-20261016-QUALIFICATION-IDENTITY` | IN_PROGRESS | Bind canonical qualification results to run and frozen policy identity |
 | `WO-RESEARCH-20261016-RUN-FINGERPRINT` | IN_PROGRESS | Verify existing Research run fingerprint at qualification boundary |
-| `WO-RESEARCH-20261021-ORDERBOOK-RETENTION` | IN_PROGRESS | Order-book retention is 14 days: the pre-registered studies lose their training data befo… |
 
-…and 4 more. Full list: `node scripts/aipos-work-order-index.js`.
+…and 5 more. Full list: `node scripts/aipos-work-order-index.js`.
 
 ## Refresh
 

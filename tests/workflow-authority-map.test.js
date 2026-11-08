@@ -36,6 +36,14 @@ test("the map records every workflow and reports real write authority", () => {
   assert.ok(jobs.some((job) => job.write.length > 0), "write authority is actually detected, not silently empty");
 });
 
+test("Codex WIP coordination is the only new authority: id-token minting without repository writes or secrets", () => {
+  const id = "autopilot-codex-coding.yml:codex";
+  const baseline = require("../.github/workflow-authority-map.json");
+  const workflow = collect()["autopilot-codex-coding.yml"];
+  assert.deepEqual(baseline.jobs[id], { write: ["id-token"], secrets: false, environment: null });
+  assert.deepEqual(workflow.jobs.codex, { write: ["id-token"], environment: null, secrets: false, prCode: false, merges: false });
+});
+
 test("undeclared write authority fails, so a new privileged job cannot appear silently", () => {
   const root = sandbox({
     "new.yml": ["name: New", "on:", "  push:", "jobs:", "  grant:", "    permissions:", "      contents: write", "    steps:", "      - run: echo hi", ""].join("\n")

@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { ExecutionCoordinator, admitActiveWip, readActiveWip, type ExecutionCoordinatorNamespace } from "./executionCoordinator";
+import { ExecutionCoordinator, admitActiveWip, completeActiveWip, readActiveWip, readActiveWipCompletions, type ExecutionCoordinatorNamespace } from "./executionCoordinator";
 import { handleCodingWipRelease, type WorkerEnv } from "./worker";
 
 class MemoryStorage {
@@ -63,4 +63,21 @@ test("the release endpoint requires coding authorization and a bounded identity"
   assert.equal((await handleCodingWipRelease(post({ dedupeKey: "bad key with spaces", executionId: claim.executionId }), env(ns))).status, 400);
   assert.equal((await handleCodingWipRelease(post({ dedupeKey: claim.dedupeKey }), env(ns))).status, 400);
   assert.equal((await readActiveWip(ns)).claims.length, 1);
+});
+
+test("a completed WIP execution cannot replay its claim while its GitHub run identity is still live", async () => {
+  const ns = namespace();
+  assert.equal((await admitActiveWip(ns, claim)).admitted, true);
+  await completeActiveWip(ns, {
+    dedupeKey: claim.dedupeKey,
+    executionId: claim.executionId,
+    workerId: "github-actions-codex:12345",
+    startedAt: claim.claimedAt,
+    completedAt: claim.claimedAt + 1_000,
+    kind: "CLAIM_RELEASED",
+  });
+  assert.equal((await readActiveWipCompletions(ns))[0]?.kind, "CLAIM_RELEASED");
+  const replay = await admitActiveWip(ns, { ...claim, claimedAt: claim.claimedAt + 2_000 });
+  assert.deepEqual(replay, { admitted: false, reason: "ACTIVE_WIP_REPLAYED" });
+  assert.equal((await readActiveWip(ns)).claims.length, 0);
 });

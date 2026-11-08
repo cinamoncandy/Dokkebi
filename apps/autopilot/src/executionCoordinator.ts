@@ -191,13 +191,17 @@ export interface ActiveWipClaim {
 }
 interface ActiveWipState { readonly schemaVersion: 1; readonly claims: readonly ActiveWipClaim[]; }
 export interface ActiveWipAdmissionRequest extends ActiveWipClaim { readonly maxConcurrent: number; }
+export type ActiveWipCompletionKind = "CODING_EXECUTION_COMPLETED" | "CLAIM_RELEASED";
 export interface ActiveWipCompletionRequest {
   readonly dedupeKey: string; readonly executionId: string; readonly workerId: string;
   readonly startedAt: number; readonly completedAt: number;
+  /** Distinguishes successful coding evidence from a claim-only release/tombstone. */
+  readonly kind?: ActiveWipCompletionKind;
 }
 export interface ActiveWipCompletionEvidence {
   readonly dedupeKey: string; readonly executionId: string; readonly canonicalOwner: string;
   readonly conflictKeys: readonly string[]; readonly workerId: string;
+  readonly kind: ActiveWipCompletionKind;
   readonly queuedAt: number; readonly claimedAt: number; readonly startedAt: number; readonly completedAt: number;
   readonly queueWaitMs: number; readonly claimToStartMs: number; readonly claimToCompleteMs: number; readonly totalMs: number;
 }
@@ -919,6 +923,16 @@ export class ExecutionCoordinator {
     return this.mutateExecutionAtomically(async (storage) => {
       const stored = await storage.get<ActiveWipState>(ACTIVE_WIP_STORAGE_KEY) ?? { schemaVersion: 1 as const, claims: [] };
       if (stored.schemaVersion !== 1 || !Array.isArray(stored.claims) || stored.claims.length > MAX_STORED_ACTIVE_WIP) return json({ error: "ACTIVE_WIP_STATE_CORRUPT" }, 500);
+      const completionHistory = await storage.get<ActiveWipCompletionHistory>(ACTIVE_WIP_COMPLETION_HISTORY_KEY)
+        ?? { schemaVersion: 1 as const, completions: [] };
+      if (completionHistory.schemaVersion !== 1 || !Array.isArray(completionHistory.completions)
+        || completionHistory.completions.length > MAX_ACTIVE_WIP_COMPLETIONS
+        || completionHistory.completions.some((completion) => !completion || typeof completion.dedupeKey !== "string" || typeof completion.executionId !== "string")) {
+        return json({ error: "ACTIVE_WIP_COMPLETION_STATE_CORRUPT" }, 500);
+      }
+      if (completionHistory.completions.some((completion) => completion.dedupeKey === request.dedupeKey || completion.executionId === request.executionId)) {
+        return json({ admitted: false, reason: "ACTIVE_WIP_REPLAYED", claims: stored.claims }, 409);
+      }
       const expiredClaims = stored.claims.filter((claim) => claim.claimedAt + ACTIVE_WIP_CLAIM_MAX_AGE_MS <= Number(request.claimedAt));
       const state: ActiveWipState = expiredClaims.length === 0
         ? stored
@@ -943,6 +957,7 @@ export class ExecutionCoordinator {
     const request = value as Partial<ActiveWipCompletionRequest>;
     if (!validText(request.dedupeKey) || !validText(request.executionId) || !validText(request.workerId)
       || !validSafeTimestamp(request.startedAt) || !validSafeTimestamp(request.completedAt)
+      || (request.kind !== undefined && request.kind !== "CODING_EXECUTION_COMPLETED" && request.kind !== "CLAIM_RELEASED")
       || Number(request.completedAt) < Number(request.startedAt)) return json({ error: "ACTIVE_WIP_REQUEST_INVALID" }, 400);
     return this.mutateExecutionAtomically(async (storage) => {
       const state = await storage.get<ActiveWipState>(ACTIVE_WIP_STORAGE_KEY) ?? { schemaVersion: 1 as const, claims: [] };
@@ -953,6 +968,7 @@ export class ExecutionCoordinator {
       const evidence: ActiveWipCompletionEvidence = Object.freeze({
         dedupeKey: claim.dedupeKey, executionId: claim.executionId, canonicalOwner: claim.canonicalOwner,
         conflictKeys: Object.freeze([...claim.conflictKeys]), workerId: request.workerId!.trim(),
+        kind: request.kind ?? "CODING_EXECUTION_COMPLETED",
         queuedAt: claim.claimedAt, claimedAt: claim.claimedAt, startedAt: Number(request.startedAt), completedAt: Number(request.completedAt),
         queueWaitMs: 0, claimToStartMs: Number(request.startedAt) - claim.claimedAt,
         claimToCompleteMs: Number(request.completedAt) - claim.claimedAt, totalMs: Number(request.completedAt) - claim.claimedAt,
