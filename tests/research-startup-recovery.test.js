@@ -244,13 +244,13 @@ for (const handoff of [
         const acquired = db.connection.prepare("SELECT account_id, owner_id, lease_until_ms FROM cloud_paper_writer_leases").get();
         assert.ok(acquired, "the runtime acquires the writer lease after its 39.9-second synchronous composition");
         const renewed = db.connection.prepare("SELECT lease_until_ms FROM cloud_paper_writer_leases").get();
-        assert.equal(handoffCalls, 1, "the existing lease is verified at the post-composition handoff");
+        assert.equal(handoffCalls, 7, "the lease is renewed after each of the three lease-start phases and between the four runtime phases");
         assert.equal(renewed.lease_until_ms, now + 30_000, "the valid lease receives one fresh existing TTL");
         await composition.handle.stop();
         assert.equal(runtimeStopped, 1);
       } else {
         assert.throws(() => startClosedLearningProductionRuntime(runtimeEnv), /PAPER_WRITER_LEASE_LOST/);
-        assert.equal(handoffCalls, 1);
+        assert.equal(handoffCalls, 5, "renewal stops at the first renewal that finds the lease expired or taken over");
         assert.equal(runtimeStopped, 1, "a listener/runtime created before failed handoff is stopped");
         const row = db.connection.prepare("SELECT owner_id, lease_until_ms FROM cloud_paper_writer_leases").get();
         if (handoff.advanceAfterStartMs > 30_000) assert.equal(row.lease_until_ms, 1_069_898, "the lease's startup hydration renewal is retained, but the expired lease is not renewed again");
