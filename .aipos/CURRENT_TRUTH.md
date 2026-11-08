@@ -7,9 +7,9 @@ Everything below is what the repository's records *claim*. Re-verify on GitHub b
 
 ## Newest handoff
 
-[`.aipos/handoffs/2026-11-07-forge-p0-p1-3010.md`](handoffs/2026-11-07-forge-p0-p1-3010.md) — CORE handoff — 2026-11-07 — #3000 Formal Validation and WO-0059 P2
+[`.aipos/handoffs/2026-11-08-core-speed-p0-p1-2770.md`](handoffs/2026-11-08-core-speed-p0-p1-2770.md) — CORE P0/P1 handoff — Issue #2770 late PAPER lease acquisition
 
-> Observed at `2026-11-07T03:59Z`.
+> Observed: `2026-11-08` (Asia/Seoul)
 
 ## Work orders
 
