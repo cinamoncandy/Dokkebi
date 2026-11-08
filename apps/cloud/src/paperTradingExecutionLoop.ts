@@ -177,14 +177,15 @@ export interface PaperAccountRepository { save(state: PaperAccountState): void; 
 /**
  * Production writer-lease timing. The lease is 120 s because PAPER startup is single-threaded synchronous work on a 1-vCPU host:
  * three Oracle activations rolled back when one startup phase alone took 24-48 s against the former 30 s lease (WO-PAPER-20261108-LEASE-TTL-120).
- * The heartbeat stays at 10 s and the takeover age stays at 120 s, exactly as with the 30 s lease; the clock-advance limit is the
- * smallest value the validation allows (the lease itself). A crashed writer's lease therefore blocks a restart for at most 120 s
+ * The heartbeat stays at 10 s. The takeover age is 210 s so that an expired lease stays takeable for the same 90 s after expiry as with
+ * the 30 s lease (30 s lease + 90 s = 120 s); a takeover age equal to the lease would leave no takeover window at all. The clock-advance
+ * limit is the smallest value the validation allows (the lease itself). A crashed writer's lease therefore blocks a restart for at most 120 s
  * (fail-closed). Callers that pass their own leaseDurationMs keep the previous derived limits.
  */
 export const PAPER_WRITER_LEASE_DURATION_MS = 120_000;
 export const PAPER_WRITER_HEARTBEAT_INTERVAL_MS = 10_000;
 export const PAPER_WRITER_MAX_CLOCK_ADVANCE_MS = 120_000;
-export const PAPER_WRITER_MAX_TAKEOVER_AGE_MS = 120_000;
+export const PAPER_WRITER_MAX_TAKEOVER_AGE_MS = 210_000;
 
 export interface PaperWriterLeaseOptions {
   /** Canonical PAPER account this repository owns; defaults to the legacy account. */
