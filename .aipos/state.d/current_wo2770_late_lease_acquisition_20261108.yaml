@@ -3,6 +3,7 @@ current_wo2770_late_lease_acquisition_20261108:
   status: LOCAL_VALIDATED_PENDING_EXACT_HEAD_CI
   issue: 2770
   branch: codex/2770-late-lease-acquisition-20261108
+  pull_request: 3022
   base_sha: 54c095daff15bc4ef067e12ed26c666e5fd3d4c0
   implementation_commit: dd77cb476
   observed_startup: "Historical DataScale observation: synchronous composition-to-first-loop-turn 39898ms; lease TTL 30000ms. Exact database size remains UNKNOWN."
@@ -10,5 +11,5 @@ current_wo2770_late_lease_acquisition_20261108:
   implementation: "Defer the existing PAPER lease until closed-learning composition and read-only research evidence preparation finish; acquire before stateful recovery and scheduler admission; preserve exact-owner checks, 30s TTL and fail-closed behavior."
   validation: "87 focused tests PASS; build/typecheck, preflight, validate:full, security gate and git diff check PASS; lint:scripts 0 errors with existing repository warnings. Fresh exact-head CI and independent review not yet run."
   blocker: "Exact-main runtime proof requires separately authorized infrastructure/release execution. No host mutation or deployment was performed; current deployed state remains unverified here."
-  next: "Record final implementation SHA, run final local AIPOS validation, publish one Draft PR for Issue 2770, then exact-head CI and fresh independent review; Audit/Release/merge and runtime evidence remain separate gates."
+  next: "PR #3022 is open as Draft. Require fresh CI on the final PR head and fresh independent review; then Audit/Release/merge and runtime evidence remain separate gates."
   safety: PAPER_ONLY_LIVE_NONE_PRODUCTION_MUTATION_FALSE_REAL_ORDER_FALSE_REAL_TRANSFER_FALSE_AI_ZERO_AUTHORITY
