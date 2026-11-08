@@ -16,6 +16,7 @@ scope:
   - "tests/paper-startup-lease-budget-2770.test.js"
   - "tests/paper-writer-first-cause.test.js"
   - "tests/research-startup-recovery.test.js"
+  - "scripts/actual-paper-runtime-e2e.js"
 exclusions:
   - "Exact-owner conditional renewal, takeover rules, clock-regression and clock-invalid checks, Risk limits, thresholds and capital are unchanged. An expired or taken-over lease still fails closed (PAPER_WRITER_LEASE_LOST); a clock advance above the limit is still PAPER_WRITER_CLOCK_ANOMALY."
   - "Operational effect: after a crashed (not gracefully stopped) writer, a restart is blocked by PAPER_WRITER_ALREADY_ACTIVE for up to 120 s instead of 30 s. Graceful stop deletes the lease row as before. The release helper and its 300 s readiness budget are unchanged."
@@ -30,4 +31,4 @@ verification_commands:
   - npx tsc -p tsconfig.json
   - node -r ./tests/register-dist.cjs --test tests/paper-writer-lease-liveness.test.js tests/paper-writer-first-cause.test.js tests/research-startup-recovery.test.js tests/paper-writer-lease-loss-fail-closed.test.js tests/paper-runtime-supervisor-lease-recovery.test.js
 review: "Draft PR; non-author review of the safety-parameter and pin move before Ready."
-residual: "The test that said a deferred lease 'does not extend its contract' now states the 120 s contract; first-cause tests pin an explicit 30 s lease because they test cause retention, not the production length. The root cause (host CPU/I-O starvation) is unproven; #3024 adds a read-only pressure reading."
+residual: "Exact-head Actual PAPER failed on the first push of this PR (RUNTIME_ERROR_PRESENT): the harness SIGKILLs the supervised child and waited 90 s for the restarted runtime, but the killed writer's lease now lives 120 s and the supervisor retries every 31 s (PAPER_WRITER_ALREADY_ACTIVE), so recovery needs up to ~155 s. The deliberate-SIGKILL recovery wait is now 210 s (lease + 2 retries + margin); the runtime must still recover, reconnect and show no duplicate order/fill. Supervisor retry (31 s) and restart budget (10) were checked and cover a 120 s lease (about 4 retries). The test that said a deferred lease 'does not extend its contract' now states the 120 s contract; first-cause tests pin an explicit 30 s lease because they test cause retention, not the production length. The root cause (host CPU/I-O starvation) is unproven; #3024 adds a read-only pressure reading."
