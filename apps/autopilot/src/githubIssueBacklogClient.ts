@@ -50,7 +50,25 @@ async function fetchOpenRecords(
   throw new Error(`GitHub ${resource} backlog unavailable`);
 }
 
-/** Fetches the complete bounded open issue and pull-request inventory used by Codex selection. */
+/** An offset page can skip an open record when earlier records close during a scan.
+ * Require two matching complete scans, including all selection-relevant metadata.
+ * An unstable inventory is not an authorization to dispatch Codex.
+ */
+async function fetchStableOpenRecords(
+  repository: string,
+  resource: GithubResource,
+  headers: HeadersInit,
+  fetchImpl: GithubFetch,
+): Promise<readonly unknown[]> {
+  const first = await fetchOpenRecords(repository, resource, headers, fetchImpl);
+  const second = await fetchOpenRecords(repository, resource, headers, fetchImpl);
+  if (JSON.stringify(first) !== JSON.stringify(second)) {
+    throw new Error(`GitHub ${resource} backlog changed during pagination`);
+  }
+  return second;
+}
+
+/** Fetches a bounded, cross-checked open issue and pull-request inventory used by Codex selection. */
 export async function fetchOpenGithubBacklog(
   repository: string,
   headers: HeadersInit,
@@ -60,8 +78,8 @@ export async function fetchOpenGithubBacklog(
     throw new Error("GitHub backlog repository invalid");
   }
   const [issues, pulls] = await Promise.all([
-    fetchOpenRecords(repository, "issues", headers, fetchImpl),
-    fetchOpenRecords(repository, "pulls", headers, fetchImpl),
+    fetchStableOpenRecords(repository, "issues", headers, fetchImpl),
+    fetchStableOpenRecords(repository, "pulls", headers, fetchImpl),
   ]);
   return Object.freeze({ issues, pulls });
 }
