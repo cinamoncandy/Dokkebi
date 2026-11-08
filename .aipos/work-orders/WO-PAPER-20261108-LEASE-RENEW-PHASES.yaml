@@ -14,6 +14,7 @@ scope:
   - "apps/cloud/src/paperTradingExecutionLoop.requalification.test.ts"
   - "tests/paper-writer-lease-liveness.test.js"
   - "tests/research-startup-recovery.test.js"
+  - "tests/cloud-paper-fill-ledger.test.js"
 exclusions:
   - "Lease TTL (30 s), exact-owner checks, clock-anomaly limits, takeover rules, Risk limits, thresholds and capital are unchanged. A lease that already expired or was taken over still fails closed (PAPER_WRITER_LEASE_LOST)."
   - "A single phase longer than the TTL is not fixed by this change; it only shortens the unrenewed window to the longest single phase."

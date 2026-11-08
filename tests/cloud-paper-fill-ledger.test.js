@@ -92,22 +92,25 @@ test("restart with an existing canonical fill ledger does not rescan all account
     f.db.close();
 
     const reopenedDb = new SqliteDatabase(f.databasePath);
+    // The startup lease is renewed between its heavy phases (WO-PAPER-20261108-LEASE-RENEW-PHASES), so the clock is read
+    // once per renewal. The property under test is unchanged: with a canonical ledger, startup must not re-read every
+    // historical account snapshot, which is asserted on the SQL itself instead of on the number of clock reads.
     let nowCalls = 0;
-    let constructorPhase = true;
-    const now = () => {
-      nowCalls += 1;
-      if (constructorPhase) return nowCalls === 1 ? 1_000 : 121_001;
-      return 1_001;
-    };
+    const now = () => { nowCalls += 1; return 1_000 + nowCalls; };
+    const statements = [];
+    const originalPrepare = reopenedDb.connection.prepare.bind(reopenedDb.connection);
+    reopenedDb.connection.prepare = (sql) => { statements.push(String(sql)); return originalPrepare(sql); };
     const reopenedRepository = new SqliteCloudPaperAccountRepository(reopenedDb, {
       ownerId: "restart-writer",
       now,
       leaseDurationMs: 30_000,
       heartbeatIntervalMs: 10_000,
     });
-    constructorPhase = false;
+    reopenedDb.connection.prepare = originalPrepare;
     try {
-      assert.equal(nowCalls, 1);
+      assert.ok(nowCalls >= 1 && nowCalls <= 4, "the clock is read for the acquisition and at most once per renewal");
+      assert.ok(statements.length > 0, "the statement spy observed the startup queries");
+      assert.equal(statements.filter((sql) => /FROM\s+cloud_paper_account_history/i.test(sql)).length, 0, "a canonical fill ledger means no historical account snapshot is re-read at startup");
       assert.equal(reopenedRepository.loadFills().length, 1);
     } finally {
       reopenedRepository.close();
