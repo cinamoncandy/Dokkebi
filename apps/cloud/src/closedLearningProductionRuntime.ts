@@ -37,7 +37,7 @@ import { buildOwnerBaselinePaperPeriodInput, isOwnerBaselinePeriodStartAt } from
 import { CloudRuntimeDashboardHydrator } from "./cloudRuntimeDashboardHydrator";
 import { SqliteCloudDashboardSnapshotRepository } from "./cloudDashboardSnapshotRepository";
 import { PaperChallengerBindingLedger } from "./paperChallengerBindingLedger";
-import { PaperTradingExecutionLoop, SqliteCloudPaperAccountRepository, paperAccountIdForCapital, type PaperAccountState } from "./paperTradingExecutionLoop";
+import { SqliteCloudPaperAccountRepository, paperAccountIdForCapital, type PaperAccountState } from "./paperTradingExecutionLoop";
 import { createCloudAiRuntime } from "./ai/runtime";
 import { registerGracefulShutdown, startCloudRuntimeFromOptions, type CloudRuntimeHandle } from "./runtime";
 import { readClosedLearningProductionConfig } from "./closedLearningProductionConfig";
@@ -155,25 +155,22 @@ export function startClosedLearningProductionRuntime(env: NodeJS.ProcessEnv = pr
 
   let longBarTickEvery = 1;
   researchExperiments = composeResearchExperiments({ env, database, log: (line) => console.log(line), longBarTickEvery: () => longBarTickEvery });
-  researchExperiments?.prepareRecovery();
 
   // Own the canonical PAPER repository/loop at this composition root so the same process can
   // supply restart-safe candidate performance evidence without opening a second writer lease.
-  // Timing only: the writer lease is owned from the repository constructor on, and its heartbeat cannot renew until
-  // the event loop turns, so everything composed synchronously below counts against the lease TTL.
+  // The lease starts inside startCloudRuntime immediately before the first PAPER account access.
+  // The full runtime's synchronous setup can outlast the 30-second lease before the event loop can heartbeat.
   const leaseWindow = createLeaseStartupWindow(30_000, (line) => console.log(line));
-  const repositoryStartedAt = performance.now();
   const paperRepository = config.paperInitialCapitalKrw === undefined
     ? undefined
-    : new SqliteCloudPaperAccountRepository(database, { accountId: paperAccountIdForCapital(config.paperInitialCapitalKrw) });
+    : new SqliteCloudPaperAccountRepository(database, {
+      accountId: paperAccountIdForCapital(config.paperInitialCapitalKrw),
+      deferWriterLease: true,
+      onWriterLeaseReady: (initializationMs) => leaseWindow.leaseOwned(initializationMs),
+    });
   if (paperRepository != null) {
-    leaseWindow.leaseOwned(performance.now() - repositoryStartedAt);
     setImmediate(() => leaseWindow.firstLoopTurn());
   }
-  const paperLoop = config.paperInitialCapitalKrw === undefined || paperRepository == null
-    ? undefined
-    : new PaperTradingExecutionLoop({ initialCapital: config.paperInitialCapitalKrw, repository: paperRepository });
-
   // Continuous research experiments: disabled unless NUSA_CLOUD_RESEARCH_EXPERIMENTS=1 (see researchExperimentComposition.ts).
   // Meta-learning steering (researchMetaLearning.ts): starts NORMAL and follows the latest meta-learning evaluation.
   // Research-only recording of the public order book and trades already streamed (Upbit keeps no history of either).
@@ -201,7 +198,8 @@ export function startClosedLearningProductionRuntime(env: NodeJS.ProcessEnv = pr
     dashboardHydrator,
     snapshotRepository: snapshots,
     paperAccountRepository: paperRepository,
-    paperExecutionLoop: paperLoop,
+    deferPaperRuntimeStart: true,
+    deferResearchRecovery: true,
     researchAutomation: researchExperiments?.orchestrator,
     aiRuntime: cloudAiRuntime,
     closedLearningStatus: () => loopStatus.snapshot(),
@@ -210,25 +208,7 @@ export function startClosedLearningProductionRuntime(env: NodeJS.ProcessEnv = pr
     orderBookCollector,
     futuresCollector,
   });
-  // startCloudRuntime performs the last large synchronous composition step before the event loop
-  // can service the repository's interval heartbeat. Re-verify/renew the existing lease at this
-  // handoff so a valid lease that survived composition gets a fresh full TTL for the remaining
-  // bounded startup work. This never revives an expired lease: verifyWriterLease() uses the same
-  // conditional owner/expiry update and fails closed if composition already exceeded the TTL.
-  try {
-    paperRepository?.verifyWriterLease();
-  } catch (error) {
-    // startCloudRuntime has already opened the listener and started repository-owned timers.
-    // If the bounded lease handoff cannot renew a still-valid lease, tear down that partial
-    // runtime before propagating the original fail-closed error to the supervisor.
-    void baseHandle.stop().catch((stopError) => {
-      const detail = stopError instanceof Error ? stopError.message.trim().slice(0, 300) : "UNKNOWN_STOP_ERROR";
-      console.error(`[closed-learning] runtime cleanup after writer lease handoff failure failed: ${detail || "UNKNOWN_STOP_ERROR"}`);
-    });
-    throw error;
-  }
-
-  const readCanonicalPaperAccount = (): PaperAccountState | undefined => paperLoop?.snapshot();
+  const readCanonicalPaperAccount = (): PaperAccountState | undefined => paperRepository?.loadLatest();
   const requireCanonicalPaperAccount = (): PaperAccountState => {
     const account = readCanonicalPaperAccount();
     if (account == null) throw new Error("closed learning canonical PAPER account is unavailable");
@@ -541,14 +521,29 @@ export function startClosedLearningProductionRuntime(env: NodeJS.ProcessEnv = pr
   };
   const scheduleTick = (): void => { void runClosedLearningTick().catch(failClosedScheduler); };
 
-  // Recovery/bootstrap must not wait for a human or app launch. Defer the first async tick just
-  // enough for the HTTP listener to become serviceable, then keep one serialized rollover poll.
+  // Acquire the PAPER lease only after synchronous service composition; otherwise the same-thread
+  // heartbeat cannot run while the remaining closed-learning components are constructed.
+  try {
+    researchExperiments?.prepareRecovery();
+    baseHandle.startPaperRuntime();
+    baseHandle.recoverResearch();
+    researchExperiments?.start();
+    researchExperiments?.finishPreparedRecovery();
+    paperRepository?.verifyWriterLease();
+  } catch (error) {
+    void baseHandle.stop().catch((stopError) => {
+      const detail = stopError instanceof Error ? stopError.message.trim().slice(0, 300) : "UNKNOWN_STOP_ERROR";
+      console.error(`[closed-learning] runtime cleanup after writer lease handoff failure failed: ${detail || "UNKNOWN_STOP_ERROR"}`);
+    });
+    throw error;
+  }
+
+  // Recovery/bootstrap must not wait for a human or app launch. The listener is already bound;
+  // defer the first async tick one turn, then keep one serialized rollover poll.
   initialTimer = setTimeout(scheduleTick, 0);
   initialTimer.unref?.();
   rolloverTimer = setInterval(scheduleTick, CLOSED_LEARNING_ROLLOVER_POLL_INTERVAL_MS);
   rolloverTimer.unref?.();
-  try { researchExperiments?.start(); }
-  finally { researchExperiments?.finishPreparedRecovery(); }
 
   return Object.freeze({
     handle,

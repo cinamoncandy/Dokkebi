@@ -5,15 +5,15 @@ owner: nusa
 repository: cinamoncandy/NUSA
 issue: 2770
 base_branch: main
-base_commit: fa4c3ad43790d4c6b2916582ef2dee0b32b52118
-implementation_branch: fix/2770-lease-handoff
+base_commit: 54c095daff15bc4ef067e12ed26c666e5fd3d4c0
+implementation_branch: codex/2770-late-lease-acquisition-20261108
 authority_impact: paper_runtime_recovery
-objective: "After startCloudRuntime completes its synchronous composition, renew only a still-valid lease owned by this process before closed-learning scheduling begins, preserving the 30-second lease contract and fail-closed ownership semantics."
-root_cause: "Production evidence showed the writer lease could be acquired before a long synchronous startup composition, leaving little or no lease time for the first event-loop heartbeat. The existing timer cannot run during synchronous work."
+objective: "Complete all synchronous runtime composition before acquiring the canonical PAPER writer lease, then finish recovery and the first event-loop handoff within a fresh existing 30-second lease window without changing ownership or recovery rules."
+root_cause: "A historical protected-main production-sized reproduction measured synchronous composition-to-first-loop-turn at 39,898ms against a 30,000ms lease. The latest 2026-11-08 Datascale release also reported PAPER_WRITER_LEASE_LOST, PAPER_WRITER_CLOCK_ANOMALY and a locked-database lease reset, but does not prove these are the same causal phase. This change removes lease ownership from the long synchronous composition; database-lock causality remains unproven and must stay fail-closed."
 scope:
-  - "Reuse SqliteCloudPaperAccountRepository.verifyWriterLease at the post-startCloudRuntime handoff."
-  - "If verification fails after listener construction, stop the partially started runtime and propagate the original error."
-  - "Add deterministic integration regressions for a valid lease after 25 seconds of synchronous composition, an expired lease after 30.001 seconds, and owner mismatch."
+  - "Defer acquisition in the closed-learning production composition until all synchronous service assembly and read-only research-evidence preparation have finished."
+  - "Acquire the existing lease before stateful PAPER/Research recovery, verify the exact owner before scheduling, and stop the partially started runtime on any failure."
+  - "Add deterministic integration regressions for a 39.898-second pre-lease composition, a current lease handoff, an expired lease, a competing owner, and owner mismatch."
 exclusions:
   - "Do not change lease TTL, heartbeat interval, takeover predicate, startup timeout, Risk, or readiness budget."
   - "Do not revive expired/missing/corrupt leases or take over a different owner."
@@ -27,8 +27,8 @@ architecture_impact:
     - tests/research-startup-recovery.test.js
     - tests/paper-startup-lease-budget-2770.test.js
 acceptance:
-  - "A still-valid current-owner lease renews immediately after startCloudRuntime returns and before closed-learning timers are scheduled."
-  - "An expired lease, missing lease, or owner mismatch remains fail-closed; no takeover or TTL extension occurs."
+  - "No PAPER lease is acquired during synchronous composition; successful startup acquires a fresh full existing TTL only at the final startup gate."
+  - "An active competing owner, expired lease, missing lease, or owner mismatch remains fail-closed; no takeover or revival occurs."
   - "A partial runtime created before a failed handoff is stopped."
   - "PAPER writer lease liveness and startup budget regressions remain green without changing the 30-second TTL or existing heartbeat."
   - "Exact-head CI and required companions pass; fresh non-author review, formal validation, Audit, Release, and protected merge remain required."
@@ -40,9 +40,12 @@ safety:
   realTransferAuthority: false
   aiAuthority: ZERO_AUTHORITY
 verification_commands:
-  - node --test tests/research-startup-recovery.test.js tests/paper-startup-lease-budget-2770.test.js tests/paper-writer-lease-liveness.test.js
+  - node --test tests/paper-startup-lease-budget-2770.test.js tests/paper-writer-lease-liveness.test.js tests/paper-writer-lease-loss-fail-closed.test.js tests/research-startup-recovery.test.js tests/cloud-runtime-options.test.js tests/oracle-paper-release-workflow.test.js
   - pnpm run build
   - pnpm run preflight
+  - pnpm run validate:full
+  - pnpm run security:gate
+  - pnpm run lint:scripts
   - git diff --check
-validation: "Local focused tests 50/50 PASS, build/typecheck PASS, Node 24.19 preflight PASS, git diff --check PASS. Exact-head CI is pending."
-next: "Push the existing fix/2770-lease-handoff branch non-force, run exact-head workflows, request fresh independent review only after CI is green, then follow Formal Validator → Audit → Release → protected merge. No Oracle mutation before governed exact-main release."
+validation: "Fresh protected-main base 54c095daff15bc4ef067e12ed26c666e5fd3d4c0. Build/typecheck PASS; six focused test files PASS; preflight PASS; validate:full PASS; security gate PASS (0 high/critical, 0 secrets); lint:scripts PASS (0 errors, existing warnings); diff check PASS. Exact-head CI pending."
+next: "Publish one Draft PR for reopened Issue #2770 on the exact recorded base, wait for fresh exact-head CI, obtain fresh independent review, then follow Formal Validator → Audit → Release → protected merge. The current host is Datascale despite the legacy Oracle workflow name; exact-main deployment/runtime acceptance requires separately authorized Infrastructure/Release execution and must not be inferred from local tests."

@@ -113,6 +113,8 @@ export type CloudRuntimeMarketDataClientFactory = (markets: readonly string[], o
 export type CloudRuntimeShadowObservabilityProvider = (principal: DashboardPrincipal) => ShadowObservabilitySnapshot;
 export type CloudRuntimeRealReadOnlyObservabilityProvider = (principal: DashboardPrincipal, events: readonly RealReadOnlyEvent[]) => RealReadOnlyObservabilitySnapshot;
 export interface CloudRuntimeHandle extends CloudDashboardServerHandle {
+  readonly startPaperRuntime: () => void;
+  readonly recoverResearch: () => void;
   readonly getLiveReadinessSourceSnapshot: () => LiveReadinessProductionSourceSnapshot;
   readonly getEngineeringOperatingSnapshot: () => NusaEngineeringOperatingSnapshot;
   readonly recordRealReadOnlyEvent: (event: RealReadOnlyEvent) => RealReadOnlyEvent;
@@ -204,6 +206,8 @@ export interface CloudRuntimeOptions {
   readonly microstructureRecorder?: MarketMicrostructureRecorder;
   readonly orderBookCollector?: ResearchOrderBookCollector;
   readonly futuresCollector?: ResearchFuturesCollector;
+  readonly deferPaperRuntimeStart?: boolean;
+  readonly deferResearchRecovery?: boolean;
 }
 
 /** Same runtime as startCloudRuntime; undefined options take the same defaults. */
@@ -229,6 +233,8 @@ export function startCloudRuntimeFromOptions(options: CloudRuntimeOptions): Clou
     options.microstructureRecorder,
     options.orderBookCollector,
     options.futuresCollector,
+    options.deferPaperRuntimeStart,
+    options.deferResearchRecovery,
   );
 }
 
@@ -257,7 +263,9 @@ export function startCloudRuntime(
   /** Research-only all-KRW order-book collector (see researchOrderBookCollector.ts). */
   orderBookCollector?: ResearchOrderBookCollector,
   /** Research-only public Binance futures collector (see researchFuturesCollector.ts). */
-  futuresCollector?: ResearchFuturesCollector
+  futuresCollector?: ResearchFuturesCollector,
+  deferPaperRuntimeStart?: boolean,
+  deferResearchRecovery?: boolean
 ): CloudRuntimeHandle {
   const config = readCloudRuntimeConfig(env);
   const paperSupervisor = readPaperRuntimeSupervisorProjection(env);
@@ -432,7 +440,7 @@ export function startCloudRuntime(
   const paperMarketObservationRepository = durableRepository instanceof SqliteCloudDashboardSnapshotRepository
     ? new SqlitePaperMarketObservationRepository(durableRepository.database())
     : undefined;
-  const effectivePaperRepository = paperAccountRepository ?? (config.paperInitialCapitalKrw !== undefined && durableRepository instanceof SqliteCloudDashboardSnapshotRepository ? new SqliteCloudPaperAccountRepository(durableRepository.database(), { accountId: paperAccountIdForCapital(config.paperInitialCapitalKrw) }) : undefined);
+  const effectivePaperRepository = paperAccountRepository ?? (config.paperInitialCapitalKrw !== undefined && durableRepository instanceof SqliteCloudDashboardSnapshotRepository ? new SqliteCloudPaperAccountRepository(durableRepository.database(), { accountId: paperAccountIdForCapital(config.paperInitialCapitalKrw), deferWriterLease: true }) : undefined);
   let effectivePaperLoop: PaperTradingExecutionLoop | undefined;
   const paperRealizedPeriodProducer = durableRepository instanceof SqliteCloudDashboardSnapshotRepository
     ? new PaperRealizedPeriodProducer(new SqlitePaperRealizedPeriodRepository(durableRepository.database()), {
@@ -484,10 +492,18 @@ export function startCloudRuntime(
   const productionPaperRiskGate = config.paperInitialCapitalKrw !== undefined && durableRepository instanceof SqliteCloudDashboardSnapshotRepository
     ? new CloudPaperCanonicalRiskGateway({ database: durableRepository.database(), initialCapital: config.paperInitialCapitalKrw, limits: cloudPaperRiskLimitsForCapital(config.paperInitialCapitalKrw), accountId: paperAccountIdForCapital(config.paperInitialCapitalKrw), sourceCommitSha: env.NUSA_SOURCE_COMMIT?.trim() || env.GITHUB_SHA?.trim() || "local-paper-build" })
     : undefined;
-  effectivePaperLoop = paperExecutionLoop ?? (config.paperInitialCapitalKrw === undefined || effectivePaperRepository === undefined ? undefined : new PaperTradingExecutionLoop({ initialCapital: config.paperInitialCapitalKrw, repository: effectivePaperRepository, readP0State: readPaperP0State }));
-  const productionPaperBoundary = effectivePaperLoop != null && productionPaperRiskGate != null
-    ? new CloudPaperExecutionBoundary({ loop: effectivePaperLoop, riskGate: productionPaperRiskGate, readP0State: readPaperP0State })
-    : undefined;
+  let productionPaperBoundary: CloudPaperExecutionBoundary | undefined;
+  let paperRuntimeStarted = false;
+  const startPaperRuntime = (): void => {
+    if (paperRuntimeStarted) return;
+    effectivePaperRepository?.startWriterLease?.();
+    effectivePaperLoop = paperExecutionLoop ?? (config.paperInitialCapitalKrw === undefined || effectivePaperRepository === undefined ? undefined : new PaperTradingExecutionLoop({ initialCapital: config.paperInitialCapitalKrw, repository: effectivePaperRepository, readP0State: readPaperP0State }));
+    productionPaperBoundary = effectivePaperLoop != null && productionPaperRiskGate != null
+      ? new CloudPaperExecutionBoundary({ loop: effectivePaperLoop, riskGate: productionPaperRiskGate, readP0State: readPaperP0State })
+      : undefined;
+    paperRuntimeStarted = true;
+  };
+  if (!deferPaperRuntimeStart) startPaperRuntime();
   const operatorPrincipal = Object.freeze({ userId: "operator", scopes: Object.freeze(["dashboard:read"]) });
   const sourceCommit = env.NUSA_SOURCE_COMMIT?.trim() || env.GITHUB_SHA?.trim() || "";
   const sourceVersion = env.NUSA_CLOUD_SOURCE_VERSION?.trim() || "unknown";
@@ -526,10 +542,16 @@ export function startCloudRuntime(
   // state) was silently discarded here and the market-data loop kept calling onMarketData on
   // unverified research state below.
   let researchRecoveryFailClosed = false;
-  try {
-    const recovery = researchAutomation?.recover?.() ?? researchRecoveryCoordinator?.recover();
-    if (recovery != null && recovery.status !== "READY") researchRecoveryFailClosed = true;
-  } catch { researchRecoveryFailClosed = true; }
+  let researchRecoveryCompleted = false;
+  const recoverResearch = (): void => {
+    if (researchRecoveryCompleted) return;
+    try {
+      const recovery = researchAutomation?.recover?.() ?? researchRecoveryCoordinator?.recover();
+      if (recovery != null && recovery.status !== "READY") researchRecoveryFailClosed = true;
+    } catch { researchRecoveryFailClosed = true; }
+    researchRecoveryCompleted = true;
+  };
+  if (!deferResearchRecovery) recoverResearch();
   // Fail closed by withholding the dashboard projection only. This used to also call
   // effectivePaperRepository.clear(), which deletes the durable PAPER account, its history and the
   // canonical fill ledger. It ran whenever the dashboard had no state on a tick (stale or missing
@@ -544,7 +566,13 @@ export function startCloudRuntime(
     if (state == null) { clearPaperProjection(); return; }
     try { effectiveProvider.set(effectivePaperLoop.applyToDashboard(state, Date.now())); } catch { clearPaperProjection(); }
   };
-  try { if (!recovered) dashboardHydrator.hydrate(effectiveProvider); projectPaperAccount(); } catch { clearPaperProjection(); }
+  let paperRuntimeHydrated = false;
+  const hydratePaperRuntime = (): void => {
+    if (paperRuntimeHydrated) return;
+    try { if (!recovered) dashboardHydrator.hydrate(effectiveProvider); projectPaperAccount(); } catch { clearPaperProjection(); }
+    paperRuntimeHydrated = true;
+  };
+  if (!deferPaperRuntimeStart) hydratePaperRuntime();
   const observations = new Map<string, IntelligenceObservation>();
   const latestTickers = new Map<string, PersonalPaperMarketProjection>();
   const latestExecutionQuotes = new Map<string, PaperObservedExecutionQuote>();
@@ -917,6 +945,8 @@ export function startCloudRuntime(
   };
   return {
     ...handle,
+    startPaperRuntime: () => { startPaperRuntime(); hydratePaperRuntime(); },
+    recoverResearch,
     getLiveReadinessSourceSnapshot: () => liveReadinessSourceProvider.getSnapshot(),
     getEngineeringOperatingSnapshot: () => engineeringOperatingReadModel.getSnapshot(),
     recordRealReadOnlyEvent: (event) => realReadOnlyEventRecorder.record(event),

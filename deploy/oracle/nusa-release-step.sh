@@ -367,6 +367,10 @@ recover_abandoned_writer_lease_once() {
   local dir="$1"
   local since="$2"
   journalctl -u "$SERVICE" --since "$since" --no-pager -o cat 2>/dev/null | grep -q 'PAPER_WRITER_CLOCK_ANOMALY' || return 1
+  if journalctl -u "$SERVICE" --since "$since" --no-pager -o cat 2>/dev/null | grep -q 'Recovered automatically: the abandoned lease row is cleared'; then
+    printf '%s\n' "nusa-release-step: PAPER supervisor already attempted canonical lease recovery; refusing a second concurrent database reset" >&2
+    return 1
+  fi
   printf '%s\n' "nusa-release-step: current candidate hit PAPER_WRITER_CLOCK_ANOMALY; attempting one fail-closed lease recovery" >&2
   runuser -u "$SERVICE_USER" -- bash -c 'set -a; source "$1"; set +a; exec node "$2"' _ "$RUNTIME_ENV" "$(script_in "$dir" reset-paper-writer-lease.js)" || return 1
   restart_units

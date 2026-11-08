@@ -151,9 +151,11 @@ test("writer lease recovery is diagnosis-scoped, fail-closed, and bounded to one
   assert.ok(recover.length > 0);
   assert.match(recover, /journalctl -u "\$SERVICE" --since "\$since"/, "old journal evidence must not authorize recovery");
   assert.match(recover, /PAPER_WRITER_CLOCK_ANOMALY/);
+  assert.match(recover, /Recovered automatically: the abandoned lease row is cleared/);
+  assert.match(recover, /refusing a second concurrent database reset/);
   assert.match(recover, /reset-paper-writer-lease\.js/);
   assert.match(recover, /runuser -u "\$SERVICE_USER"/, "lease reset must not run as root");
-  orderIn(recover, ["reset-paper-writer-lease.js", "restart_units", "oracle-readiness-check.js"]);
+  orderIn(recover, ["Recovered automatically: the abandoned lease row is cleared", "reset-paper-writer-lease.js", "restart_units", "oracle-readiness-check.js"]);
 
   const activateStart = wrapper.indexOf("  activate)");
   const activateEnd = wrapper.indexOf("\n  rollback)", activateStart);
