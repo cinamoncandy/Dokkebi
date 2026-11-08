@@ -223,6 +223,10 @@ export interface GapFillResult {
   readonly recorded: number;
   readonly rejected: number;
   readonly pages: number;
+  /** Exclusive upstream `to` cursor for the next bounded pass, when this pass stopped at its page budget. */
+  readonly nextCursorStartMs?: number;
+  /** True only when the request reached the oldest required source candle; false/absent keeps a failed cursor retryable. */
+  readonly historyComplete?: boolean;
   readonly errorCode?: string;
 }
 
@@ -242,6 +246,8 @@ export async function fillRecentGaps(input: {
   readonly sleep: BackfillInput["sleep"];
   readonly pageDelayMs?: number;
   readonly maxPages?: number;
+  /** Resume an earlier bounded pass at an older Upbit page without skipping its newest stored gaps. */
+  readonly startBeforeMs?: number;
 }): Promise<GapFillResult> {
   const { market, store } = input;
   if (!MARKET.test(market)) throw new Error("gap fill market is invalid");
@@ -264,9 +270,15 @@ export async function fillRecentGaps(input: {
   let rejected = 0;
   let pages = 0;
   // The page ending before `to` holds candles that START before it; start just after the newest missing close.
-  let cursor: string | undefined = iso(missingCloses[0]!);
+  const resumeCursor = input.startBeforeMs;
+  if (resumeCursor !== undefined && (!Number.isSafeInteger(resumeCursor) || resumeCursor <= 0 || resumeCursor % MINUTE_MS !== 0)) throw new Error("gap fill resume cursor is invalid");
+  let cursor: string | undefined = iso(resumeCursor ?? missingCloses[0]!);
+  let requestedCursorStartMs = resumeCursor ?? missingCloses[0]!;
+  let previousPageOldestStartMs: number | undefined;
+  let nextCursorStartMs: number | undefined;
+  let historyComplete = false;
   const done = (status: GapFillResult["status"], errorCode?: string): GapFillResult =>
-    Object.freeze({ market, status, missing: missingCloses.length, recorded, rejected, pages, ...(errorCode === undefined ? {} : { errorCode }) });
+    Object.freeze({ market, status, missing: missingCloses.length, recorded, rejected, pages, ...(nextCursorStartMs === undefined ? {} : { nextCursorStartMs }), ...(historyComplete ? { historyComplete: true } : {}), ...(errorCode === undefined ? {} : { errorCode }) });
   while (pages < maxPages) {
     let raw: unknown;
     try { raw = await input.fetchPage(market, cursor); } catch (error) {
@@ -276,7 +288,16 @@ export async function fillRecentGaps(input: {
     pages += 1;
     const parsed = parseUpbitMinuteCandles(raw, market);
     rejected += parsed.rejected;
-    if (parsed.oldestStartMs === undefined) break;
+    if (parsed.oldestStartMs === undefined) {
+      if (parsed.rejected > 0) return done("ERROR", "MALFORMED_PAGE");
+      break;
+    }
+    // A repeated or newer page cannot advance the bounded scan. Reject it before recording rows so a
+    // provider/proxy replay cannot cause an infinite loop or falsely advance the durable cursor.
+    if (parsed.oldestStartMs >= requestedCursorStartMs ||
+      (previousPageOldestStartMs !== undefined && parsed.oldestStartMs >= previousPageOldestStartMs)) {
+      return done("ERROR", "CURSOR_NOT_ADVANCING");
+    }
     try {
       const wanted = parsed.candles.filter((candle) => candle.closeTimeMs >= oldestMissing && candle.closeTimeMs <= top);
       if (wanted.length > 0) {
@@ -289,8 +310,15 @@ export async function fillRecentGaps(input: {
     } catch (error) {
       return done("ERROR", typeof (error as { code?: unknown })?.code === "string" ? (error as { code: string }).code : "STORE_FAILED");
     }
-    if (parsed.oldestStartMs + MINUTE_MS <= oldestMissing) break;
+    if (parsed.oldestStartMs + MINUTE_MS <= oldestMissing || parsed.oldestStartMs + MINUTE_MS <= bottom) {
+      nextCursorStartMs = undefined;
+      historyComplete = true;
+      break;
+    }
     cursor = iso(parsed.oldestStartMs);
+    requestedCursorStartMs = parsed.oldestStartMs;
+    previousPageOldestStartMs = parsed.oldestStartMs;
+    nextCursorStartMs = parsed.oldestStartMs;
     await input.sleep(delay);
   }
   return done(recorded >= missingCloses.length ? "FILLED" : "PARTIAL");

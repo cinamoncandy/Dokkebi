@@ -167,6 +167,120 @@ async function waitForAutomaticRuntime(baseUrl, token, timeoutMs = 90_000) {
   throw new Error(`timed out waiting for automatic PAPER runtime; last=${JSON.stringify(last).slice(0, 2000)}`);
 }
 
+const RECOVERABLE_STARTUP_SYNC_CODES = new Set([
+  "PAPER_ORDERBOOK_UNRECONCILED",
+  "PUBLIC_ORDERBOOK_SNAPSHOT_UNAVAILABLE",
+]);
+
+async function waitForStablePaperObservationStart({
+  initialSnapshot,
+  readSnapshot,
+  startupBudgetMs = 30_000,
+  requiredCleanSnapshots = 2,
+  pollIntervalMs = 1_000,
+  heartbeatFreshnessMs = 30_000,
+  wallNow = () => Date.now(),
+  delay = sleep,
+}) {
+  if (typeof readSnapshot !== "function") throw new Error("PAPER startup synchronization requires a read-only snapshot reader");
+  if (!Number.isSafeInteger(startupBudgetMs) || startupBudgetMs < 1_000 || startupBudgetMs > 30_000) throw new Error("PAPER startup synchronization budget is invalid or unbounded");
+  if (!Number.isSafeInteger(requiredCleanSnapshots) || requiredCleanSnapshots < 2 || requiredCleanSnapshots > 5) throw new Error("PAPER startup synchronization requires at least two clean snapshots");
+  if (!Number.isSafeInteger(pollIntervalMs) || pollIntervalMs < 100 || pollIntervalMs > 5_000) throw new Error("PAPER startup synchronization poll interval is invalid");
+  if (!Number.isSafeInteger(heartbeatFreshnessMs) || heartbeatFreshnessMs < 1_000 || heartbeatFreshnessMs > 60_000) throw new Error("PAPER startup heartbeat freshness is invalid");
+
+  const startedAtMs = wallNow();
+  const deadline = startedAtMs + startupBudgetMs;
+  const occurrences = [];
+  const observedCodes = new Set();
+  let cleanSnapshots = 0;
+  let snapshot = initialSnapshot;
+  let readInitial = true;
+  const evidence = () => ({
+    status: occurrences.length === 0 ? "NO_STARTUP_SYNCHRONIZATION_ERROR" : "RECOVERED_OR_FAILED_STARTUP_SYNCHRONIZATION",
+    budget_ms: startupBudgetMs,
+    required_consecutive_clean_snapshots: requiredCleanSnapshots,
+    consecutive_clean_snapshots: cleanSnapshots,
+    error_occurrence_count: occurrences.length,
+    error_codes: [...observedCodes].sort(),
+    first_error_at: occurrences[0]?.observed_at ?? null,
+    last_error_at: occurrences.at(-1)?.observed_at ?? null,
+    errors: occurrences.slice(0, 32),
+  });
+
+  while (wallNow() <= deadline) {
+    if (!readInitial) {
+      const remainingMs = deadline - wallNow();
+      if (remainingMs <= 0) break;
+      const response = await readSnapshot(Math.max(1, Math.min(10_000, remainingMs)));
+      snapshot = response?.httpStatus === 200 ? response.body : null;
+      if (wallNow() > deadline) {
+        return { status: "FAIL", failureCode: "AUTOMATIC_RUNTIME_STARTUP_TIMEOUT", snapshot, evidence: evidence() };
+      }
+      if (response?.httpStatus !== 200) {
+        const failureCode = observationSnapshotFailure(response);
+        return { status: "FAIL", failureCode, snapshot: null, evidence: evidence() };
+      }
+    }
+    readInitial = false;
+    const response = snapshot == null ? null : { httpStatus: 200, body: snapshot };
+    let failureCode = observationSnapshotFailure(response);
+    const observedAtMs = wallNow();
+    const startupHeartbeat = snapshot?.operations?.heartbeat;
+    const rawStartupError = startupHeartbeat?.lastError;
+    const exactSyncCode = typeof rawStartupError === "string" && RECOVERABLE_STARTUP_SYNC_CODES.has(rawStartupError)
+      ? rawStartupError
+      : null;
+    const startupProjectionSafe = snapshot?.mode === "PAPER" && snapshot?.liveAuthority === "NONE" &&
+      snapshot?.productionMutationAllowed === false && snapshot?.paperLearning?.mode === "PAPER" &&
+      snapshot?.paperLearning?.readOnly === true && snapshot?.paperLearning?.liveAuthority === "NONE" &&
+      snapshot?.paperLearning?.productionMutationAllowed === false && Array.isArray(snapshot?.paperLearning?.events) &&
+      snapshot?.operations?.schedulerRunning === true && snapshot?.operations?.transport === "ONLINE" &&
+      ["RUNNING", "DEGRADED"].includes(snapshot?.operations?.runtimeState) &&
+      startupHeartbeat != null && Number.isSafeInteger(startupHeartbeat.startedAt) &&
+      Number.isSafeInteger(startupHeartbeat.lastHeartbeatAt) && startupHeartbeat.lastHeartbeatAt >= startupHeartbeat.startedAt;
+    if (exactSyncCode != null && startupProjectionSafe) {
+      const heartbeatAgeMs = observedAtMs - startupHeartbeat.lastHeartbeatAt;
+      failureCode = heartbeatAgeMs < -60_000 || heartbeatAgeMs > heartbeatFreshnessMs
+        ? "PAPER_RUNTIME_HEARTBEAT_INVALID"
+        : exactSyncCode;
+    }
+    if (failureCode != null) {
+      cleanSnapshots = 0;
+      if (!RECOVERABLE_STARTUP_SYNC_CODES.has(failureCode)) return { status: "FAIL", failureCode, snapshot, evidence: evidence() };
+      const rawLastError = snapshot?.operations?.heartbeat?.lastError;
+      // Only an exact locally-owned diagnostic is waitable. Never strip a suffix
+      // from runtime-controlled text and accidentally bless a credential/error.
+      if (rawLastError !== failureCode) return { status: "FAIL", failureCode: "RUNTIME_ERROR_PRESENT", snapshot, evidence: evidence() };
+      occurrences.push({ code: failureCode, observed_at: new Date(observedAtMs).toISOString() });
+      observedCodes.add(failureCode);
+      if (wallNow() >= deadline) break;
+      await delay(Math.min(pollIntervalMs, deadline - wallNow()));
+      continue;
+    }
+
+    const heartbeat = snapshot.operations.heartbeat;
+    const heartbeatAgeMs = observedAtMs - heartbeat.lastHeartbeatAt;
+    if (heartbeatAgeMs < -60_000 || heartbeatAgeMs > heartbeatFreshnessMs) {
+      return { status: "FAIL", failureCode: "PAPER_RUNTIME_HEARTBEAT_INVALID", snapshot, evidence: evidence() };
+    }
+    cleanSnapshots += 1;
+    if (cleanSnapshots >= requiredCleanSnapshots) {
+      return {
+        status: "PASS",
+        snapshot,
+        evidence: {
+          ...evidence(),
+          status: occurrences.length === 0 ? "CLEAN_STARTUP" : "SYNCHRONIZATION_RECOVERED",
+          stable_observation_started_at: new Date(observedAtMs).toISOString(),
+        },
+      };
+    }
+    if (wallNow() >= deadline) break;
+    await delay(Math.min(pollIntervalMs, deadline - wallNow()));
+  }
+  return { status: "FAIL", failureCode: "AUTOMATIC_RUNTIME_STARTUP_TIMEOUT", snapshot, evidence: evidence() };
+}
+
 const PAPER_OBSERVATION = Object.freeze({
   minimumDurationMs: 60_000,
   maximumDurationMs: 180_000,
@@ -223,6 +337,11 @@ const SAFE_RUNTIME_FAILURE_CODES = new Set([
   "PAPER_PERIOD_EVIDENCE_REJECTED",
   "PAPER_RUNTIME_HEARTBEAT_INVALID",
   "PAPER_RUNTIME_NOT_RUNNING",
+  "PUBLIC_MARKET_DISCONNECTED",
+  "PUBLIC_MARKET_FAILED",
+  "PUBLIC_MARKET_RECONNECTING",
+  "PUBLIC_MARKET_RECOVERED",
+  "PUBLIC_MARKET_STALE",
   "PUBLIC_ORDERBOOK_SNAPSHOT_UNAVAILABLE",
   "RUNTIME_ERROR_PRESENT",
   "RUNTIME_HEALTH_TIMEOUT",
@@ -341,6 +460,30 @@ function observationSnapshotFailure(response) {
   return null;
 }
 
+function safeRuntimeFailureDiagnostic(response, observedAtMs) {
+  const operations = response?.httpStatus === 200 && response.body != null && typeof response.body === "object"
+    ? response.body.operations
+    : null;
+  const runtimeState = ["RUNNING", "DEGRADED", "HALTED", "STOPPED", "STOPPING"].includes(operations?.runtimeState)
+    ? operations.runtimeState
+    : "UNKNOWN";
+  const schedulerRunning = typeof operations?.schedulerRunning === "boolean" ? operations.schedulerRunning : "UNKNOWN";
+  const runtimeHaltReasons = runtimeState !== "HALTED" ? [] : Array.isArray(operations?.runtimeHaltReasons)
+    ? [...new Set(operations.runtimeHaltReasons.map((reason) => ["DASHBOARD_FAULTED", "KILL_SWITCH_ACTIVE", "AI_P0_OPEN", "AI_P0_UNVERIFIABLE"].includes(reason) ? reason : "UNKNOWN"))].slice(0, 4)
+    : ["UNKNOWN"];
+  const rawLastError = operations?.heartbeat?.lastError;
+  const lastErrorCode = rawLastError == null || (typeof rawLastError === "string" && rawLastError.trim() === "")
+    ? "NONE"
+    : typeof rawLastError === "string" ? safeRuntimeFailureCode(rawLastError) : "UNKNOWN";
+  return {
+    observed_at: Number.isSafeInteger(observedAtMs) ? new Date(observedAtMs).toISOString() : "UNKNOWN",
+    runtime_state: runtimeState,
+    runtime_halt_reasons: runtimeHaltReasons,
+    scheduler_running: schedulerRunning,
+    last_error_code: lastErrorCode,
+  };
+}
+
 function accountProjectionChanged(before, after) {
   const left = before?.portfolio?.account;
   const right = after?.portfolio?.account;
@@ -422,6 +565,7 @@ async function observeAutomaticRuntime({
   let eventEvidenceTruncated = false;
   let finalSnapshot = initialSnapshot ?? null;
   let failureCode = null;
+  let failureDiagnostic = null;
   let stopReason = "MAX_OBSERVATION_BUDGET_EXHAUSTED";
 
   const appendSample = (sample) => {
@@ -585,6 +729,7 @@ async function observeAutomaticRuntime({
     const collectionFailure = Array.isArray(response.body?.paperLearning?.events) ? collectSnapshot(response.body, observedAtMs) : null;
     failureCode = snapshotFailure ?? collectionFailure;
     if (failureCode != null) {
+      failureDiagnostic = safeRuntimeFailureDiagnostic(response, observedAtMs);
       stopReason = "RUNTIME_OR_EVIDENCE_FAILURE";
       break;
     }
@@ -647,6 +792,7 @@ async function observeAutomaticRuntime({
     poll_interval_ms: pollIntervalMs,
     stop_reason: eventEvidenceTruncated && failureCode == null ? "EVENT_EVIDENCE_TRUNCATED" : stopReason,
     ...(failureCode == null ? {} : { failure_code: failureCode }),
+    ...(failureDiagnostic == null ? {} : { failure_diagnostic: failureDiagnostic }),
     event_evidence_truncated: eventEvidenceTruncated,
     projection_window: {
       maximum_events: 250,
@@ -682,7 +828,7 @@ function writeEvidence(outputPath, payload) {
   return evidence;
 }
 
-function failedStartupEvidence({ root, market, scrubbedPrivateKeys, startedAt, failureCode }) {
+function failedStartupEvidence({ root, market, scrubbedPrivateKeys, startedAt, failureCode, startupSynchronization = null }) {
   const completedAt = new Date().toISOString();
   return {
     schema_version: 1,
@@ -694,6 +840,7 @@ function failedStartupEvidence({ root, market, scrubbedPrivateKeys, startedAt, f
     authority: { mode: "PAPER_ONLY", liveAuthority: "NONE", productionMutationAllowed: false, aiAuthority: "ZERO_AUTHORITY" },
     market_data: { provider: "UPBIT", channel: "PUBLIC_TICKER", market, private_credentials_used: false, scrubbed_private_env_key_count: scrubbedPrivateKeys.length },
     execution: { status: "NOT_OBSERVED", order_count: 0, fill_count: 0 },
+    ...(startupSynchronization == null ? {} : { startup_synchronization: startupSynchronization }),
     runtime_observation: { status: "FAIL", started_at: startedAt, ended_at: completedAt, elapsed_ms: null, stop_reason: "STARTUP_FAILURE", failure_code: safeRuntimeFailureCode(failureCode), stage_evidence: Object.fromEntries(OBSERVATION_STAGES.map((stage) => [stage, { status: "UNKNOWN", event_count: 0, reason_codes: [] }])), decision_cycles: [], timeline: [] },
     prohibited_capabilities: { upbit_private_credentials: false, live_order_endpoint: false, withdrawal_transfer: false, real_money_mutation: false },
   };
@@ -838,9 +985,26 @@ async function run(options = {}) {
   try {
     firstRuntime = startRuntime(root, env);
     let startupSnapshot;
+    let startupSynchronization;
     try {
       await waitForHealth(baseUrl, firstRuntime);
       startupSnapshot = await waitForAutomaticRuntime(baseUrl, token);
+      const stabilized = await waitForStablePaperObservationStart({
+        initialSnapshot: startupSnapshot,
+        readSnapshot: (timeoutMs) => loadOperations(baseUrl, token, timeoutMs),
+      });
+      startupSynchronization = stabilized.evidence;
+      if (stabilized.status !== "PASS") {
+        return writeEvidence(outputPath, failedStartupEvidence({
+          root,
+          market,
+          scrubbedPrivateKeys,
+          startedAt,
+          failureCode: stabilized.failureCode,
+          startupSynchronization,
+        }));
+      }
+      startupSnapshot = stabilized.snapshot;
     } catch (error) {
       return writeEvidence(outputPath, failedStartupEvidence({ root, market, scrubbedPrivateKeys, startedAt, failureCode: startupFailureCode(error, firstRuntime) }));
     }
@@ -861,6 +1025,7 @@ async function run(options = {}) {
         runtime_composition: { entrypoint: PRODUCTION_RUNTIME_ENTRYPOINT, closed_learning_production_root: true, isolated_research_snapshot_path: researchReplaySnapshotPath, isolated_qualified_challenger_path: qualifiedArtifactPath },
         market_data: { provider: "UPBIT", channel: "PUBLIC_TICKER", market, private_credentials_used: false, scrubbed_private_env_key_count: scrubbedPrivateKeys.length },
         execution: { status: "NOT_OBSERVED", order_count: 0, fill_count: 0 },
+        startup_synchronization: startupSynchronization,
         runtime_observation: observation.evidence,
         prohibited_capabilities: { upbit_private_credentials: false, live_order_endpoint: false, withdrawal_transfer: false, real_money_mutation: false },
       });
@@ -969,6 +1134,7 @@ async function run(options = {}) {
       authority: { mode: "PAPER_ONLY", liveAuthority: "NONE", productionMutationAllowed: false, aiAuthority: "ZERO_AUTHORITY" },
       runtime_composition: { entrypoint: PRODUCTION_RUNTIME_ENTRYPOINT, closed_learning_production_root: true, isolated_research_snapshot_path: researchReplaySnapshotPath, isolated_qualified_challenger_path: qualifiedArtifactPath },
       market_data: { provider: "UPBIT", channel: "PUBLIC_TICKER", market, private_credentials_used: false, scrubbed_private_env_key_count: scrubbedPrivateKeys.length },
+      startup_synchronization: startupSynchronization,
       execution: {
         status: observedFills.length > 0 ? "AUTOMATICALLY_FILLED" : observedOrders.length > 0 ? "ORDER_WITHOUT_FILL" : observation.evidence.risk_rejections.length > 0 ? "RISK_REJECTED" : "NO_ACTIONABLE_SIGNAL",
         order_count: observedOrders.length,
@@ -1020,4 +1186,4 @@ if (require.main === module) {
   });
 }
 
-module.exports = { availablePort, buildBoundPaperChaosRestartEvidence, canonical, observeAutomaticRuntime, paperChaosStateFromSnapshot, readPersistedPaperLearningIds, run, scrubPrivateExchangeEnv, sha256, snapshotObservedAt, summarizeSnapshot, waitForHealth };
+module.exports = { availablePort, buildBoundPaperChaosRestartEvidence, canonical, observeAutomaticRuntime, paperChaosStateFromSnapshot, readPersistedPaperLearningIds, run, scrubPrivateExchangeEnv, sha256, snapshotObservedAt, summarizeSnapshot, waitForHealth, waitForStablePaperObservationStart };

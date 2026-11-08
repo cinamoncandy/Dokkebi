@@ -6,16 +6,24 @@ const productionRoot = "apps/cloud/src/closedLearningProductionRuntime.ts";
 const riskGateway = "apps/cloud/src/cloudPaperCanonicalRiskGateway.ts";
 const canonicalStorage = "packages/storage/src/index.ts";
 
-test("PAPER startup completes Cloud AI durability integrity work before writer-lease acquisition", () => {
+test("PAPER startup completes synchronous composition before acquiring its writer lease", () => {
   const source = fs.readFileSync(productionRoot, "utf8");
   const ai = source.indexOf("const cloudAiRuntime = createCloudAiRuntime(env");
   const lease = source.indexOf("new SqliteCloudPaperAccountRepository(database");
   const runtime = source.indexOf("const baseHandle = startCloudRuntimeFromOptions({");
+  const startLease = source.indexOf("baseHandle.startPaperRuntime();", runtime);
+  const recover = source.indexOf("baseHandle.recoverResearch();", startLease);
+  const experiments = source.indexOf("researchExperiments?.start();", recover);
+  const scheduler = source.indexOf("initialTimer = setTimeout(scheduleTick, 0);", recover);
 
   assert.ok(ai >= 0, "prebuilt Cloud AI runtime must be explicit");
   assert.match(source.slice(ai, ai + 350), /verifiedSharedSqliteDatabase:\s*database/, "the prebuilt Cloud AI runtime must reuse only the SqliteDatabase whose constructor completed the canonical full-file integrity scan");
   assert.ok(lease > ai, "Cloud AI durability must open/verify before the PAPER repository acquires its renewable lease");
-  assert.ok(runtime > lease, "the canonical PAPER repository still owns the lease before runtime composition");
+  assert.ok(runtime > lease, "the deferred repository is passed into runtime composition without owning the lease");
+  assert.match(source.slice(lease, runtime), /deferWriterLease: true/);
+  assert.ok(startLease > runtime, "the lease starts only after closed-learning runtime composition");
+  assert.ok(recover > startLease && experiments > recover && scheduler > experiments, "stateful recovery and scheduled work start only after the lease is owned");
+  assert.match(source.slice(runtime, runtime + 400), /deferPaperRuntimeStart: true/);
   assert.match(source.slice(runtime, runtime + 1000), /researchAutomation: researchExperiments\?\.orchestrator,\s*aiRuntime: cloudAiRuntime,/);
   assert.doesNotMatch(source.slice(runtime, runtime + 1000), /createCloudAiRuntime\(env\)/);
 });
@@ -29,5 +37,28 @@ test("full SQLite integrity remains fail-closed at canonical database open, not 
   assert.match(risk, /SELECT 1 AS ready/, "the hot path must still prove the canonical connection is responsive");
   for (const table of ["risk_paper_approvals", "risk_daily_loss_state", "risk_idempotency_records", "risk_order_state"]) {
     assert.ok(risk.includes(table), `Risk health must still require ${table}`);
+  }
+});
+
+test("PAPER writer lease is renewed between each heavy synchronous startup phase", () => {
+  const repo = fs.readFileSync("apps/cloud/src/paperTradingExecutionLoop.ts", "utf8");
+  const start = repo.indexOf("public startWriterLease(): void {");
+  const body = repo.slice(start, repo.indexOf("public save(state: PaperAccountState)", start));
+  const order = ["this.acquireLease();", "this.verifyWriterLease();", "this.recoverRecognizedLegacyAccounting();", "this.verifyWriterLease();", "this.backfillFillLedgerFromHistory();", "this.verifyWriterLease();", "setInterval(() => this.heartbeatLease()"];
+  let at = -1;
+  for (const marker of order) {
+    const next = body.indexOf(marker, at + 1);
+    assert.ok(next > at, `${marker} must follow the previous startup step`);
+    at = next;
+  }
+  const source = fs.readFileSync(productionRoot, "utf8");
+  const runtime = source.indexOf("baseHandle.startPaperRuntime();");
+  const tail = source.slice(runtime, source.indexOf("initialTimer = setTimeout(scheduleTick, 0);", runtime));
+  const steps = ["baseHandle.startPaperRuntime();", "paperRepository?.verifyWriterLease();", "baseHandle.recoverResearch();", "paperRepository?.verifyWriterLease();", "researchExperiments?.start();", "paperRepository?.verifyWriterLease();", "researchExperiments?.finishPreparedRecovery();", "paperRepository?.verifyWriterLease();"];
+  let cursor = -1;
+  for (const marker of steps) {
+    const next = tail.indexOf(marker, cursor + 1);
+    assert.ok(next > cursor, `${marker} must follow the previous runtime step`);
+    cursor = next;
   }
 });
