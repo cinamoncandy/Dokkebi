@@ -258,3 +258,23 @@ pagination_candidate_publication_20261109:
   current_remote_review: "No fresh successor review requested or submitted yet; current four threads remain unresolved. Pagination thread is outdated and requires independent SUPERSEDED disposition rather than author resolution."
   safety: "No workflow dispatch, production mutation, claim/lease operation, merge, deploy or live authority change."
   next: "Commit the locally validated test-only successor, fast-forward only if remote head still equals the expected predecessor, then inspect new exact-head CI and request independent disposition for all applicable threads."
+
+pagination_candidate_main_6433_reconciliation_20261109:
+  observed_at_utc: "2026-11-09T13:38:00Z"
+  canonical_issue: 903
+  canonical_pr: 2039
+  pr_head_before_integration: f2551960cf29495e619b2f449cc462b88d68fc77
+  pr_base_before_integration: 9daeb72cedb6fc8d1a90b004e08d3a4c8d28b595
+  protected_main: 6433a7c44db4b2e953f343b971096988b3c2699d
+  merge_base: 9daeb72cedb6fc8d1a90b004e08d3a4c8d28b595
+  changed_paths: ".aipos/CURRENT_TRUTH.md; .aipos/work-orders/WO-CLOUD-20261106-DISPLAY-REPLAY-LEDGER-PRECISION.yaml; apps/cloud/src/paperLossAttribution.ts; apps/cloud/src/paperTodayRealized.ts; tests/paper-display-replay-ledger-precision.test.js"
+  merge_conflict: ".aipos/CURRENT_TRUTH.md only; regenerated through scripts/generate-aipos-current-truth.js"
+  integration: "Local non-force merge in isolated worktree; pagination, snapshot digest, recovery metadata, main recheck and WIP cap=2 preserved."
+  focused_validation: "175/175 PASS, including display replay, fail-closed oversell, pagination, snapshot, WIP/coordinator/OIDC/lease and workflow tests."
+  full_suite: "1,342/1,342 isolated test files PASS."
+  build_typecheck: "Root and mobile TypeScript compile PASS; existing dependency links reused without installation."
+  final_gates: PASS_VALIDATE_FULL_SECURITY_AIPOS_LINT_DIFF
+  actual_paper: "Prior exact-head f255 artifact remains FAIL: KILL_SWITCH_ACTIVE/PUBLIC_MARKET_STALE, no order/fill/account change, observation under minimum. Not altered or promoted."
+  wip_claim_and_writer_lease: UNKNOWN
+  safety: "No WIP claim/lease operation, dispatch, deployment, protected-main merge or approval claim."
+  next: "Final gates pass locally (175 focused, 1342 full, root/mobile compile, validate:full components, security, AIPOS, lint, diff). Recheck main and PR remote head, commit the local merge, and fast-forward only if PR head still equals f2551960cf29495e619b2f449cc462b88d68fc77 and main remains 6433a7c44db4b2e953f343b971096988b3c2699d."

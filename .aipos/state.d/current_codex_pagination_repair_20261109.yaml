@@ -2,29 +2,30 @@ current_codex_pagination_repair_20261109:
   work_order: WO-ISSUE-903-L1-EXECUTION-LEASE-HANDOFF
   issue: 903
   pull_request: 2039
-  status: SUCCESSOR_CRLF_FIX_LOCAL_VALIDATION_PASS_PENDING_FAST_FORWARD
-  observed_at_utc: "2026-11-09T13:40:00Z"
+  status: MAIN_6433_INTEGRATED_LOCAL_VALIDATION_PASS_PENDING_MERGE_COMMIT
+  observed_at_utc: "2026-11-09T13:39:44Z"
   source_pr_head: ecdee7bb568db35daf832a92d84b0a141ab40666
   source_pr_base: 54c095daff15bc4ef067e12ed26c666e5fd3d4c0
-  protected_main_at_start: 9daeb72cedb6fc8d1a90b004e08d3a4c8d28b595
-  protected_main_at_end: 9daeb72cedb6fc8d1a90b004e08d3a4c8d28b595
-  current_main_delta: "Fresh GitHub compare: PR base 54c095daff15bc4ef067e12ed26c666e5fd3d4c0 is 86 commits behind latest main 9daeb72cedb6fc8d1a90b004e08d3a4c8d28b595; PR head ecdee7bb568db35daf832a92d84b0a141ab40666 is 47 commits ahead of that base. Isolated candidate merge-base with latest main is 066a66a94edf65c79f8ec85088c2a658d0d368e7. Main 355d682f6cffac12a4dc319203a964a98fa33f43 and latest main 9daeb72cedb6fc8d1a90b004e08d3a4c8d28b595 are integrated in this isolated branch. The 9daeb72 delta contains 42 .aipos metadata/truth paths and no runtime or Autopilot code paths."
+  protected_main_at_start: 6433a7c44db4b2e953f343b971096988b3c2699d
+  protected_main_at_end: 6433a7c44db4b2e953f343b971096988b3c2699d
+  current_main_delta: "Protected main 6433a7c44db4b2e953f343b971096988b3c2699d is integrated in the new isolated reconciliation worktree. It adds five paths since PR candidate f2551960cf29495e619b2f449cc462b88d68fc77, including PAPER display replay code/tests. Merge-base is 9daeb72cedb6fc8d1a90b004e08d3a4c8d28b595; only generated CURRENT_TRUTH conflicted and was regenerated."
   isolated_implementation_branch: isolated-pagination-reconciliation
-  local_commit: "a8ea65089dc39f41698d16e7195afe882f715ed8 posted by fast-forward; CRLF portability successor ready for local commit"
+  local_commit: "f2551960cf29495e619b2f449cc462b88d68fc77 published; latest main 6433a7c4 integrated in isolated worktree; local merge commit pending final gates"
   code_change: "Replace REST offset scans with bounded GitHub GraphQL cursor traversal, validating edge IDs/cursors, totalCount consistency, ordering, labels, and complete page traversal; compare two full scans. Because no point-in-time snapshot contract is exposed, inventory is explicitly UNVERIFIED and both selector and Worker admission fail closed."
   safety: "WIP capacity remains 2; no production admission, claim, lease, dispatch, or runtime mutation occurred."
   validation:
-    focused: "115/115 PASS on latest integrated main 9daeb72"
-    build: PASS
-    full_suite: "1,341/1,341 PASS on latest integrated main 9daeb72"
-    typecheck: "PASS (root and mobile)"
-    validate_full: PASS_ON_9DAE
-    security_gate: PASS_ON_9DAE
-    lint: "PASS_ON_9DAE; 0 errors / 47 baseline warnings"
+    focused: "175/175 PASS after main 6433a7c4 integration"
+    build: "root TypeScript PASS"
+    full_suite: "1,342/1,342 PASS after main 6433a7c4 integration"
+    typecheck: "root and mobile PASS (existing node_modules links reused; no install)"
+    validate_full: PASS_ON_6433
+    security_gate: PASS_ON_6433
+    aipos: "YAML, provenance, drift, conformance PASS"
+    lint: "PASS; 0 errors / 47 existing warnings; mobile lint 254 files PASS"
     diff_check: PASS
-  exact_head_ci: FAILED_ON_PUBLISHED_A8_PREDECESSOR; SUCCESSOR_CI_PENDING
+  exact_head_ci: "f2551960cf29495e619b2f449cc462b88d68fc77 CI PASS; new 6433-integrated successor not yet published/CI-tested"
   independent_review: PENDING
-  current_main_alignment: 9DAE_INTEGRATED_AND_A8_POSTED
+  current_main_alignment: 6433A7C4_INTEGRATED_IN_ISOLATED_WORKTREE
   published_candidate_ci:
     sha: a8ea65089dc39f41698d16e7195afe882f715ed8
     ci_run: 42621794229
@@ -39,4 +40,5 @@ current_codex_pagination_repair_20261109:
     typecheck: "root and mobile PASS"
     security_aipos_lint: "PASS (security, AIPOS YAML/provenance/drift/conformance, 0 lint errors / 47 warnings)"
   wip_claim_and_writer_lease: UNKNOWN
-  next: "Commit the locally validated CRLF-normalization successor on the isolated branch, then fast-forward the existing PR branch only if its expected parent still equals a8ea65089dc39f41698d16e7195afe882f715ed8. Collect new exact-head CI and independent review. No force push. Automatic selection/admission remains blocked without point-in-time inventory proof."
+  latest_main_delta: "Integrated protected main 6433a7c44db4b2e953f343b971096988b3c2699d, whose delta from PR base f2551960cf29495e619b2f449cc462b88d68fc77 has five changed paths: CURRENT_TRUTH, display replay AIPOS work order, paperLossAttribution.ts, paperTodayRealized.ts, and their regression test. Merge-base was 9daeb72cedb6fc8d1a90b004e08d3a4c8d28b595; only CURRENT_TRUTH conflicted and was regenerated with the repository generator."
+  next: "Fresh-check main and PR remote head; commit the locally validated merge resolution and fast-forward the existing PR branch only if its remote head still equals f2551960cf29495e619b2f449cc462b88d68fc77 and main remains 6433a7c44db4b2e953f343b971096988b3c2699d. No force push. Automatic selection/admission remains blocked without point-in-time inventory proof."
