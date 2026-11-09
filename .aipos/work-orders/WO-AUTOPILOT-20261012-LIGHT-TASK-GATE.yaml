@@ -1,6 +1,6 @@
 id: WO-AUTOPILOT-20261012-LIGHT-TASK-GATE
 title: "Limit an Autopilot coding proposal to 150 changed lines"
-status: READY_FOR_REVIEW
+status: COMPLETED
 owner: nusa-development
 repository: cinamoncandy/NUSA
 base_branch: main
@@ -33,3 +33,4 @@ safety:
   productionMutationAllowed: false
   aiAuthority: ZERO_AUTHORITY
   fail_closed: true
+closed_by_merge: "PR #2643 (branch claude/autopilot-light-task-gate-impl) merged to main (07e8e694a, 2026-10-12) by the release authority after CI and Audit; it is the only merged PR from this branch. Status corrected 2026-11-09 from READY_FOR_REVIEW; this records the merge only, not a separate production verification."

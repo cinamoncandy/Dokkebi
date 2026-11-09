@@ -1,6 +1,6 @@
 id: WO-STRATEGY-20261008-BASELINE-CODE-IDENTITY
 title: "Owner baseline strategy identity must not change on every deploy"
-status: READY_FOR_REVIEW
+status: COMPLETED
 owner: nusa-development
 repository: cinamoncandy/NUSA
 base_branch: main
@@ -34,3 +34,4 @@ safety:
   productionMutationAllowed: false
   aiAuthority: ZERO_AUTHORITY
   fail_closed: true
+closed_by_merge: "PR #2584 (branch claude/baseline-code-identity) merged to main (b72aea53f, 2026-10-08) by the release authority after CI and Audit; it is the only merged PR from this branch. Status corrected 2026-11-09 from READY_FOR_REVIEW; this records the merge only, not a separate production verification."

@@ -1,6 +1,6 @@
 id: WO-DATA-2068-TICKER-PERSISTENCE-REGRESSION
 title: "Converge existing rejected ticker persistence regression"
-status: READY_FOR_REVIEW
+status: COMPLETED
 owner: nusa-data-integrity
 issue: 2022
 pull_request: 2068
@@ -19,3 +19,4 @@ validation: "Final parallel runtime/source-SHA regression5/5 PASS; preflight/YAM
 evidence_scope: "Synthetic fixture tests only; not actual public-market or Learning acceptance."
 remaining: "Exact repaired head CI, Independent Audit, governed Release and protected merge."
 safety: PAPER_ONLY_LIVE_NONE_PRODUCTION_MUTATION_FALSE_AI_ZERO_AUTHORITY
+closed_by_merge: "PR #2068 (branch market-data/2022-2034-evidence) merged to main (722b48738, 2026-10-11) by the release authority after CI and Audit; it is the only merged PR from this branch. Status corrected 2026-11-09 from READY_FOR_REVIEW; this records the merge only, not a separate production verification."
