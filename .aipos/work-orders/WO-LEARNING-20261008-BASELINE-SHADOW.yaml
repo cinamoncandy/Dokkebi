@@ -1,6 +1,6 @@
 id: WO-LEARNING-20261008-BASELINE-SHADOW
 title: "Uncensored shadow of the baseline rule: hypothetical round trips whether or not Risk allowed an order"
-status: READY_FOR_REVIEW
+status: COMPLETED
 owner: nusa-development
 repository: cinamoncandy/NUSA
 base_branch: main
@@ -42,3 +42,4 @@ safety:
   productionMutationAllowed: false
   aiAuthority: ZERO_AUTHORITY
   fail_closed: true
+closed_by_merge: "PR #2593 (branch claude/risk-blocked-shadow) merged to main (7b583f9e5, 2026-10-08) by the release authority after CI and Audit; it is the only merged PR from this branch. Status corrected 2026-11-09 from READY_FOR_REVIEW; this records the merge only, not a separate production verification."

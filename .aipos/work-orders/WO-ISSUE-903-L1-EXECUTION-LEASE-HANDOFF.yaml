@@ -233,13 +233,13 @@ pagination_candidate_main_reconciliation_20261109:
   isolated_branch: isolated-pagination-reconciliation
   pre_integration_candidate: 85386ae289dc05272fc86e99014696563de081d1
   merge_base_with_latest_main: 066a66a94edf65c79f8ec85088c2a658d0d368e7
-  main_integration: 355D_INTEGRATED_VALIDATED; 9DAE_RECONCILIATION_PENDING_LOCAL_ONLY
+  main_integration: 9DAE_INTEGRATED_LOCAL_ONLY_VALIDATION_PASS
   merge_conflicts: ".aipos/CURRENT_TRUTH.md only; resolved by the repository generator"
   pagination_contract: "Bounded GitHub GraphQL cursor traversal validates edge identity/cursor, totalCount, ordering, labels and limits. GitHub supplies no point-in-time token here; matching scans remain UNVERIFIED and selector/claim admission reject the result."
   snapshot_contract: "Digest binds issue prompt fields, owner, conflict keys and eligibility evidence (state, author association, priority, updated timestamp, normalized labels and no linked open PR); changed digest fails before atomic claim. Inventory remains UNVERIFIED and blocks production admission earlier."
   main_recheck_contract: "Protected main is rechecked after task revalidation immediately before atomic admission; a non-atomic race remains explicit because the GitHub ref read and Durable Object admission cannot be one transaction."
   recovery_contract: "This entry records the currently observed main and local-only integration; old publication steps are historical. Resolve the exact local candidate from the final report/HEAD, then require fresh CI/review for any future published SHA."
-  validation: PASS_ON_355D_175_FOCUSED_1341_FULL_BUILD_TYPECHECK_VALIDATE_SECURITY_LINT_AIPOS; RERUN_REQUIRED_AFTER_9DAE
+  validation: PASS_ON_9DAE_115_FOCUSED_1341_FULL_BUILD_TYPECHECK_VALIDATE_SECURITY_AIPOS_LINT
   wip_runtime_state: UNKNOWN
   writer_lease_state: UNKNOWN
   remote_change: NONE

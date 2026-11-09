@@ -1,6 +1,6 @@
 id: WO-LEARNING-20261008-DURABLE-CYCLE-HEALTH
 title: "Show the durable closed-learning cycle history on /health so a restart does not erase the last lap"
-status: READY_FOR_REVIEW
+status: COMPLETED
 owner: nusa-development
 repository: cinamoncandy/NUSA
 base_branch: main
@@ -34,3 +34,4 @@ safety:
   productionMutationAllowed: false
   aiAuthority: ZERO_AUTHORITY
   fail_closed: true
+closed_by_merge: "PR #2582 (branch claude/health-durable-learning-cycle) merged to main (f92f2da5d, 2026-10-08) by the release authority after CI and Audit; it is the only merged PR from this branch. Status corrected 2026-11-09 from READY_FOR_REVIEW; this records the merge only, not a separate production verification."

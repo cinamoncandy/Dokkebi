@@ -1,6 +1,6 @@
 id: WO-RESEARCH-20261008-FAILURE-HISTORY
 title: "Per-challenger failure history and repeated-failure counts for Research N+1 (record-only link)"
-status: READY_FOR_REVIEW
+status: COMPLETED
 owner: nusa-development
 repository: cinamoncandy/NUSA
 base_branch: main
@@ -39,3 +39,4 @@ safety:
   productionMutationAllowed: false
   aiAuthority: ZERO_AUTHORITY
   fail_closed: true
+closed_by_merge: "PR #2591 (branch claude/research-failure-history) merged to main (70b998487, 2026-10-08) by the release authority after CI and Audit; it is the only merged PR from this branch. Status corrected 2026-11-09 from READY_FOR_REVIEW; this records the merge only, not a separate production verification."

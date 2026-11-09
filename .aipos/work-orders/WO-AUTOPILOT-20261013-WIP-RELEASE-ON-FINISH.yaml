@@ -1,6 +1,6 @@
 id: WO-AUTOPILOT-20261013-WIP-RELEASE-ON-FINISH
 title: "Free the Autopilot active-WIP slot as soon as a coding attempt finishes"
-status: READY_FOR_REVIEW
+status: COMPLETED
 owner: nusa-development
 repository: cinamoncandy/NUSA
 base_branch: main
@@ -39,3 +39,4 @@ safety:
   productionMutationAllowed: false
   aiAuthority: ZERO_AUTHORITY
   fail_closed: true
+closed_by_merge: "PR #2671 (branch claude/autopilot-wip-release-on-finish) merged to main (a813deb27) by the release authority after CI and Audit; it is the only merged PR from this branch, and its title matches this work order (checked by hand 2026-11-09 after the automatic check flagged other PR numbers in the text). Status corrected from READY_FOR_REVIEW; this records the merge only, not a separate production verification."
