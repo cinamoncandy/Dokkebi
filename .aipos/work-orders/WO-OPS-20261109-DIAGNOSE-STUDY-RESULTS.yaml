@@ -1,0 +1,22 @@
+id: WO-OPS-20261109-DIAGNOSE-STUDY-RESULTS
+title: "Host diagnosis: show whether the once-only study result files exist (fixed fields, read-only)"
+status: READY_FOR_REVIEW
+created: 2026-11-09
+authority_impact: none
+trigger: "WO-RESEARCH-20261021-ORDERBOOK-RETENTION records that run-raim-study.js reads only the live order-book table and would lose its 2026-10-25..10-29 data after about 2026-11-08. Whether the RAIM study already wrote its final result could not be read: the diagnosis lists /var/lib/nusa cut at 40 lines and the study prints only to the Research journal."
+change:
+  - ".github/workflows/oracle-host-diagnose.yml: new read-only step 'Study result files' prints, for raim-study-result.json and orderbook-study-result.json, present or ABSENT, studyId, status, eligible and file time. Nothing else from the file is printed."
+  - "tests/oracle-host-diagnose-workflow.test.js: runs the step's snippet against a temp directory; asserts fixed fields only, an ABSENT file, and that an extra field is not printed."
+rules:
+  - "Read only: no sudo, no write, no service change, no network, no credential. The existing workflow gates (no cat, no write, dispatch-only) still pass."
+not_changed:
+  - "The studies, their windows and pass rules, retention, thresholds, limits, capital and authority."
+safety:
+  paper_only: true
+  liveAuthority: NONE
+  productionMutationAllowed: false
+  aiAuthority: ZERO_AUTHORITY
+validation:
+  - "oracle-host-diagnose-workflow.test 13 pass; workflow action-pin and authority-map validators PASS."
+unverified: "The values on the host: the step runs on the next diagnosis dispatch."
+next: "Read the RAIM line. HOLDOUT_* means the once-only result exists and the lost raw data no longer matters; ABSENT means the study has not produced a final result and its window data is being pruned, which needs an owner decision."
