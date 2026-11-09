@@ -165,7 +165,7 @@ jobs:
           try {
             const h = JSON.parse(fs.readFileSync(process.argv[1], "utf8")), r = h.runtime && typeof h.runtime === "object" ? h.runtime : {};
             const out = {};
-            for (const [name, value] of [["learningLoopVerdict", h.learningLoopVerdict], ["learningPipeline", h.learningPipeline], ["orderBookCoverage", r.orderBookCoverage], ["researchGapFill", r.researchGapFill], ["closedLearningLoop", r.closedLearningLoop], ["paperLedger", r.paperLedger], ["dataIntegrity", r.dataIntegrity], ["runtimeScalars", Object.fromEntries(Object.entries(r).filter(([k, x]) => /^[a-zA-Z0-9][a-zA-Z0-9_]{0,47}$/.test(k) && (typeof x === "boolean" || Number.isFinite(x) || (typeof x === "string" && /^[A-Z][A-Z0-9_]{0,47}$/.test(x)))))]]) {
+            for (const [name, value] of [["learningLoopVerdict", h.learningLoopVerdict], ["learningPipeline", h.learningPipeline], ["orderBookCoverage", r.orderBookCoverage], ["researchGapFill", r.researchGapFill], ["researchRollingHoldout", r.researchRollingHoldout], ["closedLearningLoop", r.closedLearningLoop], ["paperLedger", r.paperLedger], ["dataIntegrity", r.dataIntegrity], ["runtimeScalars", Object.fromEntries(Object.entries(r).filter(([k, x]) => /^[a-zA-Z0-9][a-zA-Z0-9_]{0,47}$/.test(k) && (typeof x === "boolean" || Number.isFinite(x) || (typeof x === "string" && /^[A-Z][A-Z0-9_]{0,47}$/.test(x)))))]]) {
               const v = keep(value, 0); if (v && Object.keys(v).length > 0) out[name] = v;
             }
             // The decision funnel and the last decision outcome use coded keys with colons; the same patterns /health already enforces.

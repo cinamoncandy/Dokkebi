@@ -46,7 +46,7 @@ test("the production composition feeds every loop tick into the status and hands
   assert.match(src, /loopStatus\.observeRollover\(await runClosedLearningRolloverAsync\(\), Date\.now\(\)\);\r?\n\s*persistLastBlocked\(\);/, "a blocked tick persists its reason");
   assert.match(src, /loopStatus\.seedLastBlocked\(readClosedLearningBlocked\(config\.cloudStateDbPath\)\)/, "the persisted reason seeds the status after a restart");
   assert.match(src, /loopStatus\.observePeriods\(periods\.listOpenPeriods\(\)\[0\], periods\.listRealizedPeriods\(\)(?:, pendingPeriods\.dispositions\(\))?\)/, "every tick reads the canonical period identities");
-  assert.match(src, /closedLearningStatus: \(\) => loopStatus\.snapshot\(\),\r?\n\s*researchIntervalTicks: \(\) => researchExperiments\?\.experimentTicksByInterval\(\) \?\? null,\r?\n\s*microstructureRecorder,\r?\n\s*orderBookCollector,\r?\n\s*futuresCollector,\r?\n\s*\}\);/);
+  assert.match(src, /closedLearningStatus: \(\) => loopStatus\.snapshot\(\),\r?\n\s*researchIntervalTicks: \(\) => researchExperiments\?\.experimentTicksByInterval\(\) \?\? null,\r?\n\s*researchRollingHoldout: \(\) => researchExperiments\?\.rollingHoldoutByInterval\(\) \?\? null,\r?\n\s*microstructureRecorder,\r?\n\s*orderBookCollector,\r?\n\s*futuresCollector,\r?\n\s*\}\);/);
 });
 
 test("evidence correlates the open period, the latest realized period and the latest Research cycle", () => {
