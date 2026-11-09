@@ -1,0 +1,25 @@
+id: WO-OPS-20261108-DIAGNOSE-HOST-PRESSURE
+title: "Read-only host CPU/I-O pressure reading in the Oracle host diagnosis (evidence for the three rolled-back activations)"
+status: READY_FOR_REVIEW
+owner: nusa-development
+repository: cinamoncandy/NUSA
+base_branch: main
+implementation_branch: claude/diagnose-host-load
+authority_impact: none
+objective: "Three Oracle activations (54c095d, 7879d1e, 6c7f1ea) rolled back because PAPER startup phases took 6-48 s against a 30 s writer lease on a 1-vCPU host that also runs the runner, research and autopilot. The last failure fell inside startWriterLease itself (repositoryConstruction 6049 ms and 47901 ms in two attempts of the same activation), so lease renewal between phases cannot fix a single phase longer than the TTL. Add a read-only step to oracle-host-diagnose.yml that records cpu count, loadavg, /proc/pressure/{cpu,io,memory}, the busiest processes and D-state processes, so a quiet reading can be compared with a post-backup reading."
+scope:
+  - ".github/workflows/oracle-host-diagnose.yml"
+exclusions:
+  - "Read-only: no sudo, restart, write, credential read or external call; the existing tests/oracle-host-diagnose-workflow.test.js guards (including the cat ban) pass unchanged."
+  - "No change to any release workflow, helper, lease, limit, threshold or capital."
+safety:
+  paper_only: true
+  liveAuthority: NONE
+  productionMutationAllowed: false
+  aiAuthority: ZERO_AUTHORITY
+  fail_closed: "Diagnosis only; nothing it prints feeds a decision."
+verification_commands:
+  - node --test tests/oracle-host-diagnose-workflow.test.js
+  - node scripts/validate-workflow-action-inputs.js
+review: "Draft PR; non-author review before Ready."
+residual: "Pressure is only visible if the kernel exposes /proc/pressure; if it does not, the step prints the read error and the loadavg/ps rows still help."

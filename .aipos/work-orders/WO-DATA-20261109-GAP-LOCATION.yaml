@@ -1,0 +1,21 @@
+id: WO-DATA-20261109-GAP-LOCATION
+title: "Data-integrity probe: report where the missing 1-minute candles are (display only)"
+status: READY_FOR_REVIEW
+created: 2026-11-09
+trigger: "After the 2026-11-09 release the host log showed '[research-manifest] KRW-XRP/1m, /15m and /60m blocked: canonical dataset has missing intervals' while dataIntegrity reported candleMissing7d 299 of about 9,750 rows. A dataset manifest is rejected for any gap inside its window (missingCandlePolicy REJECT), so the 15m and 60m experiments stay at MANIFEST_NOT_FOUND. The count alone cannot say whether the gaps are old history or still being made."
+change:
+  - "scripts/run-data-integrity-probe.js: three numeric display fields for the 1-minute series, candleGapRuns, candleLongestGapMinutes and candleLatestGapEndMs. They pass through the existing numeric /health dataIntegrity path."
+  - "scripts/run-data-integrity-probe.test.js: two separate gaps give 2 runs, the longest run, the end of the newest gap, an unchanged missing count and WARN."
+rules:
+  - "Display and evidence only: no gate, threshold, window, missingCandlePolicy or experiment input changes. The gaps are not filled or hidden."
+not_changed:
+  - "missingCandlePolicy REJECT, the manifest materializer, the gap-fill schedule, every integrity FAIL condition, limits, capital and authority."
+safety:
+  paper_only: true
+  liveAuthority: NONE
+  productionMutationAllowed: false
+  aiAuthority: ZERO_AUTHORITY
+validation:
+  - "run-data-integrity-probe.test (9) passes."
+unverified: "The values on the host: the probe runs in the daily research service, so they show in /health dataIntegrity after the next release and the next daily probe."
+next: "Read candleLatestGapEndMs. If it is old, the gaps are history and need a decision on how to cover them; if it is recent, find what drops 1-minute candles now."

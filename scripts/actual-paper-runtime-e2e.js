@@ -151,6 +151,9 @@ async function waitForRecoveredRuntime(baseUrl, token, timeoutMs = 30_000) {
   throw new Error(`timed out waiting for persisted PAPER recovery; last=${JSON.stringify(last).slice(0, 2000)}`);
 }
 
+// 120 s writer lease + 2 x 31 s supervisor lease-conflict retries + 28 s startup/readiness margin.
+const SUPERVISOR_RECOVERY_AFTER_SIGKILL_TIMEOUT_MS = 210_000;
+
 async function waitForAutomaticRuntime(baseUrl, token, timeoutMs = 90_000) {
   const deadline = Date.now() + timeoutMs;
   let last;
@@ -1103,7 +1106,9 @@ async function run(options = {}) {
     const recoveryDeadline = Date.now() + 30_000;
     while (Date.now() < recoveryDeadline && supervisor.snapshot().restartCount < 1) await sleep(50);
     if (supervisor.snapshot().restartCount < 1) throw new Error("PAPER supervisor did not schedule recovery after child failure");
-    const supervisedRecovery = await waitForAutomaticRuntime(baseUrl, token);
+    // The child was SIGKILLed, so its writer lease is not released: the restarted runtime is refused (PAPER_WRITER_ALREADY_ACTIVE) until the
+    // 120 s production lease expires, and the supervisor retries every 31 s. Bound the wait by lease + two retries + startup, not by 90 s.
+    const supervisedRecovery = await waitForAutomaticRuntime(baseUrl, token, SUPERVISOR_RECOVERY_AFTER_SIGKILL_TIMEOUT_MS);
     const recoveryProjection = supervisedRecovery.operations?.supervisor;
     if (recoveryProjection?.managed !== true || recoveryProjection.restartCount < 1 || recoveryProjection.lastExit == null) throw new Error("PAPER operations projection did not expose supervisor recovery evidence");
     if (supervisedRecovery.operations.transport !== "ONLINE" || supervisedRecovery.operations.schedulerRunning !== true) throw new Error("PAPER supervisor recovery did not reconnect public market runtime");

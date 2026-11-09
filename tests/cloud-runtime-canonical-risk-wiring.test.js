@@ -12,7 +12,7 @@ test("startCloudRuntime constructs one canonical risk adapter and one execution 
   assert.match(source, /import \{ CloudPaperExecutionBoundary \} from "\.\/cloudPaperExecutionBoundary";/);
   assert.match(source, /const productionPaperRiskGate = config\.paperInitialCapitalKrw !== undefined && durableRepository instanceof SqliteCloudDashboardSnapshotRepository/);
   assert.match(source, /new CloudPaperCanonicalRiskGateway\(/);
-  assert.match(source, /const productionPaperBoundary = effectivePaperLoop != null && productionPaperRiskGate != null/);
+  assert.match(source, /productionPaperBoundary = effectivePaperLoop != null && productionPaperRiskGate != null\s*\?/);
   assert.match(source, /new CloudPaperExecutionBoundary\(\{ loop: effectivePaperLoop, riskGate: productionPaperRiskGate, readP0State: readPaperP0State \}\)/);
 });
 
