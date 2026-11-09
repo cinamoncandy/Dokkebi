@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { deriveGithubIssueBacklogReadiness, selectStalenessProbePulls } from "./evolveGithubIssueBacklog";
+import { codexBacklogTaskSnapshot, deriveGithubIssueBacklogReadiness, selectCodexBacklogTask, selectStalenessProbePulls } from "./evolveGithubIssueBacklog";
 
 const NOW = new Date("2026-09-17T08:00:00.000Z");
 const SAFETY = "Safety invariants: liveAuthority=NONE, productionMutationAllowed=false, aiAuthority=ZERO_AUTHORITY. No LIVE activation or real broker mutation.";
@@ -22,6 +22,34 @@ test("backlog readiness surfaces owner-authored safety-bounded P0/P1 Autopilot w
   const result = deriveGithubIssueBacklogReadiness([issue()], [], NOW);
   assert.equal(result.eligibleIssueCount, 1);
   assert.deepEqual(result.signals.map((signal) => signal.id), ["github-issue-903"]);
+});
+
+test("Codex task snapshot binds prompt, ownership, conflict keys, and eligibility metadata", () => {
+  const selected = selectCodexBacklogTask([issue()], []);
+  assert.ok(selected);
+  const baseline = codexBacklogTaskSnapshot(selected);
+
+  for (const changed of [
+    issue({ title: "P0: Autopilot changed priority prompt" }),
+    issue({ body: `${String(issue().body)}\nchanged prompt` }),
+    issue({ body: String(issue().body).replace("canonicalOwner: evolve", "canonicalOwner: research") }),
+    issue({ body: String(issue().body).replace("conflictKeys: issue:903", "conflictKeys: issue:904") }),
+    issue({ updated_at: "2026-09-17T07:51:00.000Z" }),
+    issue({ labels: [{ name: "RESEARCH-READY" }] }),
+  ]) {
+    const changedSelection = selectCodexBacklogTask([changed], []);
+    assert.ok(changedSelection);
+    assert.notEqual(codexBacklogTaskSnapshot(changedSelection), baseline);
+  }
+
+  for (const ineligible of [
+    issue({ state: "closed" }),
+    issue({ author_association: "CONTRIBUTOR" }),
+    issue({ labels: [{ name: "HOLD" }] }),
+  ]) {
+    assert.equal(selectCodexBacklogTask([ineligible], []), null);
+  }
+  assert.equal(selectCodexBacklogTask([issue()], [{ title: "work #903", body: "" }]), null);
 });
 
 test("backlog readiness counts all eligible work but dispatch signal stays bounded to one", () => {

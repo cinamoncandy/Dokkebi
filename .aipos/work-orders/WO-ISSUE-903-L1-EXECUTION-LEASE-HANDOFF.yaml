@@ -177,7 +177,7 @@ codex_claim_review_findings_20261108:
   audit_and_release: NOT_AUTHORIZED
   current_manual_run_gate: "BLOCKED: deployed protected main does not contain the claim guard/digest binding; complete selector returns null; WIP claims UNKNOWN; runner labels and Codex login UNKNOWN/unverified. No dispatch."
   next: "Commit/push the validated repair only to existing Draft PR #2039, then require exact-head CI/companions and fresh independent review. Existing Formal Validator request targets predecessor 747460c and must not be reused as a successor verdict."
-next: "Keep the local pagination candidate isolated. Before publication, verify canonical WIP/lease ownership and inspect/reconcile the 64-commit current-main delta. Automatic selection/admission remains fail-closed until a verifiable point-in-time GitHub inventory contract exists. No dispatch, push, merge, or production mutation."
+next: "The preserved original worktree remains unchanged. The separate isolated-pagination-reconciliation branch is integrating current protected main 355d682f6cffac12a4dc319203a964a98fa33f43 and is under local validation only. Do not push, dispatch, claim/release WIP, mutate leases, deploy, merge, or infer inventory snapshot completeness."
 
 historical_first_main_alignment_20261028:
   previous_validated_head: cbb638d5d4d50ca6e290dbb4dcb597a1da44e7f3
@@ -216,3 +216,31 @@ local_pagination_repair_20261109:
   protected_main_delta: "At final recheck main=422de99d2444860bc8fbc1e2e141e78d74daa93b while PR base remains 54c095daff15bc4ef067e12ed26c666e5fd3d4c0; GitHub compare reports 64 main-only commits. Candidate is not current-main aligned."
   unresolved: "No GitHub inventory snapshot proof exists; automatic task selection/admission is deliberately blocked. Active WIP/writer-lease receipt remains UNKNOWN. Independent review, exact-successor CI, Formal Validator, Audit, Release, and runtime proof remain pending."
   next: "Preserve the test-only baseline package and this local candidate separately. Before publication, obtain current canonical claim/WIP status and inspect/reconcile the 64-commit main delta under the existing #903 owner path. No workflow dispatch, claim, lease mutation, push, merge, or deployment."
+
+
+pagination_candidate_main_reconciliation_20261109:
+  observed_at_utc: "2026-11-09T11:53:56Z"
+  canonical_issue: 903
+  canonical_pr: 2039
+  source_pr_head: ecdee7bb568db35daf832a92d84b0a141ab40666
+  source_pr_base: 54c095daff15bc4ef067e12ed26c666e5fd3d4c0
+  protected_main: 355d682f6cffac12a4dc319203a964a98fa33f43
+  pr_base_to_main: "80 commits ahead; compare at observation"
+  original_candidate_path: /workspace/nusa-2039-pagination-p1-repair
+  original_candidate_head: ecdee7bb568db35daf832a92d84b0a141ab40666
+  original_candidate_mutated: false
+  home_pc_fefa8208_recovered: false
+  isolated_branch: isolated-pagination-reconciliation
+  pre_integration_candidate: 85386ae289dc05272fc86e99014696563de081d1
+  merge_base_with_latest_main: 066a66a94edf65c79f8ec85088c2a658d0d368e7
+  main_integration: 355D_INTEGRATED_VALIDATED; 9DAE_RECONCILIATION_PENDING_LOCAL_ONLY
+  merge_conflicts: ".aipos/CURRENT_TRUTH.md only; resolved by the repository generator"
+  pagination_contract: "Bounded GitHub GraphQL cursor traversal validates edge identity/cursor, totalCount, ordering, labels and limits. GitHub supplies no point-in-time token here; matching scans remain UNVERIFIED and selector/claim admission reject the result."
+  snapshot_contract: "Digest binds issue prompt fields, owner, conflict keys and eligibility evidence (state, author association, priority, updated timestamp, normalized labels and no linked open PR); changed digest fails before atomic claim. Inventory remains UNVERIFIED and blocks production admission earlier."
+  main_recheck_contract: "Protected main is rechecked after task revalidation immediately before atomic admission; a non-atomic race remains explicit because the GitHub ref read and Durable Object admission cannot be one transaction."
+  recovery_contract: "This entry records the currently observed main and local-only integration; old publication steps are historical. Resolve the exact local candidate from the final report/HEAD, then require fresh CI/review for any future published SHA."
+  validation: PASS_ON_355D_175_FOCUSED_1341_FULL_BUILD_TYPECHECK_VALIDATE_SECURITY_LINT_AIPOS; RERUN_REQUIRED_AFTER_9DAE
+  wip_runtime_state: UNKNOWN
+  writer_lease_state: UNKNOWN
+  remote_change: NONE
+  next: "Complete local tests and gates, commit only on the isolated branch if they pass, and keep the existing Draft PR and remote branch untouched."

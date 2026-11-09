@@ -1,6 +1,6 @@
 id: WO-RESEARCH-20261016-A-GRADE-VALIDATION
 title: Canonical A-grade anti-overfit validation convergence
-status: IN_PROGRESS
+status: COMPLETED
 priority: P0
 risk: HIGH
 authority_impact: none
@@ -37,3 +37,4 @@ acceptance_status: UNVERIFIED
 validation: "Implementation6f6a6c6deefa98df3898bf127d47b388e5f9a9be:18 focused consumer tests and1231 isolated files PASS; build/typecheck/validate:full/security/lint PASS24 existing warnings. Red3 tests proved false completeness including synthetic Release APPROVED before repair."
 independent_review: "Fresh Confucius PASS_WITH_NOTES at6f6a6c6d,0P0/0P1/0P2. Timestamp parsing preserves legacy semantics; hash shape is not execution authenticity. Not Audit/Release approval."
 next: "Exact-head CI and canonical Audit/Release for first repair, then existing Research Factory policy/precommit/qualification receipt integration. All A-grade acceptance flags remain UNVERIFIED."
+closed_by_merge: "PR #2736 merged to main (9a2c235d9) by the release authority after CI and Audit. Status corrected 2026-11-09 from a stale IN_PROGRESS; this records the merge only, not a separate production verification."

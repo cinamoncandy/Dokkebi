@@ -7,6 +7,7 @@ type EligibleIssue = Readonly<{
   title: string;
   priority: 0 | 1;
   updatedAtMs: number;
+  labels: readonly string[];
   capability: GithubIssueCapability;
   canonicalOwner?: string;
   conflictKeys?: readonly string[];
@@ -162,6 +163,7 @@ function eligibleIssue(value: unknown, linked: ReadonlySet<number>): EligibleIss
     title,
     priority,
     updatedAtMs: Number.isFinite(updatedAtMs) ? updatedAtMs : 0,
+    labels: labelNames(issue).slice().sort(),
     capability: capabilityForIssue(title, body),
     ...(metadata ?? {}),
     ...(codingTarget === undefined ? {} : { codingTarget }),
@@ -259,6 +261,14 @@ export interface CodexBacklogTask {
   readonly capability: GithubIssueCapability;
   readonly canonicalOwner: string;
   readonly conflictKeys: readonly string[];
+  readonly eligibility: Readonly<{
+    readonly state: "open";
+    readonly authorAssociation: "OWNER";
+    readonly priority: 0 | 1;
+    readonly updatedAtMs: number;
+    readonly labels: readonly string[];
+    readonly linkedOpenPullRequest: false;
+  }>;
 }
 
 /**
@@ -273,6 +283,14 @@ export function codexBacklogTaskSnapshot(task: CodexBacklogTask): string {
     capability: task.capability,
     canonicalOwner: task.canonicalOwner,
     conflictKeys: [...task.conflictKeys],
+    eligibility: {
+      state: task.eligibility.state,
+      authorAssociation: task.eligibility.authorAssociation,
+      priority: task.eligibility.priority,
+      updatedAtMs: task.eligibility.updatedAtMs,
+      labels: [...task.eligibility.labels],
+      linkedOpenPullRequest: task.eligibility.linkedOpenPullRequest,
+    },
   });
 }
 
@@ -312,5 +330,13 @@ export function selectCodexBacklogTask(issues: readonly unknown[], openPulls: re
     capability: candidate.capability,
     canonicalOwner: candidate.canonicalOwner!,
     conflictKeys: Object.freeze([...candidate.conflictKeys!]),
+    eligibility: Object.freeze({
+      state: "open" as const,
+      authorAssociation: "OWNER" as const,
+      priority: candidate.priority,
+      updatedAtMs: candidate.updatedAtMs,
+      labels: Object.freeze([...candidate.labels]),
+      linkedOpenPullRequest: false as const,
+    }),
   });
 }

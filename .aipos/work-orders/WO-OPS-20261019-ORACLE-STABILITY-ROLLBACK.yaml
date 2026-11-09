@@ -1,6 +1,6 @@
 id: WO-OPS-20261019-ORACLE-STABILITY-ROLLBACK
 title: "Prevent false Oracle stability rollback and converge Autopilot identity on rollback"
-status: IN_PROGRESS
+status: COMPLETED
 priority: P0
 owner: nusa-server-automation
 repository: cinamoncandy/NUSA
@@ -74,3 +74,4 @@ follow_up_acceptance:
   - exact-head CI and fresh non-author validation pass before Audit/Release
   - exact-main deployment keeps protected main SHA, PAPER ledger identity, writer ownership, and Autopilot identity continuous
 follow_up_validation: "Release 39471191806 failed at the initial mobile_owner_route stage after 15 seconds; exact-source CI, backup, stage, preflight, and exact-main recheck passed. Candidate reached /ready and owner-route checks, then canonical rollback restored 1b4a2429. The prior release passed rollback readiness and Autopilot readiness. Route-proof patch on 0dddbad6 completed focused tests 42/42 and exact-head CI/companions PASS; fresh Codex review identified and this branch corrected an AIPOS next-action mismatch. Exact-head CI on 39514441549 then exposed current high advisories in existing vite 7.3.6 and launch-editor 2.14.1 dependencies; this successor pins patched 7.3.7 and 2.14.2. Local security gate, typecheck, validate:full, AIPOS validators, and focused tests 42/42 PASS. Fresh Codex review of 453ca5a found a P2 because this runbook still documented a 15-second route window; this successor documents initial and soak request/retry settings separately and adds a runbook contract regression. Fresh exact-head CI and review are required."
+closed_by_merge: "PR #2819 merged to main (843865d7e) by the release authority after CI and Audit. Status corrected 2026-11-09; this records the merge only, not a separate production verification. Its next step (install the exact reviewed root helper before a release) is satisfied: every release since matched the host helper byte for byte."

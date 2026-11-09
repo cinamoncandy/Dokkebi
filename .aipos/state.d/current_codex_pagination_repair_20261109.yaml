@@ -2,28 +2,28 @@ current_codex_pagination_repair_20261109:
   work_order: WO-ISSUE-903-L1-EXECUTION-LEASE-HANDOFF
   issue: 903
   pull_request: 2039
-  status: LOCAL_VALIDATED_PENDING_CANONICAL_ALIGNMENT
-  observed_at_utc: "2026-11-09T04:41:47Z"
+  status: VALIDATED_ON_MAIN_355D_PENDING_9DAE_RECONCILIATION
+  observed_at_utc: "2026-11-09T12:00:00Z"
   source_pr_head: ecdee7bb568db35daf832a92d84b0a141ab40666
   source_pr_base: 54c095daff15bc4ef067e12ed26c666e5fd3d4c0
-  protected_main_at_start: b2186edc2e4422efb0d95d07c1c8c12a61be218d
-  protected_main_at_end: 422de99d2444860bc8fbc1e2e141e78d74daa93b
-  current_main_delta: "GitHub compare: PR base merge-base 54c095da; current main is 64 commits ahead. Candidate is intentionally not aligned or published."
-  isolated_implementation_branch: codex/pr2039-pagination-p1-repair-20261109
-  local_commit: NOT_CREATED
+  protected_main_at_start: 355d682f6cffac12a4dc319203a964a98fa33f43
+  protected_main_at_end: 355d682f6cffac12a4dc319203a964a98fa33f43
+  current_main_delta: "Fresh GitHub compare: PR base 54c095daff15bc4ef067e12ed26c666e5fd3d4c0 is 86 commits behind latest main 9daeb72cedb6fc8d1a90b004e08d3a4c8d28b595; PR head ecdee7bb568db35daf832a92d84b0a141ab40666 is 47 commits ahead of that base. Isolated candidate merge-base with latest main is 066a66a94edf65c79f8ec85088c2a658d0d368e7; main 355d682f6cffac12a4dc319203a964a98fa33f43 is integrated and locally validated; latest main 9daeb72cedb6fc8d1a90b004e08d3a4c8d28b595 is 12 commits newer and awaits integration. Its 42 changed paths are all .aipos metadata/truth files; no runtime or Autopilot code paths changed."
+  isolated_implementation_branch: isolated-pagination-reconciliation
+  local_commit: VALIDATED_TREE_PENDING_LOCAL_COMMIT
   code_change: "Replace REST offset scans with bounded GitHub GraphQL cursor traversal, validating edge IDs/cursors, totalCount consistency, ordering, labels, and complete page traversal; compare two full scans. Because no point-in-time snapshot contract is exposed, inventory is explicitly UNVERIFIED and both selector and Worker admission fail closed."
   safety: "WIP capacity remains 2; no production admission, claim, lease, dispatch, or runtime mutation occurred."
   validation:
-    focused: "31/31 PASS"
+    focused: "175/175 PASS after eligibility snapshot binding change"
     build: PASS
-    full_suite: "pnpm test PASS; 1,340 isolated test files"
+    full_suite: "1,341/1,341 PASS on integrated main 355d682f after eligibility snapshot binding change; latest 9daeb72 main integration still pending"
     typecheck: PASS
-    validate_full: PASS
-    security_gate: PASS
-    lint: "PASS; 0 errors / 47 warnings"
+    validate_full: PASS_ON_MAIN_355D
+    security_gate: PASS_ON_MAIN_355D
+    lint: "PASS_ON_MAIN_355D; 0 errors / 47 warnings"
     diff_check: PASS
   exact_head_ci: NOT_RUN_LOCAL_CANDIDATE_NOT_PUBLISHED
   independent_review: PENDING
-  current_main_alignment: REQUIRED_BEFORE_PUBLICATION
+  current_main_alignment: MAIN_355D_ALIGNED_AND_VALIDATED; MAIN_9DAE_PENDING
   wip_claim_and_writer_lease: UNKNOWN
-  next: "Keep this local candidate isolated. Before any publication, re-verify the canonical work order/claim and WIP lease, inspect the 64-commit current-main delta for semantic overlap, then obtain owner/governed authorization for any branch update. Do not infer point-in-time inventory completeness; automatic selection/admission remains blocked."
+  next: "Preserve the validated 355d682f tree as a local checkpoint, integrate latest main 9daeb72cedb6fc8d1a90b004e08d3a4c8d28b595 locally, rerun required validation, then commit only on isolated-pagination-reconciliation. No push or PR update. Automatic selection/admission remains blocked without point-in-time inventory proof."
