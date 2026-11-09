@@ -188,6 +188,30 @@ jobs:
           for n in 1 2 3 4 5; do part="${errors:$(( (n-1)*3500 )):3500}"; [ -n "$part" ] && emit "diag-nusa-log-$n" "$part"; done
           emit "diag-autopilot-log" "$autopilot"
       # Runs LAST: the 40 s du walk competes for I/O on the 1-vCPU host, and diagnosis 38673436344 saw the /health probe time out right after it.
+      - name: Study result files (fixed fields only, read-only)
+        if: ${{ inputs.health_only != true && inputs.health_only != 'true' }}
+        shell: bash
+        run: |
+          set +e
+          # The pre-registered studies run once inside the Research service and write a final HOLDOUT_* result next to the state DB. The state
+          # listing above can be cut at 40 lines, so read each result's fixed fields here: file present or not, study id, status, eligible markets,
+          # file time. A missing file prints ABSENT; nothing else from the file is shown and nothing is written.
+          node -e '
+          const fs = require("node:fs");
+          const dir = "/var/lib/nusa/";
+          for (const name of ["raim-study-result.json", "orderbook-study-result.json"]) {
+            try {
+              const st = fs.statSync(dir + name);
+              const r = JSON.parse(fs.readFileSync(dir + name, "utf8"));
+              const status = typeof r.status === "string" && /^[A-Z_]{1,40}$/.test(r.status) ? r.status : "UNRECOGNIZED";
+              const studyId = typeof r.studyId === "string" && /^[A-Z0-9_]{1,60}$/.test(r.studyId) ? r.studyId : "UNRECOGNIZED";
+              const eligible = Number.isSafeInteger(r.eligible) && r.eligible >= 0 ? r.eligible : null;
+              console.log(JSON.stringify({file: name, present: true, studyId, status, eligible, mtime: new Date(st.mtimeMs).toISOString()}));
+            } catch (error) {
+              console.log(JSON.stringify({file: name, present: false, reason: error && error.code === "ENOENT" ? "ABSENT" : "UNREADABLE"}));
+            }
+          }
+          '
       - name: Disk consumers (read-only, after the health probe)
         if: ${{ inputs.health_only != true && inputs.health_only != 'true' }}
         shell: bash
