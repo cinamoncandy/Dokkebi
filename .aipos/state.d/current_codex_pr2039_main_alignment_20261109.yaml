@@ -1,0 +1,28 @@
+current_codex_pr2039_main_alignment_20261109:
+  observed_at_utc: "2026-11-09T22:41:13Z"
+  canonical_issue: 903
+  canonical_pr: 2039
+  pr_head_before_alignment: 9b325c3befd68ecaeb130466a551585df42ca340
+  pr_base_ref_sha_at_alignment: 6433a7c44db4b2e953f343b971096988b3c2699d
+  protected_main: 2b3f05e8a3c62a7821306461eb3b28bbc4a6785a
+  merge_base: 6433a7c44db4b2e953f343b971096988b3c2699d
+  ahead_behind_before_alignment: "PR 56 ahead / 5 behind protected main"
+  merge_conflict: ".aipos/CURRENT_TRUTH.md only; resolved by node scripts/generate-aipos-current-truth.js"
+  main_delta: "Five main-only commits; adds paperFillReplay and tests, changes paperTodayRealized, and adds its work order. No overlap with Autopilot selector/OIDC/pagination implementation files."
+  local_integration: "SUCCESS in isolated worktree /workspace/nusa-2039-main-align-2b3f05e8; existing candidate worktrees preserved"
+  focused_tests: "100/100 PASS: paper-fill-replay, pagination, snapshot, WIP coordination, Coordinator and OIDC tests"
+  full_tests: "pnpm test PASS; preflight, build and 1,343 isolated test files"
+  validation: "validate:full PASS; security:gate PASS; AIPOS YAML/provenance/drift/conformance PASS; lint 0 errors/48 warnings; git diff --check PASS"
+  pagination_inventory: "UNVERIFIED; task selector and WIP claim admission fail closed"
+  actual_paper: "INCOMPLETE; previous exact runtime evidence is not readiness PASS and no new runtime was dispatched"
+  wip_claims: UNKNOWN
+  writer_lease: UNKNOWN
+  prior_head_ci: "42637434782 PASS on 9b325c3befd68ecaeb130466a551585df42ca340; not evidence for the main-aligned successor"
+  independent_review: PENDING_NEW_EXACT_HEAD_REVIEW
+  thread_disposition: "11 threads unresolved; 8 currently outdated; no author-side resolution"
+  formal_validator: PENDING
+  audit: PENDING
+  release_authorization: PENDING
+  safety: "PAPER_ONLY; liveAuthority=NONE; productionMutationAllowed=false; realOrderAuthority=false; realTransferAuthority=false; aiAuthority=ZERO_AUTHORITY; fail-closed"
+  exact_head_ci: PENDING_FOR_MAIN_ALIGNED_SUCCESSOR
+  next: "Commit the aligned candidate, fast-forward the existing Draft PR only if its remote head still equals 9b325c3 and protected main still equals 2b3f05e8, then verify exact-head CI and request fresh non-author disposition."

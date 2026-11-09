@@ -1,4 +1,5 @@
 import { paperTradingDayKey } from "./paperTradingDay";
+import { replayFills } from "./paperFillReplay";
 import type { PaperAccountPosition, PaperFillRecord } from "./paperTradingExecutionLoop";
 
 /**
@@ -13,32 +14,17 @@ import type { PaperAccountPosition, PaperFillRecord } from "./paperTradingExecut
  * from the retained fills must equal the account's own position quantity for every market; any mismatch yields null.
  */
 const QUANTITY_TOLERANCE = 1e-9;
-// The ledger keeps quantities rounded to 8 decimals (PaperTradingExecutionLoop round8); the rebuild must round the same way at the same step.
-const ledgerRound8 = (value: number): number => Number(value.toFixed(8));
 
 export function computeTodayRealizedPnlKrw(fills: readonly PaperFillRecord[], positions: readonly PaperAccountPosition[], now: number): number | null {
   if (!Number.isFinite(now)) return null;
-  const rebuilt = new Map<string, { quantity: number; averageEntryPrice: number }>();
+  const replay = replayFills(fills);
+  if (!replay.ok) return null;
   const today = paperTradingDayKey(now);
-  let realized = 0;
-  for (const fill of [...fills].reverse().sort((a, b) => a.filledAt - b.filledAt)) {
-    if (![fill.quantity, fill.price, fill.fee, fill.filledAt].every(Number.isFinite) || fill.quantity <= 0) return null;
-    const prior = rebuilt.get(fill.market) ?? { quantity: 0, averageEntryPrice: 0 };
-    if (fill.side === "BUY") {
-      const quantity = ledgerRound8(prior.quantity + fill.quantity);
-      rebuilt.set(fill.market, { quantity, averageEntryPrice: quantity <= 0 ? 0 : (prior.averageEntryPrice * prior.quantity + fill.quantity * fill.price + fill.fee) / quantity });
-      continue;
-    }
-    if (fill.quantity > prior.quantity + Number.EPSILON) return null;
-    const pnl = (fill.price - prior.averageEntryPrice) * fill.quantity - fill.fee;
-    const quantity = ledgerRound8(Math.max(0, prior.quantity - fill.quantity));
-    rebuilt.set(fill.market, { quantity, averageEntryPrice: quantity === 0 ? 0 : prior.averageEntryPrice });
-    if (fill.filledAt <= now && paperTradingDayKey(fill.filledAt) === today) realized += pnl;
-  }
+  const realized = replay.sells.filter((sell) => sell.filledAt <= now && paperTradingDayKey(sell.filledAt) === today).reduce((sum, sell) => sum + sell.pnl, 0);
   const held = new Map(positions.map((position) => [position.market, position.quantity]));
-  for (const market of new Set([...held.keys(), ...rebuilt.keys()])) {
+  for (const market of new Set([...held.keys(), ...replay.positions.keys()])) {
     const expected = held.get(market) ?? 0;
-    const actual = rebuilt.get(market)?.quantity ?? 0;
+    const actual = replay.positions.get(market)?.quantity ?? 0;
     if (!Number.isFinite(expected) || Math.abs(expected - actual) > QUANTITY_TOLERANCE * Math.max(1, Math.abs(expected))) return null;
   }
   return Number.isFinite(realized) ? realized : null;
@@ -52,22 +38,12 @@ export function computeTodayRealizedPnlKrw(fills: readonly PaperFillRecord[], po
  */
 export function computeLimitReachedAt(fills: readonly PaperFillRecord[], now: number, streak: number, max: number): number | null {
   if (!Number.isFinite(now) || !Number.isSafeInteger(streak) || !Number.isSafeInteger(max) || max < 1 || streak < max) return null;
-  const rebuilt = new Map<string, { quantity: number; averageEntryPrice: number }>();
+  const replay = replayFills(fills);
+  if (!replay.ok) return null;
   const sellOrders = new Map<string, { pnl: number; filledAt: number }>();
-  for (const fill of [...fills].reverse().sort((a, b) => a.filledAt - b.filledAt)) {
-    if (![fill.quantity, fill.price, fill.fee, fill.filledAt].every(Number.isFinite) || fill.quantity <= 0) return null;
-    const prior = rebuilt.get(fill.market) ?? { quantity: 0, averageEntryPrice: 0 };
-    if (fill.side === "BUY") {
-      const quantity = ledgerRound8(prior.quantity + fill.quantity);
-      rebuilt.set(fill.market, { quantity, averageEntryPrice: quantity <= 0 ? 0 : (prior.averageEntryPrice * prior.quantity + fill.quantity * fill.price + fill.fee) / quantity });
-      continue;
-    }
-    if (fill.quantity > prior.quantity + Number.EPSILON) return null;
-    const pnl = (fill.price - prior.averageEntryPrice) * fill.quantity - fill.fee;
-    const quantity = ledgerRound8(Math.max(0, prior.quantity - fill.quantity));
-    rebuilt.set(fill.market, { quantity, averageEntryPrice: quantity === 0 ? 0 : prior.averageEntryPrice });
-    const previous = sellOrders.get(fill.orderId);
-    sellOrders.set(fill.orderId, { pnl: (previous?.pnl ?? 0) + pnl, filledAt: fill.filledAt });
+  for (const sell of replay.sells) {
+    const previous = sellOrders.get(sell.orderId);
+    sellOrders.set(sell.orderId, { pnl: (previous?.pnl ?? 0) + sell.pnl, filledAt: sell.filledAt });
   }
   const today = paperTradingDayKey(now);
   const completed = [...sellOrders.values()].filter((sell) => sell.filledAt <= now && paperTradingDayKey(sell.filledAt) === today).sort((a, b) => a.filledAt - b.filledAt);

@@ -1,0 +1,33 @@
+id: WO-ARCH-20261106-FILL-REPLAY-SHARED
+title: "One shared fill replay (stage 1): paperFillReplay.ts adopted by the display readers; RISK gateway switch is a separate requalification step"
+status: READY_FOR_REVIEW
+owner: nusa-development
+repository: cinamoncandy/NUSA
+base_branch: claude/display-replay-round8
+implementation_branch: claude/fill-replay-shared
+authority_impact: none
+objective: "The same fill replay existed in four places (ledger, RISK gateway, today-realized display, loss attribution). Differences caused the 7,379 halted BUYs (#2999) and the unknown display figures (#3003). Add one replay (apps/cloud/src/paperFillReplay.ts: ledger-style 8-decimal rounding, fail-closed) and a differential test against a reference copy of the gateway's realizedLossState. Stage 1 adopts it in the display readers only (paperTodayRealized.ts). paperLossAttribution.ts keeps its own loop because it carries a per-position family state; it is listed as a later step."
+scope:
+  - "apps/cloud/src/paperFillReplay.ts (new): replayFills, summarizeTradingDay, ledgerRound8."
+  - "apps/cloud/src/paperTodayRealized.ts: both display functions use replayFills (behaviour unchanged for every history the old code handled; same fail-closed null)."
+  - "tests/paper-fill-replay.test.js: 1,800-history differential test against the gateway reference, oversell boundary (1e-8), invalid values, ordering, and the display figure equals the shared summary."
+exclusions:
+  - "The RISK gateway (cloudPaperCanonicalRiskGateway.ts) is NOT changed: it is a pinned qualification module. Switching it to the shared replay (stage 2) needs the formal requalification path, a separate PR and a separate owner approval of the pin move and merge."
+  - "No limit, threshold, capital or authority change. The oversell comparison and tolerance are unchanged. No pin is moved."
+safety:
+  paper_only: true
+  liveAuthority: NONE
+  productionMutationAllowed: false
+  aiAuthority: ZERO_AUTHORITY
+  fail_closed: "Invalid values or an oversell yield ok:false; readers treat that as unknown."
+owner_decision: "2026-11-06: owner approved starting the fill-replay unification ('다 해라 승인할게'), including starting the RISK exact-source requalification preparation for stage 2. This is not approval of a pin move, merge or release and not a verification verdict."
+stages:
+  - "Stage 1 (this PR, stacked on #3003): module + display adoption + differential tests."
+  - "Stage 2 (separate PR, pinned): RISK gateway realizedLossState calls replayFills/summarizeTradingDay; requires exact-source requalification evidence, an independent validator, and the pin move in the same commit pair as the precedent #2999."
+  - "Stage 3: paperLossAttribution adopts the replay with its family state layered on top."
+verification_commands:
+  - node_modules/.bin/tsc -p tsconfig.json
+  - node -r ./tests/register-dist.cjs --test tests/paper-fill-replay.test.js tests/paper-display-replay-ledger-precision.test.js tests/paper-loss-attribution.test.js tests/cloud-unreached-baseline.test.js dist/apps/cloud/src/paperTodayRealized.test.js tests/mobile-loss-limit.test.js tests/now-day-ruler.test.js
+  - node scripts/validate-aipos-yaml.js
+review: "Draft; stacked on #3003 (CI runs after retargeting to main). A non-author review is required before it leaves Draft."
+residual: "The ledger itself (PaperTradingExecutionLoop.round8) is not rewritten to import this module in stage 1; the test pins the same rounding. The server fill history was not read."
