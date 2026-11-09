@@ -1,0 +1,22 @@
+id: WO-OPS-20261109-DIAGNOSE-RESEARCH-JOURNAL
+title: "Host diagnosis: say why the Research journal projections come back UNAVAILABLE (counts and one timestamp)"
+status: READY_FOR_REVIEW
+created: 2026-11-09
+authority_impact: none
+trigger: "The 2026-11-09 diagnosis printed ORDERBOOK_STUDY_UNAVAILABLE, DATA_INTEGRITY_UNAVAILABLE, FORWARD_EXECUTION_EVIDENCE_UNAVAILABLE and RAIM_STUDY_UNAVAILABLE together. Those projections read the nusa-research journal with errors hidden (2>/dev/null), so an empty result cannot tell a missing line from an unreadable journal or from a line older than the last 400 entries. The owner chose not to expose the RAIM result through /health (it is low value), so the cause of the empty journal read is the remaining question."
+change:
+  - ".github/workflows/oracle-host-diagnose.yml: a read-only block before the forward-log projection prints last400_lines, permission_hint_lines, one count per study marker (ORDERBOOK_STUDY, RAIM_STUDY, DATA_INTEGRITY, REGIME_FORWARD_STUDY), lines_last_26h and newest_entry (a 30-character timestamp). No journal text is printed."
+  - "tests/oracle-host-diagnose-workflow.test.js: the block exists, names the four markers, counts with grep -c, never prints the journal variable, has no sudo, write or tee."
+rules:
+  - "Read only: no sudo, no write, no service change, no network, no credential."
+not_changed:
+  - "The studies, retention, thresholds, limits, capital and authority. The existing projections are unchanged."
+safety:
+  paper_only: true
+  liveAuthority: NONE
+  productionMutationAllowed: false
+  aiAuthority: ZERO_AUTHORITY
+validation:
+  - "oracle-host-diagnose-workflow.test 14 pass; research-runtime-proof 2 pass; bash -n and a dry run of the block; workflow action-pin and authority-map validators PASS; no credential-shaped line in the changed files."
+unverified: "The values on the host: they appear on the next diagnosis dispatch."
+next: "last400_lines=0 with permission_hint_lines>0 means the runner account cannot read that journal (a host permission, an owner decision). lines_last_26h>0 with all marker counts 0 means the markers are outside the last 400 lines, which a larger window fixes. newest_entry older than 26 hours means the daily Research run did not happen."

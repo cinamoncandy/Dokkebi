@@ -78,6 +78,15 @@ jobs:
           done
           echo "== Research timer next and previous activation"
           systemctl show nusa-research.timer -p NextElapseUSecRealtime,LastTriggerUSec 2>&1
+          # The study and integrity projections below read this journal with errors hidden, so an empty result cannot say why. Print only counts,
+          # whether a permission hint appears, and the time of the newest entry: no log text.
+          echo "== Research journal availability (counts and one timestamp only)"
+          rj="$(journalctl -u nusa-research.service -n 400 --no-pager -o cat 2>&1)"
+          echo "last400_lines=$(printf '%s\n' "$rj" | grep -c .)"
+          echo "permission_hint_lines=$(printf '%s\n' "$rj" | grep -ciE 'insufficient permissions|No journal files|not seeing messages')"
+          for marker in ORDERBOOK_STUDY RAIM_STUDY DATA_INTEGRITY REGIME_FORWARD_STUDY; do echo "marker_${marker}=$(printf '%s\n' "$rj" | grep -c "$marker")"; done
+          echo "lines_last_26h=$(journalctl -u nusa-research.service --since "-26 hours" --no-pager -o cat 2>&1 | grep -c .)"
+          echo "newest_entry=$(journalctl -u nusa-research.service -n 1 --no-pager -o short-iso 2>&1 | cut -c1-30)"
           echo "== Forward Research log projection (last 200 lines; fixed fields only; absence is not success)"
           journalctl -u nusa-research.service -n 200 --no-pager -o cat 2>/dev/null | grep 'REGIME_FORWARD_STUDY ' | tail -3 | cut -c1-4096 | node -e '
           const fs = require("node:fs");
