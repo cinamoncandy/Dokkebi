@@ -163,7 +163,7 @@ test("the study result step reads only fixed fields of the two result files and 
   const body = step.slice(step.indexOf("node -e '") + "node -e '".length, step.indexOf("\n          '\n"));
   const dir = fs.mkdtempSync(path.join(require("node:os").tmpdir(), "nusa-study-"));
   fs.writeFileSync(path.join(dir, "raim-study-result.json"), JSON.stringify({ studyId: "RAIM_MM_20261029", status: "HOLDOUT_FAIL", eligible: 7, secretNote: "do not print" }));
-  const run = require("node:child_process").spawnSync(process.execPath, ["-e", body.replace("/var/lib/nusa/", dir + path.sep)], { encoding: "utf8" });
+  const run = require("node:child_process").spawnSync(process.execPath, ["-e", body.replace("/var/lib/nusa/", dir.replace(/\\/g, "/") + "/")], { encoding: "utf8" });
   assert.equal(run.status, 0, run.stderr);
   const lines = run.stdout.trim().split("\n").map((line) => JSON.parse(line));
   assert.deepEqual(lines[0], { file: "raim-study-result.json", present: true, studyId: "RAIM_MM_20261029", status: "HOLDOUT_FAIL", eligible: 7, mtime: lines[0].mtime });
