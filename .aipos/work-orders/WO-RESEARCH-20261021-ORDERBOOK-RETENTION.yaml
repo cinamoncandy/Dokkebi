@@ -1,6 +1,6 @@
 id: WO-RESEARCH-20261021-ORDERBOOK-RETENTION
 title: "Order-book retention is 14 days: the pre-registered studies lose their training data before their verdict (owner decision needed)"
-status: IN_PROGRESS
+status: COMPLETED
 priority: P0
 authority_impact: none
 repository: cinamoncandy/NUSA
@@ -26,3 +26,4 @@ safety:
   liveAuthority: NONE
   productionMutationAllowed: false
   aiAuthority: ZERO_AUTHORITY
+closed_by_merge: "PR #2854 merged to main (55d723aad) by the release authority after CI and Audit. Status corrected 2026-11-09; this records the merge only, not a separate production verification. The remaining_gaps recorded above stay true (minutes outside the archive, run-raim-study reads the live table only)."
