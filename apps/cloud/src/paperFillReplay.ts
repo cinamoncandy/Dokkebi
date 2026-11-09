@@ -8,8 +8,9 @@ import { paperTradingDayKey } from "./paperTradingDay";
  * made two display figures unknown in #3003. This module replays like the ledger (same rounding, same step), exactly as the
  * RISK gateway's realizedLossState and the two display readers do after those fixes, and fails closed.
  *
- * Stage 1 only adds this module and its tests. No existing reader calls it yet: the RISK gateway is a pinned qualification module,
- * so switching it needs the formal requalification path (owner-approved start 2026-11-06); the display readers follow after #3003.
+ * Stage 1 adds this module and its tests, and the display readers in paperTodayRealized.ts call it. The RISK gateway is a pinned qualification module and
+ * still has its own copy, so switching it needs the formal requalification path (owner-approved start 2026-11-06). Note for that stage: replayFills
+ * also rejects non-finite or non-positive quantities and non-finite price, fee or time (INVALID_FILL_VALUE), which the gateway's replay does not check.
  */
 export interface ReplayFill {
   readonly market: string;
