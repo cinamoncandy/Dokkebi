@@ -109,7 +109,7 @@ test("the runtime acquires its PAPER lease before first account access when acti
   assert.ok(scheduler > runtimeSource.indexOf("const baseHandle = startCloudRuntimeFromOptions({"), "the closed-learning scheduler must start after the runtime it is scheduled against");
 });
 
-test("a deferred lease survives a 39.9-second composition delay without extending its contract", () => {
+test("a deferred lease survives a 39.9-second composition delay and carries the 120-second production lease (WO-PAPER-20261108-LEASE-TTL-120)", () => {
   const database = new SqliteDatabase(":memory:");
   let now = NOW;
   const repository = new SqliteCloudPaperAccountRepository(database, {
@@ -124,7 +124,7 @@ test("a deferred lease survives a 39.9-second composition delay without extendin
     now += 39_898;
     repository.startWriterLease();
     const lease = database.connection.prepare("SELECT owner_id, lease_until_ms, heartbeat_at_ms FROM cloud_paper_writer_leases WHERE account_id = ?").get("paper-startup");
-    assert.deepEqual({ ...lease }, { owner_id: "startup-writer", lease_until_ms: now + 30_000, heartbeat_at_ms: now });
+    assert.deepEqual({ ...lease }, { owner_id: "startup-writer", lease_until_ms: now + 120_000, heartbeat_at_ms: now });
     repository.startWriterLease();
     assert.deepEqual({ ...database.connection.prepare("SELECT owner_id, lease_until_ms, heartbeat_at_ms FROM cloud_paper_writer_leases WHERE account_id = ?").get("paper-startup") }, { ...lease }, "repeat start must not renew or replace the established owner");
   } finally {

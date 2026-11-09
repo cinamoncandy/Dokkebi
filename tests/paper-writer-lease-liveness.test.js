@@ -62,3 +62,42 @@ test("PAPER writer lease is renewed between each heavy synchronous startup phase
     cursor = next;
   }
 });
+
+test("the production writer lease is 120 s with the heartbeat, takeover age and clock limits pinned explicitly", () => {
+  const { PAPER_WRITER_LEASE_DURATION_MS, PAPER_WRITER_HEARTBEAT_INTERVAL_MS, PAPER_WRITER_MAX_CLOCK_ADVANCE_MS, PAPER_WRITER_MAX_TAKEOVER_AGE_MS } = require("../dist/apps/cloud/src/paperTradingExecutionLoop.js");
+  assert.equal(PAPER_WRITER_LEASE_DURATION_MS, 120_000);
+  assert.equal(PAPER_WRITER_HEARTBEAT_INTERVAL_MS, 10_000, "renewal cadence is unchanged from the 30 s lease");
+  assert.equal(PAPER_WRITER_MAX_TAKEOVER_AGE_MS - PAPER_WRITER_LEASE_DURATION_MS, 90_000, "an expired lease stays takeable for the same 90 s after expiry as with the 30 s lease (120 s - 30 s)");
+  assert.ok(PAPER_WRITER_MAX_CLOCK_ADVANCE_MS >= PAPER_WRITER_LEASE_DURATION_MS && PAPER_WRITER_MAX_CLOCK_ADVANCE_MS <= 120_000, "the clock-advance limit is the smallest value the validation allows");
+  assert.ok(PAPER_WRITER_HEARTBEAT_INTERVAL_MS * 3 <= PAPER_WRITER_LEASE_DURATION_MS);
+  const source = fs.readFileSync(productionRoot, "utf8");
+  assert.match(source, /createLeaseStartupWindow\(PAPER_WRITER_LEASE_DURATION_MS,/, "the startup-window alarm follows the production lease");
+});
+
+test("a crashed writer's expired 120 s lease is taken over by the next start, and a lease older than the takeover age still fails closed", () => {
+  const { SqliteDatabase } = require("../dist/packages/storage/src/index.js");
+  const { SqliteCloudPaperAccountRepository } = require("../dist/apps/cloud/src/paperTradingExecutionLoop.js");
+  const database = new SqliteDatabase(":memory:");
+  let now = 1_000_000;
+  const options = (ownerId) => ({ accountId: "paper-takeover", ownerId, now: () => now, deferWriterLease: true });
+  const crashed = new SqliteCloudPaperAccountRepository(database, options("crashed-writer"));
+  crashed.startWriterLease();
+  // The crashed writer never releases or renews (SIGKILL). While its 120 s lease is valid a second writer is refused.
+  now += 119_000;
+  const early = new SqliteCloudPaperAccountRepository(database, options("early-writer"));
+  assert.throws(() => early.startWriterLease(), /PAPER_WRITER_ALREADY_ACTIVE/);
+  // Just after expiry the next start takes over (the supervisor's 31 s retry lands here).
+  now += 6_000;
+  const next = new SqliteCloudPaperAccountRepository(database, options("next-writer"));
+  next.startWriterLease();
+  assert.equal(database.connection.prepare("SELECT owner_id FROM cloud_paper_writer_leases WHERE account_id = ?").get("paper-takeover").owner_id, "next-writer");
+  next.close();
+  // A lease whose last heartbeat is older than the takeover age is not taken over automatically.
+  const stale = new SqliteCloudPaperAccountRepository(database, options("stale-writer"));
+  stale.startWriterLease();
+  now += 211_000;
+  const tooLate = new SqliteCloudPaperAccountRepository(database, options("too-late-writer"));
+  assert.throws(() => tooLate.startWriterLease(), /PAPER_WRITER_CLOCK_ANOMALY/);
+  for (const repository of [crashed, early, stale, tooLate]) repository.close();
+  database.close();
+});

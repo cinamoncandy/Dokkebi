@@ -37,7 +37,7 @@ import { buildOwnerBaselinePaperPeriodInput, isOwnerBaselinePeriodStartAt } from
 import { CloudRuntimeDashboardHydrator } from "./cloudRuntimeDashboardHydrator";
 import { SqliteCloudDashboardSnapshotRepository } from "./cloudDashboardSnapshotRepository";
 import { PaperChallengerBindingLedger } from "./paperChallengerBindingLedger";
-import { SqliteCloudPaperAccountRepository, paperAccountIdForCapital, type PaperAccountState } from "./paperTradingExecutionLoop";
+import { PAPER_WRITER_LEASE_DURATION_MS, SqliteCloudPaperAccountRepository, paperAccountIdForCapital, type PaperAccountState } from "./paperTradingExecutionLoop";
 import { createCloudAiRuntime } from "./ai/runtime";
 import { registerGracefulShutdown, startCloudRuntimeFromOptions, type CloudRuntimeHandle } from "./runtime";
 import { readClosedLearningProductionConfig } from "./closedLearningProductionConfig";
@@ -56,6 +56,18 @@ import { cloudPaperRiskLimitsForCapital } from "./paperRiskLimitScaling";
 import { ClosedLearningRolloverScheduler, type ClosedLearningRolloverResult } from "./closedLearningRolloverScheduler";
 import { ClosedLearningInitialPaperBootstrap, type ClosedLearningInitialPaperBootstrapResult } from "./closedLearningInitialPaperBootstrap";
 import { buildPaperPerformanceFromLedger, type PaperPerformanceFromLedgerResult } from "./paperPerformanceFromLedger";
+
+/**
+ * Startup timing (WO-OPS-20261109-STARTUP-PHASE-TIMING): one fixed-name line per synchronous startup phase with the time since process
+ * start and since the previous mark, so a slow activation can be attributed to a phase (database open with its full-file integrity
+ * check, Cloud AI, research composition, listener, PAPER lease start, research recovery). Log only: fixed names and integers, no input.
+ */
+let lastStartupMarkMs = 0;
+function startupMark(name: "database-open" | "cloud-ai-runtime" | "research-compose" | "cloud-runtime-listening" | "paper-runtime-start" | "research-recover" | "research-start"): void {
+  const now = Math.round(performance.now());
+  console.log(`[startup-phase] ${name} atMs=${now} deltaMs=${now - lastStartupMarkMs}`);
+  lastStartupMarkMs = now;
+}
 
 export const CLOSED_LEARNING_ROLLOVER_POLL_INTERVAL_MS = 30_000;
 
@@ -93,6 +105,7 @@ export function startClosedLearningProductionRuntime(env: NodeJS.ProcessEnv = pr
   const config = readCloudRuntimeConfig(env);
   const closedLearningConfig = readClosedLearningProductionConfig(env, config.cloudStateDbPath);
   const database = new SqliteDatabase(config.cloudStateDbPath);
+  startupMark("database-open");
   if (config.paperInitialCapitalKrw !== undefined) {
     const retired = retiredPaperAccountIds(env);
     if (retired.length > 0) {
@@ -152,15 +165,17 @@ export function startClosedLearningProductionRuntime(env: NodeJS.ProcessEnv = pr
   // initialization must not invalidate prepared SQLite change-tracking evidence, and its startup
   // I/O must not starve the lease heartbeat.
   const cloudAiRuntime = createCloudAiRuntime(env, undefined, { verifiedSharedSqliteDatabase: database });
+  startupMark("cloud-ai-runtime");
 
   let longBarTickEvery = 1;
   researchExperiments = composeResearchExperiments({ env, database, log: (line) => console.log(line), longBarTickEvery: () => longBarTickEvery });
+  startupMark("research-compose");
 
   // Own the canonical PAPER repository/loop at this composition root so the same process can
   // supply restart-safe candidate performance evidence without opening a second writer lease.
   // The lease starts inside startCloudRuntime immediately before the first PAPER account access.
   // The full runtime's synchronous setup can outlast the 30-second lease before the event loop can heartbeat.
-  const leaseWindow = createLeaseStartupWindow(30_000, (line) => console.log(line));
+  const leaseWindow = createLeaseStartupWindow(PAPER_WRITER_LEASE_DURATION_MS, (line) => console.log(line));
   const paperRepository = config.paperInitialCapitalKrw === undefined
     ? undefined
     : new SqliteCloudPaperAccountRepository(database, {
@@ -208,6 +223,7 @@ export function startClosedLearningProductionRuntime(env: NodeJS.ProcessEnv = pr
     orderBookCollector,
     futuresCollector,
   });
+  startupMark("cloud-runtime-listening");
   const readCanonicalPaperAccount = (): PaperAccountState | undefined => paperRepository?.loadLatest();
   const requireCanonicalPaperAccount = (): PaperAccountState => {
     const account = readCanonicalPaperAccount();
@@ -526,12 +542,15 @@ export function startClosedLearningProductionRuntime(env: NodeJS.ProcessEnv = pr
   try {
     researchExperiments?.prepareRecovery();
     baseHandle.startPaperRuntime();
+    startupMark("paper-runtime-start");
     // Renew the writer lease between the synchronous phases: on a slow host their sum can exceed the 30 s lease
     // before the event loop can run the repository heartbeat. Each call is the existing exact-owner fail-closed check.
     paperRepository?.verifyWriterLease();
     baseHandle.recoverResearch();
+    startupMark("research-recover");
     paperRepository?.verifyWriterLease();
     researchExperiments?.start();
+    startupMark("research-start");
     paperRepository?.verifyWriterLease();
     researchExperiments?.finishPreparedRecovery();
     paperRepository?.verifyWriterLease();
