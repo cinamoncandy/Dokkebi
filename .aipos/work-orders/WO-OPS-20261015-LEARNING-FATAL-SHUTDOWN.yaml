@@ -1,6 +1,6 @@
 id: WO-OPS-20261015-LEARNING-FATAL-SHUTDOWN
 title: Route daemon scheduler fatal failure through existing bounded shutdown
-status: IN_PROGRESS
+status: COMPLETED
 priority: P1
 risk: MEDIUM
 authority_impact: runtime-recovery-no-trading-authority-change
@@ -34,3 +34,4 @@ safety:
   productionMutationAllowed: false
   aiAuthority: ZERO_AUTHORITY
 next: "All local gates and fresh review PASS; submit draft then ready through canonical exact-head CI/Audit/Release, followed by approved PAPER deployment. No historical root-cause claim."
+closed_by_merge: "PR #2722 merged to main (326406a37) by the release authority after CI and Audit. Status corrected 2026-11-09 from a stale IN_PROGRESS; this records the merge only, not a separate production verification."

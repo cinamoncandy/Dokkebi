@@ -1,6 +1,6 @@
 id: WO-POLICY-20261015-PAPER-LOSS-LIMIT
 title: Owner-approved removal of Cloud spot PAPER consecutive-loss halt
-status: IN_PROGRESS
+status: COMPLETED
 decision: OWNER_ACCEPTED
 branch: codex/paper-loss-limit-policy-20261015
 base_commit: 316fb0a0951c375ea90d49c0d73889efdc81892f
@@ -35,3 +35,4 @@ independent_review: "Fresh Hubble review PASS no remaining P0/P1/P2 at9db66cdb; 
 compatibility: "Optional boolean missing means enforced; malformed values fail closed. Cloud default false is explicit owner policy. Numeric reference3 retained for compatibility but enforcementfalse projected. Immutable past fills/losses/evidence unchanged; policy fingerprint changes intentionally."
 rollback: "Restore Cloud enforcementtrue via reviewed policy rollback; never erase counters or rewrite old evidence. No old evidence promoted to new policy proof."
 next: "Draft PR/exact-head CI and canonical Audit/Release. Previous Oracle38688550321 failed startup/readiness and rolled back; runtime89a9ceca recovered. Investigate writer-lease startup before another rollout; operational loss-policy change NOT applied."
+closed_by_merge: "PR #2731 merged to main (7721f159e) by the release authority after CI and Audit. Status corrected 2026-11-09 from a stale IN_PROGRESS; this records the merge only, not a separate production verification."
