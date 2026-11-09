@@ -1,0 +1,23 @@
+id: WO-OPS-20261109-DIAGNOSE-STUDY-RESULTS
+title: "Host diagnosis: show the RAIM study status from the Research journal (fixed fields, read-only)"
+status: READY_FOR_REVIEW
+created: 2026-11-09
+authority_impact: none
+trigger: "WO-RESEARCH-20261021-ORDERBOOK-RETENTION records that run-raim-study.js reads only the live order-book table and would lose its 2026-10-25..10-29 data after about 2026-11-08. Whether the RAIM study already wrote its final result could not be read: the study prints only to the Research journal and the diagnosis never projected that line."
+change:
+  - ".github/workflows/oracle-host-diagnose.yml: the annotation step now also projects the latest RAIM_STUDY line of the Research journal (fixed status code plus numbers, booleans and a 64-hex fingerprint only), next to the existing ORDERBOOK_STUDY and DATA_INTEGRITY projections. Once a final result exists the study prints it every run with recorded:true."
+  - "Correction of the first attempt (#3030): a step that read raim-study-result.json and orderbook-study-result.json from /var/lib/nusa was removed. The diagnosis runner account gets 'Permission denied' on that directory (host hardening), so it could only print UNREADABLE."
+  - "tests/oracle-host-diagnose-workflow.test.js: runs the RAIM projection snippet on sample lines: fixed fields only, free text and a token dropped, a forged status, truncated JSON and an empty journal fail closed."
+rules:
+  - "Read only: no sudo, no write, no service change, no network, no credential. The existing workflow gates (no cat, no write, dispatch-only) still pass."
+not_changed:
+  - "The studies, their windows and pass rules, retention, thresholds, limits, capital and authority."
+safety:
+  paper_only: true
+  liveAuthority: NONE
+  productionMutationAllowed: false
+  aiAuthority: ZERO_AUTHORITY
+validation:
+  - "oracle-host-diagnose-workflow.test 13 pass; workflow action-pin and authority-map validators PASS."
+unverified: "The value on the host: raim_study= appears on the next diagnosis dispatch; the journal window is the last 400 lines, so an old study line can fall out of it."
+next: "Read raim_study. HOLDOUT_* means the once-only result exists and the pruned raw data no longer matters; WAITING_DATA or INSUFFICIENT_DATA means no final result and its window data is being pruned, which needs an owner decision; UNAVAILABLE means the line is outside the journal window."

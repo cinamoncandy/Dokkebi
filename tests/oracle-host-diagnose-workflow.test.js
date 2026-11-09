@@ -135,7 +135,7 @@ test("the learning readout reads the saved /health file, keeps only booleans, nu
   try {
     const out = JSON.parse(run(JSON.stringify({
       learningLoopVerdict: { verdict: "PARTIAL", candidateFunnel: { stage: "NO_DISCOVERY", experiments: 9 } },
-      runtime: { paperFunnel: { since: 5, counts: { "DECISION:PASS:BUY": 7, "ORDER_INTENT:FAIL": 5, "ORDER_INTENT:FAIL:ALLOCATION_ZERO": 4, "free text": 9, "RISK:FAIL:x": 1 } }, lastPaperFillAt: 1700, paperFillCount: 2, lastPaperDecisionOutcome: "HOLD", sourceCommitSha: "a".repeat(40), lastError: "free text here", paperLedger: { fillCount: 4, ledgerFingerprintSha256: "b".repeat(64) }, dataIntegrity: { status: "WARN", candleStaleSeries: 1, candleMaxLatestAgeMs: 3_500_000 }, orderBookCoverage: { market: "KRW-BTC", ratio: 0.6, meetsStudyBar: false }, closedLearningLoop: { cycleId: "closed-learning:abc", note: "secret text", cyclesEvaluated: 0 } },
+      runtime: { paperFunnel: { since: 5, counts: { "DECISION:PASS:BUY": 7, "ORDER_INTENT:FAIL": 5, "ORDER_INTENT:FAIL:ALLOCATION_ZERO": 4, "free text": 9, "RISK:FAIL:x": 1 } }, lastPaperFillAt: 1700, paperFillCount: 2, lastPaperDecisionOutcome: "HOLD", sourceCommitSha: "a".repeat(40), lastError: "free text here", paperLedger: { fillCount: 4, ledgerFingerprintSha256: "b".repeat(64) }, dataIntegrity: { status: "WARN", candleStaleSeries: 1, candleMaxLatestAgeMs: 3_500_000 }, researchRollingHoldout: { "1m": { mode: "SHADOW", candidatesChecked: 2, refused: { ROLLING_INSUFFICIENT_HISTORY_FOLD_0: 2 }, folds: { notBetter: 1 } } }, orderBookCoverage: { market: "KRW-BTC", ratio: 0.6, meetsStudyBar: false }, closedLearningLoop: { cycleId: "closed-learning:abc", note: "secret text", cyclesEvaluated: 0 } },
     })));
     assert.equal(out.learningLoopVerdict.candidateFunnel.stage, "NO_DISCOVERY");
     assert.deepEqual(out.orderBookCoverage, { ratio: 0.6, meetsStudyBar: false }, "the market name is dropped");
@@ -145,8 +145,44 @@ test("the learning readout reads the saved /health file, keeps only booleans, nu
     assert.equal(JSON.parse(run(JSON.stringify({ runtime: { lastPaperDecisionOutcome: "BLOCKED:PAPER_EXECUTION_INTENT_MINIMUM_ORDER_EXCEEDS_CASH" } }))).lastPaperDecisionOutcome, "BLOCKED:PAPER_EXECUTION_INTENT_MINIMUM_ORDER_EXCEEDS_CASH", "a coded decision outcome is read");
     assert.equal(run(JSON.stringify({ runtime: { lastPaperDecisionOutcome: "balance is 9,999 KRW" } })), "LEARNING_READOUT_EMPTY", "free text is dropped");
     assert.deepEqual(out.dataIntegrity, { status: "WARN", candleStaleSeries: 1, candleMaxLatestAgeMs: 3_500_000 });
+    assert.deepEqual(out.researchRollingHoldout, { "1m": { mode: "SHADOW", candidatesChecked: 2, refused: { ROLLING_INSUFFICIENT_HISTORY_FOLD_0: 2 }, folds: { notBetter: 1 } } }, "the SHADOW rolling summary is read");
     assert.deepEqual(out.closedLearningLoop, { cyclesEvaluated: 0 }, "identifiers and free text are dropped");
     assert.equal(run("{bad"), "LEARNING_READOUT_UNAVAILABLE");
     assert.equal(run("{}"), "LEARNING_READOUT_EMPTY");
   } finally { fs.rmSync(directory, { recursive: true, force: true }); }
+});
+
+// WO-OPS-20261109-DIAGNOSE-STUDY-RESULTS: the RAIM study line is read from the Research journal (the runner account cannot read /var/lib/nusa).
+test("the RAIM study projection keeps a fixed status and numbers only and fails closed", () => {
+  const start = text.indexOf("raim=\"$(journalctl");
+  assert.ok(start > 0, "the RAIM projection exists");
+  const block = text.slice(start, text.indexOf("summary=\"${summary}\"$'\\n'\"raim_study", start));
+  assert.match(block, /nusa-research\.service/);
+  assert.doesNotMatch(block, /\/var\/lib\/nusa/, "no state-directory read");
+  const code = block.slice(block.indexOf("node -e '") + "node -e '".length, block.lastIndexOf("')\""));
+  const project = (input) => {
+    const run = require("node:child_process").spawnSync(process.execPath, ["-e", code], { input, encoding: "utf8" });
+    assert.equal(run.status, 0, run.stderr);
+    return run.stdout.trim();
+  };
+  const fp = "a".repeat(64);
+  const line = "RAIM_STUDY " + JSON.stringify({ status: "HOLDOUT_FAIL", markets: 20, eligible: 7, recorded: true, independent: false, datasetFingerprint: fp, note: "free text", privateField: "private-value" });
+  assert.deepEqual(JSON.parse(project(line)), { status: "HOLDOUT_FAIL", markets: 20, eligible: 7, recorded: true, independent: false, datasetFingerprint: fp });
+  assert.doesNotMatch(project(line), /free text|private-value/);
+  assert.equal(project("RAIM_STUDY {"), "RAIM_STUDY_UNAVAILABLE");
+  assert.equal(project("RAIM_STUDY " + JSON.stringify({ status: "FORGED_PASS" })), "RAIM_STUDY_UNAVAILABLE");
+  assert.equal(project("[cloud-research-snapshot] RAIM_STUDY_FAILED_CLOSED"), "RAIM_STUDY_FAILED_CLOSED");
+  assert.equal(project(""), "RAIM_STUDY_UNAVAILABLE");
+});
+
+// WO-OPS-20261109-DIAGNOSE-RESEARCH-JOURNAL: the Research journal probe prints counts and one timestamp only, never log text.
+test("the Research journal availability probe prints only counts and a timestamp", () => {
+  const start = text.indexOf('echo "== Research journal availability');
+  assert.ok(start > 0, "the probe exists");
+  const block = text.slice(start, text.indexOf('echo "== Forward Research log projection', start));
+  for (const marker of ["ORDERBOOK_STUDY", "RAIM_STUDY", "DATA_INTEGRITY", "REGIME_FORWARD_STUDY"]) assert.match(block, new RegExp(marker));
+  const printed = block.split("\n").filter((line) => /^\s*(echo|for)\b/.test(line)).join("\n");
+  assert.doesNotMatch(printed, /echo\s+"?\$rj\b|printf\s+'%s\\n'\s+"\$rj"\s*$/m, "the journal text itself is never printed");
+  assert.match(block, /grep -c/);
+  assert.doesNotMatch(block, /\bsudo\b|>\s*\/|\btee\b/);
 });

@@ -124,7 +124,10 @@ function readOwnerResearch(file = OWNER_RESEARCH_FILE) {
   if (intervals !== undefined && (!Array.isArray(intervals) || intervals.length === 0 || intervals.some((value) => ![1, 15, 60, 240].includes(value)) || new Set(intervals).size !== intervals.length)) {
     throw new Error(`owner research file is invalid: ${file}`);
   }
-  return Object.freeze({ experiments: parsed.experiments, ...(intervals === undefined ? {} : { intervalMinutes: Object.freeze([...intervals]) }) });
+  // Optional K-of-N rolling holdout mode (display-only SHADOW; docs/DESIGN_ROLLING_HOLDOUT_WIRING.md). Only the exact words are accepted.
+  const rolling = parsed.rollingHoldout;
+  if (rolling !== undefined && rolling !== "OFF" && rolling !== "SHADOW") throw new Error(`owner research file is invalid: ${file}`);
+  return Object.freeze({ experiments: parsed.experiments, ...(intervals === undefined ? {} : { intervalMinutes: Object.freeze([...intervals]) }), ...(rolling === undefined ? {} : { rollingHoldout: rolling }) });
 }
 
 /** Fills in operational defaults without overriding anything the caller set explicitly. */
@@ -179,6 +182,10 @@ function buildRuntimeEnv(baseEnv, token, ownerPaperAccount = readOwnerPaperAccou
     if (env.NUSA_CLOUD_RESEARCH_EXPERIMENTS !== value) {
       env.NUSA_CLOUD_RESEARCH_EXPERIMENTS = value;
       applied.push("NUSA_CLOUD_RESEARCH_EXPERIMENTS");
+    }
+    if (ownerResearch.rollingHoldout != null && env.NUSA_RESEARCH_ROLLING_HOLDOUT !== ownerResearch.rollingHoldout) {
+      env.NUSA_RESEARCH_ROLLING_HOLDOUT = ownerResearch.rollingHoldout;
+      applied.push("NUSA_RESEARCH_ROLLING_HOLDOUT");
     }
     if (ownerResearch.intervalMinutes != null) {
       const intervals = ownerResearch.intervalMinutes.join(",");

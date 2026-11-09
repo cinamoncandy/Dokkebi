@@ -1,6 +1,6 @@
 id: WO-DOCS-20261012-HANDOFF-EVENING-DECISIONS
 title: "Record the evening owner decisions in the AIPOS handoff"
-status: READY_FOR_REVIEW
+status: COMPLETED
 owner: nusa-development
 repository: cinamoncandy/NUSA
 base_branch: main
@@ -30,3 +30,4 @@ safety:
   productionMutationAllowed: false
   aiAuthority: ZERO_AUTHORITY
   fail_closed: true
+closed_by_merge: "PR #2647 (branch claude/handoff-evening-decisions) merged to main (297574177, 2026-10-12) by the release authority after CI and Audit; it is the only merged PR from this branch. Status corrected 2026-11-09 from READY_FOR_REVIEW; this records the merge only, not a separate production verification."

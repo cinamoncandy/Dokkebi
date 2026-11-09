@@ -1,0 +1,32 @@
+id: WO-PAPER-20261108-LEASE-RENEW-PHASES
+title: "Renew the PAPER writer lease between heavy synchronous startup phases (#2770 follow-up after two failed Oracle activations)"
+status: READY_FOR_REVIEW
+owner: nusa-development
+repository: cinamoncandy/NUSA
+base_branch: main
+implementation_branch: claude/lease-renew
+authority_impact: none
+objective: "Oracle activation of 54c095d (run 42431793601) and 7879d1e (run 42461974290) both rolled back automatically: startup took 39.9 s / 51.9 s against the 30 s writer lease, and after #3022 the lease-start work (acquire, legacy recovery, fill-ledger backfill) alone measured 24.0 s (repositoryConstruction=24034ms). Owner approved the fix on 2026-11-08: call the existing exact-owner verifyWriterLease() after each heavy synchronous phase (inside startWriterLease and between the closed-learning runtime phases) so a slow host renews the lease instead of letting it expire. Re-pins PAPER_ADAPTER to the new exact source blob (requalification path, owner approved)."
+scope:
+  - "apps/cloud/src/paperTradingExecutionLoop.ts"
+  - "apps/cloud/src/closedLearningProductionRuntime.ts"
+  - "apps/cloud/src/moduleQualificationV1.ts"
+  - "apps/cloud/src/paperTradingExecutionLoop.requalification.test.ts"
+  - "tests/paper-writer-lease-liveness.test.js"
+  - "tests/research-startup-recovery.test.js"
+  - "tests/cloud-paper-fill-ledger.test.js"
+exclusions:
+  - "Lease TTL (30 s), exact-owner checks, clock-anomaly limits, takeover rules, Risk limits, thresholds and capital are unchanged. A lease that already expired or was taken over still fails closed (PAPER_WRITER_LEASE_LOST)."
+  - "A single phase longer than the TTL is not fixed by this change; it only shortens the unrenewed window to the longest single phase."
+  - "No host change, no deployment, no database mutation in this PR."
+safety:
+  paper_only: true
+  liveAuthority: NONE
+  productionMutationAllowed: false
+  aiAuthority: ZERO_AUTHORITY
+  fail_closed: "Every added call is the existing verifyWriterLease(); on failure startWriterLease closes the repository and the production root stops the partial runtime."
+verification_commands:
+  - npx tsc -p tsconfig.json
+  - node -r ./tests/register-dist.cjs --test tests/paper-writer-lease-liveness.test.js tests/research-startup-recovery.test.js tests/paper-writer-lease-loss-fail-closed.test.js
+review: "Draft PR; non-author review of the pin move before Ready."
+residual: "Whether the 24 s lease-start work is itself caused by host I/O after the backup is unverified. If one phase alone exceeds 30 s on the host, a further change (heartbeat off the main thread or splitting that phase) is needed."

@@ -1,6 +1,6 @@
 id: WO-OPS-20261015-RESEARCH-STARTUP-RECOVERY
 title: Move repeated Research evidence validation outside PAPER writer startup window
-status: IN_PROGRESS
+status: COMPLETED
 branch: codex/paper-startup-research-recovery-20261015
 base_commit: 7721f159e50f1d93c48678795af4f309f7c13e4f
 priority: P1
@@ -34,3 +34,4 @@ validation: "Frozen code9027cbf0c58e085b882503988d668eeb83903087:35 focused test
 independent_review: "Fresh Hubble exact9027cbf0 PASS0/0/0 after fixing same-connection cache invalidation; independently9 regressions PASS. Not Audit/Release approval."
 limitations: "total_changes conservatively invalidates on legitimate account/lease/session writes too. Revalidation can still consume lease time. No complete startup-stall solution, initiating-host-cause proof or deployment claim."
 next: "Draft PR/exact-head CI then canonical Audit/Release; governed rollout and actual readiness remain required."
+closed_by_merge: "PR #2732 merged to main (10c153464) by the release authority after CI and Audit. Status corrected 2026-11-09 from a stale IN_PROGRESS; this records the merge only, not a separate production verification."

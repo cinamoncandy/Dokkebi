@@ -1,0 +1,26 @@
+id: WO-AUTOPILOT-20261107-CANARY2-REVERT
+title: "Canary 2 R: revert PR #3015 (merge 38c70bb) after the second controlled PAPER canary"
+status: READY_FOR_REVIEW
+owner: nusa-development
+repository: cinamoncandy/NUSA
+base_branch: main
+implementation_branch: claude/canary2-revert-r
+authority_impact: none
+objective: "Restore apps/autopilot/src/repairableWorkflowRun.ts to blob 865c7fb4f3a3669511acae08135853337545d70f and the three tests that asserted the original behaviour after the owner-approved second canary (merge 2026-11-07 22:08:54 KST, 38c70bb). git revert -m 1 of the #3015 merge commit; only the canary 2 work order and the regenerated CURRENT_TRUTH.md are removed or changed with it."
+scope:
+  - "Revert of 38c70bb plus this record."
+exclusions:
+  - "No gate, protection, workflow, pin, limit or server change. L1 stays PARTIAL; no CODE_ACTIONABLE was observed or claimed."
+safety:
+  paper_only: true
+  liveAuthority: NONE
+  productionMutationAllowed: false
+  aiAuthority: ZERO_AUTHORITY
+  fail_closed: "The original policy is restored; a red main stays blocked from deployment until this lands."
+canary2_result_summary: "Main push CI of 38c70bb (run 42375619284, attempts 1-3): causal-regression-contract failed with OBSERVED_MISMATCH; attest-causal-regression succeeded in every attempt and nusa-causal-attestation-1..3 were retained (the #3013 fix worked). The Event Bridge downloaded the bundle and delivered it over OIDC (HTTP 202, status DELIVERED) in all three attempts; the server answered executorStatus NOOP, executorReason CAUSAL_EVIDENCE_REJECTED each time (closed rejection, as expected for a main-ci-timeout case with a failure source run). No autonomous PR, no Cloudflare deploy (skipped), no server effect, one source identity (sha 38c70bb). Evidence sha256 (first 16 hex): attestation-1 7f84937de4834bb7, attestation-2 b5a83276d056b368, attestation-3 0551355d24a28552; receipt-1 c2d5c4ad4ea24b0e, receipt-2 1538693cbd92cc8c, receipt-3 4928716a4920dce9."
+verification_commands:
+  - node -r ./tests/register-dist.cjs --test dist/apps/autopilot/src/causalRegressionContract.test.js dist/apps/autopilot/src/repairableWorkflowRun.test.js tests/causal-regression-observe.test.js
+  - node scripts/validate-aipos-yaml.js
+review: "Draft until PR CI and the PAPER runtime evidence are green on the exact head; then Audit and the release bot."
+release_serialization: "Red main left no exact-main Cloudflare deploy, so the trusted preflight can fail on this PR and reopen P0 #1461 (it did after the first canary). The PR body carries 'Resolves #1461' from the start (owner-approved designed closing reference, 2026-11-07)."
+residual: "Real CODE_ACTIONABLE, live Gate A and a positive admission were not observed."

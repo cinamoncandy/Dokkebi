@@ -1,6 +1,6 @@
 id: WO-OPS-20261015-DIAGNOSE-HEALTH-FRESHNESS
 title: Prevent failed host health probes from publishing stale response files
-status: IN_PROGRESS
+status: COMPLETED
 authority_impact: none
 priority: P0
 risk: LOW
@@ -36,3 +36,4 @@ safety:
   productionMutationAllowed: false
   aiAuthority: ZERO_AUTHORITY
 next: "Finish gates/review; track canonical PAPER recovery independently. Do not infer outage root cause from stale health."
+closed_by_merge: "PR #2718 merged to main (8c297c976) by the release authority after CI and Audit. Status corrected 2026-11-09 from a stale IN_PROGRESS; this records the merge only, not a separate production verification."

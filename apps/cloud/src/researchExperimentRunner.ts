@@ -176,10 +176,14 @@ export interface RollingExperimentOutcome {
 const refuseRolling = (reason: string): RollingExperimentOutcome => Object.freeze({ decision: decideRollingHoldout([]), folds: Object.freeze([]), refusal: reason });
 
 /**
- * Runs the existing single-fold experiment once per fold. This exported composition is
- * deliberately not called by the orchestrator, scheduler, ledger, backfill, or /health.
+ * Runs the existing single-fold experiment once per fold. Only the orchestrator's SHADOW mode calls it (default OFF); it is not
+ * used by the scheduler, ledger, backfill, or /health.
+ *
+ * `newestOutcome`: the outcome the caller already obtained for `spec` itself, which IS the newest fold (same end, same holdout window).
+ * The newest fold's holdout claim is already used by that run, so running it again could only report HOLDOUT_ALREADY_USED; the given
+ * outcome is classified instead and the older folds are the only ones run here.
  */
-export function runRollingResearchExperiment(ports: ExperimentRunnerPorts, spec: ExperimentSpec, folds: number = ROLLING_FOLDS): RollingExperimentOutcome {
+export function runRollingResearchExperiment(ports: ExperimentRunnerPorts, spec: ExperimentSpec, folds: number = ROLLING_FOLDS, newestOutcome?: ExperimentOutcome): RollingExperimentOutcome {
   // K stays 2, so only N=3 keeps "2 of 3" as strict as designed; any other N would be an easier bar and is refused.
   if (folds !== ROLLING_FOLDS) return refuseRolling("ROLLING_UNSUPPORTED_FOLD_COUNT");
   try {
@@ -190,7 +194,7 @@ export function runRollingResearchExperiment(ports: ExperimentRunnerPorts, spec:
 
     const results = built.folds.map((fold) => {
       const endCloseMs = fold.bounds.holdout.endCloseMs;
-      const outcome = runResearchExperiment(ports, { ...spec, endCloseMs });
+      const outcome = newestOutcome !== undefined && fold.index === folds - 1 ? newestOutcome : runResearchExperiment(ports, { ...spec, endCloseMs });
       let classified: FoldOutcome, note: string;
       if (outcome.status !== "COMPLETED") { classified = "INSUFFICIENT"; note = `${outcome.status}_${outcome.reason}`; }
       else if (outcome.holdout != null) { classified = outcome.holdout.result === "CHALLENGER_BETTER" ? "CHALLENGER_BETTER" : "NOT_BETTER"; note = "HOLDOUT_EVALUATED"; }
