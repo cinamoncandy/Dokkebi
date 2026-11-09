@@ -1,0 +1,20 @@
+id: WO-OPS-20261109-WO-STATUS-CLEANUP
+title: "Close eight work orders whose PRs are already merged but still read IN_PROGRESS"
+status: READY_FOR_REVIEW
+created: 2026-11-09
+authority_impact: none
+trigger: "The owner asked what work is left across NUSA. Of the P0/P1 work orders still listed as active, eight name a branch whose pull request is already merged to main (found with git log --merges on the branch name), so the active list overstates the remaining work."
+change:
+  - "Status IN_PROGRESS -> COMPLETED and a closed_by_merge line (PR number, merge commit) on WO-OPS-20261015-DIAGNOSE-HEALTH-FRESHNESS (#2718), WO-OPS-20261015-LEARNING-FATAL-SHUTDOWN (#2722), WO-OPS-20261015-RESEARCH-STARTUP-RECOVERY (#2732), WO-POLICY-20261015-PAPER-LOSS-LIMIT (#2731), WO-RESEARCH-20261016-A-GRADE-VALIDATION (#2736), WO-RESEARCH-20261016-CLOUD-IDENTITY (#2740), WO-RESEARCH-20261016-QUALIFICATION-IDENTITY (#2738) and WO-RESEARCH-20261016-RUN-FINGERPRINT (#2737)."
+  - "Regenerated .aipos/CURRENT_TRUTH.md."
+rules:
+  - "Records only. closed_by_merge states that the PR merged; it does not claim a separate production verification."
+not_changed:
+  - "No code, workflow, threshold, limit, capital or authority. Other active work orders are untouched (not checked here: RISK-20261030-ACCOUNT-KEY-PEAK-PERSIST, OPS-20261019-ORACLE-STABILITY-ROLLBACK, OPS-20261002-PREFLIGHT-RUNTIME-UNCHANGED, RESEARCH-20261021-ORDERBOOK-RETENTION and the other P0/P1 orders)."
+safety:
+  paper_only: true
+  liveAuthority: NONE
+  productionMutationAllowed: false
+  aiAuthority: ZERO_AUTHORITY
+validation:
+  - "validate-aipos-yaml PASS (602 files); aipos-work-order-status.test 6 pass."
