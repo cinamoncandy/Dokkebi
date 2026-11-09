@@ -87,7 +87,7 @@ const selectedIssue = selectCodexBacklogTask([issue()], []);
 assert.ok(selectedIssue);
 const TASK_DIGEST = createHash("sha256").update(codexBacklogTaskSnapshot(selectedIssue)).digest("hex");
 
-function githubFetch(fixture: Awaited<ReturnType<typeof oidcFixture>>, options: { run?: Record<string, unknown>; issue?: unknown; pulls?: unknown; mainSha?: string | null; mainShas?: Array<string | null> } = {}) {
+function githubFetch(fixture: Awaited<ReturnType<typeof oidcFixture>>, options: { run?: Record<string, unknown>; issue?: unknown; pulls?: unknown; inventoryErrors?: boolean; mainSha?: string | null; mainShas?: Array<string | null> } = {}) {
   let mainCheck = 0;
   const defaultRun = {
     id: Number(fixture.claims.run_id),
@@ -99,7 +99,7 @@ function githubFetch(fixture: Awaited<ReturnType<typeof oidcFixture>>, options: 
     event: fixture.claims.event_name,
     status: "in_progress",
   };
-  return async (input: string) => {
+  return async (input: string, init?: RequestInit) => {
     const url = String(input);
     if (url.endsWith("/.well-known/jwks")) return new Response(JSON.stringify(fixture.jwks), { status: 200 });
     if (url.includes("/actions/runs/")) return new Response(JSON.stringify({ ...defaultRun, ...options.run }), { status: 200 });
@@ -111,8 +111,40 @@ function githubFetch(fixture: Awaited<ReturnType<typeof oidcFixture>>, options: 
       ? new Response("unavailable", { status: 503 })
       : new Response(JSON.stringify({ object: { sha: currentSha } }), { status: 200 });
     }
-    if (url.includes("/issues?")) return new Response(JSON.stringify([options.issue ?? issue()]), { status: 200 });
-    if (url.includes("/pulls?")) return new Response(JSON.stringify(options.pulls ?? []), { status: 200 });
+    if (url.endsWith("/graphql")) {
+      const query = JSON.parse(String(init?.body)) as { query: string; variables: { after: string | null } };
+      const resource = query.query.includes("pullRequests(first:") ? "pullRequests" : "issues";
+      if (resource === "issues" && options.inventoryErrors) {
+        return new Response(JSON.stringify({ errors: [{ message: "fixture inventory unavailable" }] }), { status: 200 });
+      }
+      const rawNodes = resource === "issues"
+        ? [options.issue ?? issue()]
+        : options.pulls ?? [];
+      const nodes = (rawNodes as Array<Record<string, unknown>>).map((value) => resource === "issues"
+        ? {
+          number: value.number,
+          title: value.title,
+          body: value.body,
+          state: String(value.state ?? "open").toUpperCase(),
+          authorAssociation: value.author_association,
+          createdAt: value.created_at ?? "2026-11-08T00:00:00Z",
+          updatedAt: value.updated_at ?? "2026-11-08T00:00:00Z",
+          labels: { edges: (Array.isArray(value.labels) ? value.labels : []).map((label) => ({ node: { name: typeof label === "string" ? label : (label as { name?: string }).name } })), pageInfo: { hasNextPage: false } },
+        }
+        : {
+          number: value.number,
+          title: value.title,
+          body: value.body,
+          state: String(value.state ?? "open").toUpperCase(),
+          createdAt: value.created_at ?? "2026-11-08T00:00:00Z",
+          updatedAt: value.updated_at ?? "2026-11-08T00:00:00Z",
+        });
+      const afterNumber = Number(query.variables.after?.split(":").at(-1) ?? 0);
+      const page = nodes.filter((value) => Number(value.number) > afterNumber).slice(0, 100);
+      const edges = page.map((value) => ({ cursor: `${resource}:${value.number}`, node: value }));
+      const hasNextPage = nodes.some((value) => Number(value.number) > Number(page.at(-1)?.number ?? 0));
+      return new Response(JSON.stringify({ data: { repository: { [resource]: { edges, totalCount: nodes.length, pageInfo: { hasNextPage, endCursor: edges.at(-1)?.cursor ?? null } } } } }), { status: 200 });
+    }
     return new Response("not found", { status: 404 });
   };
 }
@@ -133,36 +165,14 @@ function env(coordinator: ExecutionCoordinatorNamespace): WorkerEnv {
   } as unknown as WorkerEnv;
 }
 
-test("Codex claims the existing WIP slot, rejects duplicate admission, and releases with a durable replay tombstone", async () => {
+test("Codex does not admit a task from a stable cursor scan without point-in-time inventory proof", async () => {
   const coordinator = namespace();
   const fixture = await oidcFixture();
   const fetchImpl = githubFetch(fixture);
-  const dependencies = { now: () => NOW, fetchImpl };
-  const claimed = await handleCodexWipCoordination(request(fixture.token, "claim"), env(coordinator), dependencies);
-  assert.equal(claimed.status, 201);
-  const claim = await claimed.json() as { accepted: boolean; executionId: string; dedupeKey: string };
-  assert.equal(claim.accepted, true);
-  const active = await readActiveWip(coordinator);
-  assert.equal(active.claims.length, 1);
-  assert.equal(active.claims[0]?.canonicalOwner, "apps/autopilot");
-  assert.deepEqual(active.claims[0]?.conflictKeys, ["issue:903", "module:apps/autopilot/src"]);
-
-  const duplicate = await handleCodexWipCoordination(request(fixture.token, "claim"), env(coordinator), dependencies);
-  assert.equal(duplicate.status, 409);
-  assert.equal((await duplicate.json() as { error: string }).error, "ALREADY_ACTIVE");
-  assert.equal((await readActiveWip(coordinator)).claims.length, 1);
-
-  const released = await handleCodexWipCoordination(request(fixture.token, "release"), env(coordinator), dependencies);
-  assert.equal(released.status, 200);
-  assert.equal((await released.json() as { released: boolean }).released, true);
-  const completionResponse = await coordinator.get(coordinator.idFromName("evolve-active-wip-v1")).fetch("https://execution-coordinator/active-wip/completions");
-  const completion = (await completionResponse.json() as { completions: Array<{ kind: string }> }).completions[0];
-  assert.equal(completion?.kind, "CLAIM_RELEASED");
+  const response = await handleCodexWipCoordination(request(fixture.token, "claim"), env(coordinator), { now: () => NOW, fetchImpl });
+  assert.equal(response.status, 503);
+  assert.equal((await response.json() as { error: string }).error, "CODEX_WIP_INVENTORY_UNVERIFIABLE");
   assert.equal((await readActiveWip(coordinator)).claims.length, 0);
-
-  const replay = await handleCodexWipCoordination(request(fixture.token, "claim"), env(coordinator), dependencies);
-  assert.equal(replay.status, 409);
-  assert.equal((await replay.json() as { error: string }).error, "ACTIVE_WIP_REPLAYED");
 });
 
 test("Codex claim is bound to the live OIDC workflow, task selection, and available two-slot capacity", async () => {
@@ -181,22 +191,28 @@ test("Codex claim is bound to the live OIDC workflow, task selection, and availa
     now: () => NOW,
     fetchImpl: githubFetch(valid, { pulls: [{ number: 100, title: "fix", body: "Refs #903" }] }),
   });
-  assert.equal(linkedIssue.status, 409);
+  assert.equal(linkedIssue.status, 503);
+  assert.equal((await linkedIssue.json() as { error: string }).error, "CODEX_WIP_INVENTORY_UNVERIFIABLE");
   assert.equal((await readActiveWip(coordinator)).claims.length, 0);
 
   await admitActiveWip(coordinator, { dedupeKey: "existing:wip:1", executionId: "existing:exec:1", canonicalOwner: "owner-1", conflictKeys: ["path:1"], claimedAt: NOW, maxConcurrent: 2 });
   await admitActiveWip(coordinator, { dedupeKey: "existing:wip:2", executionId: "existing:exec:2", canonicalOwner: "owner-2", conflictKeys: ["path:2"], claimedAt: NOW, maxConcurrent: 2 });
-  const full = await handleCodexWipCoordination(request(valid.token, "claim"), env(coordinator), { now: () => NOW, fetchImpl: githubFetch(valid) });
-  assert.equal(full.status, 409);
-  assert.equal((await full.json() as { error: string }).error, "WIP_LIMIT_REACHED");
+  const full = await admitActiveWip(coordinator, { dedupeKey: "existing:wip:3", executionId: "existing:exec:3", canonicalOwner: "owner-3", conflictKeys: ["path:3"], claimedAt: NOW, maxConcurrent: 2 });
+  assert.equal(full.reason, "WIP_LIMIT_REACHED");
   assert.equal((await readActiveWip(coordinator)).claims.length, 2);
 });
 
 test("Codex release from another run cannot release the original task claim", async () => {
   const coordinator = namespace();
   const owner = await oidcFixture();
-  const claim = await handleCodexWipCoordination(request(owner.token, "claim"), env(coordinator), { now: () => NOW, fetchImpl: githubFetch(owner) });
-  assert.equal(claim.status, 201);
+  await admitActiveWip(coordinator, {
+    dedupeKey: `codex-wip:${owner.claims.run_id}:${owner.claims.run_attempt}:issue:903:sha:${SHA}`,
+    executionId: `codex-execution:${owner.claims.run_id}:${owner.claims.run_attempt}:issue:903:sha:${SHA}`,
+    canonicalOwner: "apps/autopilot",
+    conflictKeys: ["issue:903"],
+    claimedAt: NOW,
+    maxConcurrent: 2,
+  });
   const otherRun = await oidcFixture({ run_id: "54321" });
   const denied = await handleCodexWipCoordination(request(otherRun.token, "release"), env(coordinator), { now: () => NOW + 1_000, fetchImpl: githubFetch(otherRun) });
   assert.equal(denied.status, 409);
@@ -233,7 +249,19 @@ test("Codex claim rejects a moved or unavailable protected main before creating 
   assert.equal((await readActiveWip(coordinator)).claims.length, 0);
 });
 
-test("Codex claim rejects an issue snapshot changed after selection", async () => {
+test("Codex claim fails closed when a complete cursor inventory cannot be proven", async () => {
+  const coordinator = namespace();
+  const fixture = await oidcFixture();
+  const response = await handleCodexWipCoordination(request(fixture.token, "claim"), env(coordinator), {
+    now: () => NOW,
+    fetchImpl: githubFetch(fixture, { inventoryErrors: true }),
+  });
+  assert.equal(response.status, 503);
+  assert.equal((await response.json() as { error: string }).error, "CODEX_WIP_TASK_UNAVAILABLE");
+  assert.equal((await readActiveWip(coordinator)).claims.length, 0);
+});
+
+test("Codex claim rejects even a stable issue scan while snapshot consistency is unverified", async () => {
   const coordinator = namespace();
   const fixture = await oidcFixture();
   const changedIssue = { ...issue(), body: `${issue().body}\nchanged after selection` };
@@ -241,20 +269,20 @@ test("Codex claim rejects an issue snapshot changed after selection", async () =
     now: () => NOW,
     fetchImpl: githubFetch(fixture, { issue: changedIssue }),
   });
-  assert.equal(response.status, 409);
-  assert.equal((await response.json() as { error: string }).error, "CODEX_WIP_TASK_SNAPSHOT_MISMATCH");
+  assert.equal(response.status, 503);
+  assert.equal((await response.json() as { error: string }).error, "CODEX_WIP_INVENTORY_UNVERIFIABLE");
   assert.equal((await readActiveWip(coordinator)).claims.length, 0);
 });
 
-test("Codex claim rechecks protected main after task lookup and before admission", async () => {
+test("Codex claim remains fail-closed when cursor scans match but have no snapshot contract", async () => {
   const coordinator = namespace();
   const fixture = await oidcFixture();
   const response = await handleCodexWipCoordination(request(fixture.token, "claim"), env(coordinator), {
     now: () => NOW,
     fetchImpl: githubFetch(fixture, { mainShas: [SHA, "b".repeat(40)] }),
   });
-  assert.equal(response.status, 409);
-  assert.equal((await response.json() as { error: string }).error, "CODEX_WIP_MAIN_MISMATCH");
+  assert.equal(response.status, 503);
+  assert.equal((await response.json() as { error: string }).error, "CODEX_WIP_INVENTORY_UNVERIFIABLE");
   assert.equal((await readActiveWip(coordinator)).claims.length, 0);
 });
 

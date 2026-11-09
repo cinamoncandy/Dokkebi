@@ -3,136 +3,217 @@ import test from "node:test";
 import { selectCodexBacklogTask } from "./evolveGithubIssueBacklog";
 import { fetchOpenGithubBacklog } from "./githubIssueBacklogClient";
 
-function response(body: unknown, link?: string, status = 200): Response {
-  const headers = new Headers();
-  if (link !== undefined) headers.set("link", link);
-  return new Response(JSON.stringify(body), { status, headers });
+type Resource = "issues" | "pullRequests";
+
+function issueNode(number: number, overrides: Record<string, unknown> = {}): Record<string, unknown> {
+  return {
+    number,
+    title: "Task",
+    body: "details",
+    state: "OPEN",
+    authorAssociation: "OWNER",
+    createdAt: "2026-11-01T00:00:00Z",
+    updatedAt: "2026-11-01T00:00:00Z",
+    labels: { edges: [], pageInfo: { hasNextPage: false } },
+    ...overrides,
+  };
 }
 
-test("backlog fetch reads later issue pages and stable pull-request pages", async () => {
-  const calls: string[] = [];
-  const fetchImpl = async (input: RequestInfo | URL, init?: RequestInit): Promise<Response> => {
-    const url = String(input);
-    calls.push(url);
-    assert.equal(new Headers(init?.headers).get("authorization"), "Bearer test-token");
-    if (url.includes("/issues?")) {
-      const page = Number(new URL(url).searchParams.get("page"));
-      return page === 1
-        ? response(Array.from({ length: 100 }, (_, index) => ({ number: index + 1 })), '<https://api.github.com/next>; rel="next"')
-        : response([{
-          number: 101,
-          title: "[P0] Research backlog task",
-          body: "Research evidence. Safety: liveAuthority=NONE productionMutationAllowed=false aiAuthority=ZERO_AUTHORITY.\ncanonicalOwner: research-owner\nconflictKeys: research:history",
-          state: "open",
-          author_association: "OWNER",
-          updated_at: "2026-11-01T00:00:00.000Z",
-          labels: [],
-        }]);
+function pullNode(number: number, overrides: Record<string, unknown> = {}): Record<string, unknown> {
+  return {
+    number,
+    title: "Unrelated pull request",
+    body: "",
+    state: "OPEN",
+    createdAt: "2026-11-01T00:00:00Z",
+    updatedAt: "2026-11-01T00:00:00Z",
+    ...overrides,
+  };
+}
+
+function edge(resource: Resource, node: Record<string, unknown>, cursor = `${resource}:${node.number}`) {
+  return { cursor, node };
+}
+
+function graphResponse(
+  resource: Resource,
+  edges: readonly unknown[],
+  hasNextPage = false,
+  endCursor: string | null = (edges.at(-1) as { cursor?: string } | undefined)?.cursor ?? null,
+  totalCount = edges.length,
+): Response {
+  return new Response(JSON.stringify({
+    data: {
+      repository: {
+        [resource]: { edges, totalCount, pageInfo: { hasNextPage, endCursor } },
+      },
+    },
+  }), { status: 200 });
+}
+
+function readQuery(init?: RequestInit): { query: string; variables: { owner: string; name: string; after: string | null } } {
+  assert.equal(init?.method, "POST");
+  const headers = new Headers(init?.headers);
+  assert.equal(headers.get("content-type"), "application/json");
+  const body = JSON.parse(String(init?.body)) as { query: string; variables: { owner: string; name: string; after: string | null } };
+  assert.equal(body.variables.owner, "cinamoncandy");
+  assert.equal(body.variables.name, "NUSA");
+  return body;
+}
+
+test("cursor pagination reads all open issues and PRs and keeps a later eligible task selectable", async () => {
+  const afterValues: Record<Resource, Array<string | null>> = { issues: [], pullRequests: [] };
+  const fetchImpl = async (_input: RequestInfo | URL, init?: RequestInit): Promise<Response> => {
+    const body = readQuery(init);
+    const resource: Resource = body.query.includes("pullRequests(first:") ? "pullRequests" : "issues";
+    afterValues[resource].push(body.variables.after);
+    assert.match(body.query, /orderBy: \{field: CREATED_AT, direction: ASC\}/);
+    assert.match(body.query, /states: \[OPEN\]/);
+    if (resource === "pullRequests") return graphResponse(resource, [edge(resource, pullNode(201))]);
+    if (body.variables.after === null) {
+      const firstPage = Array.from({ length: 100 }, (_, index) => edge(resource, issueNode(index + 1)));
+      return graphResponse(resource, firstPage, true, "issues:100", 101);
     }
-    return response([{ number: 201 }]);
+    assert.equal(body.variables.after, "issues:100");
+    return graphResponse(resource, [edge(resource, issueNode(101, {
+      title: "[P0] Autopilot Research backlog task",
+      body: "Research task. liveAuthority=NONE productionMutationAllowed=false aiAuthority=ZERO_AUTHORITY.\ncanonicalOwner: research-owner\nconflictKeys: research:history",
+    }))], false, "issues:101", 101);
   };
 
   const result = await fetchOpenGithubBacklog("cinamoncandy/NUSA", { authorization: "Bearer test-token" }, fetchImpl);
   assert.equal(result.issues.length, 101);
   assert.equal(result.pulls.length, 1);
-  assert.equal(selectCodexBacklogTask(result.issues, result.pulls)?.issueNumber, 101, "a real eligible task beyond page one remains selectable");
-  assert.ok(calls.some((url) => url.includes("/issues?") && url.includes("page=2")));
-  assert.ok(calls.every((url) => url.includes("sort=created&direction=asc")));
+  assert.equal(result.consistency.pointInTimeSnapshot, "UNVERIFIED");
+  assert.equal(result.consistency.automaticSelectionAllowed, false);
+  assert.equal(selectCodexBacklogTask(result.issues, result.pulls)?.issueNumber, 101);
+  assert.deepEqual(afterValues.issues, [null, "issues:100", null, "issues:100"]);
+  assert.deepEqual(afterValues.pullRequests, [null, null]);
 });
 
-test("a full page without Link metadata is followed, then stops on a short page", async () => {
-  let issuePage = 0;
-  const result = await fetchOpenGithubBacklog("cinamoncandy/NUSA", {}, async (input) => {
-    if (String(input).includes("/pulls?")) return response([]);
-    issuePage += 1;
-    return issuePage % 2 === 1
-      ? response(Array.from({ length: 100 }, (_, index) => ({ number: index + 1 })))
-      : response([{ number: 101 }]);
+test("pageInfo, not a full-page length guess, controls cursor termination", async () => {
+  let issueCalls = 0;
+  const result = await fetchOpenGithubBacklog("cinamoncandy/NUSA", {}, async (_input, init) => {
+    const body = readQuery(init);
+    if (body.query.includes("pullRequests(first:")) return graphResponse("pullRequests", []);
+    issueCalls += 1;
+    return graphResponse("issues", Array.from({ length: 100 }, (_, index) => edge("issues", issueNode(index + 1))), false, "issues:100", 100);
   });
-  assert.equal(issuePage, 4);
-  assert.equal(result.issues.length, 101);
+  assert.equal(issueCalls, 2, "one exact-full page is read per complete scan");
+  assert.equal(result.issues.length, 100);
 });
 
 test("a linked pull request beyond page one still blocks duplicate task selection", async () => {
-  const issues = [{
-    number: 42,
+  const issue = issueNode(42, {
     title: "[P1] Autopilot task",
-    body: "Autopilot control-plane task. liveAuthority=NONE productionMutationAllowed=false aiAuthority=ZERO_AUTHORITY.\ncanonicalOwner: apps-autopilot\nconflictKeys: issue:42",
-    state: "open",
-    author_association: "OWNER",
-    updated_at: "2026-11-01T00:00:00.000Z",
-    labels: [],
-  }];
-  const result = await fetchOpenGithubBacklog("cinamoncandy/NUSA", {}, async (input) => {
-    const url = String(input);
-    if (url.includes("/issues?")) return response(issues);
-    const page = Number(new URL(url).searchParams.get("page"));
-    return page === 1
-      ? response(Array.from({ length: 100 }, (_, index) => ({ number: index + 101, title: "unrelated", body: "" })), '<https://api.github.com/next>; rel="next"')
-      : response([{ number: 201, title: "issue reference", body: "Refs #42" }]);
+    body: "Autopilot task. liveAuthority=NONE productionMutationAllowed=false aiAuthority=ZERO_AUTHORITY.\ncanonicalOwner: apps-autopilot\nconflictKeys: issue:42",
   });
-
-  assert.equal(result.pulls.length, 101);
-  assert.equal(selectCodexBacklogTask(result.issues, result.pulls), null, "the later open PR is included in duplicate prevention");
-});
-
-test("backlog fetch fails closed on API errors, malformed bodies, duplicate identities and page overflow", async () => {
-  await assert.rejects(
-    fetchOpenGithubBacklog("cinamoncandy/NUSA", {}, async (input) => String(input).includes("/issues?") ? response([], undefined, 403) : response([])),
-    /unavailable \(403\)/,
-  );
-  await assert.rejects(
-    fetchOpenGithubBacklog("cinamoncandy/NUSA", {}, async (input) => response(String(input).includes("/issues?") ? { items: [] } : [])),
-    /response invalid/,
-  );
-  await assert.rejects(
-    fetchOpenGithubBacklog("cinamoncandy/NUSA", {}, async (input) => response(String(input).includes("/issues?") ? [{ number: 1 }, { number: 1 }] : [])),
-    /identity ambiguous/,
-  );
-  await assert.rejects(
-    fetchOpenGithubBacklog("cinamoncandy/NUSA", {}, async () => response([{ number: 1 }], "malformed-pagination")),
-    /pagination metadata invalid/,
-  );
-
-  let issuePage = 0;
-  await assert.rejects(
-    fetchOpenGithubBacklog("cinamoncandy/NUSA", {}, async (input) => {
-      if (String(input).includes("/pulls?")) return response([]);
-      issuePage += 1;
-      return response(Array.from({ length: 100 }, (_, index) => ({ number: (issuePage - 1) * 100 + index + 1 })), '<https://api.github.com/next>; rel="next"');
-    }),
-    /exceeds bounded pagination/,
-  );
-  assert.equal(issuePage, 10);
-});
-
-test("offset page shift caused by an intervening close fails closed rather than silently omitting a linked PR", async () => {
-  let pullScan = 0;
-  await assert.rejects(
-    fetchOpenGithubBacklog("cinamoncandy/NUSA", {}, async (input) => {
-      const url = String(input);
-      if (url.includes("/issues?")) return response([]);
-      const page = Number(new URL(url).searchParams.get("page"));
-      if (page === 1) {
-        pullScan += 1;
-        // A PR ahead of the boundary closes between page one and page two.
-        const firstPage = Array.from({ length: 100 }, (_, index) => ({ number: index + 1 }));
-        return response(pullScan === 1 ? firstPage : firstPage.slice(1).concat({ number: 101 }), '<https://api.github.com/next>; rel="next"');
+  const fetchImpl = async (_input: RequestInfo | URL, init?: RequestInit): Promise<Response> => {
+    const body = readQuery(init);
+    if (body.query.includes("pullRequests(first:")) {
+      if (body.variables.after === null) {
+        return graphResponse("pullRequests", Array.from({ length: 100 }, (_, index) => edge("pullRequests", pullNode(index + 101))), true, "pullRequests:200", 101);
       }
-      return response(pullScan === 1 ? [{ number: 102 }] : [{ number: 102 }, { number: 103 }]);
-    }),
-    /backlog changed during pagination/,
-  );
+      return graphResponse("pullRequests", [edge("pullRequests", pullNode(201, { title: "Fix #42", body: "Refs #42" }))], false, "pullRequests:201", 101);
+    }
+    return graphResponse("issues", [edge("issues", issue)]);
+  };
+  const result = await fetchOpenGithubBacklog("cinamoncandy/NUSA", {}, fetchImpl);
+  assert.equal(result.pulls.length, 101);
+  assert.equal(selectCodexBacklogTask(result.issues, result.pulls), null);
 });
 
-test("changes to selection metadata between complete scans fail closed", async () => {
+test("a mutation during cursor pagination fails closed when total count changes", async () => {
+  let issueScan = 0;
+  let closedBoundaryItem = false;
+  const fetchImpl = async (_input: RequestInfo | URL, init?: RequestInit): Promise<Response> => {
+    const body = readQuery(init);
+    const resource: Resource = body.query.includes("pullRequests(first:") ? "pullRequests" : "issues";
+    if (resource === "pullRequests") return graphResponse(resource, []);
+    if (body.variables.after === null) {
+      issueScan += 1;
+      const current = Array.from({ length: 102 }, (_, index) => index + 1).filter((number) => !(closedBoundaryItem && number === 50));
+      const page = current.slice(0, 100).map((number) => edge(resource, issueNode(number, number === 101
+        ? { title: "[P0] Autopilot high priority task", body: "Autopilot task. liveAuthority=NONE productionMutationAllowed=false aiAuthority=ZERO_AUTHORITY.\ncanonicalOwner: apps-autopilot\nconflictKeys: issue:high" }
+        : number === 102
+          ? { title: "[P1] Autopilot lower priority task", body: "Autopilot task. liveAuthority=NONE productionMutationAllowed=false aiAuthority=ZERO_AUTHORITY.\ncanonicalOwner: apps-autopilot\nconflictKeys: issue:low" }
+          : {})));
+      if (issueScan === 1) closedBoundaryItem = true;
+      return graphResponse(resource, page, current.length > 100, page.at(-1)?.cursor ?? null, 102);
+    }
+    const current = Array.from({ length: 102 }, (_, index) => index + 1).filter((number) => !(closedBoundaryItem && number === 50));
+    const cursorNumber = Number(body.variables.after?.split(":").at(-1));
+    const page = current.filter((number) => number > cursorNumber).slice(0, 100).map((number) => edge(resource, issueNode(number, number === 101
+      ? { title: "[P0] Autopilot high priority task", body: "Autopilot task. liveAuthority=NONE productionMutationAllowed=false aiAuthority=ZERO_AUTHORITY.\ncanonicalOwner: apps-autopilot\nconflictKeys: issue:high" }
+      : number === 102
+        ? { title: "[P1] Autopilot lower priority task", body: "Autopilot task. liveAuthority=NONE productionMutationAllowed=false aiAuthority=ZERO_AUTHORITY.\ncanonicalOwner: apps-autopilot\nconflictKeys: issue:low" }
+        : {})));
+    return graphResponse(resource, page, current.some((number) => number > (page.at(-1)?.node.number as number)), page.at(-1)?.cursor ?? null, current.length);
+  };
+
+  await assert.rejects(fetchOpenGithubBacklog("cinamoncandy/NUSA", {}, fetchImpl), /count changed during pagination|inventory incomplete/);
+  assert.equal(issueScan, 1, "the count change is rejected before a second full scan can authorize a selection");
+});
+
+test("GraphQL errors, malformed edges, duplicate identities, bad cursors, incomplete labels and page overflow fail closed", async () => {
+  await assert.rejects(fetchOpenGithubBacklog("cinamoncandy/NUSA", {}, async (_input, init) => {
+    const body = readQuery(init);
+    return body.query.includes("pullRequests(first:")
+      ? graphResponse("pullRequests", [])
+      : new Response(JSON.stringify({ errors: [{ message: "permission denied" }] }), { status: 200 });
+  }), /query failed/);
+
+  await assert.rejects(fetchOpenGithubBacklog("cinamoncandy/NUSA", {}, async (_input, init) => {
+    const body = readQuery(init);
+    return body.query.includes("pullRequests(first:")
+      ? graphResponse("pullRequests", [])
+      : new Response(JSON.stringify({ data: { repository: { issues: { edges: [], pageInfo: { hasNextPage: "yes" } } } } }), { status: 200 });
+  }), /response invalid/);
+
+  await assert.rejects(fetchOpenGithubBacklog("cinamoncandy/NUSA", {}, async (_input, init) => {
+    const body = readQuery(init);
+    if (body.query.includes("pullRequests(first:")) return graphResponse("pullRequests", []);
+    const duplicate = edge("issues", issueNode(1));
+    return graphResponse("issues", [duplicate, duplicate]);
+  }), /identity duplicated|cursor did not advance/);
+
+  await assert.rejects(fetchOpenGithubBacklog("cinamoncandy/NUSA", {}, async (_input, init) => {
+    const body = readQuery(init);
+    if (body.query.includes("pullRequests(first:")) return graphResponse("pullRequests", []);
+    return graphResponse("issues", [edge("issues", issueNode(1))], true, null);
+  }), /cursor metadata invalid/);
+
+  await assert.rejects(fetchOpenGithubBacklog("cinamoncandy/NUSA", {}, async (_input, init) => {
+    const body = readQuery(init);
+    if (body.query.includes("pullRequests(first:")) return graphResponse("pullRequests", []);
+    return graphResponse("issues", [edge("issues", issueNode(1, { labels: { edges: [], pageInfo: { hasNextPage: true } } }))]);
+  }), /labels incomplete/);
+
+  let page = 0;
+  await assert.rejects(fetchOpenGithubBacklog("cinamoncandy/NUSA", {}, async (_input, init) => {
+    const body = readQuery(init);
+    if (body.query.includes("pullRequests(first:")) return graphResponse("pullRequests", []);
+    page += 1;
+    const numbers = Array.from({ length: 100 }, (_, index) => (page - 1) * 100 + index + 1);
+    const edges = numbers.map((number) => edge("issues", issueNode(number), `issues-page-${page}-item-${number}`));
+    return graphResponse("issues", edges, true, undefined, 1001);
+  }), /exceeds bounded pagination/);
+  assert.equal(page, 10);
+
+  await assert.rejects(fetchOpenGithubBacklog("cinamoncandy/NUSA", {}, async (_input, init) => {
+    const body = readQuery(init);
+    return body.query.includes("pullRequests(first:")
+      ? graphResponse("pullRequests", [])
+      : new Response("unavailable", { status: 403 });
+  }), /unavailable \(403\)/);
+});
+
+test("changes to selection metadata between complete cursor scans fail closed", async () => {
   let issueReads = 0;
-  await assert.rejects(
-    fetchOpenGithubBacklog("cinamoncandy/NUSA", {}, async (input) => {
-      if (String(input).includes("/pulls?")) return response([]);
-      issueReads += 1;
-      return response([{ number: 42, title: "Task", body: issueReads === 1 ? "old" : "new" }]);
-    }),
-    /backlog changed during pagination/,
-  );
+  await assert.rejects(fetchOpenGithubBacklog("cinamoncandy/NUSA", {}, async (_input, init) => {
+    const body = readQuery(init);
+    if (body.query.includes("pullRequests(first:")) return graphResponse("pullRequests", []);
+    issueReads += 1;
+    return graphResponse("issues", [edge("issues", issueNode(42, { title: issueReads === 1 ? "old" : "new" }))]);
+  }), /changed between complete cursor scans/);
 });

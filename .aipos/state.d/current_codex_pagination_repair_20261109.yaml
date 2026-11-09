@@ -1,0 +1,29 @@
+current_codex_pagination_repair_20261109:
+  work_order: WO-ISSUE-903-L1-EXECUTION-LEASE-HANDOFF
+  issue: 903
+  pull_request: 2039
+  status: LOCAL_VALIDATED_PENDING_CANONICAL_ALIGNMENT
+  observed_at_utc: "2026-11-09T04:41:47Z"
+  source_pr_head: ecdee7bb568db35daf832a92d84b0a141ab40666
+  source_pr_base: 54c095daff15bc4ef067e12ed26c666e5fd3d4c0
+  protected_main_at_start: b2186edc2e4422efb0d95d07c1c8c12a61be218d
+  protected_main_at_end: 422de99d2444860bc8fbc1e2e141e78d74daa93b
+  current_main_delta: "GitHub compare: PR base merge-base 54c095da; current main is 64 commits ahead. Candidate is intentionally not aligned or published."
+  isolated_implementation_branch: codex/pr2039-pagination-p1-repair-20261109
+  local_commit: NOT_CREATED
+  code_change: "Replace REST offset scans with bounded GitHub GraphQL cursor traversal, validating edge IDs/cursors, totalCount consistency, ordering, labels, and complete page traversal; compare two full scans. Because no point-in-time snapshot contract is exposed, inventory is explicitly UNVERIFIED and both selector and Worker admission fail closed."
+  safety: "WIP capacity remains 2; no production admission, claim, lease, dispatch, or runtime mutation occurred."
+  validation:
+    focused: "31/31 PASS"
+    build: PASS
+    full_suite: "pnpm test PASS; 1,340 isolated test files"
+    typecheck: PASS
+    validate_full: PASS
+    security_gate: PASS
+    lint: "PASS; 0 errors / 47 warnings"
+    diff_check: PASS
+  exact_head_ci: NOT_RUN_LOCAL_CANDIDATE_NOT_PUBLISHED
+  independent_review: PENDING
+  current_main_alignment: REQUIRED_BEFORE_PUBLICATION
+  wip_claim_and_writer_lease: UNKNOWN
+  next: "Keep this local candidate isolated. Before any publication, re-verify the canonical work order/claim and WIP lease, inspect the 64-commit current-main delta for semantic overlap, then obtain owner/governed authorization for any branch update. Do not infer point-in-time inventory completeness; automatic selection/admission remains blocked."

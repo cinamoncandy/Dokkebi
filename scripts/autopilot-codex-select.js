@@ -19,6 +19,14 @@ const CONTRACT = [
   "- Do NOT run pnpm install, build, typecheck, the test suite or any other heavy command: this runner shares a 1 GB host with the PAPER runtime and a host guard stops the run (discarding your patch) when memory runs low. The workflow runs build, typecheck, validate, the work-order index check, tests/*.test.js and the isolated (co-located) tests on separate hardware after you finish; heavy commands are blocked on this runner and fail immediately. Light reads (git diff, grep, cat) are fine; report truthfully that validation is left to the workflow.",
 ].join("\n");
 
+function selectFromGithubInventory(inventory) {
+  if (inventory?.consistency?.automaticSelectionAllowed !== true
+    || inventory?.consistency?.pointInTimeSnapshot !== "VERIFIED") {
+    throw new Error("GitHub inventory has no verified point-in-time snapshot; automatic Codex selection is blocked");
+  }
+  return selectCodexBacklogTask(inventory.issues, inventory.pulls);
+}
+
 function buildPrompt(task) {
   return `${CONTRACT}\n\nOWNER ISSUE #${task.issueNumber} (${task.capability}): ${task.title}\n\n${task.body}`;
 }
@@ -27,12 +35,12 @@ async function main(env = process.env) {
   const token = env.GITHUB_TOKEN;
   const repository = env.GITHUB_REPOSITORY;
   if (!token || !repository) throw new Error("GITHUB_TOKEN and GITHUB_REPOSITORY are required");
-  const { issues, pulls } = await fetchOpenGithubBacklog(repository, {
+  const inventory = await fetchOpenGithubBacklog(repository, {
     authorization: `Bearer ${token}`,
     accept: "application/vnd.github+json",
     "user-agent": "nusa-autopilot-codex",
   });
-  const task = selectCodexBacklogTask(issues, pulls);
+  const task = selectFromGithubInventory(inventory);
   const lines = task == null ? ["has_task=false"] : [
     "has_task=true",
     `issue=${task.issueNumber}`,
@@ -46,4 +54,4 @@ async function main(env = process.env) {
 
 if (require.main === module) main().catch((error) => { console.error(error instanceof Error ? error.message : error); process.exit(1); });
 
-module.exports = { buildPrompt, CONTRACT };
+module.exports = { buildPrompt, CONTRACT, selectFromGithubInventory };

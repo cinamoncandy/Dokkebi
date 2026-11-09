@@ -445,8 +445,12 @@ export async function handleCodexWipCoordination(
     let selectedTask: ReturnType<typeof selectCodexBacklogTask>;
     try {
       const headers = { accept: "application/vnd.github+json", authorization: `Bearer ${env.NUSA_GITHUB_TOKEN.trim()}`, "user-agent": "nusa-autopilot-worker", "x-github-api-version": "2022-11-28" };
-      const { issues, pulls } = await fetchOpenGithubBacklog(allowedRepository, headers, fetchImpl);
-      selectedTask = selectCodexBacklogTask(issues, pulls);
+      const inventory = await fetchOpenGithubBacklog(allowedRepository, headers, fetchImpl);
+      if (inventory.consistency.automaticSelectionAllowed !== true
+        || inventory.consistency.pointInTimeSnapshot !== "VERIFIED") {
+        return json({ accepted: false, error: "CODEX_WIP_INVENTORY_UNVERIFIABLE", ...authority }, 503);
+      }
+      selectedTask = selectCodexBacklogTask(inventory.issues, inventory.pulls);
     } catch {
       return json({ accepted: false, error: "CODEX_WIP_TASK_UNAVAILABLE", ...authority }, 503);
     }

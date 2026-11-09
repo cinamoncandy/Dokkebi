@@ -4,7 +4,7 @@ const test = require("node:test");
 const assert = require("node:assert/strict");
 const fs = require("node:fs");
 const { selectCodexBacklogTask } = require("../dist/apps/autopilot/src/evolveGithubIssueBacklog.js");
-const { buildPrompt } = require("../scripts/autopilot-codex-select.js");
+const { buildPrompt, selectFromGithubInventory } = require("../scripts/autopilot-codex-select.js");
 
 const SAFE = "liveAuthority=NONE\nproductionMutationAllowed=false\naiAuthority=ZERO_AUTHORITY";
 const issue = (number, title, body, extra = {}) => ({ number, title, body: `${body}\ncanonicalOwner: issue-${number}\nconflictKeys: issue:${number}`, state: "open", author_association: "OWNER", updated_at: "2026-09-29T00:00:00Z", labels: [], ...extra });
@@ -33,6 +33,19 @@ test("unsafe, non-owner, blocked or already-linked issues are never selected", (
   assert.equal(selectCodexBacklogTask(issues, [{ title: "fix", body: "Refs #23" }]), null);
 });
 
+test("the production Codex selector rejects cursor scans without a point-in-time snapshot contract", () => {
+  assert.throws(() => selectFromGithubInventory({
+    issues: [issue(900, "P0: eligible-looking task", `Autopilot task.\n${SAFE}`)],
+    pulls: [],
+    consistency: {
+      pagination: "GRAPHQL_CURSOR",
+      repeatedScansMatched: true,
+      pointInTimeSnapshot: "UNVERIFIED",
+      automaticSelectionAllowed: false,
+    },
+  }), /no verified point-in-time snapshot/);
+});
+
 test("Codex refuses to select backlog work without canonical WIP owner and conflict metadata", () => {
   const missingMetadata = issue(25, "P0: research work", `Research OOS.\n${SAFE}`, { body: `Research OOS.\n${SAFE}` });
   assert.equal(selectCodexBacklogTask([missingMetadata], []), null);
@@ -49,6 +62,8 @@ test("the Codex prompt carries the CORE/AIPOS contract and forbids commit, push 
 
 test("the workflow pins Codex to the single dedicated-account runner and publishes only after validation", () => {
   const workflow = fs.readFileSync(".github/workflows/autopilot-codex-coding.yml", "utf8");
+  const selectJob = workflow.slice(workflow.indexOf("  select:"), workflow.indexOf("  codex:"));
+  assert.match(selectJob, /permissions:\n\s+actions: read\n\s+contents: read\n\s+issues: read\n\s+pull-requests: read/, "only the read-only selector job can query the GraphQL issue and PR connections");
   assert.match(workflow, /runs-on: \[self-hosted, Linux, nusa-codex-autopilot\]/, "only the runner labelled for the dedicated ChatGPT account");
   assert.doesNotMatch(workflow, /nusa-codex-dev\]/, "never the shared Codex runner label");
   const codexJob = workflow.slice(workflow.indexOf("  codex:"), workflow.indexOf("  publish:"));
