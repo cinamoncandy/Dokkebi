@@ -1,0 +1,26 @@
+current_codex_pagination_recovery_closeout_20261109:
+  supersedes_checkpoint: current_codex_pagination_main_alignment_20261109
+  canonical_issue: 903
+  canonical_pr: 2039
+  status: METADATA_SUCCESSOR_LOCAL_VALIDATED_PENDING_EXACT_HEAD_CI
+  pr_head_before_metadata_successor: 2d2adcd106650d2f3cd541e85695aebf0a3cee4a
+  pr_base_sha_at_parent: 6433a7c44db4b2e953f343b971096988b3c2699d
+  protected_main_at_record: 2b3f05e8a3c62a7821306461eb3b28bbc4a6785a
+  merge_base: 6433a7c44db4b2e953f343b971096988b3c2699d
+  ahead_behind: "PR 55 ahead / 5 behind protected main at observation"
+  parent_exact_head_ci: "42627675153 and companions 42627675083, 42627675206, 42627675185, 42627675401, 42627675106 all SUCCESS; conditional causal/attestation jobs SKIPPED"
+  branch_mergeability: "GitHub mergeable=false; read-only merge-tree found only generated .aipos/CURRENT_TRUTH.md conflict. This metadata-only successor does not merge main."
+  main_delta: "Five main-only commits include paperFillReplay and paperTodayRealized changes plus tests/work-order/generated truth. Current-main alignment remains a separate required step before Formal Validator/Audit/Release."
+  pagination: "GraphQL cursor scans are diagnostic; no point-in-time snapshot token exists. pointInTimeSnapshot=UNVERIFIED and automaticSelectionAllowed=false; selector and Worker admission fail closed."
+  snapshot_binding: "Task digest binds prompt fields, owner, conflict keys, and eligibility evidence; Worker reselects and rejects mismatch before claim."
+  main_recheck: "Main is checked after task revalidation immediately before atomic admission; GitHub read and Durable Object write are not a single transaction, so residual race remains documented."
+  actual_paper: "INCOMPLETE; 60.272s and 9 decisions, NO_ACTIONABLE_PAPER_DECISION / INSUFFICIENT_SMA_OBSERVATIONS:1/20, no order/fill/account/PnL change."
+  independent_review: PENDING
+  thread_disposition: "All 11 unresolved threads require eligible non-author review; previous implementation-session triage is not acceptance."
+  formal_validator: PENDING
+  audit: PENDING
+  release_authorization: PENDING
+  wip_claims: UNKNOWN
+  writer_lease: UNKNOWN
+  next: "Run fresh exact-head CI/companions on the metadata successor, then obtain independent disposition of all 11 threads. Reconcile protected main 2b3f05e8 and regenerate CURRENT_TRUTH before Formal Validator/Audit/Release."
+  safety: PAPER_ONLY_ZERO_AUTHORITY_FAIL_CLOSED
