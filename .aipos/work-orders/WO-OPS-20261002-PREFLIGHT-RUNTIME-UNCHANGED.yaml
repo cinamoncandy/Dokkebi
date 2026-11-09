@@ -1,6 +1,6 @@
 id: WO-OPS-20261002-PREFLIGHT-RUNTIME-UNCHANGED
 title: "Credential preflight accepts a runtime-unchanged exact main proven against the live Worker revision"
-status: READY_FOR_REVIEW
+status: COMPLETED
 priority: P0
 owner: nusa-development
 repository: cinamoncandy/NUSA
@@ -40,3 +40,4 @@ safety:
   productionMutationAllowed: false
   aiAuthority: ZERO_AUTHORITY
   fail_closed: true
+closed_by_merge: "PR #2459 merged to main (0f26f54b2) by the release authority after CI and Audit. Status corrected 2026-11-09; this records the merge only, not a separate production verification."
