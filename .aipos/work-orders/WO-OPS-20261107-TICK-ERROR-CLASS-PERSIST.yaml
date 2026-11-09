@@ -1,0 +1,24 @@
+id: WO-OPS-20261107-TICK-ERROR-CLASS-PERSIST
+title: "Persist the bounded error class of a closed-learning TICK_ERROR across restarts (P0 #2589 follow-up)"
+status: READY_FOR_REVIEW
+owner: nusa-development
+repository: cinamoncandy/NUSA
+base_branch: main
+implementation_branch: claude/persist-tick-error-class
+authority_impact: none
+objective: "The 2026-11-07 read-only host check showed lastBlockedReason TICK_ERROR at 08:28:44 KST (during the 08:13-08:34 release restart) with no error class. The reason and time already survive a restart (closed-learning-last-blocked.json) but the bounded class (tickErrorClass, a fixed code, never the message) did not: seedLastBlocked cleared it, so a failed tick of the previous process could no longer be root-caused. The record now carries an optional errorClass for TICK_ERROR only (same code shape as the reason), the tracker returns it from lastBlockedRecord and restores it on seed."
+scope:
+  - "apps/cloud/src/closedLearningBlockedRecord.ts, apps/cloud/src/closedLearningLoopStatus.ts, apps/cloud/src/closedLearningBlockedRecord.test.ts."
+exclusions:
+  - "Display and forensics only: no decision reads the class. No limit, threshold, capital, gate, pin or authority change. No free text or message is stored. schemaVersion stays 1 (the field is optional; records without it still read)."
+safety:
+  paper_only: true
+  liveAuthority: NONE
+  productionMutationAllowed: false
+  aiAuthority: ZERO_AUTHORITY
+  fail_closed: "An invalid class is dropped; the best-effort write still never changes the loop."
+verification_commands:
+  - node -r ./tests/register-dist.cjs --test dist/apps/cloud/src/closedLearningBlockedRecord.test.js dist/apps/cloud/src/closedLearningLoopStatus.test.js tests/cloud-unreached-baseline.test.js
+  - node scripts/validate-aipos-yaml.js
+review: "Draft; non-author review before leaving Draft. Release to the host is a separate owner-approved step."
+residual: "The class of the 08:28 error itself is lost (it was written by the old release without a class); only future errors keep theirs. This does not fix whatever threw."
