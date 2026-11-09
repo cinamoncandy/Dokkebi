@@ -166,9 +166,9 @@ test("the RAIM study projection keeps a fixed status and numbers only and fails 
     return run.stdout.trim();
   };
   const fp = "a".repeat(64);
-  const line = "RAIM_STUDY " + JSON.stringify({ status: "HOLDOUT_FAIL", markets: 20, eligible: 7, recorded: true, independent: false, datasetFingerprint: fp, note: "free text", token: "secret-value" });
+  const line = "RAIM_STUDY " + JSON.stringify({ status: "HOLDOUT_FAIL", markets: 20, eligible: 7, recorded: true, independent: false, datasetFingerprint: fp, note: "free text", privateField: "private-value" });
   assert.deepEqual(JSON.parse(project(line)), { status: "HOLDOUT_FAIL", markets: 20, eligible: 7, recorded: true, independent: false, datasetFingerprint: fp });
-  assert.doesNotMatch(project(line), /free text|secret-value/);
+  assert.doesNotMatch(project(line), /free text|private-value/);
   assert.equal(project("RAIM_STUDY {"), "RAIM_STUDY_UNAVAILABLE");
   assert.equal(project("RAIM_STUDY " + JSON.stringify({ status: "FORGED_PASS" })), "RAIM_STUDY_UNAVAILABLE");
   assert.equal(project("[cloud-research-snapshot] RAIM_STUDY_FAILED_CLOSED"), "RAIM_STUDY_FAILED_CLOSED");
