@@ -1,0 +1,34 @@
+id: WO-PAPER-20261108-LEASE-TTL-120
+title: "PAPER writer lease TTL 30 s -> 120 s (owner-approved safety-parameter change after three rolled-back Oracle activations)"
+status: READY_FOR_REVIEW
+owner: nusa-development
+repository: cinamoncandy/NUSA
+base_branch: main
+implementation_branch: claude/lease-ttl-120
+authority_impact: none
+objective: "Three Oracle activations (54c095d, 7879d1e, 6c7f1ea) rolled back with PAPER_WRITER_LEASE_LOST. The last one failed inside startWriterLease itself: repositoryConstruction took 6049 ms and 47901 ms in two attempts of the same activation on a 1-vCPU host, so renewal between phases (#3023) cannot help when one phase exceeds the 30 s TTL. Owner approved on 2026-11-08 (option 1 of 1/2/3) raising the production writer lease to 120 s. The heartbeat stays 10 s; the takeover age is 210 s (lease + the same 90 s post-expiry takeover window the 30 s lease had; a takeover age equal to the lease would leave no window); the clock-advance limit becomes 120 s, the smallest value the existing validation allows (the lease itself). Explicit leaseDurationMs callers keep the previous derived limits."
+scope:
+  - "apps/cloud/src/paperTradingExecutionLoop.ts"
+  - "apps/cloud/src/closedLearningProductionRuntime.ts"
+  - "apps/cloud/src/moduleQualificationV1.ts"
+  - "apps/cloud/src/paperTradingExecutionLoop.requalification.test.ts"
+  - "tests/paper-writer-lease-liveness.test.js"
+  - "tests/paper-startup-lease-budget-2770.test.js"
+  - "tests/paper-writer-first-cause.test.js"
+  - "tests/research-startup-recovery.test.js"
+  - "scripts/actual-paper-runtime-e2e.js"
+exclusions:
+  - "Exact-owner conditional renewal, takeover rules, clock-regression and clock-invalid checks, Risk limits, thresholds and capital are unchanged. An expired or taken-over lease still fails closed (PAPER_WRITER_LEASE_LOST); a clock advance above the limit is still PAPER_WRITER_CLOCK_ANOMALY."
+  - "Operational effect: after a crashed (not gracefully stopped) writer, a restart is blocked by PAPER_WRITER_ALREADY_ACTIVE for up to 120 s instead of 30 s. Graceful stop deletes the lease row as before. The release helper and its 300 s readiness budget are unchanged."
+  - "Not a fix for a single startup phase longer than 120 s. No host change, no deployment in this PR."
+safety:
+  paper_only: true
+  liveAuthority: NONE
+  productionMutationAllowed: false
+  aiAuthority: ZERO_AUTHORITY
+  fail_closed: "A longer TTL only lengthens the window in which a crashed writer keeps exclusive ownership; it never allows two writers."
+verification_commands:
+  - npx tsc -p tsconfig.json
+  - node -r ./tests/register-dist.cjs --test tests/paper-writer-lease-liveness.test.js tests/paper-writer-first-cause.test.js tests/research-startup-recovery.test.js tests/paper-writer-lease-loss-fail-closed.test.js tests/paper-runtime-supervisor-lease-recovery.test.js
+review: "Draft PR; non-author review of the safety-parameter and pin move before Ready."
+residual: "Second exact-head Actual PAPER failure (PAPER_WRITER_CLOCK_ANOMALY in acquireLease after the SIGKILL): with takeover age = lease (120 s) the restarted runtime found the expired lease too old to take over at any time. Fixed by takeover age 210 s and a unit test covering refuse-while-valid, take-over-after-expiry and fail-closed-when-too-old. Exact-head Actual PAPER failed on the first push of this PR (RUNTIME_ERROR_PRESENT): the harness SIGKILLs the supervised child and waited 90 s for the restarted runtime, but the killed writer's lease now lives 120 s and the supervisor retries every 31 s (PAPER_WRITER_ALREADY_ACTIVE), so recovery needs up to ~155 s. The deliberate-SIGKILL recovery wait is now 210 s (lease + 2 retries + margin); the runtime must still recover, reconnect and show no duplicate order/fill. Supervisor retry (31 s) and restart budget (10) were checked and cover a 120 s lease (about 4 retries). The test that said a deferred lease 'does not extend its contract' now states the 120 s contract; first-cause tests pin an explicit 30 s lease because they test cause retention, not the production length. The root cause (host CPU/I-O starvation) is unproven; #3024 adds a read-only pressure reading."

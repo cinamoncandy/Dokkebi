@@ -502,6 +502,8 @@ function publicRuntimeLiveness(value: CloudRuntimeLivenessSnapshot): CloudRuntim
         shadowSince: (v) => Number.isSafeInteger(v) && Number(v) >= 0, shadowTrades: (v) => Number.isSafeInteger(v) && Number(v) >= 0,
         shadowWins: (v) => Number.isSafeInteger(v) && Number(v) >= 0, shadowGrossGainBp: (v) => Number.isSafeInteger(v) && Number(v) >= 0,
         shadowGrossLossBp: (v) => Number.isSafeInteger(v) && Number(v) >= 0, shadowFeeBp: (v) => Number.isSafeInteger(v) && Number(v) >= 0,
+        // Pre-registered extra shadows (RSI, Donchian): the same non-negative integers as the baseline shadow.
+        ...Object.fromEntries(["Rsi", "Donchian"].flatMap((name) => ["Since", "Trades", "Wins", "GrossGainBp", "GrossLossBp", "FeeBp"].map((field) => [`shadow${name}${field}`, (v: unknown) => Number.isSafeInteger(v) && Number(v) >= 0] as const))),
         // Null comparators (buy-and-hold, seeded random entry): counts and SIGNED basis points; no amount or price.
         nullSince: (v) => Number.isSafeInteger(v) && Number(v) >= 0, nullSeed: (v) => Number.isSafeInteger(v) && Number(v) >= 0,
         nullBaseTrades: (v) => Number.isSafeInteger(v) && Number(v) >= 0, nullBaseNetBp: (v) => Number.isSafeInteger(v) && Math.abs(Number(v)) <= 10_000_000,

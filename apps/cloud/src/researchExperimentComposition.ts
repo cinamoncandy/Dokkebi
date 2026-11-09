@@ -1,5 +1,5 @@
 import { performance } from "node:perf_hooks";
-import { SqliteCandidatePromotionRepository, SqliteResearchCandleStore, SqliteResearchDatasetManifestStore, SqliteResearchEvaluationLedger, SqliteResearchHoldoutLedger, SqliteResearchMemoryRepository, SqliteResearchSessionRepository, SqliteResearchPrecommitRepository, type SqliteDatabase } from "../../../packages/storage/src/index";
+import { SqliteCandidatePromotionRepository, SqliteResearchCandleStore, SqliteResearchDatasetManifestStore, SqliteResearchEvaluationLedger, SqliteResearchGapFillProgressStore, SqliteResearchManifestRetryStore, SqliteResearchHoldoutLedger, SqliteResearchMemoryRepository, SqliteResearchSessionRepository, SqliteResearchPrecommitRepository, type SqliteDatabase } from "../../../packages/storage/src/index";
 import { BacktestResearchEvaluator, buildDonchianResearchStrategy, buildRsiResearchStrategy, buildSmaResearchStrategy } from "./backtestResearchEvaluator";
 import { ResearchAutomationRuntime } from "./researchAutomationRuntime";
 import { ResearchExperimentOrchestrator, type ResearchVariant, type TickReport } from "./researchExperimentOrchestrator";
@@ -19,6 +19,11 @@ import type { ResearchRecoveryResult } from "../../../packages/contracts/src/res
  * only logged, because new registrations require a canonical family binding that this research path never holds.
  */
 const M = 60_000;
+/** A pass alternates head/history when history remains; head is therefore revisited at least every 30m, inside the 2h stale ceiling. */
+export const RESEARCH_GAP_FILL_INTERVAL_MS = 15 * M;
+/** Periodic repairs make bounded progress; the existing timer revisits older gaps on later passes. */
+export const RESEARCH_GAP_FILL_MAX_PAGES_PER_RUN = 1;
+const MISSING_MANIFEST_RETRY_MS = 60 * M;
 const DAY_MS = 86_400_000;
 export const RESEARCH_FLAG = "NUSA_CLOUD_RESEARCH_EXPERIMENTS";
 // Upbit KRW market fee is 0.05%; slippage is a fixed conservative 5 bps. Both are explicit by design.
@@ -134,6 +139,8 @@ export function composeResearchExperiments(input: {
   readonly log?: (line: string) => void;
   readonly fetchImpl?: typeof fetch;
   readonly sleep?: (ms: number) => Promise<void>;
+  /** Yield the shared runtime event loop between synchronous per-interval manifest builds. */
+  readonly yieldControl?: () => Promise<void>;
   /** Meta-learning steering: the longer bar lengths tick every N-th scheduled tick (1 = every tick). Read on every tick. */
   readonly longBarTickEvery?: () => number;
 }): ResearchExperimentComposition | undefined {
@@ -143,10 +150,13 @@ export function composeResearchExperiments(input: {
   if (parsed.status === "INVALID") { log(`[research-experiments] disabled: ${parsed.reason}`); return undefined; }
   const settings = parsed.settings;
   const now = input.now ?? Date.now;
+  const yieldControl = input.yieldControl ?? (() => new Promise<void>((resolve) => setImmediate(resolve)));
   const db = input.database;
 
   const store = new SqliteResearchCandleStore(db);
   const datasetManifests = new SqliteResearchDatasetManifestStore(db);
+  const gapFillProgress = new SqliteResearchGapFillProgressStore(db);
+  const manifestRetrySchedule = new SqliteResearchManifestRetryStore(db);
   const holdout = new SqliteResearchHoldoutLedger(db);
   const ledger = new SqliteResearchEvaluationLedger(db);
   const precommits = new SqliteResearchPrecommitRepository(db);
@@ -283,35 +293,77 @@ export function composeResearchExperiments(input: {
   let backfilling = false;
   let researchTickActive = false;
   const targetSpanMs = researchTargetSpanMs(settings);
+  const materializeConfiguredManifests = async (market: string, firstClose: number, lastClose: number, sourceChanged = false): Promise<void> => {
+    const fromBaseClose = Math.max(firstClose, lastClose - targetSpanMs + M);
+    const createdAt = new Date(now()).toISOString();
+    for (const minutes of settings.intervalsMinutes) {
+      const intervalMs = minutes * M;
+      const intervalName = `${minutes}m`;
+      try {
+        const existing = datasetManifests.latest(market, intervalName);
+        const currentIntervalClose = Math.floor(lastClose / intervalMs) * intervalMs;
+        const inputAdvanced = existing != null && currentIntervalClose > existing.endCloseTime;
+        const retryState = manifestRetrySchedule.lastAttempt(market, intervalName);
+        const sourceAdvancedSinceAttempt = retryState != null && currentIntervalClose > retryState.inputWatermarkMs;
+        const missingRetryDue = existing == null && (retryState == null || sourceAdvancedSinceAttempt || now() - retryState.atMs >= MISSING_MANIFEST_RETRY_MS);
+        if (!sourceChanged && !inputAdvanced && !missingRetryDue) {
+          // A materialization of another interval may have occupied the event loop long enough
+          // for the PAPER writer heartbeat to become due. Yield even when this interval is a no-op.
+        } else {
+          manifestRetrySchedule.recordAttempt(market, intervalName, now(), currentIntervalClose);
+          const candles = bars.read(market, intervalMs, fromBaseClose, lastClose);
+          if (candles.length === 0) {
+            log(`[research-manifest] ${market}/${intervalName} blocked: no complete interval candles`);
+          } else {
+            const source = minutes === 1
+              ? `upbit-1m-closed:${market}:${M}`
+              : `upbit-1m-aggregated:${market}:${intervalMs}`;
+            const manifestBuildStarted = performance.now();
+            materializeResearchDatasetManifest({ store: datasetManifests, candleStore: store, market, intervalMs, candles, source, createdAt, sourceCommitSha: settings.sourceCommitSha });
+            log(`[research-manifest] ${market}/${intervalName} materialized dataset manifest`);
+            log(`[research-manifest] ${market}/${intervalName} build durationMs=${Math.max(0, Math.round(performance.now() - manifestBuildStarted))}`);
+          }
+        }
+      } catch (error) {
+        log(`[research-manifest] ${market}/${intervalName} blocked: ${error instanceof Error ? error.message : "unknown"}`);
+      }
+      // Manifest construction is synchronous and can be CPU/I/O heavy for the maximum history
+      // window. Let lease heartbeats and other bounded runtime timers run between intervals.
+      await yieldControl();
+    }
+  };
   const backfill = async (): Promise<readonly BackfillResult[]> => {
     if (backfilling || researchTickActive || stopped) return Object.freeze([]);
     backfilling = true;
     const results: BackfillResult[] = [];
-    try {
-      for (const market of settings.markets) {
-        if (stopped) break;
+    for (const market of settings.markets) {
+      if (stopped) break;
+      try {
         const result = await backfillMarket({ market, targetSpanMs, nowMs: now(), store, fetchPage, sleep, yieldControl: () => new Promise((resolve) => setImmediate(resolve)) });
         results.push(result);
         if (result.status === "COMPLETE") {
           const firstClose = store.earliestCloseTime(market, M);
           const lastClose = store.latestCloseTime(market, M);
           if (firstClose != null && lastClose != null) {
-            try {
-              materializeResearchDatasetManifest({ store: datasetManifests, candleStore: store, market, intervalMs: M, candles: store.read(market, M, Math.max(firstClose, lastClose - targetSpanMs + M), lastClose), source: `upbit-1m-closed:${market}:${M}`, createdAt: new Date(now()).toISOString(), sourceCommitSha: settings.sourceCommitSha });
-              log(`[research-manifest] ${market} materialized dataset manifest`);
-            } catch (error) { log(`[research-manifest] ${market} blocked: ${error instanceof Error ? error.message : "unknown"}`); }
+            await materializeConfiguredManifests(market, firstClose, lastClose, result.recorded > 0);
           }
         }
         log(`[research-backfill] ${market} ${result.status} recorded=${result.recorded} rejected=${result.rejected} pages=${result.pages}${result.errorCode === undefined ? "" : ` error=${result.errorCode}`}`);
+      } catch (error) {
+        const errorCode = typeof (error as { code?: unknown })?.code === "string" ? (error as { code: string }).code : "BACKFILL_FAILED";
+        results.push({ market, status: "ERROR", recorded: 0, rejected: 0, pages: 0, errorCode });
+        log(`[research-backfill] ${market} ERROR code=${errorCode}`);
       }
-    } catch (error) {
-      log(`[research-backfill] failed: ${error instanceof Error ? error.message : "unknown"}`);
+    }
+    try {
+      return Object.freeze(results);
     } finally {
       backfilling = false;
     }
-    return Object.freeze(results);
   };
   let gapFilling = false;
+  // Durable cursor plus alternating attempts: a failed head or history page cannot starve its counterpart,
+  // and restart does not discard bounded history progress.
   let gapTimer: ReturnType<typeof setInterval> | undefined;
   let gapRetry: ReturnType<typeof setTimeout> | undefined;
   const fillGaps = async (): Promise<readonly GapFillResult[]> => {
@@ -322,27 +374,43 @@ export function composeResearchExperiments(input: {
     try {
       for (const market of settings.markets) {
         if (stopped) break;
-        const fillStarted = performance.now();
-        const result = await fillRecentGaps({ market, windowMs: targetSpanMs, nowMs: now(), store, fetchPage, sleep });
-        fillMs += performance.now() - fillStarted;
-        results.push(result);
-        if (result.status === "NO_GAPS" || result.status === "FILLED") {
-          const firstClose = store.earliestCloseTime(market, M);
-          const lastClose = store.latestCloseTime(market, M);
-          if (firstClose != null && lastClose != null) {
-            try {
-              const readStarted = performance.now();
-              const candles = store.read(market, M, Math.max(firstClose, lastClose - targetSpanMs + M), lastClose);
-              readMs += performance.now() - readStarted;
-              const materializeStarted = performance.now();
-              try {
-                materializeResearchDatasetManifest({ store: datasetManifests, candleStore: store, market, intervalMs: M, candles, source: `upbit-1m-closed:${market}:${M}`, createdAt: new Date(now()).toISOString(), sourceCommitSha: settings.sourceCommitSha });
-              } finally { materializeMs += performance.now() - materializeStarted; }
-              log(`[research-manifest] ${market} materialized dataset manifest after gap fill`);
-            } catch (error) { log(`[research-manifest] ${market} blocked after gap fill: ${error instanceof Error ? error.message : "unknown"}`); }
+        try {
+          const previous = gapFillProgress.load(market);
+          const pass = gapFillProgress.loadNextPass(market)?.nextPass ?? previous?.nextPass ?? "HEAD";
+          const headPass = pass === "HEAD";
+          const historyStartBeforeMs = headPass ? undefined : previous?.historyCursorStartMs ?? store.latestCloseTime(market, M);
+          const fillStarted = performance.now();
+          const result = await fillRecentGaps({ market, windowMs: targetSpanMs, nowMs: now(), store, fetchPage, sleep,
+            maxPages: RESEARCH_GAP_FILL_MAX_PAGES_PER_RUN,
+            ...(historyStartBeforeMs === undefined ? {} : { startBeforeMs: historyStartBeforeMs }) });
+          fillMs += performance.now() - fillStarted;
+          // A head probe must never replace an older history cursor; only history continuation advances it.
+          const nextCursor = headPass
+            ? previous?.historyCursorStartMs ?? result.nextCursorStartMs
+            : result.nextCursorStartMs ?? previous?.historyCursorStartMs;
+          if (result.status === "NO_GAPS" || result.status === "FILLED" || result.historyComplete === true) gapFillProgress.clear(market);
+          else {
+            const nextPass = headPass ? "HISTORY" : "HEAD";
+            const updatedAtMs = now();
+            if (nextCursor !== undefined) gapFillProgress.save(market, { historyCursorStartMs: nextCursor, nextPass, updatedAtMs });
+            else gapFillProgress.saveNextPass(market, nextPass, updatedAtMs);
           }
+          results.push(result);
+          if (result.recorded > 0 || result.status === "NO_GAPS" || result.status === "FILLED") {
+            const firstClose = store.earliestCloseTime(market, M);
+            const lastClose = store.latestCloseTime(market, M);
+            if (firstClose != null && lastClose != null) {
+              const shouldRefresh = result.recorded > 0;
+              const materializeStarted = performance.now();
+              try { await materializeConfiguredManifests(market, firstClose, lastClose, shouldRefresh); }
+              finally { materializeMs += performance.now() - materializeStarted; }
+            }
+          }
+          log(`[research-gap-fill] ${market} ${result.status} missing=${result.missing} recorded=${result.recorded} rejected=${result.rejected} pages=${result.pages}${result.errorCode === undefined ? "" : ` error=${result.errorCode}`}`);
+        } catch (error) {
+          results.push({ market, status: "ERROR", missing: 0, recorded: 0, rejected: 0, pages: 0, errorCode: typeof (error as { code?: unknown })?.code === "string" ? (error as { code: string }).code : "GAP_FILL_FAILED" });
+          log(`[research-gap-fill] ${market} ERROR code=${typeof (error as { code?: unknown })?.code === "string" ? (error as { code: string }).code : "GAP_FILL_FAILED"}`);
         }
-        log(`[research-gap-fill] ${market} ${result.status} missing=${result.missing} recorded=${result.recorded} rejected=${result.rejected} pages=${result.pages}${result.errorCode === undefined ? "" : ` error=${result.errorCode}`}`);
       }
     } catch (error) {
       log(`[research-gap-fill] failed: ${error instanceof Error ? error.message : "unknown"}`);
@@ -483,7 +551,7 @@ export function composeResearchExperiments(input: {
       first.unref?.();
       timer = setInterval(scheduleTick, settings.tickMs);
       timer.unref?.();
-      if (settings.backfill) { gapTimer = setInterval(() => scheduleGapFill(), 60 * M); gapTimer.unref?.(); }
+      if (settings.backfill) { gapTimer = setInterval(() => scheduleGapFill(), RESEARCH_GAP_FILL_INTERVAL_MS); gapTimer.unref?.(); }
       log(`[research-experiments] enabled: markets=${settings.markets.join(",")} variants=${variantCount} intervals=${settings.intervalsMinutes.join(",")}m tickMinutes=${settings.tickMs / M} backfill=${settings.backfill ? "ENABLED" : "DISABLED"}`);
     },
     stop: () => { preparationActive = false; clearPreparedRecovery(); stopped = true; if (gapTimer != null) clearInterval(gapTimer); if (gapRetry != null) clearTimeout(gapRetry); if (backfillTimer != null) clearTimeout(backfillTimer); if (tickRetry != null) clearTimeout(tickRetry); if (first != null) clearTimeout(first); if (timer != null) clearInterval(timer); },

@@ -92,6 +92,9 @@ export type ClosedLearningEvidenceCorrelation = Readonly<Partial<{
    */
   nullSince: number; nullSeed: number; nullBaseTrades: number; nullBaseNetBp: number; nullHoldMarkets: number; nullHoldNetBp: number;
   nullRandTrades: number; nullRandWins: number; nullRandNetBp: number; nullRandSkipped: number;
+  /** Pre-registered extra shadows (RSI, Donchian): the same six non-negative integers as the baseline shadow, display only. */
+  shadowRsiSince: number; shadowRsiTrades: number; shadowRsiWins: number; shadowRsiGrossGainBp: number; shadowRsiGrossLossBp: number; shadowRsiFeeBp: number;
+  shadowDonchianSince: number; shadowDonchianTrades: number; shadowDonchianWins: number; shadowDonchianGrossGainBp: number; shadowDonchianGrossLossBp: number; shadowDonchianFeeBp: number;
 }>>;
 
 const CODE = /^[A-Z][A-Z0-9_]{1,63}$/;
@@ -122,6 +125,7 @@ export class ClosedLearningLoopStatusTracker {
   private durableFailure: ClosedLearningEvidenceCorrelation = {};
   private shadow: ClosedLearningEvidenceCorrelation = {};
   private nulls: ClosedLearningEvidenceCorrelation = {};
+  private extraShadows: Readonly<Record<string, ClosedLearningEvidenceCorrelation>> = {};
   private replay: ClosedLearningEvidenceCorrelation = {};
   private metaLearning: ClosedLearningMetaLearningStatus | undefined;
 
@@ -207,6 +211,16 @@ export class ClosedLearningLoopStatusTracker {
     this.publish();
   }
 
+  /** Display-only totals of one pre-registered extra shadow (`Rsi` or `Donchian`); a malformed value withdraws only its own keys. */
+  public observeExtraShadow(name: "Rsi" | "Donchian", totals: { readonly since: number; readonly trades: number; readonly wins: number; readonly grossGainBp: number; readonly grossLossBp: number; readonly feeBp: number } | undefined): void {
+    const ok = totals != null && [totals.since, totals.trades, totals.wins, totals.grossGainBp, totals.grossLossBp, totals.feeBp].every((value) => Number.isSafeInteger(value) && value >= 0) && totals.wins <= totals.trades;
+    const next = { ...this.extraShadows };
+    if (!ok || totals == null || totals.since === 0) delete next[name];
+    else next[name] = Object.freeze({ [`shadow${name}Since`]: totals.since, [`shadow${name}Trades`]: totals.trades, [`shadow${name}Wins`]: totals.wins, [`shadow${name}GrossGainBp`]: totals.grossGainBp, [`shadow${name}GrossLossBp`]: totals.grossLossBp, [`shadow${name}FeeBp`]: totals.feeBp });
+    this.extraShadows = next;
+    this.publish();
+  }
+
   /** Display-only null comparator figures; a malformed value withdraws the null keys. Absent optional fields stay absent (never zero). */
   public observeNullComparators(summary: NullComparatorSummary | undefined): void {
     const count = (value: unknown): value is number => Number.isSafeInteger(value) && Number(value) >= 0;
@@ -258,6 +272,7 @@ export class ClosedLearningLoopStatusTracker {
       ...this.cycle,
       ...this.shadow,
       ...this.nulls,
+      ...Object.assign({}, ...Object.values(this.extraShadows)),
       ...this.replay,
     });
     // lastCycleOutcome and evidence are always rebuilt here from their sources (this process first, then the durable copy), never carried
@@ -328,16 +343,19 @@ export class ClosedLearningLoopStatusTracker {
    * Seeds the last BLOCKED/ERROR reason from the restart-surviving record. A reason observed by THIS process always wins, so the
    * seed only fills the gap after a restart; its own timestamp shows readers that it is older than this process.
    */
-  public seedLastBlocked(record: { readonly reason: string; readonly at: number } | undefined): void {
+  public seedLastBlocked(record: { readonly reason: string; readonly at: number; readonly errorClass?: string } | undefined): void {
     if (record == null || this.lastBlocked !== undefined || !CODE.test(record.reason) || !Number.isSafeInteger(record.at) || record.at < 0) return;
     this.lastBlocked = { reason: record.reason, at: record.at };
-    this.lastErrorClass = undefined;
+    // The class of a failed tick of the previous process survives the restart (bounded code only), but only for TICK_ERROR.
+    this.lastErrorClass = record.reason === "TICK_ERROR" && record.errorClass !== undefined && CODE.test(record.errorClass) ? record.errorClass : undefined;
     this.publish();
   }
 
   /** The most recent BLOCKED/ERROR reason, for persistence by the runtime. */
-  public lastBlockedRecord(): { readonly reason: string; readonly at: number } | undefined {
-    return this.lastBlocked === undefined ? undefined : { reason: this.lastBlocked.reason, at: this.lastBlocked.at };
+  public lastBlockedRecord(): { readonly reason: string; readonly at: number; readonly errorClass?: string } | undefined {
+    if (this.lastBlocked === undefined) return undefined;
+    const base = { reason: this.lastBlocked.reason, at: this.lastBlocked.at };
+    return this.lastBlocked.reason === "TICK_ERROR" && this.lastErrorClass !== undefined ? { ...base, errorClass: this.lastErrorClass } : base;
   }
 
   /** A tick that threw before a rollover result: recorded as ERROR without changing the counts. */

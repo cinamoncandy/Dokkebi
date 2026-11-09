@@ -46,6 +46,26 @@ jobs:
           echo "== state sizes"; du -sh /var/lib/nusa /var/backups/nusa 2>&1 | head -10
           echo "== release dir count"; ls -1 /opt/nusa/releases 2>&1 | wc -l
           echo "== release dirs"; ls -1 /opt/nusa/releases 2>&1 | tail -8; readlink -f /opt/nusa/current 2>&1
+      - name: Host CPU and I/O pressure (read-only)
+        shell: bash
+        run: |
+          set +e
+          # Why: three Oracle activations rolled back because PAPER startup phases took 6-48 s on a 1-vCPU host that also runs
+          # the runner, research and autopilot. This records CPU/I/O pressure and the busiest processes so a startup
+          # failure can be compared with a quiet reading. Reads /proc and one `ps`; writes nothing, calls nothing external.
+          out="$({
+            echo "== time"; date -u +%FT%TZ
+            echo "== cpus"; nproc 2>&1
+            echo "== loadavg"; head -n 1 /proc/loadavg 2>&1
+            for f in cpu io memory; do echo "== pressure/$f"; head -n 3 "/proc/pressure/$f" 2>&1; done
+            echo "== top CPU (comm, %cpu, %mem, state; names only)"
+            ps -eo comm,pcpu,pmem,stat --sort=-pcpu 2>&1 | head -8
+            echo "== processes in uninterruptible I/O wait (D)"
+            ps -eo comm,stat 2>&1 | awk '$2 ~ /^D/ {print $1}' | sort | uniq -c | head -8
+          } 2>&1)"
+          printf '%s\n' "$out"
+          body="$(printf '%s' "${out:0:3500}" | sed -e 's/%/%25/g' | awk '{printf "%s%%0A", $0}')"
+          echo "::warning title=diag-host-pressure::${body}"
       - name: Service state and redacted recent errors
         if: ${{ inputs.health_only != true && inputs.health_only != 'true' }}
         shell: bash

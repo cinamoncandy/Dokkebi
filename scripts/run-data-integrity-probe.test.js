@@ -102,3 +102,19 @@ test("the result is written atomically beside the state database for /health", (
   assert.deepEqual(JSON.parse(fs.readFileSync(path.join(dir, RESULT_FILE), "utf8")), { schemaVersion: 1, observedAt: 123, status: "PASS", candleSeries: 2 });
   assert.equal(fs.existsSync(path.join(dir, `${RESULT_FILE}.tmp`)), false);
 });
+
+test("gap location: runs, the longest run and where the newest gap ends are reported without changing the missing count", () => {
+  const d = db();
+  const clean = probe({ db: d, now: NOW });
+  assert.equal(clean.candleGapRuns, 0);
+  assert.equal(clean.candleLongestGapMinutes, 0);
+  assert.equal(clean.candleLatestGapEndMs, 0);
+  d.prepare("DELETE FROM research_closed_candles WHERE close_time_ms IN (?, ?)").run(NOW - 100 * M, NOW - 99 * M);
+  d.prepare("DELETE FROM research_closed_candles WHERE close_time_ms = ?").run(NOW - 80 * M);
+  const r = probe({ db: d, now: NOW });
+  assert.equal(r.candleMissing7d, 3);
+  assert.equal(r.candleGapRuns, 2, "two separate runs");
+  assert.equal(r.candleLongestGapMinutes, 2);
+  assert.equal(r.candleLatestGapEndMs, NOW - 80 * M, "the newest gap ends at the last missing close");
+  assert.equal(r.status, "WARN");
+});
