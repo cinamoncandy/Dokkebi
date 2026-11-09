@@ -157,7 +157,7 @@ test("the study result step reads only fixed fields of the two result files and 
   const path = require("node:path");
   const start = text.indexOf("- name: Study result files");
   assert.ok(start > 0, "the step exists");
-  const step = text.slice(start, text.indexOf("- name: Host CPU and I/O pressure", start));
+  const step = text.slice(start, text.indexOf("      - name:", start + 10));
   assert.match(step, /raim-study-result\.json/);
   assert.match(step, /orderbook-study-result\.json/);
   const body = step.slice(step.indexOf("node -e '") + "node -e '".length, step.indexOf("\n          '\n"));
