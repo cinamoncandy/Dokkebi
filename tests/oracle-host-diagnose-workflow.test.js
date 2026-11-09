@@ -174,3 +174,15 @@ test("the RAIM study projection keeps a fixed status and numbers only and fails 
   assert.equal(project("[cloud-research-snapshot] RAIM_STUDY_FAILED_CLOSED"), "RAIM_STUDY_FAILED_CLOSED");
   assert.equal(project(""), "RAIM_STUDY_UNAVAILABLE");
 });
+
+// WO-OPS-20261109-DIAGNOSE-RESEARCH-JOURNAL: the Research journal probe prints counts and one timestamp only, never log text.
+test("the Research journal availability probe prints only counts and a timestamp", () => {
+  const start = text.indexOf('echo "== Research journal availability');
+  assert.ok(start > 0, "the probe exists");
+  const block = text.slice(start, text.indexOf('echo "== Forward Research log projection', start));
+  for (const marker of ["ORDERBOOK_STUDY", "RAIM_STUDY", "DATA_INTEGRITY", "REGIME_FORWARD_STUDY"]) assert.match(block, new RegExp(marker));
+  const printed = block.split("\n").filter((line) => /^\s*(echo|for)\b/.test(line)).join("\n");
+  assert.doesNotMatch(printed, /echo\s+"?\$rj\b|printf\s+'%s\\n'\s+"\$rj"\s*$/m, "the journal text itself is never printed");
+  assert.match(block, /grep -c/);
+  assert.doesNotMatch(block, /\bsudo\b|>\s*\/|\btee\b/);
+});
