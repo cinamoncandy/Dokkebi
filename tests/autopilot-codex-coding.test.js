@@ -61,7 +61,7 @@ test("the Codex prompt carries the CORE/AIPOS contract and forbids commit, push 
 });
 
 test("the workflow pins Codex to the single dedicated-account runner and publishes only after validation", () => {
-  const workflow = fs.readFileSync(".github/workflows/autopilot-codex-coding.yml", "utf8");
+  const workflow = fs.readFileSync(".github/workflows/autopilot-codex-coding.yml", "utf8").replace(/\r\n?/g, "\n");
   const selectJob = workflow.slice(workflow.indexOf("  select:"), workflow.indexOf("  codex:"));
   assert.match(selectJob, /permissions:\n\s+actions: read\n\s+contents: read\n\s+issues: read\n\s+pull-requests: read/, "only the read-only selector job can query the GraphQL issue and PR connections");
   assert.match(workflow, /runs-on: \[self-hosted, Linux, nusa-codex-autopilot\]/, "only the runner labelled for the dedicated ChatGPT account");

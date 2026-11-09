@@ -244,3 +244,17 @@ pagination_candidate_main_reconciliation_20261109:
   writer_lease_state: UNKNOWN
   remote_change: NONE
   next: "Complete local tests and gates, commit only on the isolated branch if they pass, and keep the existing Draft PR and remote branch untouched."
+
+pagination_candidate_publication_20261109:
+  canonical_pr: 2039
+  published_predecessor: a8ea65089dc39f41698d16e7195afe882f715ed8
+  publication_method: FAST_FORWARD
+  remote_head_after_publication: a8ea65089dc39f41698d16e7195afe882f715ed8
+  exact_head_ci_run: 42621794229
+  ci_result: FAILED
+  finding: "Windows checkout CRLF caused a LF-only workflow permissions assertion in tests/autopilot-codex-coding.test.js to fail; the workflow itself retained the expected read-only selector permissions."
+  repair: "Normalize CRLF/CR to LF in the test's loaded workflow text; no production workflow change."
+  local_successor_validation: "Focused test 11/11; isolated suite 1341/1341; root/mobile TypeScript compile PASS; validate:full components PASS; security gate PASS; AIPOS YAML/provenance/drift/conformance PASS; lint 0 errors/47 warnings; mobile lint and diff check PASS."
+  current_remote_review: "No fresh successor review requested or submitted yet; current four threads remain unresolved. Pagination thread is outdated and requires independent SUPERSEDED disposition rather than author resolution."
+  safety: "No workflow dispatch, production mutation, claim/lease operation, merge, deploy or live authority change."
+  next: "Commit the locally validated test-only successor, fast-forward only if remote head still equals the expected predecessor, then inspect new exact-head CI and request independent disposition for all applicable threads."
