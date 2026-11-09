@@ -11,3 +11,17 @@ Local verification on this dirty candidate: focused selection/client/mutation/co
 Active WIP claims and writer lease are UNKNOWN. No claim, lease operation, workflow dispatch, remote write, merge, deployment, or production mutation occurred. PR #2039 remains OPEN/Draft at `ecdee7…`; the existing six exact-head workflows were SUCCESS on that unchanged SHA, but they do not validate this dirty candidate.
 
 Next permitted step: preserve both worktrees; verify the canonical WIP/lease receipt and inspect the current-main delta before any authorized successor publication. Do not claim the GitHub inventory is complete or enable selection/admission without a verifiable snapshot contract. Keep `PAPER_ONLY`, `liveAuthority=NONE`, `productionMutationAllowed=false`, `realOrderAuthority=false`, `realTransferAuthority=false`, `aiAuthority=ZERO_AUTHORITY`, and fail-closed behavior.
+
+## Superseding isolated main-alignment update — 2026-11-09
+
+The preceding status describes the pre-alignment point in time. The original candidate `/workspace/nusa-2039-pagination-p1-repair` remains unchanged at HEAD `ecdee7bb568db35daf832a92d84b0a141ab40666`. Its 16 changed/tracked and untracked files were captured in a SHA-256 manifest and copied to `/workspace/nusa-2039-reconcile-copy-20261109`; every file hash matched. The four untracked audit documents were copied and preserved, not staged into the implementation commit. This is not recovery of home-PC candidate `fefa8208…`.
+
+Fresh protected main is `422de99d2444860bc8fbc1e2e141e78d74daa93b`; PR #2039 remains at `ecdee7…`, base `54c095daff15bc4ef067e12ed26c666e5fd3d4c0`. The merge base is `54c095da…`; main is 64 commits ahead of the base and the PR is 47 commits ahead of it. The isolated copy merged main locally. The only content conflict was generated `.aipos/CURRENT_TRUTH.md`, resolved by `node scripts/generate-aipos-current-truth.js`. No PR, remote branch, workflow, Worker, claim, lease, or production state was changed.
+
+The main delta changes PAPER runtime startup and its writer lease lifecycle, but not the distinct ExecutionCoordinator WIP claim interface or the PR candidate's Autopilot/OIDC/selector/pagination files. The only shared touched path relative to the old base is generated `.aipos/CURRENT_TRUTH.md`. GitHub currently reports the PR as `mergeable=false`; this local integration does not determine or change that state.
+
+Pagination remains fail-closed: GitHub cursor pagination does not provide a point-in-time snapshot token; inventory is `UNVERIFIED`, selector and Worker admission reject it, and WIP cap remains 2. Runtime WIP claims and writer lease remain `UNKNOWN` because no authorized read-only operational receipt is available.
+
+On integrated parent `4db515cb096e04b980c3aedcc05ecc8e1cb923ce`, the focused Autopilot/pagination/coordination/workflow suite passed 122/122 and isolated full suite passed 1,341/1,341. Direct equivalents of build/typecheck, preflight, validate:full components, AIPOS provenance, security, lint and diff checks passed; the `pnpm` wrapper itself aborts while attempting to replace `node_modules`, so no install was authorized. AIPOS alignment metadata now records validation pending for the final metadata successor; final exact SHA evidence is in the external report path referenced by `.aipos/state.d/current_codex_pagination_main_alignment_20261109.yaml`.
+
+`PAPER_ONLY / ZERO_AUTHORITY / FAIL-CLOSED` remain in force. No exact-head CI, independent review, Formal Validator, Audit, Release, PR update, dispatch, deploy or merge has occurred.
