@@ -152,21 +152,25 @@ test("the learning readout reads the saved /health file, keeps only booleans, nu
   } finally { fs.rmSync(directory, { recursive: true, force: true }); }
 });
 
-// WO-OPS-20261109-DIAGNOSE-STUDY-RESULTS: the once-only study results are read by fixed fields, so an absent file is visible and nothing else leaks.
-test("the study result step reads only fixed fields of the two result files and runs the snippet safely", () => {
-  const path = require("node:path");
-  const start = text.indexOf("- name: Study result files");
-  assert.ok(start > 0, "the step exists");
-  const step = text.slice(start, text.indexOf("      - name:", start + 10));
-  assert.match(step, /raim-study-result\.json/);
-  assert.match(step, /orderbook-study-result\.json/);
-  const body = step.slice(step.indexOf("node -e '") + "node -e '".length, step.indexOf("\n          '\n"));
-  const dir = fs.mkdtempSync(path.join(require("node:os").tmpdir(), "nusa-study-"));
-  fs.writeFileSync(path.join(dir, "raim-study-result.json"), JSON.stringify({ studyId: "RAIM_MM_20261029", status: "HOLDOUT_FAIL", eligible: 7, secretNote: "do not print" }));
-  const run = require("node:child_process").spawnSync(process.execPath, ["-e", body.replace("/var/lib/nusa/", dir.replace(/\\/g, "/") + "/")], { encoding: "utf8" });
-  assert.equal(run.status, 0, run.stderr);
-  const lines = run.stdout.trim().split("\n").map((line) => JSON.parse(line));
-  assert.deepEqual(lines[0], { file: "raim-study-result.json", present: true, studyId: "RAIM_MM_20261029", status: "HOLDOUT_FAIL", eligible: 7, mtime: lines[0].mtime });
-  assert.deepEqual(lines[1], { file: "orderbook-study-result.json", present: false, reason: "ABSENT" });
-  assert.doesNotMatch(run.stdout, /do not print/);
+// WO-OPS-20261109-DIAGNOSE-STUDY-RESULTS: the RAIM study line is read from the Research journal (the runner account cannot read /var/lib/nusa).
+test("the RAIM study projection keeps a fixed status and numbers only and fails closed", () => {
+  const start = text.indexOf("raim=\"$(journalctl");
+  assert.ok(start > 0, "the RAIM projection exists");
+  const block = text.slice(start, text.indexOf("summary=\"${summary}\"$'\\n'\"raim_study", start));
+  assert.match(block, /nusa-research\.service/);
+  assert.doesNotMatch(block, /\/var\/lib\/nusa/, "no state-directory read");
+  const code = block.slice(block.indexOf("node -e '") + "node -e '".length, block.lastIndexOf("')\""));
+  const project = (input) => {
+    const run = require("node:child_process").spawnSync(process.execPath, ["-e", code], { input, encoding: "utf8" });
+    assert.equal(run.status, 0, run.stderr);
+    return run.stdout.trim();
+  };
+  const fp = "a".repeat(64);
+  const line = "RAIM_STUDY " + JSON.stringify({ status: "HOLDOUT_FAIL", markets: 20, eligible: 7, recorded: true, independent: false, datasetFingerprint: fp, note: "free text", token: "secret-value" });
+  assert.deepEqual(JSON.parse(project(line)), { status: "HOLDOUT_FAIL", markets: 20, eligible: 7, recorded: true, independent: false, datasetFingerprint: fp });
+  assert.doesNotMatch(project(line), /free text|secret-value/);
+  assert.equal(project("RAIM_STUDY {"), "RAIM_STUDY_UNAVAILABLE");
+  assert.equal(project("RAIM_STUDY " + JSON.stringify({ status: "FORGED_PASS" })), "RAIM_STUDY_UNAVAILABLE");
+  assert.equal(project("[cloud-research-snapshot] RAIM_STUDY_FAILED_CLOSED"), "RAIM_STUDY_FAILED_CLOSED");
+  assert.equal(project(""), "RAIM_STUDY_UNAVAILABLE");
 });

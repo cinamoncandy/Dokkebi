@@ -141,6 +141,14 @@ jobs:
             const out = { status: v.status }; for (const [k, x] of Object.entries(v)) if (/^[a-zA-Z]{1,40}$/.test(k) && (typeof x === "boolean" || Number.isFinite(x) || (/Fingerprint$/.test(k) && /^[a-f0-9]{64}$/.test(x)) || (k === "reasonCode" && /^DATA_[A-Z_]{1,30}$/.test(x)))) out[k] = x; console.log(JSON.stringify(out));
           } catch { console.log(line.includes("ORDERBOOK_STUDY_FAILED_CLOSED") ? "ORDERBOOK_STUDY_FAILED_CLOSED" : "ORDERBOOK_STUDY_UNAVAILABLE"); }')"
           summary="${summary}"$'\n'"orderbook_study=${study}"
+          # Latest pre-registered RAIM study line (the runner account cannot read /var/lib/nusa, so the Research journal is the only read path). Once a final
+          # result exists the study prints it again every run with recorded:true. A fixed status code plus numbers/booleans only.
+          raim="$(journalctl -u nusa-research.service -n 400 --no-pager -o cat 2>/dev/null | grep 'RAIM_STUDY' | tail -1 | cut -c1-2000 | node -e '
+          const line = require("node:fs").readFileSync(0, "utf8"); const i = line.indexOf("RAIM_STUDY ");
+          try { const v = JSON.parse(line.slice(i + 11)); if (i < 0 || !["WAITING_DATA", "INSUFFICIENT_DATA", "DATA_INTEGRITY_FAIL", "BLOCKED_SPEC", "HOLDOUT_PASS", "HOLDOUT_FAIL"].includes(v.status)) throw 0;
+            const out = { status: v.status }; for (const [k, x] of Object.entries(v)) if (/^[a-zA-Z]{1,40}$/.test(k) && (typeof x === "boolean" || Number.isFinite(x) || (/Fingerprint$/.test(k) && /^[a-f0-9]{64}$/.test(x)))) out[k] = x; console.log(JSON.stringify(out));
+          } catch { console.log(line.includes("RAIM_STUDY_FAILED_CLOSED") ? "RAIM_STUDY_FAILED_CLOSED" : "RAIM_STUDY_UNAVAILABLE"); }')"
+          summary="${summary}"$'\n'"raim_study=${raim}"
           # Latest stored-data integrity probe from the Research service: a fixed status plus integers only.
           integrity="$(journalctl -u nusa-research.service -n 400 --no-pager -o cat 2>/dev/null | grep 'DATA_INTEGRITY' | tail -1 | cut -c1-2000 | node -e '
           const line = require("node:fs").readFileSync(0, "utf8"); const i = line.indexOf("DATA_INTEGRITY ");
@@ -188,30 +196,6 @@ jobs:
           for n in 1 2 3 4 5; do part="${errors:$(( (n-1)*3500 )):3500}"; [ -n "$part" ] && emit "diag-nusa-log-$n" "$part"; done
           emit "diag-autopilot-log" "$autopilot"
       # Runs LAST: the 40 s du walk competes for I/O on the 1-vCPU host, and diagnosis 38673436344 saw the /health probe time out right after it.
-      - name: Study result files (fixed fields only, read-only)
-        if: ${{ inputs.health_only != true && inputs.health_only != 'true' }}
-        shell: bash
-        run: |
-          set +e
-          # The pre-registered studies run once inside the Research service and write a final HOLDOUT_* result next to the state DB. The state
-          # listing above can be cut at 40 lines, so read each result's fixed fields here: file present or not, study id, status, eligible markets,
-          # file time. A missing file prints ABSENT; nothing else from the file is shown and nothing is written.
-          node -e '
-          const fs = require("node:fs");
-          const dir = "/var/lib/nusa/";
-          for (const name of ["raim-study-result.json", "orderbook-study-result.json"]) {
-            try {
-              const st = fs.statSync(dir + name);
-              const r = JSON.parse(fs.readFileSync(dir + name, "utf8"));
-              const status = typeof r.status === "string" && /^[A-Z_]{1,40}$/.test(r.status) ? r.status : "UNRECOGNIZED";
-              const studyId = typeof r.studyId === "string" && /^[A-Z0-9_]{1,60}$/.test(r.studyId) ? r.studyId : "UNRECOGNIZED";
-              const eligible = Number.isSafeInteger(r.eligible) && r.eligible >= 0 ? r.eligible : null;
-              console.log(JSON.stringify({file: name, present: true, studyId, status, eligible, mtime: new Date(st.mtimeMs).toISOString()}));
-            } catch (error) {
-              console.log(JSON.stringify({file: name, present: false, reason: error && error.code === "ENOENT" ? "ABSENT" : "UNREADABLE"}));
-            }
-          }
-          '
       - name: Disk consumers (read-only, after the health probe)
         if: ${{ inputs.health_only != true && inputs.health_only != 'true' }}
         shell: bash
