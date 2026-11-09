@@ -1,6 +1,6 @@
 id: WO-20260926-AUDIT-RECOVERY-PAGINATION-FIX
 title: Audit recovery pagination compatibility
-status: READY_FOR_REVIEW
+status: COMPLETED
 branch: fix/audit-recovery-gh-pagination
 base_sha: 0921f0514a47e3f3313645a654e258cf8f3ab485
 implementation_head: 30b378c2afcedb796f6f33e59bc92aee1192ec6f
@@ -19,3 +19,4 @@ validation:
 blocker: "none in repository code; independent Audit may still be externally capacity-gated, but the wait can now be persisted and classified normally."
 next_permitted_action: "Run fresh exact-head CI on the metadata-reconciled head; then independent Audit -> canonical Release -> merge -> protected-main deployment/recovery verification. No parallel Audit implementation."
 safety: PAPER_ONLY_LIVE_NONE_PRODUCTION_MUTATION_FALSE_AI_ZERO_AUTHORITY
+closed_by_merge: "PR #2328 (branch fix/audit-recovery-gh-pagination) merged to main (8c77a70f1) by the release authority after CI and Audit; it is the only merged PR from this branch, and its title matches this work order (checked by hand 2026-11-09 after the automatic check flagged other PR numbers in the text). Status corrected from READY_FOR_REVIEW; this records the merge only, not a separate production verification."

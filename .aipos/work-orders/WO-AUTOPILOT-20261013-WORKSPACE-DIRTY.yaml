@@ -1,6 +1,6 @@
 id: WO-AUTOPILOT-20261013-WORKSPACE-DIRTY
 title: "Ignore the freshness check's cited-workflow-runs.json so real coding attempts can start"
-status: READY_FOR_REVIEW
+status: COMPLETED
 owner: nusa-development
 repository: cinamoncandy/NUSA
 base_branch: main
@@ -33,3 +33,4 @@ safety:
   productionMutationAllowed: false
   aiAuthority: ZERO_AUTHORITY
   fail_closed: true
+closed_by_merge: "PR #2670 (branch claude/autopilot-workspace-dirty) merged to main (c88965843) by the release authority after CI and Audit; it is the only merged PR from this branch, and its title matches this work order (checked by hand 2026-11-09 after the automatic check flagged other PR numbers in the text). Status corrected from READY_FOR_REVIEW; this records the merge only, not a separate production verification."
