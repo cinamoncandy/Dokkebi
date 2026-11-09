@@ -1,0 +1,32 @@
+current_wo0059_paper_observation_forensic_20261106:
+  work_order: WO-0059-PAPER-OBSERVATION-20261106
+  status: IN_PROGRESS
+  branch: WO-0059-PAPER-OBSERVATION-20261106
+  current_head: eee1db8c2955a0a8546f69fc9f9771ccfc725060
+  protected_main_and_pr_base: 2224d7f8e2f58081cf3edcd2597ea7048e07f70a
+  exact_head_validation: "CI 42230256050 SUCCESS; four safety companions 42230255438, 42230255419, 42230255817, 42230255809 SUCCESS; Actual PAPER run 42230255698 FAILED on both attempts; full exact-head workflow set is not green."
+  exact_head_review: "Separate read-only validator session posted terminal COMMENT ACCEPTED P0=0/P1=0/P2=0 on eee1db8. Authenticated GitHub identity cinamoncandy is also PR author; this is technical disposition only, not non-author approval, Formal Validation, Audit, or Release authorization."
+  source_run_42199682632:
+    artifact_id: 13494211160
+    sha256: bc978a415808eb15c8d9ab3d9f808d020c9f3e86404bc4ea0890355a6c958f24
+    final_observed_strategy_reason: "PAPER_CANDIDATE:sma-crossover:INSUFFICIENT_SMA_OBSERVATIONS:1/20 at 2026-11-06T10:05:07.595Z"
+    root_cause_classification: WARMUP_NOT_COMPLETED_ISOLATED_FRESH_DATABASE
+    explanation: "The E2E recreates state.sqlite, baseline SMA needs 20 completed market-specific 1m closes, and the final observed Decision had one. Earlier per-cycle counts and rows omitted by the 250-event projection are UNKNOWN. This is not deployed DB evidence."
+  event_cap: "250 bound exists at in-memory recorder, SQLite retention/hydration, read-only projection, and E2E collector. Truncation is surfaced as INCOMPLETE; missing count is UNKNOWN. Current eee failed before truncation. No cap change justified."
+  current_actual_paper_failure:
+    run_id: 42230255698
+    attempt_1_artifact: "13506924457 sha256:76da53871a209656dbe8b26ccd846ca2318336c16f7f721d05cae59f392988f4"
+    attempt_2_artifact: "13507827850 sha256:e731312203ece9f50a885b559c4ac0ef74d0809c5f56fd59b75c6595cdb56d68"
+    observed: "Each attempt failed after 4-5ms with one sample, zero Decision cycles, zero orders/fills, no truncation, and sanitized RUNTIME_ERROR_PRESENT. A non-empty initial heartbeat lastError is confirmed; exact failure class is UNKNOWN. One same-SHA retry has already occurred."
+  local_diagnostic_patch:
+    status: IMPLEMENTED_UNCOMMITTED
+    files: "scripts/actual-paper-runtime-e2e.js; tests/actual-paper-runtime-observation.test.js"
+    finding: "Four fixed local runtime failure codes in runtime.ts were missing from the strict observer allowlist, causing those diagnoses to collapse to RUNTIME_ERROR_PRESENT."
+    codes: "PAPER_ORDERBOOK_OBSERVATION_REJECTED, PAPER_ORDERBOOK_UNRECONCILED, PAPER_PERIOD_EVIDENCE_REJECTED, PUBLIC_ORDERBOOK_SNAPSHOT_UNAVAILABLE"
+    validation: "Focused 39/39; full 1,335 isolated test files; typecheck; validate:full; security:gate; workflow action pins; lint 0 errors / 47 warnings."
+    semantic_effect: "Diagnostics only; unknown/sensitive inputs remain redacted and fail-closed. Existing readiness semantics, strategy, cap, and execution authority are unchanged."
+    successor_ci: PENDING
+  read_only_runtime: "Loopback /health at 2026-11-06T14:23:11Z reports runtime sourceCommitSha 185c52c22691a5a35b13fe024cb39d810719a833, behind main. Aggregate candle metrics only; embedded integrity report observed at 00:18:51Z, about 14 hours old, with no per-market completed 1m history. /var/lib/nusa is outside SentinelX allowlist. Deployed PAPER history remains UNVERIFIED."
+  first_broken_transition: "Initial Actual PAPER heartbeat has an unclassified non-empty error -> safe canonical runtime failure category; separately, authorized per-market deployed 1m candle history -> source availability classification."
+  next: "Do not change code, SMA warmup, cap, or readiness semantics without a confirmed defect. Obtain an approved bounded read-only source for exact runtime failure class and per-market deployed completed 1m count/range/gaps/provenance. No more same-SHA blind retries, access widening, DB reads/mutation, deployment, or restart. Preserve PAPER_ONLY / ZERO_AUTHORITY / fail-closed and readiness INCOMPLETE."
+  safety: PAPER_ONLY_LIVE_NONE_PRODUCTION_MUTATION_FALSE_REAL_ORDER_FALSE_REAL_TRANSFER_FALSE_AI_ZERO_AUTHORITY_FAIL_CLOSED

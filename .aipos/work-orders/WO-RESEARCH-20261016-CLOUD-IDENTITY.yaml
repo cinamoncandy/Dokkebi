@@ -1,6 +1,6 @@
 id: WO-RESEARCH-20261016-CLOUD-IDENTITY
 title: Preserve and verify qualification identity across Cloud worker response
-status: IN_PROGRESS
+status: COMPLETED
 priority: P0
 risk: HIGH
 authority_impact: none
@@ -36,3 +36,4 @@ validation: "2 RED codec regressions;53 focused tests and1232 isolated files PAS
 independent_review: "Fresh non-author Curie PASS_WITH_NOTES atbe4495772f78dcb60834371a7951646d826e8e0d;0P0/0P1/1P2,53 independent tests plus13 rejection probes PASS;9 implementation/test blobs match committed head. Not Audit/Release."
 known_p2: "Shared binder requires an unbound payload. Passing a pre-bound payload produces an unverifiable receipt and fails closed; actual producer and fixture callers use unbound payloads. No production correctness blocker; preserve explicit limitation."
 next: "Final metadata-head review then draft PR/exact-head CI/Audit/Release."
+closed_by_merge: "PR #2740 merged to main (310d34d7d) by the release authority after CI and Audit. Status corrected 2026-11-09 from a stale IN_PROGRESS; this records the merge only, not a separate production verification."

@@ -32,7 +32,23 @@ function probe({ db, now = Date.now(), currentNow = () => now }) {
   const one = (sql, ...args) => Number(Object.values(db.prepare(sql).get(...args))[0] ?? 0);
   const series = db.prepare("SELECT market, interval_ms AS i, COUNT(*) AS n, MIN(close_time_ms) AS a, MAX(close_time_ms) AS b FROM research_closed_candles WHERE close_time_ms > ? GROUP BY market, interval_ms").all(since);
   let candleMissing = 0; let staleSeries = 0; let maxLatestAgeMs = 0;
+  // Where the missing candles are (display only): a gap is a run of absent closes between two stored ones. A manifest is rejected for ANY gap inside its window,
+  // so the count alone cannot tell old history from a gap that is still being made.
+  let gapRuns = 0; let longestGapMinutes = 0; let latestGapEndMs = 0;
+  const closes = db.prepare("SELECT close_time_ms AS t FROM research_closed_candles WHERE market = ? AND interval_ms = ? AND close_time_ms > ? ORDER BY close_time_ms");
   for (const s of series) {
+    if (Number(s.i) === M) {
+      let previous = null;
+      for (const row of closes.iterate(s.market, M, since)) {
+        const t = Number(row.t);
+        if (previous !== null && t > previous + M) {
+          gapRuns += 1;
+          longestGapMinutes = Math.max(longestGapMinutes, (t - previous) / M - 1);
+          latestGapEndMs = Math.max(latestGapEndMs, t - M);
+        }
+        previous = t;
+      }
+    }
     const expected = Math.floor((Number(s.b) - Number(s.a)) / Number(s.i)) + 1;
     candleMissing += Math.max(0, expected - Number(s.n));
     if (Number(s.i) === M) {
@@ -45,6 +61,9 @@ function probe({ db, now = Date.now(), currentNow = () => now }) {
     candleSeries: series.length,
     candleRows7d: series.reduce((sum, s) => sum + Number(s.n), 0),
     candleMissing7d: candleMissing,
+    candleGapRuns: gapRuns,
+    candleLongestGapMinutes: longestGapMinutes,
+    candleLatestGapEndMs: latestGapEndMs,
     candleMisaligned: one("SELECT COUNT(*) FROM research_closed_candles WHERE close_time_ms % interval_ms <> 0"),
     candleInvalidOhlc: one("SELECT COUNT(*) FROM research_closed_candles WHERE high < open OR high < close OR low > open OR low > close OR low > high"),
     candleFuture: one("SELECT COUNT(*) FROM research_closed_candles WHERE close_time_ms > ?", futureCutoff()),

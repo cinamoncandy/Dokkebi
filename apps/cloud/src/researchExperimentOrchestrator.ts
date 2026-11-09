@@ -4,9 +4,9 @@ import type { ResearchComparisonEvidence, ResearchInputSnapshot } from "../../..
 import type { GeneratedStrategy } from "../../../packages/core/src/optimizer/aiStrategyEngine";
 import type { ResearchCandleSource } from "./backtestResearchEvaluator";
 import { countRepeatedFailures, countResearchFailures, summarizeStrategyFailureHistory } from "./researchFailureMemory";
-import { planResearchSession, researchSessionIdFor } from "./researchSessionPlanner";
-import { runResearchExperiment, type ExperimentOutcome, type ExperimentRunnerPorts, type ExperimentSpec } from "./researchExperimentRunner";
-import type { WalkForwardWindowConfig } from "./researchWalkForwardWindows";
+import { MAX_DAILY_RESEARCH_EXPERIMENTS, planResearchSession, researchSessionIdFor } from "./researchSessionPlanner";
+import { runResearchExperiment, runRollingResearchExperiment, type ExperimentOutcome, type ExperimentRunnerPorts, type ExperimentSpec } from "./researchExperimentRunner";
+import { ROLLING_FOLDS, type WalkForwardWindowConfig } from "./researchWalkForwardWindows";
 import type { ResearchSessionStartInput } from "./researchAutomationRuntime";
 import type { ResearchPrecommit } from "../../../packages/contracts/src/researchPrecommit";
 
@@ -59,6 +59,8 @@ export interface OrchestratorOptions {
   readonly precommitStore?: { create(precommit: ResearchPrecommit): ResearchPrecommit };
   readonly datasetManifest?: ExperimentRunnerPorts["datasetManifest"];
   readonly datasetIdForMarket?: (market: string) => string;
+  /** K-of-N rolling holdout in SHADOW mode only (see docs/DESIGN_ROLLING_HOLDOUT_WIRING.md). Absent or OFF: nothing runs. */
+  readonly rollingHoldout?: { readonly mode: "OFF" | "SHADOW" };
 }
 
 export interface ResearchExperimentTickSummary {
@@ -88,6 +90,27 @@ export interface TickReport {
 
 const empty = (status: TickReport["status"]): TickReport => Object.freeze({ status, started: 0, resumed: 0, stopped: 0, experiments: Object.freeze([]) });
 const yieldToEventLoop = (): Promise<void> => new Promise((resolve) => setImmediate(resolve));
+
+/** Suffix of the research session that carries rolling-holdout checks, so its records can be told apart from the real experiments. */
+export const ROLLING_SESSION_SUFFIX = "_rolling";
+/** The rolling session never limits the real flow: each check runs up to 2 x folds experiments, and a candidate is checked once per day. */
+const ROLLING_BUDGET_FACTOR = 2 * ROLLING_FOLDS;
+
+/** Display only: fixed codes and integers; it is kept separate from `counts`, whose 40 published keys are full. */
+export interface RollingHoldoutSummary {
+  readonly mode: "SHADOW";
+  readonly candidatesChecked: number;
+  readonly pass: number;
+  readonly fail: number;
+  readonly insufficientEvidence: number;
+  readonly errors: number;
+  readonly refused: Readonly<Record<string, number>>;
+  readonly folds: Readonly<{ challengerBetter: number; notBetter: number; insufficient: number }>;
+  readonly lastCheckedAt?: number;
+}
+
+/** True for evaluation records written by a rolling check; the real experiments' failure counters never include them. */
+export const isRollingRecord = (record: ResearchComparisonEvidence): boolean => typeof record.provenance?.sessionId === "string" && record.provenance.sessionId.endsWith(ROLLING_SESSION_SUFFIX);
 
 /** Upper bound on challenger variants per bar length (SMA 4 + RSI 3 + Donchian 3 today); each runs at most its daily budget of experiments. */
 export const MAX_VARIANTS = 12;
@@ -200,6 +223,74 @@ export class ResearchExperimentOrchestrator {
 
   private gapFillSummary: ResearchGapFillSummary | null = null;
 
+  private rollingState = { checked: 0, pass: 0, fail: 0, insufficient: 0, errors: 0, refused: {} as Record<string, number>, folds: { challengerBetter: 0, notBetter: 0, insufficient: 0 }, lastCheckedAt: undefined as number | undefined };
+
+  /** Display only: the SHADOW rolling-holdout summary since this process started, or null when the mode is not SHADOW. */
+  public rollingHoldout(): RollingHoldoutSummary | null {
+    if (this.options.rollingHoldout?.mode !== "SHADOW") return null;
+    const r = this.rollingState;
+    return Object.freeze({
+      mode: "SHADOW" as const, candidatesChecked: r.checked, pass: r.pass, fail: r.fail, insufficientEvidence: r.insufficient, errors: r.errors,
+      refused: Object.freeze({ ...r.refused }), folds: Object.freeze({ ...r.folds }), ...(r.lastCheckedAt === undefined ? {} : { lastCheckedAt: r.lastCheckedAt }),
+    });
+  }
+
+  private rollingRefused(reason: string): void {
+    const code = reason.replace(/[^A-Z0-9_]/g, "_").slice(0, 47);
+    if (!/^[A-Z][A-Z0-9_]{1,47}$/.test(code)) return;
+    if (!(code in this.rollingState.refused) && Object.keys(this.rollingState.refused).length >= 12) return;
+    this.rollingState.refused[code] = (this.rollingState.refused[code] ?? 0) + 1;
+  }
+
+  /**
+   * SHADOW only: after the real experiment found validation favourable, check the same challenger on the K-of-N folds in its own
+   * `<variant>_rolling` session. Nothing here feeds the real counters, the holdout counters, the meta-learning input or any candidate
+   * registration; every failure is swallowed and counted. The real flow has already finished when this runs.
+   */
+  private shadowRolling(variant: ResearchVariant, outcome: ExperimentOutcome, nowMs: number, spec: ExperimentSpec): void {
+    if (this.options.rollingHoldout?.mode !== "SHADOW") return;
+    if (outcome.status !== "COMPLETED" || outcome.validation.result !== "CHALLENGER_BETTER") return;
+    try {
+      const rollingVariantId = `${variant.variantId}${ROLLING_SESSION_SUFFIX}`;
+      const rollingSessionId = researchSessionIdFor(nowMs, rollingVariantId);
+      let session = this.options.sessions.load(rollingSessionId);
+      if (session == null) {
+        const dailyBudget = Math.min(this.options.dailyBudgetPerVariant * ROLLING_BUDGET_FACTOR, MAX_DAILY_RESEARCH_EXPERIMENTS);
+        let plan = planResearchSession({ nowMs, sessions: this.options.sessions.list(), dailyBudget, recoveryReady: this.recoveryReady, variantId: rollingVariantId });
+        // Like the real flow: an earlier day's rolling session of this variant is stopped, or it would block every later day.
+        if (plan.action === "NONE" && plan.reason === "PREVIOUS_SESSION_STILL_RUNNING") {
+          for (const old of this.options.sessions.list().filter((item) => item.state === "RUNNING" && item.sessionId.endsWith(`-${rollingVariantId}`) && item.sessionId !== rollingSessionId)) variant.runtime.stop(old.sessionId);
+          plan = planResearchSession({ nowMs, sessions: this.options.sessions.list(), dailyBudget, recoveryReady: this.recoveryReady, variantId: rollingVariantId });
+        }
+        if (plan.action !== "START") { this.rollingRefused(`PLAN_${plan.reason}`); return; }
+        variant.runtime.startSession({
+          sessionId: plan.sessionId,
+          datasetId: `upbit-1m-closed:${this.options.markets.join(",")}:${this.options.intervalMs}`,
+          interval: `${this.options.intervalMs / 60_000}m`,
+          championStrategyId: variant.champion.strategy.strategyId,
+          championStrategyVersion: variant.champion.strategy.version,
+          challengerStrategyId: variant.challenger.strategy.strategyId,
+          challengerStrategyVersion: variant.challenger.strategy.version,
+          deterministicConfig: { windows: this.options.windows, markets: this.options.markets, challenger: variant.challenger.config, champion: variant.champion.config, rolling: true },
+          maxExperiments: plan.maxExperiments,
+        });
+        session = this.options.sessions.load(rollingSessionId);
+      }
+      if (session?.state === "PAUSED") session = variant.runtime.resume(rollingSessionId);
+      if (session == null || session.state !== "RUNNING") { this.rollingRefused("SESSION_NOT_RUNNING"); return; }
+      const result = runRollingResearchExperiment(this.portsFor(variant), { ...spec, sessionId: rollingSessionId, attempt: (session.experimentCount ?? 0) + 1 }, ROLLING_FOLDS, outcome);
+      const r = this.rollingState;
+      r.checked += 1; r.lastCheckedAt = nowMs;
+      if (result.refusal !== undefined) { this.rollingRefused(result.refusal); r.insufficient += 1; return; }
+      if (result.decision.decision === "PASS") r.pass += 1; else if (result.decision.decision === "FAIL") r.fail += 1; else r.insufficient += 1;
+      for (const fold of result.folds) {
+        if (fold.outcome === "CHALLENGER_BETTER") r.folds.challengerBetter += 1; else if (fold.outcome === "NOT_BETTER") r.folds.notBetter += 1; else r.folds.insufficient += 1;
+      }
+    } catch {
+      this.rollingState.errors += 1;
+    }
+  }
+
   /**
    * Display only: the outcome of the hourly REST gap fill, the only writer of the candle series head. Fixed status and
    * error codes with integer counts; nothing from the request or the data is kept.
@@ -257,7 +348,7 @@ export class ResearchExperimentOrchestrator {
     for (const key of Object.keys(counts)) if (key.startsWith("FAIL_")) delete counts[key];
     for (const key of Object.keys(counts)) if (key.startsWith("REPEAT_")) delete counts[key];
     try {
-      const failureRecords = this.options.failureEvidence?.() ?? [];
+      const failureRecords = (this.options.failureEvidence?.() ?? []).filter((record) => !isRollingRecord(record));
       // REPEAT_<reason>: how many challengers keep failing for the same bounded reason (Research N+1 bookkeeping; changes no schedule).
       const merged = { ...countResearchFailures(failureRecords), ...countRepeatedFailures(summarizeStrategyFailureHistory(failureRecords)) };
       for (const [key, value] of Object.entries(merged)) if (/^[A-Z][A-Z0-9_]{1,47}$/.test(key) && Number.isSafeInteger(value)) counts[key] = value;
@@ -345,7 +436,7 @@ export class ResearchExperimentOrchestrator {
           const validationEnd = endCloseMs - this.options.windows.holdoutMs;
           const last = session.lastEvidenceAt;
           if (last != null && validationEnd < last + this.options.windows.validationMs) { experiments.push({ variantId: variant.variantId, market, outcome: { status: "NOT_DUE" } }); yield; continue; }
-          const outcome = runResearchExperiment(this.portsFor(variant), {
+          const spec: ExperimentSpec = {
             sessionId, market, intervalMs: this.options.intervalMs, endCloseMs, windows: this.options.windows,
             datasetId: this.options.datasetIdForMarket?.(market),
             champion: variant.champion, challenger: variant.challenger,
@@ -358,8 +449,10 @@ export class ResearchExperimentOrchestrator {
             walkForwardConfig: { windows: this.options.windows, challenger: variant.challenger.config },
             candidateCohort: this.options.variants.map((item) => ({ id: item.variantId, strategyId: item.challenger.strategy.strategyId, strategyVersion: item.challenger.strategy.version, parameters: item.challenger.config as Readonly<Record<string, unknown>> })),
             searchUniverse: { variantIds: this.options.variants.map((item) => item.variantId), selectionRule: "PREDECLARED_VARIANTS", trialCount: this.options.variants.length, intervalMs: this.options.intervalMs },
-          });
+          };
+          const outcome = runResearchExperiment(this.portsFor(variant), spec);
           experiments.push({ variantId: variant.variantId, market, outcome });
+          this.shadowRolling(variant, outcome, nowMs, spec);
           session = this.options.sessions.load(sessionId) ?? session;
           yield;
           if (session.state !== "RUNNING") break;

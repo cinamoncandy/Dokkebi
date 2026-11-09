@@ -25,6 +25,7 @@ import { readCloudRuntimeConfig } from "./cloudRuntimeConfig";
 import { readCanonicalPaperTickerBenchmark } from "./paperMarketBenchmark";
 import { readClosedLearningBlocked, recordClosedLearningBlocked } from "./closedLearningBlockedRecord";
 import { PaperBaselineShadow } from "./paperBaselineShadow";
+import { SHADOW_STRATEGY_IDS, readShadowStrategyRecord, shadowStrategySpec, writeShadowStrategyRecord } from "./paperShadowStrategies";
 import { readBaselineShadowRecord, writeBaselineShadowRecord } from "./paperBaselineShadowRecord";
 import { PaperNullComparators } from "./paperNullComparators";
 import { readNullComparatorsRecord, writeNullComparatorsRecord } from "./paperNullComparatorsRecord";
@@ -36,7 +37,7 @@ import { buildOwnerBaselinePaperPeriodInput, isOwnerBaselinePeriodStartAt } from
 import { CloudRuntimeDashboardHydrator } from "./cloudRuntimeDashboardHydrator";
 import { SqliteCloudDashboardSnapshotRepository } from "./cloudDashboardSnapshotRepository";
 import { PaperChallengerBindingLedger } from "./paperChallengerBindingLedger";
-import { PaperTradingExecutionLoop, SqliteCloudPaperAccountRepository, paperAccountIdForCapital, type PaperAccountState } from "./paperTradingExecutionLoop";
+import { PAPER_WRITER_LEASE_DURATION_MS, SqliteCloudPaperAccountRepository, paperAccountIdForCapital, type PaperAccountState } from "./paperTradingExecutionLoop";
 import { createCloudAiRuntime } from "./ai/runtime";
 import { registerGracefulShutdown, startCloudRuntimeFromOptions, type CloudRuntimeHandle } from "./runtime";
 import { readClosedLearningProductionConfig } from "./closedLearningProductionConfig";
@@ -55,6 +56,18 @@ import { cloudPaperRiskLimitsForCapital } from "./paperRiskLimitScaling";
 import { ClosedLearningRolloverScheduler, type ClosedLearningRolloverResult } from "./closedLearningRolloverScheduler";
 import { ClosedLearningInitialPaperBootstrap, type ClosedLearningInitialPaperBootstrapResult } from "./closedLearningInitialPaperBootstrap";
 import { buildPaperPerformanceFromLedger, type PaperPerformanceFromLedgerResult } from "./paperPerformanceFromLedger";
+
+/**
+ * Startup timing (WO-OPS-20261109-STARTUP-PHASE-TIMING): one fixed-name line per synchronous startup phase with the time since process
+ * start and since the previous mark, so a slow activation can be attributed to a phase (database open with its full-file integrity
+ * check, Cloud AI, research composition, listener, PAPER lease start, research recovery). Log only: fixed names and integers, no input.
+ */
+let lastStartupMarkMs = 0;
+function startupMark(name: "database-open" | "cloud-ai-runtime" | "research-compose" | "cloud-runtime-listening" | "paper-runtime-start" | "research-recover" | "research-start"): void {
+  const now = Math.round(performance.now());
+  console.log(`[startup-phase] ${name} atMs=${now} deltaMs=${now - lastStartupMarkMs}`);
+  lastStartupMarkMs = now;
+}
 
 export const CLOSED_LEARNING_ROLLOVER_POLL_INTERVAL_MS = 30_000;
 
@@ -92,6 +105,7 @@ export function startClosedLearningProductionRuntime(env: NodeJS.ProcessEnv = pr
   const config = readCloudRuntimeConfig(env);
   const closedLearningConfig = readClosedLearningProductionConfig(env, config.cloudStateDbPath);
   const database = new SqliteDatabase(config.cloudStateDbPath);
+  startupMark("database-open");
   if (config.paperInitialCapitalKrw !== undefined) {
     const retired = retiredPaperAccountIds(env);
     if (retired.length > 0) {
@@ -125,11 +139,16 @@ export function startClosedLearningProductionRuntime(env: NodeJS.ProcessEnv = pr
     const restoredNulls = readNullComparatorsRecord(config.cloudStateDbPath);
     nullComparators = new PaperNullComparators({ feeRate: 0.0005, now: Date.now, baselineTotals: () => baselineShadow.summary(), ...(restoredNulls === undefined ? {} : { restore: restoredNulls }) });
   }
+  // Pre-registered RSI and Donchian shadows on the same bars and fee model (display/analysis only; see paperShadowStrategies.ts).
+  const extraShadows = baselineShadow == null ? [] : SHADOW_STRATEGY_IDS.map((id) => {
+    const restored = readShadowStrategyRecord(config.cloudStateDbPath, id);
+    return { id, name: id === "rsi" ? "Rsi" as const : "Donchian" as const, shadow: new PaperBaselineShadow({ spec: shadowStrategySpec(id), feeRate: 0.0005, now: Date.now, ...(restored === undefined ? {} : { restore: restored }) }) };
+  });
   const dashboardHydrator = new CloudRuntimeDashboardHydrator({
     paperCandidateBindingProvider,
     paperCandidateMinuteCloses: (market, now) => {
       const bars = minuteBars.read(market, now);
-      nullComparators?.observe(market, bars); // before the baseline shadow, so a round trip it completes is matched on bars already seen
+      nullComparators?.observe(market, bars); for (const extra of extraShadows) extra.shadow.observe(market, bars); // before the baseline shadow, so a round trip it completes is matched on bars already seen
       baselineShadow?.observe(market, bars);
       return bars;
     },
@@ -146,28 +165,27 @@ export function startClosedLearningProductionRuntime(env: NodeJS.ProcessEnv = pr
   // initialization must not invalidate prepared SQLite change-tracking evidence, and its startup
   // I/O must not starve the lease heartbeat.
   const cloudAiRuntime = createCloudAiRuntime(env, undefined, { verifiedSharedSqliteDatabase: database });
+  startupMark("cloud-ai-runtime");
 
   let longBarTickEvery = 1;
   researchExperiments = composeResearchExperiments({ env, database, log: (line) => console.log(line), longBarTickEvery: () => longBarTickEvery });
-  researchExperiments?.prepareRecovery();
+  startupMark("research-compose");
 
   // Own the canonical PAPER repository/loop at this composition root so the same process can
   // supply restart-safe candidate performance evidence without opening a second writer lease.
-  // Timing only: the writer lease is owned from the repository constructor on, and its heartbeat cannot renew until
-  // the event loop turns, so everything composed synchronously below counts against the lease TTL.
-  const leaseWindow = createLeaseStartupWindow(30_000, (line) => console.log(line));
-  const repositoryStartedAt = performance.now();
+  // The lease starts inside startCloudRuntime immediately before the first PAPER account access.
+  // The full runtime's synchronous setup can outlast the 30-second lease before the event loop can heartbeat.
+  const leaseWindow = createLeaseStartupWindow(PAPER_WRITER_LEASE_DURATION_MS, (line) => console.log(line));
   const paperRepository = config.paperInitialCapitalKrw === undefined
     ? undefined
-    : new SqliteCloudPaperAccountRepository(database, { accountId: paperAccountIdForCapital(config.paperInitialCapitalKrw) });
+    : new SqliteCloudPaperAccountRepository(database, {
+      accountId: paperAccountIdForCapital(config.paperInitialCapitalKrw),
+      deferWriterLease: true,
+      onWriterLeaseReady: (initializationMs) => leaseWindow.leaseOwned(initializationMs),
+    });
   if (paperRepository != null) {
-    leaseWindow.leaseOwned(performance.now() - repositoryStartedAt);
     setImmediate(() => leaseWindow.firstLoopTurn());
   }
-  const paperLoop = config.paperInitialCapitalKrw === undefined || paperRepository == null
-    ? undefined
-    : new PaperTradingExecutionLoop({ initialCapital: config.paperInitialCapitalKrw, repository: paperRepository });
-
   // Continuous research experiments: disabled unless NUSA_CLOUD_RESEARCH_EXPERIMENTS=1 (see researchExperimentComposition.ts).
   // Meta-learning steering (researchMetaLearning.ts): starts NORMAL and follows the latest meta-learning evaluation.
   // Research-only recording of the public order book and trades already streamed (Upbit keeps no history of either).
@@ -195,34 +213,19 @@ export function startClosedLearningProductionRuntime(env: NodeJS.ProcessEnv = pr
     dashboardHydrator,
     snapshotRepository: snapshots,
     paperAccountRepository: paperRepository,
-    paperExecutionLoop: paperLoop,
+    deferPaperRuntimeStart: true,
+    deferResearchRecovery: true,
     researchAutomation: researchExperiments?.orchestrator,
     aiRuntime: cloudAiRuntime,
     closedLearningStatus: () => loopStatus.snapshot(),
     researchIntervalTicks: () => researchExperiments?.experimentTicksByInterval() ?? null,
+    researchRollingHoldout: () => researchExperiments?.rollingHoldoutByInterval() ?? null,
     microstructureRecorder,
     orderBookCollector,
     futuresCollector,
   });
-  // startCloudRuntime performs the last large synchronous composition step before the event loop
-  // can service the repository's interval heartbeat. Re-verify/renew the existing lease at this
-  // handoff so a valid lease that survived composition gets a fresh full TTL for the remaining
-  // bounded startup work. This never revives an expired lease: verifyWriterLease() uses the same
-  // conditional owner/expiry update and fails closed if composition already exceeded the TTL.
-  try {
-    paperRepository?.verifyWriterLease();
-  } catch (error) {
-    // startCloudRuntime has already opened the listener and started repository-owned timers.
-    // If the bounded lease handoff cannot renew a still-valid lease, tear down that partial
-    // runtime before propagating the original fail-closed error to the supervisor.
-    void baseHandle.stop().catch((stopError) => {
-      const detail = stopError instanceof Error ? stopError.message.trim().slice(0, 300) : "UNKNOWN_STOP_ERROR";
-      console.error(`[closed-learning] runtime cleanup after writer lease handoff failure failed: ${detail || "UNKNOWN_STOP_ERROR"}`);
-    });
-    throw error;
-  }
-
-  const readCanonicalPaperAccount = (): PaperAccountState | undefined => paperLoop?.snapshot();
+  startupMark("cloud-runtime-listening");
+  const readCanonicalPaperAccount = (): PaperAccountState | undefined => paperRepository?.loadLatest();
   const requireCanonicalPaperAccount = (): PaperAccountState => {
     const account = readCanonicalPaperAccount();
     if (account == null) throw new Error("closed learning canonical PAPER account is unavailable");
@@ -482,6 +485,11 @@ export function startClosedLearningProductionRuntime(env: NodeJS.ProcessEnv = pr
         const persistable = baselineShadow.takePersistable();
         if (persistable != null && !writeBaselineShadowRecord(config.cloudStateDbPath, persistable)) baselineShadow.markUnpersisted();
       }
+      for (const extra of extraShadows) {
+        loopStatus.observeExtraShadow(extra.name, extra.shadow.summary());
+        const persistable = extra.shadow.takePersistable();
+        if (persistable != null && !writeShadowStrategyRecord(config.cloudStateDbPath, extra.id, persistable)) extra.shadow.markUnpersisted();
+      }
       if (nullComparators != null) {
         loopStatus.observeNullComparators(nullComparators.summary());
         const persistableNulls = nullComparators.takePersistable();
@@ -530,14 +538,37 @@ export function startClosedLearningProductionRuntime(env: NodeJS.ProcessEnv = pr
   };
   const scheduleTick = (): void => { void runClosedLearningTick().catch(failClosedScheduler); };
 
-  // Recovery/bootstrap must not wait for a human or app launch. Defer the first async tick just
-  // enough for the HTTP listener to become serviceable, then keep one serialized rollover poll.
+  // Acquire the PAPER lease only after synchronous service composition; otherwise the same-thread
+  // heartbeat cannot run while the remaining closed-learning components are constructed.
+  try {
+    researchExperiments?.prepareRecovery();
+    baseHandle.startPaperRuntime();
+    startupMark("paper-runtime-start");
+    // Renew the writer lease between the synchronous phases: on a slow host their sum can exceed the 30 s lease
+    // before the event loop can run the repository heartbeat. Each call is the existing exact-owner fail-closed check.
+    paperRepository?.verifyWriterLease();
+    baseHandle.recoverResearch();
+    startupMark("research-recover");
+    paperRepository?.verifyWriterLease();
+    researchExperiments?.start();
+    startupMark("research-start");
+    paperRepository?.verifyWriterLease();
+    researchExperiments?.finishPreparedRecovery();
+    paperRepository?.verifyWriterLease();
+  } catch (error) {
+    void baseHandle.stop().catch((stopError) => {
+      const detail = stopError instanceof Error ? stopError.message.trim().slice(0, 300) : "UNKNOWN_STOP_ERROR";
+      console.error(`[closed-learning] runtime cleanup after writer lease handoff failure failed: ${detail || "UNKNOWN_STOP_ERROR"}`);
+    });
+    throw error;
+  }
+
+  // Recovery/bootstrap must not wait for a human or app launch. The listener is already bound;
+  // defer the first async tick one turn, then keep one serialized rollover poll.
   initialTimer = setTimeout(scheduleTick, 0);
   initialTimer.unref?.();
   rolloverTimer = setInterval(scheduleTick, CLOSED_LEARNING_ROLLOVER_POLL_INTERVAL_MS);
   rolloverTimer.unref?.();
-  try { researchExperiments?.start(); }
-  finally { researchExperiments?.finishPreparedRecovery(); }
 
   return Object.freeze({
     handle,

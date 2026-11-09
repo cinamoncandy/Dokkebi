@@ -46,6 +46,26 @@ jobs:
           echo "== state sizes"; du -sh /var/lib/nusa /var/backups/nusa 2>&1 | head -10
           echo "== release dir count"; ls -1 /opt/nusa/releases 2>&1 | wc -l
           echo "== release dirs"; ls -1 /opt/nusa/releases 2>&1 | tail -8; readlink -f /opt/nusa/current 2>&1
+      - name: Host CPU and I/O pressure (read-only)
+        shell: bash
+        run: |
+          set +e
+          # Why: three Oracle activations rolled back because PAPER startup phases took 6-48 s on a 1-vCPU host that also runs
+          # the runner, research and autopilot. This records CPU/I/O pressure and the busiest processes so a startup
+          # failure can be compared with a quiet reading. Reads /proc and one `ps`; writes nothing, calls nothing external.
+          out="$({
+            echo "== time"; date -u +%FT%TZ
+            echo "== cpus"; nproc 2>&1
+            echo "== loadavg"; head -n 1 /proc/loadavg 2>&1
+            for f in cpu io memory; do echo "== pressure/$f"; head -n 3 "/proc/pressure/$f" 2>&1; done
+            echo "== top CPU (comm, %cpu, %mem, state; names only)"
+            ps -eo comm,pcpu,pmem,stat --sort=-pcpu 2>&1 | head -8
+            echo "== processes in uninterruptible I/O wait (D)"
+            ps -eo comm,stat 2>&1 | awk '$2 ~ /^D/ {print $1}' | sort | uniq -c | head -8
+          } 2>&1)"
+          printf '%s\n' "$out"
+          body="$(printf '%s' "${out:0:3500}" | sed -e 's/%/%25/g' | awk '{printf "%s%%0A", $0}')"
+          echo "::warning title=diag-host-pressure::${body}"
       - name: Service state and redacted recent errors
         if: ${{ inputs.health_only != true && inputs.health_only != 'true' }}
         shell: bash
@@ -58,8 +78,18 @@ jobs:
           done
           echo "== Research timer next and previous activation"
           systemctl show nusa-research.timer -p NextElapseUSecRealtime,LastTriggerUSec 2>&1
-          echo "== Forward Research log projection (last 200 lines; fixed fields only; absence is not success)"
-          journalctl -u nusa-research.service -n 200 --no-pager -o cat 2>/dev/null | grep 'REGIME_FORWARD_STUDY ' | tail -3 | cut -c1-4096 | node -e '
+          # The study and integrity projections below read this journal with errors hidden, so an empty result cannot say why. Print only counts,
+          # whether a permission hint appears, and the time of the newest entry: no log text.
+          echo "== Research journal availability (counts and one timestamp only)"
+          rj="$(journalctl -u nusa-research.service -n 400 --no-pager -o cat 2>&1)"
+          echo "last400_lines=$(printf '%s\n' "$rj" | grep -c .)"
+          echo "permission_hint_lines=$(printf '%s\n' "$rj" | grep -ciE 'insufficient permissions|No journal files|not seeing messages')"
+          rj26="$(journalctl -u nusa-research.service --since "-26 hours" --no-pager -o cat 2>&1)"
+          for marker in ORDERBOOK_STUDY RAIM_STUDY DATA_INTEGRITY REGIME_FORWARD_STUDY; do echo "marker_${marker}_last400=$(printf '%s\n' "$rj" | grep -c "$marker") marker_${marker}_26h=$(printf '%s\n' "$rj26" | grep -c "$marker")"; done
+          echo "lines_last_26h=$(journalctl -u nusa-research.service --since "-26 hours" --no-pager -o cat 2>&1 | grep -c .)"
+          echo "newest_entry=$(journalctl -u nusa-research.service -n 1 --no-pager -o short-iso 2>&1 | cut -c1-30)"
+          echo "== Forward Research log projection (last 26 hours; fixed fields only; absence is not success)"
+          journalctl -u nusa-research.service --since "-26 hours" --no-pager -o cat 2>/dev/null | grep 'REGIME_FORWARD_STUDY ' | tail -3 | cut -c1-4096 | node -e '
           const fs = require("node:fs");
           let count = 0;
           for (const line of fs.readFileSync(0, "utf8").split("\n").slice(0, 3)) {
@@ -115,14 +145,22 @@ jobs:
           # A release directory name is a public commit SHA, not a secret: print it unredacted.
           summary="${summary}"$'\n'"current_release=$(basename "$(readlink -f /opt/nusa/current)")"$'\n'"$(ls -1t /opt/nusa/releases 2>&1 | head -5 | sed 's/^/release_dir=/')"
           # Latest pre-registered ORDERBOOK study line from the Research service: a fixed status code plus numbers/booleans only.
-          study="$(journalctl -u nusa-research.service -n 400 --no-pager -o cat 2>/dev/null | grep 'ORDERBOOK_STUDY' | tail -1 | cut -c1-2000 | node -e '
+          study="$(journalctl -u nusa-research.service --since "-26 hours" --no-pager -o cat 2>/dev/null | grep 'ORDERBOOK_STUDY' | tail -1 | cut -c1-2000 | node -e '
           const line = require("node:fs").readFileSync(0, "utf8"); const i = line.indexOf("ORDERBOOK_STUDY ");
           try { const v = JSON.parse(line.slice(i + 16)); if (i < 0 || !["WAITING_DATA", "INSUFFICIENT_DATA", "DATA_INTEGRITY_FAIL", "HOLDOUT_PASS", "HOLDOUT_FAIL"].includes(v.status)) throw 0;
             const out = { status: v.status }; for (const [k, x] of Object.entries(v)) if (/^[a-zA-Z]{1,40}$/.test(k) && (typeof x === "boolean" || Number.isFinite(x) || (/Fingerprint$/.test(k) && /^[a-f0-9]{64}$/.test(x)) || (k === "reasonCode" && /^DATA_[A-Z_]{1,30}$/.test(x)))) out[k] = x; console.log(JSON.stringify(out));
           } catch { console.log(line.includes("ORDERBOOK_STUDY_FAILED_CLOSED") ? "ORDERBOOK_STUDY_FAILED_CLOSED" : "ORDERBOOK_STUDY_UNAVAILABLE"); }')"
           summary="${summary}"$'\n'"orderbook_study=${study}"
+          # Latest pre-registered RAIM study line (the runner account cannot read /var/lib/nusa, so the Research journal is the only read path). Once a final
+          # result exists the study prints it again every run with recorded:true. A fixed status code plus numbers/booleans only.
+          raim="$(journalctl -u nusa-research.service --since "-26 hours" --no-pager -o cat 2>/dev/null | grep 'RAIM_STUDY' | tail -1 | cut -c1-2000 | node -e '
+          const line = require("node:fs").readFileSync(0, "utf8"); const i = line.indexOf("RAIM_STUDY ");
+          try { const v = JSON.parse(line.slice(i + 11)); if (i < 0 || !["WAITING_DATA", "INSUFFICIENT_DATA", "DATA_INTEGRITY_FAIL", "BLOCKED_SPEC", "HOLDOUT_PASS", "HOLDOUT_FAIL"].includes(v.status)) throw 0;
+            const out = { status: v.status }; for (const [k, x] of Object.entries(v)) if (/^[a-zA-Z]{1,40}$/.test(k) && (typeof x === "boolean" || Number.isFinite(x) || (/Fingerprint$/.test(k) && /^[a-f0-9]{64}$/.test(x)))) out[k] = x; console.log(JSON.stringify(out));
+          } catch { console.log(line.includes("RAIM_STUDY_FAILED_CLOSED") ? "RAIM_STUDY_FAILED_CLOSED" : "RAIM_STUDY_UNAVAILABLE"); }')"
+          summary="${summary}"$'\n'"raim_study=${raim}"
           # Latest stored-data integrity probe from the Research service: a fixed status plus integers only.
-          integrity="$(journalctl -u nusa-research.service -n 400 --no-pager -o cat 2>/dev/null | grep 'DATA_INTEGRITY' | tail -1 | cut -c1-2000 | node -e '
+          integrity="$(journalctl -u nusa-research.service --since "-26 hours" --no-pager -o cat 2>/dev/null | grep 'DATA_INTEGRITY' | tail -1 | cut -c1-2000 | node -e '
           const line = require("node:fs").readFileSync(0, "utf8"); const i = line.indexOf("DATA_INTEGRITY ");
           try { const v = JSON.parse(line.slice(i + 15)); if (i < 0 || !["PASS", "WARN", "FAIL"].includes(v.status)) throw 0;
             const out = { status: v.status }; for (const [k, x] of Object.entries(v)) if (/^[a-zA-Z0-9]{1,40}$/.test(k) && Number.isSafeInteger(x)) out[k] = x; console.log(JSON.stringify(out));
@@ -145,7 +183,7 @@ jobs:
           try {
             const h = JSON.parse(fs.readFileSync(process.argv[1], "utf8")), r = h.runtime && typeof h.runtime === "object" ? h.runtime : {};
             const out = {};
-            for (const [name, value] of [["learningLoopVerdict", h.learningLoopVerdict], ["learningPipeline", h.learningPipeline], ["orderBookCoverage", r.orderBookCoverage], ["researchGapFill", r.researchGapFill], ["closedLearningLoop", r.closedLearningLoop], ["paperLedger", r.paperLedger], ["dataIntegrity", r.dataIntegrity], ["runtimeScalars", Object.fromEntries(Object.entries(r).filter(([k, x]) => /^[a-zA-Z0-9][a-zA-Z0-9_]{0,47}$/.test(k) && (typeof x === "boolean" || Number.isFinite(x) || (typeof x === "string" && /^[A-Z][A-Z0-9_]{0,47}$/.test(x)))))]]) {
+            for (const [name, value] of [["learningLoopVerdict", h.learningLoopVerdict], ["learningPipeline", h.learningPipeline], ["orderBookCoverage", r.orderBookCoverage], ["researchGapFill", r.researchGapFill], ["researchRollingHoldout", r.researchRollingHoldout], ["closedLearningLoop", r.closedLearningLoop], ["paperLedger", r.paperLedger], ["dataIntegrity", r.dataIntegrity], ["runtimeScalars", Object.fromEntries(Object.entries(r).filter(([k, x]) => /^[a-zA-Z0-9][a-zA-Z0-9_]{0,47}$/.test(k) && (typeof x === "boolean" || Number.isFinite(x) || (typeof x === "string" && /^[A-Z][A-Z0-9_]{0,47}$/.test(x)))))]]) {
               const v = keep(value, 0); if (v && Object.keys(v).length > 0) out[name] = v;
             }
             // The decision funnel and the last decision outcome use coded keys with colons; the same patterns /health already enforces.

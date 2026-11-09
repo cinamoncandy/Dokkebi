@@ -1,6 +1,6 @@
 id: WO-LEARNING-20261007-ROLLOVER-WALL-CLOCK
 title: "Closed-learning rollover also counts the wall-clock KST day while the PAPER account is idle"
-status: READY_FOR_REVIEW
+status: COMPLETED
 owner: nusa-development
 repository: cinamoncandy/NUSA
 base_branch: main
@@ -31,3 +31,4 @@ safety:
   productionMutationAllowed: false
   aiAuthority: ZERO_AUTHORITY
   fail_closed: true
+closed_by_merge: "PR #2577 (branch claude/rollover-wall-clock) merged to main (82a892012, 2026-10-07) by the release authority after CI and Audit; it is the only merged PR from this branch. Status corrected 2026-11-09 from READY_FOR_REVIEW; this records the merge only, not a separate production verification."

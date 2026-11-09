@@ -1,6 +1,6 @@
 id: WO-20260927-AUTOPILOT-CODING-RECEIPT-RECONCILIATION
 title: Autopilot coding receipt reconciliation
-status: IN_PROGRESS
+status: COMPLETED
 branch: codex/core-autopilot-integration
 base_sha: 3e23eccc70776d2cb932b7a819bdb92389d0e374
 implementation_code_head: 5aed3c955c6ec0887c91ed73ad72cf73443dca46
@@ -23,3 +23,4 @@ validation:
   companion_safety_workflows: PENDING_FRESH_HEAD
 next_permitted_action: "Fresh exact-head CI and companion safety workflows; on PASS independent Integration/E2E review, then Audit/Release. #903 owns successor dispatch."
 safety: PAPER_ONLY_LIVE_NONE_PRODUCTION_MUTATION_FALSE_AI_ZERO_AUTHORITY
+closed_by_merge: "PR #2330 (branch codex/core-autopilot-integration) merged to main (e95aab187, 2026-09-30) by the release authority after CI and Audit; it is the only merged PR from this branch. Status corrected 2026-11-09 from IN_PROGRESS; this records the merge only, not a separate production verification."
