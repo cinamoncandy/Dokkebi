@@ -1,6 +1,6 @@
 id: WO-RESEARCH-20261012-SMA-60M-OOS
 title: "Research note: SMA 60-minute out-of-sample screen on public candles"
-status: READY_FOR_REVIEW
+status: COMPLETED
 owner: nusa-development
 repository: cinamoncandy/NUSA
 base_branch: main
@@ -35,3 +35,4 @@ safety:
   productionMutationAllowed: false
   aiAuthority: ZERO_AUTHORITY
   fail_closed: true
+closed_by_merge: "PR #2633 (branch claude/research-sma-oos-60m) merged to main (71aa43502, 2026-10-13) by the release authority after CI and Audit; it is the only merged PR from this branch. Status corrected 2026-11-09 from READY_FOR_REVIEW; this records the merge only, not a separate production verification."

@@ -1,6 +1,6 @@
 id: WO-RISK-20261008-LOSS-LIMIT-COMPARISON-TOOL
 title: "Offline consecutive-loss limit 3/4/5 comparison tool (issue 2575 item 5, tooling only)"
-status: READY_FOR_REVIEW
+status: COMPLETED
 owner: nusa-development
 repository: cinamoncandy/NUSA
 base_branch: main
@@ -42,3 +42,4 @@ safety:
   productionMutationAllowed: false
   aiAuthority: ZERO_AUTHORITY
   fail_closed: true
+closed_by_merge: "PR #2586 (branch claude/loss-limit-comparison) merged to main (09d0ca251, 2026-10-13) by the release authority after CI and Audit; it is the only merged PR from this branch. Status corrected 2026-11-09 from READY_FOR_REVIEW; this records the merge only, not a separate production verification."

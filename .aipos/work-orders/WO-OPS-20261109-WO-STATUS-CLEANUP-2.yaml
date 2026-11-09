@@ -1,0 +1,23 @@
+id: WO-OPS-20261109-WO-STATUS-CLEANUP-2
+title: "Close 24 more work orders whose own branch has exactly one merged PR on main"
+status: READY_FOR_REVIEW
+created: 2026-11-09
+authority_impact: none
+trigger: "Follow-up of WO-OPS-20261109-WO-STATUS-CLEANUP. About 280 work orders still read IN_PROGRESS or READY_FOR_REVIEW. Of those with a branch field, 40 have exactly one merged PR from that branch on main."
+method:
+  - "Candidate: status IN_PROGRESS/READY_FOR_REVIEW/OPEN/BLOCKED, a branch field, and exactly one 'Merge pull request #N from <owner>/<branch>' commit on main (a reused branch name is skipped)."
+  - "Safety checks: the merge date must not be before the date in the work order id, and a work order text that names other PR numbers but not #N is flagged. 24 passed and are closed here; 16 were flagged and are left untouched for a manual look (the other PR numbers are mostly related or dependent PRs, so most are probably fine)."
+  - "232 work orders have no branch field and were not examined."
+change:
+  - "Status -> COMPLETED and a closed_by_merge line (PR number, branch, merge commit and date) on the 24 work orders; CURRENT_TRUTH.md regenerated."
+rules:
+  - "Records only. closed_by_merge states that the PR merged; it does not claim a separate production verification."
+not_changed:
+  - "No code, workflow, threshold, limit, capital or authority. The 16 flagged and 232 branchless work orders are untouched."
+safety:
+  paper_only: true
+  liveAuthority: NONE
+  productionMutationAllowed: false
+  aiAuthority: ZERO_AUTHORITY
+validation:
+  - "validate-aipos-yaml PASS; aipos-work-order-status and aipos-current-truth tests pass."

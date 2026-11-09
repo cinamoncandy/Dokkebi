@@ -13,15 +13,15 @@ Everything below is what the repository's records *claim*. Re-verify on GitHub b
 
 ## Work orders
 
-547 total: 518 in `.aipos/work-orders/`, 29 closed and merged in `.aipos/work-orders/archive/`.
-Of the 518 active files, 108 carry a closed status that has not been archived (merge not proven, or the path is still referenced) and 410 are open or unclassified.
+548 total: 519 in `.aipos/work-orders/`, 29 closed and merged in `.aipos/work-orders/archive/`.
+Of the 519 active files, 132 carry a closed status that has not been archived (merge not proven, or the path is still referenced) and 387 are open or unclassified.
 
 Most common statuses among the open files (new orders use only `READY_FOR_REVIEW`, `IN_PROGRESS`, `BLOCKED`, `COMPLETED`, `SUPERSEDED`, `ABANDONED`):
 
 | Status | Files |
 |---|---|
-| READY_FOR_REVIEW | 239 |
-| IN_PROGRESS | 29 |
+| READY_FOR_REVIEW | 218 |
+| IN_PROGRESS | 27 |
 | LOCAL_VALIDATED_PENDING_CI | 20 |
 | VERIFYING | 14 |
 | LOCAL_VALIDATED_PENDING_EXACT_HEAD_CI | 13 |
@@ -29,7 +29,7 @@ Most common statuses among the open files (new orders use only `READY_FOR_REVIEW
 | COMPLETED_NO_SURVIVOR | 6 |
 | LOCAL_VALIDATED_PENDING_REVIEW_CI | 6 |
 
-### In progress or blocked (36)
+### In progress or blocked (34)
 
 | Work order | Status | Title |
 |---|---|---|
@@ -42,7 +42,6 @@ Most common statuses among the open files (new orders use only `READY_FOR_REVIEW
 | `WO-0059-PAPER-STARTUP-STABILIZATION-20261107` | IN_PROGRESS | Separate PAPER orderbook startup stabilization from bounded observation |
 | `WO-0059-PROJECTION-CONTINUITY-20261107` | IN_PROGRESS | Bounded PAPER evidence projection anchors under saturated read-only windows |
 | `WO-20260924-MOBILE-DELIVERY-RESIDUAL-GATES` | BLOCKED | Residual Android delivery and device gates from closed mobile UI work orders |
-| `WO-20260927-AUTOPILOT-CODING-RECEIPT-RECONCILIATION` | IN_PROGRESS | Autopilot coding receipt reconciliation |
 | `WO-20260927-AUTOPILOT-SCHEDULED-RECEIPT-RECOVERY` | IN_PROGRESS | Recover malformed scheduled runtime receipt state |
 | `WO-20260927-JEV-CODING-MODEL-TIERING` | IN_PROGRESS | Jev bounded coding model tier selection |
 | `WO-20260927-PR1991-REVIEW-HARDENING` | IN_PROGRESS | Restore qualification evidence integrity after latest-main reconvergence |
@@ -58,7 +57,6 @@ Most common statuses among the open files (new orders use only `READY_FOR_REVIEW
 | `WO-ISSUE-661-SHADOW-TRANSPORT-UNIFIED-MONITOR` | IN_PROGRESS | Issue #661 Shadow transport, durable replay, and unified PAPER/SHADOW monitor |
 | `WO-OPS-20261015-DISK-CONSUMERS` | IN_PROGRESS | Read-only host diagnosis: where the 90% full root disk goes |
 | `WO-OPS-20261015-RELEASE-RETENTION` | IN_PROGRESS | Keep fewer old releases on the PAPER host (RELEASE_RETENTION 4 to 2) |
-| `WO-OPS-20261016-PAPER-WRITER-CAUSE` | IN_PROGRESS | Preserve the first PAPER writer lease failure cause without changing authority |
 | `WO-OPS-20261018-PERIOD-DISPOSITION-CONSUMER-V2` | IN_PROGRESS | Make canonical PAPER pending consumers recovery-safe across immutable schemaVersion=2 dis… |
 | `WO-OPS-20261030-AIPOS-STATUS-ARCHIVE-TRUTH` | IN_PROGRESS | One work-order status enum, an archive for closed merged orders, and a generated current-… |
 | `WO-PAPER-20261006-ANON-OBSERVATION` | IN_PROGRESS | Restore truthful mobile PAPER observation without widening authority |
