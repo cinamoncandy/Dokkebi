@@ -408,11 +408,13 @@ export function composeResearchExperiments(input: {
             else gapFillProgress.saveNextPass(market, nextPass, updatedAtMs);
           }
           results.push(result);
-          if (result.recorded > 0 || result.status === "NO_GAPS" || result.status === "FILLED") {
+          // A newly confirmed absence changes what the 1m manifest may allow, exactly like a recorded candle.
+          const newAbsence = (result.confirmedAbsent ?? 0) > 0;
+          if (result.recorded > 0 || newAbsence || result.status === "NO_GAPS" || result.status === "FILLED") {
             const firstClose = store.earliestCloseTime(market, M);
             const lastClose = store.latestCloseTime(market, M);
             if (firstClose != null && lastClose != null) {
-              const shouldRefresh = result.recorded > 0;
+              const shouldRefresh = result.recorded > 0 || newAbsence;
               const materializeStarted = performance.now();
               try { await materializeConfiguredManifests(market, firstClose, lastClose, shouldRefresh); }
               finally { materializeMs += performance.now() - materializeStarted; }

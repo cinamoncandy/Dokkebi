@@ -493,6 +493,38 @@ test("a history pass walks at most the bounded number of pages through a long ol
   } finally { composition.stop(); db.close(); }
 });
 
+test("a pass that only confirms an exchange absence still refreshes the 1m manifest", async () => {
+  const db = open();
+  const store = new SqliteResearchCandleStore(db, 200_000);
+  const last = Math.floor(T_END / M) * M;
+  const first = last - 150 * M;
+  const absent = new Set();
+  for (let close = last - 80 * M; close <= last - 60 * M; close += M) absent.add(close);
+  const rows = [];
+  for (let close = first; close <= last; close += M) if (!absent.has(close)) rows.push({ closeTimeMs: close, open: 10, high: 11, low: 9, close: 10 });
+  store.append("KRW-BTC", M, rows);
+  const stamp = (ms) => new Date(ms).toISOString().slice(0, 19);
+  const fetchImpl = async (url) => {
+    const to = new URL(url).searchParams.get("to");
+    const upperExclusive = to == null ? last + M : Date.parse(to);
+    const candles = [];
+    for (let start = upperExclusive - M; candles.length < 200 && start >= first - M; start -= M) {
+      if (absent.has(start + M)) continue;
+      candles.push({ market: "KRW-BTC", candle_date_time_utc: stamp(start), opening_price: 100, high_price: 101, low_price: 99, trade_price: 100.5, candle_acc_trade_volume: 2 });
+    }
+    return new Response(JSON.stringify(candles), { status: 200, headers: { "content-type": "application/json" } });
+  };
+  const lines = [];
+  const composition = composeResearchExperiments({ env: env({ NUSA_RESEARCH_MARKETS: "KRW-BTC" }), database: db, now: () => T_END, log: (line) => lines.push(line), fetchImpl, sleep: async () => undefined });
+  try {
+    const [result] = await composition.fillGaps();
+    assert.equal(result.recorded, 0, JSON.stringify(result));
+    assert.ok((result.confirmedAbsent ?? 0) > 0, `the pass proves the absence: ${JSON.stringify(result)}`);
+    assert.ok(lines.some((line) => line.startsWith("[research-manifest] KRW-BTC/1m")), `the 1m manifest is refreshed: ${lines.join("|")}`);
+    assert.ok(lines.some((line) => /confirmedAbsent=\d+/.test(line)), "the gap-fill log line reports the proof");
+  } finally { composition.stop(); db.close(); }
+});
+
 test("bounded gap-fill passes advance past an exchange-missing newest minute", async () => {
   const db = open();
   const store = new SqliteResearchCandleStore(db, 200_000);
