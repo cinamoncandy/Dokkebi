@@ -35,10 +35,18 @@ export interface WalkForwardRefusal {
 
 export const DEFAULT_MAX_MISSING_RATIO = 0.01;
 
+/** Largest share of one window that may be exchange-confirmed absent (the exchange itself had no candle). */
+export const MAX_CONFIRMED_ABSENT_RATIO = 0.2;
+
 export function buildWalkForwardWindows(input: {
   readonly candles: readonly BacktestCandle[];
   readonly endCloseMs: number;
   readonly config: WalkForwardWindowConfig;
+  /**
+   * Close times the exchange itself proved have no candle (from a verified dataset manifest). They are not our data
+   * loss, so they are left out of both sides of the missing ratio. Our own missing candles still count in full.
+   */
+  readonly excludedCloses?: ReadonlySet<number>;
 }): WalkForwardWindowsOk | WalkForwardRefusal {
   const { intervalMs, trainMs, validationMs, holdoutMs } = input.config;
   const maxMissing = input.config.maxMissingRatio ?? DEFAULT_MAX_MISSING_RATIO;
@@ -73,8 +81,12 @@ export function buildWalkForwardWindows(input: {
     const slots = part.ms / intervalMs;
     const candles = slice(part.from, part.to);
     if (candles.length === 0) return Object.freeze({ status: "REFUSED", reason: "INSUFFICIENT_HISTORY", window: name });
-    const gap = slots - candles.length;
-    if (gap / slots > maxMissing) return Object.freeze({ status: "REFUSED", reason: "TOO_MANY_GAPS", window: name });
+    let excluded = 0;
+    if (input.excludedCloses != null) for (const close of input.excludedCloses) if (close >= part.from && close <= part.to) excluded += 1;
+    if (excluded / slots > MAX_CONFIRMED_ABSENT_RATIO) return Object.freeze({ status: "REFUSED", reason: "TOO_MANY_GAPS", window: name });
+    const effectiveSlots = slots - excluded;
+    const gap = effectiveSlots - candles.length;
+    if (gap / effectiveSlots > maxMissing) return Object.freeze({ status: "REFUSED", reason: "TOO_MANY_GAPS", window: name });
     out[name] = candles;
     missing[name] = gap;
   }

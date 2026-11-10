@@ -118,3 +118,50 @@ test("skips with a stable reason when history is too short, and reports provenan
     assert.equal(s.holdout.count(), 0);
   } finally { s.db.close(); }
 });
+
+test("a dataset whose only gap is exchange-confirmed absent runs; the same gap without the exchange proof never becomes a dataset", () => {
+  const { SqliteResearchDatasetManifestStore } = require("../dist/packages/storage/src/index.js");
+  const { materializeResearchDatasetManifest } = require("../dist/apps/cloud/src/researchDatasetManifestMaterializer.js");
+  const { UPBIT_CANDLE_SOURCE_FINGERPRINT } = require("../dist/apps/cloud/src/researchCandleBackfill.js");
+  const build = (withProof) => {
+    const db = new SqliteDatabase(join(mkdtempSync(join(tmpdir(), "nusa-absence-")), "p.db"));
+    const store = new SqliteResearchCandleStore(db);
+    // 400 minutes ending at END; the exchange had nothing for 6 minutes inside the 80-minute holdout (7.5%)
+    const rows = wave(400, 4601).map((c) => ({ ...c, volume: 1 })).filter((c) => { const m = c.closeTimeMs / M; return m < 4950 || m > 4955; });
+    const receipt = (part, tag) => store.appendWithMaterial("KRW-BTC", M, part, { source: "UPBIT_PUBLIC_CANDLES", sourceFingerprint: UPBIT_CANDLE_SOURCE_FINGERPRINT, evidenceFingerprintSha256: tag.repeat(64), missingBuckets: 0, incompleteBuckets: 0, rejectedObservations: 0 });
+    receipt(rows.filter((c) => c.closeTimeMs < 4950 * M), "1");
+    receipt(rows.filter((c) => c.closeTimeMs > 4955 * M), "2");
+    if (withProof) store.recordAbsence({ market: "KRW-BTC", intervalMs: M, firstAbsentCloseMs: 4950 * M, lastAbsentCloseMs: 4955 * M, beforeCloseMs: 4949 * M, afterCloseMs: 4956 * M, evidenceFingerprintSha256: "3".repeat(64), observedAt: new Date(END).toISOString() });
+    const manifests = new SqliteResearchDatasetManifestStore(db);
+    return { db, store, manifests, make: () => materializeResearchDatasetManifest({ store: manifests, candleStore: store, market: "KRW-BTC", intervalMs: M, candles: store.read("KRW-BTC", M, 0, END), source: "upbit-1m-closed:KRW-BTC:60000", createdAt: new Date(END).toISOString(), sourceCommitSha: SHA }) };
+  };
+  const plain = build(false);
+  try { assert.throws(() => plain.make(), /missing intervals/); } finally { plain.db.close(); }
+
+  const proved = build(true);
+  try {
+    const manifest = proved.make();
+    assert.equal(manifest.missingCandleCount, 6);
+    const s = setup();
+    s.db.close();
+    // reuse the real coordinator wiring, but read candles and the manifest from the store that has the gap
+    const t = { ...s };
+    const ledgerDb = new SqliteDatabase(join(mkdtempSync(join(tmpdir(), "nusa-absence-l-")), "l.db"));
+    const holdout = new SqliteResearchHoldoutLedger(ledgerDb);
+    const ledger = new SqliteResearchEvaluationLedger(ledgerDb);
+    const candidates = new SqliteCandidatePromotionRepository(ledgerDb);
+    const memory = new SqliteResearchMemoryRepository(ledgerDb);
+    const sessions = new SqliteResearchSessionRepository(ledgerDb);
+    const promotion = new CandidatePromotionRuntime({ repository: candidates, evaluationLedger: ledger, ownerActorRefs: ["owner"], now: () => END });
+    const ev = (strategy, authority) => new BacktestResearchEvaluator({ strategyId: strategy.strategyId, strategyVersion: strategy.version, authority, evaluatorVersion: "backtest-eval-v1", strategy, candles: proved.store, intervalMs: M, backtest: BACKTEST });
+    const coordinator = new ResearchRuntimeCoordinator({ champion: ev(t.champion, "PAPER_ONLY"), challenger: ev(t.challenger, "ZERO_AUTHORITY"), ledger });
+    const recovery = new ResearchRecoveryCoordinator({ repository: candidates, evaluationLedger: ledger, now: () => END });
+    const automation = new ResearchAutomationRuntime({ coordinator, sessions, memory, registerCandidate: (identity) => promotion.registerCandidate(identity), listCandidates: () => candidates.listCandidates(), recovery, now: () => END, maxEvidenceAgeMs: 100 * M * 1000 });
+    automation.recover();
+    automation.startSession(startInput("research-absence", t.champion, t.challenger));
+    const outcome = runResearchExperiment({ runExperiment: (input) => automation.runExperiment(input), candles: proved.store, holdout, now: () => END, datasetManifest: { read: (id) => proved.manifests.read(id) } }, spec(t, { sessionId: "research-absence", datasetId: manifest.datasetId }));
+    assert.notEqual(outcome.status, "SKIPPED", JSON.stringify(outcome));
+    assert.notEqual(outcome.reason, "WINDOWS_TOO_MANY_GAPS_HOLDOUT");
+    ledgerDb.close();
+  } finally { proved.db.close(); }
+});
