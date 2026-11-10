@@ -337,8 +337,9 @@ pr2039_main_alignment_20261110_successor:
   status_on_published_commit: PUBLISHED_FRESH_GATE_DISCOVERY_REQUIRED
   prior_published_pr_head: efa145dae9c7ed5f910bd522b147ad7fdd3fd0a0
   confirmed_prior_head_exact_ci: "6/6 workflow runs SUCCESS; conditional main-only causal jobs SKIPPED"
-  merged_main_parent: 7714c22a3439c332e93841ea79535082cc27be2e
-  alignment: "Protected main 7714c22a was merged without textual conflicts and the existing #2039 branch updated without force; resolve current main/PR exact head fresh for each next gate."
+  historical_main_parent: 7714c22a3439c332e93841ea79535082cc27be2e
+  latest_aligned_main_parent_at_record: 91959182a10abcf6176cc5b40304838724a01fa5
+  alignment: "Protected main 7714c22a was merged, then 91959182 merged without conflicts (current main at this checkpoint); existing #2039 branch stays non-force and Draft. Resolve live main/PR exact head for each next gate."
   new_change: "Isolated Codex coding smoke-test added client fail-closed regression for HTTP 200 accepted=false and coordinator fetch error; no operational claim."
   recovery_supersession: "Older 2026-11-09 entries and their 2b3f05e8 publication instructions are historical only; do not repeat. Determine next gate from actual remote HEAD and exact-head CI."
   inventory_source: "AIPOS-only local candidate 449f275dcdb4278fc9686d1c1d0cb692a168e813 unavailable; not integrated. GitHub scan remains diagnostic and selector/admission fail closed."
