@@ -1,7 +1,7 @@
 version: 1
 id: WO-20260927-PR1991-REVIEW-HARDENING
 title: "Restore qualification evidence integrity after latest-main reconvergence"
-status: IN_PROGRESS
+status: COMPLETED
 owner: nusa-development
 repository: cinamoncandy/NUSA
 pull_request: 1991
@@ -30,3 +30,4 @@ validation:
   exact_head_ci: PENDING_FRESH_EXACT_HEAD_CI
   independent_audit: PENDING_AFTER_EXACT_HEAD_CI
 next_permitted_action: "Fresh exact-head CI on the latest-main convergence head; on PASS request independent Audit, then canonical Release. No protected OOS rerun, threshold tuning, or gate bypass."
+closed_by_merge: "PR #1991 (branch fix/1892-qualification-survival-gates) merged to main; it is the only PR from this branch and the only work order naming it. Status corrected by an automatic branch-to-merged-PR match on 2026-11-10; this records the merge only, not a separate production verification."

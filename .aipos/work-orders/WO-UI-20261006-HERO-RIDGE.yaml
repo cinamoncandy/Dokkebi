@@ -1,6 +1,6 @@
 id: WO-UI-20261006-HERO-RIDGE
 title: "Replace the hero figure with the owner-chosen ridge landscape (능선)"
-status: SUPERSEDED_BY_WO-UI-20261007-HERO-FLOW-FIELD
+status: COMPLETED
 owner: nusa-development
 repository: cinamoncandy/NUSA
 base_branch: main
@@ -28,3 +28,4 @@ verification_commands:
   - node --test tests/mobile-cold-future-palette.test.js tests/mobile-hero-harmony.test.js
   - node scripts/lint-mobile.js
 residual: "Skia cannot run in this environment; the figure was checked by drawing the compiled model with the same draw order on a Chromium canvas (order beam, halt tint, small mark). The owner should confirm look and smoothness on the device after the next Android build; each frame now draws two paths per ridge (about 100 draws), so frame time on a low-end phone must be checked."
+closed_by_merge: "PR #2542 (branch claude/hero-ridge) merged to main; it is the only PR from this branch and the only work order naming it. Status corrected by an automatic branch-to-merged-PR match on 2026-11-10; this records the merge only, not a separate production verification."

@@ -1,6 +1,6 @@
 id: WO-PAPER-20260928-CAPITAL-5000-ACCOUNT
 title: "PAPER initial capital KRW 5,000 as a new account, preserving the existing ledger"
-status: ROLLED_BACK
+status: COMPLETED
 owner: nusa-development
 repository: cinamoncandy/NUSA
 base_branch: main
@@ -44,3 +44,4 @@ incident:
   local_reproduction: "The production entrypoint on a fresh DB (10,000,000 then 5,000) did not crash for 45 s; the trigger is prod-specific state. Root cause NOT confirmed."
   action: "#2371 reverts the per-capital account id, the owner capital file and the 5,000 launcher default. The generic retire-and-reopen of an open period whose account boundary no longer matches is kept, so a period opened by the 5,000 runtime cannot block closed learning after the rollback."
   next: "Reproduce the crash from prod-like state (existing open period, risk approvals, challenger binding) before re-proposing the capital switch. The owner decision (KRW 5,000, new account) still stands."
+closed_by_merge: "PR #2369 (branch claude/nusa-repository-j93sd8-paper-capital-5000) merged to main; it is the only PR from this branch and the only work order naming it. Status corrected by an automatic branch-to-merged-PR match on 2026-11-10; this records the merge only, not a separate production verification."

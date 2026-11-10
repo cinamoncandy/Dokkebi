@@ -1,6 +1,6 @@
 id: WO-20260924-MOBILE-APP-UPDATE-CONTINUITY
 title: "First launch after an app update restores PAPER with the registered DeviceKey"
-status: READY_FOR_REVIEW
+status: COMPLETED
 owner: nusa-development
 repository: cinamoncandy/NUSA
 base_branch: main
@@ -38,3 +38,4 @@ safety:
   aiAuthority: ZERO_AUTHORITY
   fail_closed: true
 next_permitted_action: "Obtain exact-head CI, Audit, Release; owner runs the Galaxy in-place update acceptance."
+closed_by_merge: "PR #2254 (branch claude/nusa-repository-j93sd8-update-continuity) merged to main; it is the only PR from this branch and the only work order naming it. Status corrected by an automatic branch-to-merged-PR match on 2026-11-10; this records the merge only, not a separate production verification."

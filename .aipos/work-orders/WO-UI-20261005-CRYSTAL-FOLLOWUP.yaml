@@ -1,6 +1,6 @@
 id: WO-UI-20261005-CRYSTAL-FOLLOWUP
 title: "Crystal follow-up: app-wide radius tokens, in-canvas fill expansion, tone-tinted core, accurate legend"
-status: READY_FOR_REVIEW
+status: COMPLETED
 owner: nusa-development
 repository: cinamoncandy/NUSA
 base_branch: main
@@ -26,3 +26,4 @@ verification_commands:
   - node scripts/lint-mobile.js
   - node --test tests/mobile-*.test.js tests/uiux-*.test.js
 residual: "Extent bound is a conservative analytic estimate, not measured on a device. Larger radii may change wrapping in tight pills."
+closed_by_merge: "PR #2513 (branch claude/ui-crystal-followup) merged to main; it is the only PR from this branch and the only work order naming it. Status corrected by an automatic branch-to-merged-PR match on 2026-11-10; this records the merge only, not a separate production verification."

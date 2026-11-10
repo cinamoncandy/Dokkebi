@@ -1,6 +1,6 @@
 id: WO-PAPER-20261003-OBSERVATION-CAP
 title: "Keep PAPER market observations per market so the SMA 5/20 baseline can warm up with several markets"
-status: READY_FOR_REVIEW
+status: COMPLETED
 owner: nusa-development
 repository: cinamoncandy/NUSA
 base_branch: main
@@ -23,3 +23,4 @@ verification_commands:
   - npx tsc -p tsconfig.json
   - node --test tests/observation-retention.test.js
 residual: "Per-tick work grows with the number of retained observations (at most 5 x 40 = 200 instead of 50); not measured on the 1 GB host. The buffer is still cleared on every feed reconnect, so each reconnect restarts the warm-up; seeding it from persisted observations is a separate change. Trading begins only after this is deployed (owner standing deploy approval) and 20 observations exist."
+closed_by_merge: "PR #2495 (branch claude/nusa-repository-j93sd8-observation-cap) merged to main; it is the only PR from this branch and the only work order naming it. Status corrected by an automatic branch-to-merged-PR match on 2026-11-10; this records the merge only, not a separate production verification."

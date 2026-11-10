@@ -1,6 +1,6 @@
 id: WO-RESEARCH-20261002-OPTIMIZER-CORE
 title: "Move the deterministic strategy optimizer core into packages/core so the server can reuse it (Stage 2a-1)"
-status: READY_FOR_REVIEW
+status: COMPLETED
 owner: nusa-development
 repository: cinamoncandy/NUSA
 base_branch: main
@@ -24,3 +24,4 @@ verification_commands:
   - node --test tests/ai-strategy-engine.test.js tests/ai-strategy-optimizer.test.js tests/ai-evaluation-engine.test.js tests/ai-backtest-engine.test.js tests/ai-backtest-digest-strength.test.js tests/optimizer-core-layering.test.js
   - pnpm run validate
 residual: "Physical Android acceptance is HUMAN_ENVIRONMENT_ONLY. Not run: pnpm run validate (sandbox Node 22); individual validators run instead."
+closed_by_merge: "PR #2468 (branch claude/nusa-repository-j93sd8-optimizer-core) merged to main; it is the only PR from this branch and the only work order naming it. Status corrected by an automatic branch-to-merged-PR match on 2026-11-10; this records the merge only, not a separate production verification."

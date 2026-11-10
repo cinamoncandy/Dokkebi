@@ -1,6 +1,6 @@
 id: WO-CLOUD-20261103-SELL-EXIT-ORDER-CAP
 title: "Chunk PAPER SELL exits to the enforced per-order notional cap"
-status: READY_FOR_REVIEW
+status: COMPLETED
 owner: nusa-development
 repository: cinamoncandy/NUSA
 base_branch: main
@@ -28,3 +28,4 @@ verification_commands:
   - node scripts/validate-aipos-yaml.js
 review: "Draft PR; a separate non-author session reviews it under docs/GRILL_ME_PROTOCOL.md."
 residual: "Effect on the live learning period is verified only after an owner-approved server release and diagnose read-back. Remaining-position sells repeat per strategy tick; same-side streak and per-minute order limits were not exercised here."
+closed_by_merge: "PR #2993 (branch claude/sell-chunk-to-order-cap) merged to main; it is the only PR from this branch and the only work order naming it. Status corrected by an automatic branch-to-merged-PR match on 2026-11-10; this records the merge only, not a separate production verification."

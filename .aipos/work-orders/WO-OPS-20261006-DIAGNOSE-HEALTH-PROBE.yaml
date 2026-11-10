@@ -1,6 +1,6 @@
 id: WO-OPS-20261006-DIAGNOSE-HEALTH-PROBE
 title: "Host diagnosis reads the runtime's own /health to tell a dead server from a connection problem"
-status: READY_FOR_REVIEW
+status: COMPLETED
 owner: nusa-development
 repository: cinamoncandy/NUSA
 base_branch: main
@@ -23,3 +23,4 @@ verification_commands:
   - node scripts/validate-workflow-action-pins.js && node scripts/validate-workflow-action-inputs.js && node scripts/validate-workflow-authority-map.js
   - node scripts/validate-aipos-yaml.js && node scripts/validate-aipos-drift.js && node scripts/validate-platform-independent-tests.js
 residual: "The step has not run on the host yet; it runs only after this reaches main and the owner or the agent dispatches the diagnosis. /health is documented as unauthenticated and allowlisted; if its body ever carried more than liveness, the 1500 character bound and the public nature of the endpoint limit the exposure."
+closed_by_merge: "PR #2524 (branch claude/diagnose-health-probe) merged to main; it is the only PR from this branch and the only work order naming it. Status corrected by an automatic branch-to-merged-PR match on 2026-11-10; this records the merge only, not a separate production verification."

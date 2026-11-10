@@ -1,6 +1,6 @@
 id: WO-20260924-RESEARCH-RECOVERY-FEED-GATE
 title: "Gate the plain researchRuntime market-data feed on recovery integrity"
-status: READY_FOR_REVIEW
+status: COMPLETED
 owner: nusa-development
 repository: cinamoncandy/NUSA
 base_branch: main
@@ -39,3 +39,4 @@ safety:
   aiAuthority: ZERO_AUTHORITY
   fail_closed: true
 next_permitted_action: "Exact-head CI, Audit, Release."
+closed_by_merge: "PR #2265 (branch claude/nusa-repository-j93sd8-research-recovery-gate) merged to main; it is the only PR from this branch and the only work order naming it. Status corrected by an automatic branch-to-merged-PR match on 2026-11-10; this records the merge only, not a separate production verification."

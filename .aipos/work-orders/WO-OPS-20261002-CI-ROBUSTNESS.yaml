@@ -1,6 +1,6 @@
 id: WO-OPS-20261002-CI-ROBUSTNESS
 title: "Stop recurring CI failures that come from display copy and a tight test timeout"
-status: READY_FOR_REVIEW
+status: COMPLETED
 owner: nusa-development
 repository: cinamoncandy/NUSA
 base_branch: main
@@ -23,3 +23,4 @@ verification_commands:
   - node --test tests/mobile-product-v5.test.js tests/mobile-safety-line.test.js tests/desktop-cloud-paper-production-e2e.test.js
   - pnpm run validate
 residual: "The emulator acceptance gate itself only runs in CI; the new testIDs were checked against the dumps from run 36962005994."
+closed_by_merge: "PR #2463 (branch claude/nusa-repository-j93sd8-ci-robustness) merged to main; it is the only PR from this branch and the only work order naming it. Status corrected by an automatic branch-to-merged-PR match on 2026-11-10; this records the merge only, not a separate production verification."

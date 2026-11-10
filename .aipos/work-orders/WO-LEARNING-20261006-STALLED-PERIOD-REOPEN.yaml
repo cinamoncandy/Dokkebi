@@ -1,6 +1,6 @@
 id: WO-LEARNING-20261006-STALLED-PERIOD-REOPEN
 title: "Continue the closed-learning PAPER loop when a period closed without a successor"
-status: READY_FOR_REVIEW
+status: COMPLETED
 owner: nusa-development
 repository: cinamoncandy/NUSA
 base_branch: main
@@ -23,3 +23,4 @@ verification_commands:
   - npx tsc -p tsconfig.json
   - node --test dist/apps/cloud/src/closedLearningRolloverScheduler.test.js
 residual: "Requires a PAPER deploy. If a qualified deployment was interrupted mid-way, its replay would now find the continuation period open and fail closed ('another PAPER realized period is already open') rather than opening a second period."
+closed_by_merge: "PR #2551 (branch claude/closed-learning-stall-reopen) merged to main; it is the only PR from this branch and the only work order naming it. Status corrected by an automatic branch-to-merged-PR match on 2026-11-10; this records the merge only, not a separate production verification."

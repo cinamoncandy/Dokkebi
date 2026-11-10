@@ -1,6 +1,6 @@
 id: WO-RESEARCH-20261002-CANDLE-AGGREGATOR
 title: "Deterministic closed-candle aggregation from stored public ticker observations (Stage 2b-1; not wired)"
-status: READY_FOR_REVIEW
+status: COMPLETED
 owner: nusa-development
 repository: cinamoncandy/NUSA
 base_branch: main
@@ -24,3 +24,4 @@ verification_commands:
   - node --test tests/closed-candle-aggregator.test.js
   - pnpm run validate
 residual: "Long-retention candle store (storage schema change), input builder with full provenance, evaluators, production composition and owner-approved deploy not started. Not run: pnpm run validate (sandbox Node 22)."
+closed_by_merge: "PR #2470 (branch claude/nusa-repository-j93sd8-candle-aggregator) merged to main; it is the only PR from this branch and the only work order naming it. Status corrected by an automatic branch-to-merged-PR match on 2026-11-10; this records the merge only, not a separate production verification."

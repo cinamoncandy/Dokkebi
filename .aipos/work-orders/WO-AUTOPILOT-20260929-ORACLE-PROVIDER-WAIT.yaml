@@ -1,6 +1,6 @@
 id: WO-AUTOPILOT-20260929-ORACLE-PROVIDER-WAIT
 title: "Keep the Oracle Autopilot healthy during a canonical provider wait"
-status: READY_FOR_REVIEW
+status: COMPLETED
 owner: nusa-development
 repository: cinamoncandy/NUSA
 base_branch: main
@@ -31,3 +31,4 @@ verification_commands:
   - pnpm run lint:scripts
   - pnpm run validate:full
 next_permitted_action: "Fresh exact-head CI, independent Audit, canonical Release merge, exact-main Oracle PAPER Release, then observe runtime wait without counter growth and a later bounded coding dispatch when capacity returns."
+closed_by_merge: "PR #2372 (branch codex/autopilot-runtime-provider-wait) merged to main; it is the only PR from this branch and the only work order naming it. Status corrected by an automatic branch-to-merged-PR match on 2026-11-10; this records the merge only, not a separate production verification."

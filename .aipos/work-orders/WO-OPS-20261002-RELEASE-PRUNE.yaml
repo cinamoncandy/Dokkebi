@@ -1,6 +1,6 @@
 id: WO-OPS-20261002-RELEASE-PRUNE
 title: "Prune superseded Oracle releases before the host is touched (disk-full backup failure)"
-status: READY_FOR_REVIEW
+status: COMPLETED
 owner: nusa-development
 repository: cinamoncandy/NUSA
 base_branch: main
@@ -24,3 +24,4 @@ verification_commands:
   - node --test tests/oracle-paper-release-workflow.test.js
   - node scripts/validate-aipos-yaml.js
 residual: "Does not free space already consumed by runner work/diag directories or other files. The host may still need a manual cleanup once; owner approval needed for any deploy."
+closed_by_merge: "PR #2478 (branch claude/nusa-repository-j93sd8-release-main-drift) merged to main; it is the only PR from this branch and the only work order naming it. Status corrected by an automatic branch-to-merged-PR match on 2026-11-10; this records the merge only, not a separate production verification."

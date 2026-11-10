@@ -1,6 +1,6 @@
 id: WO-20260927-AUDIT-RECOVERY-BOUNDED-RETRY
 title: "Keep transient Audit recovery inside the Audit lane"
-status: READY_FOR_REVIEW
+status: COMPLETED
 owner: nusa-release-audit
 repository: cinamoncandy/NUSA
 base_branch: main
@@ -52,3 +52,4 @@ safety:
   aiAuthority: ZERO_AUTHORITY
   fail_closed: true
 next_permitted_action: "Obtain fresh exact-head CI including validation/preflight/AIPOS gates, resolve any review findings, then independent Audit and canonical Release."
+closed_by_merge: "PR #2332 (branch fix/audit-recovery-bounded-audit-retry) merged to main; it is the only PR from this branch and the only work order naming it. Status corrected by an automatic branch-to-merged-PR match on 2026-11-10; this records the merge only, not a separate production verification."

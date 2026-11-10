@@ -1,6 +1,6 @@
 id: WO-AUTOPILOT-20260929-CAPACITY-EFFICIENCY
 title: "Reduce Autopilot provider-wait overhead and optional Jev SHADOW neuron use"
-status: IN_PROGRESS
+status: COMPLETED
 owner: nusa-development
 repository: cinamoncandy/NUSA
 base_branch: main
@@ -72,3 +72,4 @@ safety:
   paid_provider_activation: false
   paper_only: true
 next_permitted_action: "Do not redispatch while the persisted Workers AI capacity wait is active. After provider recovery is independently evidenced, observe the existing canonical Jev SHADOW path and its typed token/neuron usage receipt; only then assess measured cost change. Keep SHADOW configuration/activation under its separate existing work order and owner gates; do not enable it here, bypass quota, or claim runtime savings from estimates."
+closed_by_merge: "PR #2378 (branch codex/autopilot-provider-wait-cost-efficiency) merged to main; it is the only PR from this branch and the only work order naming it. Status corrected by an automatic branch-to-merged-PR match on 2026-11-10; this records the merge only, not a separate production verification."

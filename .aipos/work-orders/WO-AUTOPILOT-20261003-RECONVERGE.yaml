@@ -1,6 +1,6 @@
 id: WO-AUTOPILOT-20261003-RECONVERGE
 title: "Automatically merge current main into autopilot PRs that fell behind so Audit stops declining them as stale"
-status: READY_FOR_REVIEW
+status: COMPLETED
 owner: nusa-development
 repository: cinamoncandy/NUSA
 base_branch: main
@@ -22,3 +22,4 @@ rollback: "Delete the workflow file (or disable it in Actions)."
 verification_commands:
   - node --test tests/autopilot-reconverge.test.js
 residual: "Not exercised against live GitHub before merge. The Autopilot token needs permission to push merge commits that include workflow-file changes; if it lacks the workflow scope the API refuses and the PR stays for a human. The workflow file itself is a protected path and needs the normal review."
+closed_by_merge: "PR #2496 (branch claude/autopilot-productivity) merged to main; it is the only PR from this branch and the only work order naming it. Status corrected by an automatic branch-to-merged-PR match on 2026-11-10; this records the merge only, not a separate production verification."

@@ -1,6 +1,6 @@
 id: WO-OPS-20261026-BACKUP-HELPER-PROOF
 title: Avoid extracting the full release before Oracle backup helper verification
-status: PR_OPEN_DRAFT_GATES_MUST_BE_RECHECKED_BEFORE_AUDIT_RELEASE
+status: COMPLETED
 priority: P0
 owner: nusa-server-automation
 repository: cinamoncandy/NUSA
@@ -47,3 +47,4 @@ validation: 'Exact head f20835bd534fa44c7bad5ffe989054ecf27f5b62: six required w
 precommit_review: 'Fresh non-author review on exact head f20835bd534fa44c7bad5ffe989054ecf27f5b62 found no actionable findings (receipt 6407094152); all three prior P2 review threads are resolved. The next Audit transition still requires live exact-head/base and gate revalidation.'
 publication_blockers: []
 next: Require six completed/success workflows and a fresh clean non-author review bound to the same live PR head and current protected base immediately before Independent Audit. Any head change invalidates both receipts. Keep Draft; then use separately authorized Release gates. No Oracle deployment, helper installation, backup invocation, or host mutation is authorized.
+closed_by_merge: "PR #2885 (branch codex/oracle-backup-helper-artifact-20261026) merged to main; it is the only PR from this branch and the only work order naming it. Status corrected by an automatic branch-to-merged-PR match on 2026-11-10; this records the merge only, not a separate production verification."

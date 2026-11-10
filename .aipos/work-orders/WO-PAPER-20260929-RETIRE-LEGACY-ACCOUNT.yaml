@@ -1,6 +1,6 @@
 id: WO-PAPER-20260929-RETIRE-LEGACY-ACCOUNT
 title: "Delete the retired KRW 10,000,000 PAPER ledger (owner decision)"
-status: READY_FOR_REVIEW
+status: COMPLETED
 owner: nusa-development
 repository: cinamoncandy/NUSA
 base_branch: main
@@ -28,3 +28,4 @@ verification_commands:
 evidence:
   - "apps/cloud/src/paperAccountRetirement.test.ts: purge of the retired account, active account untouched, idempotent, active-account refusal, id validation."
   - "Launcher-driven local run: paper-default rows deleted (fill ledger 1, history 1, account 1), receipt written, runtime started once."
+closed_by_merge: "PR #2385 (branch claude/nusa-repository-j93sd8-retire-legacy-account) merged to main; it is the only PR from this branch and the only work order naming it. Status corrected by an automatic branch-to-merged-PR match on 2026-11-10; this records the merge only, not a separate production verification."
