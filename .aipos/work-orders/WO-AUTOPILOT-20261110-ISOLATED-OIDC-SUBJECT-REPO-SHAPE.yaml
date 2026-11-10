@@ -1,0 +1,19 @@
+id: WO-AUTOPILOT-20261110-ISOLATED-OIDC-SUBJECT-REPO-SHAPE
+title: "A REPOSITORY subject refusal names the subject's repository segment"
+status: READY_FOR_REVIEW
+created: 2026-11-10
+implementation_branch: claude/isolated-oidc-subject-repo-shape
+authority_impact: none
+finding: "FORGE L1 attempt 6 (source 42845957144, consumer 42846099154) was refused with ISOLATED_CONSUMER_OIDC_SUBJECT_INVALID:REPOSITORY:repo:ref: the subject's repo segment is not cinamoncandy/nusa even case-insensitively, while the signed repository claim is cinamoncandy/NUSA. The segment's actual value is unknown."
+change:
+  - "On a REPOSITORY refusal only, the stage carries the subject's repo segment reduced to [A-Za-z0-9_] and 48 characters (a public repository name; never a token), plus up to two claim keys."
+not_changed:
+  - "Every acceptance rule; nothing new is accepted. The route stays off."
+safety:
+  paper_only: true
+  liveAuthority: NONE
+  productionMutationAllowed: false
+  aiAuthority: ZERO_AUTHORITY
+validation:
+  - "All compiled apps/autopilot tests and the control-plane wiring ledger pass; the new stage matches the Worker and consumer stage pattern."
+next_action: "Review, merge; attempt 7 under the owner's standing approval reads the real segment, then a bounded fix."
