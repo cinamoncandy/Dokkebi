@@ -315,7 +315,11 @@ export async function verifyGithubCodingPublisherRun(
 export function isolatedConsumerSubjectRefusal(sub: unknown): "FORMAT" | "REPOSITORY" | "REF" | "KIND" | undefined {
   if (typeof sub !== "string" || sub.length === 0 || sub.length > 512 || /[\u0000-\u001f\u007f]/.test(sub)) return "FORMAT";
   const parts = sub.split(":");
-  const boundByName = parts[0] === "repo" && (parts[1] ?? "").toLowerCase() === "cinamoncandy/nusa";
+  const repoSegment = parts[0] === "repo" ? parts[1] ?? "" : "";
+  // Either the plain name or GitHub's ID-pinned form owner<sep>ownerId/repo<sep>repoId. FORGE L1 attempt 7 (consumer run
+  // 42850690523) showed this repository's subject uses the ID-pinned form; both ids are pinned exactly here.
+  const boundByName = repoSegment.toLowerCase() === "cinamoncandy/nusa"
+    || /^cinamoncandy[^A-Za-z0-9:/]213270074\/nusa[^A-Za-z0-9:/]1296492411$/i.test(repoSegment);
   const boundById = /(?:^|:)repository_id:1296492411(?::|$)/.test(sub);
   if (!boundByName && !boundById) return "REPOSITORY";
   // Every occurrence counts, not only the first: a duplicated, dangling or non-main ref is refused.
