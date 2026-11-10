@@ -334,11 +334,11 @@ pr2039_main_alignment_20261109:
 pr2039_main_alignment_20261110_successor:
   canonical_issue: 903
   canonical_pr: 2039
-  status_at_record: LOCAL_VALIDATED_PENDING_EXACT_HEAD_CI
+  status_on_published_commit: PUBLISHED_FRESH_GATE_DISCOVERY_REQUIRED
   prior_published_pr_head: efa145dae9c7ed5f910bd522b147ad7fdd3fd0a0
   confirmed_prior_head_exact_ci: "6/6 workflow runs SUCCESS; conditional main-only causal jobs SKIPPED"
   merged_main_parent: 7714c22a3439c332e93841ea79535082cc27be2e
-  alignment: "Existing PR branch aligned locally with 7714c22a via a non-force merge candidate; no textual conflicts. Resolve true current main and PR HEAD fresh before any publication."
+  alignment: "Protected main 7714c22a was merged without textual conflicts and the existing #2039 branch updated without force; resolve current main/PR exact head fresh for each next gate."
   new_change: "Isolated Codex coding smoke-test added client fail-closed regression for HTTP 200 accepted=false and coordinator fetch error; no operational claim."
   recovery_supersession: "Older 2026-11-09 entries and their 2b3f05e8 publication instructions are historical only; do not repeat. Determine next gate from actual remote HEAD and exact-head CI."
   inventory_source: "AIPOS-only local candidate 449f275dcdb4278fc9686d1c1d0cb692a168e813 unavailable; not integrated. GitHub scan remains diagnostic and selector/admission fail closed."
@@ -349,4 +349,4 @@ pr2039_main_alignment_20261110_successor:
   audit: PENDING
   release_authorization: PENDING
   safety: "PAPER_ONLY; liveAuthority=NONE; productionMutationAllowed=false; realOrderAuthority=false; realTransferAuthority=false; aiAuthority=ZERO_AUTHORITY; FAIL_CLOSED"
-  next: "Validate this successor and safely publish to existing #2039 only if owner scope, branch, and main match freshly confirmed state; then require new exact-head CI, independent disposition, Formal Validator/Audit/Release. No operational Claim or Dispatch."
+  next: "Do not repeat publication of this checkpoint. Read live #2039 HEAD and protected main, check that exact HEAD CI and five companion statuses; if PASS seek non-author thread disposition then separate Formal Validator/Audit/Release. If CI fails, repair the concrete failing test and rerun exact-head gates. No operational Claim or Dispatch."
