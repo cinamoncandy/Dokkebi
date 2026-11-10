@@ -46,7 +46,7 @@ function evidence(caseId: "main-ci-failure" | "main-ci-timeout" = "main-ci-failu
   const verified: CryptographicallyVerifiedCausalManifest = {
     manifest,
     signerIdentity: {
-      subjectAlternativeName: `${repository}/.github/workflows/ci.yml@refs/heads/main`,
+      subjectAlternativeName: `https://github.com/${repository}/.github/workflows/ci.yml@refs/heads/main`,
       issuer: "https://token.actions.githubusercontent.com",
     },
     statementDigest,
@@ -130,7 +130,7 @@ test("classifies only the domain-separated isolated verification proof and never
     fixtureDigest: "f".repeat(64),
     statementDigest: "e".repeat(64),
     signerIdentity: {
-      subjectAlternativeName: `${repository}/.github/workflows/causal-verification.yml@refs/heads/main`,
+      subjectAlternativeName: `https://github.com/${repository}/.github/workflows/causal-verification.yml@refs/heads/main`,
       issuer: "https://token.actions.githubusercontent.com",
     },
   };
@@ -144,6 +144,6 @@ test("classifies only the domain-separated isolated verification proof and never
   assert.throws(() => classifyIsolatedCausalVerification({ ...verified, source: { ...verified.source, event: "push" } } as never), /ISOLATED_CAUSAL_VERIFICATION_INVALID/);
   assert.throws(() => classifyIsolatedCausalVerification({
     ...verified,
-    signerIdentity: { ...verified.signerIdentity, subjectAlternativeName: `${repository}/.github/workflows/ci.yml@refs/heads/main` },
+    signerIdentity: { ...verified.signerIdentity, subjectAlternativeName: `https://github.com/${repository}/.github/workflows/ci.yml@refs/heads/main` },
   } as never), /ISOLATED_CAUSAL_VERIFICATION_INVALID/);
 });
