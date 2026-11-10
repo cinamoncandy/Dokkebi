@@ -1,0 +1,20 @@
+id: WO-AUTOPILOT-20261110-ISOLATED-OIDC-SUBJECT
+title: "The isolated consumer's OIDC check does not depend on the subject template"
+status: READY_FOR_REVIEW
+created: 2026-11-10
+implementation_branch: claude/isolated-oidc-subject
+authority_impact: none
+finding: "FORGE L1 attempt 4 (source 42826258388, consumer 42826406914) was refused with workerRejectionStage=ISOLATED_CONSUMER_OIDC_SUBJECT_INVALID. The Worker required sub to equal the GitHub default 'repo:<repo>:ref:refs/heads/main'; the repository's subject template evidently differs. The exact template cannot be read from this sandbox."
+change:
+  - "isolatedConsumerSubjectAllowed: sub must be a bounded string without control characters; a ref segment, if present, must be refs/heads/main; pull_request and environment subjects are refused."
+  - "Identity still rests on the individually signed, pinned claims: iss, aud, exp/iat, repository, repository_id 1296492411, ref refs/heads/main, event_name workflow_run, workflow_ref of the consumer workflow on main, workflow_sha equal to sha, then the run read-back."
+not_changed:
+  - "Every other OIDC, attestation, claim, replay, CodingRunner or authority check; the route stays off."
+safety:
+  paper_only: true
+  liveAuthority: NONE
+  productionMutationAllowed: false
+  aiAuthority: ZERO_AUTHORITY
+validation:
+  - "All compiled apps/autopilot tests pass, including new cases for customized templates (accepted) and feature-ref, pull_request, environment, empty and non-string subjects and a wrong ref claim (refused)."
+next_action: "Review, merge; then, with owner approval, attempt 5. Later Worker stages (run read-back, CodingRunner) are untested in production and may still refuse; the receipt will name them."
