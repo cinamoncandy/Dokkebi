@@ -1,6 +1,6 @@
 id: WO-OPS-20261013-VERIFICATION-FIRST
 title: Verification-first engineering using canonical CI and evidence
-status: LOCAL_VALIDATED_PENDING_EXACT_HEAD_CI
+status: COMPLETED
 priority: P1
 authority_impact: none
 risk: MEDIUM
@@ -38,3 +38,4 @@ validation: "6 real Chromium E2E including synthetic console/page-error probes P
 review: "Independent read-only review found3 P2 issues; all fixed and fresh review reports no actionable P0/P1/P2. Context-created pages guarded; exact expected errors restricted to nondefault synthetic probes. Not Audit/Release approval."
 remaining: "Full product Feature Map expansion, workload-specific CPU/heap proof, physical-device evidence and measured AI concurrency scaling. Control Glass unavailable; no alternative control engine added."
 next: "Final revalidation, committed exact-head independent review, then canonical CI/Audit/Release; first increment only, not20-agent/full-device verification."
+closed_by_merge: "PR #2656 (branch codex/verification-first-20261013) merged to main; it is the only PR from this branch and the only work order naming it. Status corrected by an automatic branch-to-merged-PR match on 2026-11-10; this records the merge only, not a separate production verification."

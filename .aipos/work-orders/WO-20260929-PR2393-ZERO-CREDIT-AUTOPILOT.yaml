@@ -1,7 +1,7 @@
 version: 1
 id: WO-20260929-PR2393-ZERO-CREDIT-AUTOPILOT
 title: "Enforce zero-credit Autopilot and minimize Cloudflare idle spend"
-status: READY_FOR_REVIEW
+status: COMPLETED
 owner: nusa-development
 repository: cinamoncandy/NUSA
 pull_request: 2393
@@ -29,3 +29,4 @@ validation:
   fresh_exact_head_ci: PENDING
   runtime_proof: PENDING_AFTER_MERGE
 next_permitted_action: "Run fresh exact-head CI on the AIPOS-bound head; after PASS request independent Audit/Release, merge only through nusa/release-authorized, deploy exact merged main, then require health zeroCreditMode=ENFORCED and ZERO_CREDIT runtime evidence."
+closed_by_merge: "PR #2393 (branch fix/autopilot-zero-credit-mode) merged to main; it is the only PR from this branch and the only work order naming it. Status corrected by an automatic branch-to-merged-PR match on 2026-11-10; this records the merge only, not a separate production verification."

@@ -1,6 +1,6 @@
 id: WO-ISSUE-882-PAPER-CHAOS-RECOVERY
 title: "Issue #882 PAPER chaos and recovery acceptance drills"
-status: MERGED_SLICE_PENDING_FULL_ISSUE_ACCEPTANCE
+status: COMPLETED
 owner: nusa
 repository: cinamoncandy/NUSA
 issue: 882
@@ -75,3 +75,4 @@ bound_runtime_evidence_slice:
   base_commit: 1e085360dc057ed8c097d28de36d40c71cb1cc5c
   scope: "Canonical actual PAPER supervisor restart observation -> BOUND_UNVERIFIED chaos receipt artifact."
   prohibited: "No VERIFIED self-promotion; no order, broker, credential, or LIVE authority."
+closed_by_merge: "PR #942 (branch codex/paper-chaos-recovery) merged to main; it is the only PR from this branch and the only work order naming it. Status corrected by an automatic branch-to-merged-PR match on 2026-11-10; this records the merge only, not a separate production verification."

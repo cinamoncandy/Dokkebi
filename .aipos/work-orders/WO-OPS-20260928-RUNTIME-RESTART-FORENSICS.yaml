@@ -1,6 +1,6 @@
 id: WO-OPS-20260928-RUNTIME-RESTART-FORENSICS
 title: "Report why the supervised PAPER runtime last stopped through /health"
-status: READY_FOR_REVIEW
+status: COMPLETED
 owner: nusa-development
 repository: cinamoncandy/NUSA
 base_branch: main
@@ -36,3 +36,4 @@ persistence_and_recovery_evidence:
     - "node --test tests/*.test.js: 4693 pass, 0 fail"
     - "node scripts/run-tests-isolated.js: PASS 1086 isolated test files"
 residual: "Root cause of the 2026-09-28 PAPER restart loop is diagnosed from the reported code after deployment."
+closed_by_merge: "PR #2374 (branch claude/nusa-repository-j93sd8-runtime-forensics) merged to main; it is the only PR from this branch and the only work order naming it. Status corrected by an automatic branch-to-merged-PR match on 2026-11-10; this records the merge only, not a separate production verification."

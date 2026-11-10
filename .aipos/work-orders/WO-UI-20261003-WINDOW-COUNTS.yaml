@@ -1,6 +1,6 @@
 id: WO-UI-20261003-WINDOW-COUNTS
 title: "Server-side 09:00 KST window counts for the HOME decision and order numbers"
-status: READY_FOR_REVIEW
+status: COMPLETED
 owner: nusa-development
 repository: cinamoncandy/NUSA
 base_branch: main
@@ -27,3 +27,4 @@ verification_commands:
   - node scripts/lint-mobile.js
   - node --test tests/mobile-daily-reset.test.js tests/mobile-buy-signal-line.test.js
 residual: "Counts live in memory: a server restart restarts them; the BUY row and a note under the rings state the later start time. Needs a server deploy and a new app build to take effect; both need owner approval."
+closed_by_merge: "PR #2484 (branch claude/nusa-repository-j93sd8-window-counts) merged to main; it is the only PR from this branch and the only work order naming it. Status corrected by an automatic branch-to-merged-PR match on 2026-11-10; this records the merge only, not a separate production verification."

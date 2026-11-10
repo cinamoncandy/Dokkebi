@@ -1,6 +1,6 @@
 id: WO-OPS-20261018-PERIOD-DISPOSITION-CONSUMER-V2
 title: "Make canonical PAPER pending consumers recovery-safe across immutable schemaVersion=2 dispositions"
-status: IN_PROGRESS
+status: COMPLETED
 support_checkpoint_20261019:
   evidence: .aipos/handoffs/2026-10-19-closed-loop-convergence-support.md
   target_pr: 2808
@@ -198,3 +198,4 @@ latest_main_sync_20261021:
   runtime_activation: PROHIBITED
   safety: PAPER_ONLY_LIVE_NONE_PRODUCTION_MUTATION_FALSE_AI_ZERO_AUTHORITY
 next: "Complete fresh local validation of the 5084744b4b5b6f2b02e558b867281528584c8098 + 68226b2df7090485d3d79377e67f2f4aba8b4ed7 candidate; if protected main and PR head remain unchanged, create one exact-parent merge commit and update only the existing PR branch. Then require six fresh exact-head workflows, zero unresolved threads, and a formal non-author P0/P1/P2 Validator. Keep Draft until Validator ACCEPTED and do not activate markPendingIneligible in production."
+closed_by_merge: "PR #2808 (branch codex/pending-disposition-main-20261018) merged to main; it is the only PR from this branch and the only work order naming it. Status corrected by an automatic branch-to-merged-PR match on 2026-11-10; this records the merge only, not a separate production verification."

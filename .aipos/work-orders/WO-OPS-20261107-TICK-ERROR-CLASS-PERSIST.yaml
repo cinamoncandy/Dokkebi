@@ -1,6 +1,6 @@
 id: WO-OPS-20261107-TICK-ERROR-CLASS-PERSIST
 title: "Persist the bounded error class of a closed-learning TICK_ERROR across restarts (P0 #2589 follow-up)"
-status: READY_FOR_REVIEW
+status: COMPLETED
 owner: nusa-development
 repository: cinamoncandy/NUSA
 base_branch: main
@@ -22,3 +22,4 @@ verification_commands:
   - node scripts/validate-aipos-yaml.js
 review: "Draft; non-author review before leaving Draft. Release to the host is a separate owner-approved step."
 residual: "The class of the 08:28 error itself is lost (it was written by the old release without a class); only future errors keep theirs. This does not fix whatever threw."
+closed_by_merge: "PR #3019 (branch claude/persist-tick-error-class) merged to main; it is the only PR from this branch and the only work order naming it. Status corrected by an automatic branch-to-merged-PR match on 2026-11-10; this records the merge only, not a separate production verification."

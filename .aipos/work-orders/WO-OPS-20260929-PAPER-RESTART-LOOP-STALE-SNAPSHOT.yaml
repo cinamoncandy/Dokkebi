@@ -1,6 +1,6 @@
 id: WO-OPS-20260929-PAPER-RESTART-LOOP-STALE-SNAPSHOT
 title: "Stop the Oracle PAPER restart loop caused by an unreplayable Research snapshot"
-status: READY_FOR_REVIEW
+status: COMPLETED
 owner: nusa-development
 repository: cinamoncandy/NUSA
 base_branch: main
@@ -31,3 +31,4 @@ evidence:
   - "With this change on the same state: one supervisor start in 140s, 350 decisions, lastError null, no failure record."
   - "tests/research-run-robustness-evidence.test.js legacy League test fails before the fix with the production TypeError and passes after; apps/cloud/src/closedLearningInitialPaperBootstrap.test.ts covers stale wait, no persistence/deployment, per-fingerprint caching and fail-closed for other faults."
 residual: "A fresh challenger needs a new Research snapshot, which requires #2376 and the next Research timer run."
+closed_by_merge: "PR #2377 (branch claude/nusa-repository-j93sd8-legacy-replay) merged to main; it is the only PR from this branch and the only work order naming it. Status corrected by an automatic branch-to-merged-PR match on 2026-11-10; this records the merge only, not a separate production verification."

@@ -1,6 +1,6 @@
 id: WO-0059-PAPER-STARTUP-STABILIZATION-20261107
 title: "Separate PAPER orderbook startup stabilization from bounded observation"
-status: IN_PROGRESS
+status: COMPLETED
 priority: P0
 owner: nusa-development
 repository: cinamoncandy/NUSA
@@ -106,3 +106,4 @@ diagnostic_followup:
   exact_head_ci: "Prior diagnostic head faa2effadca0bc7db17cc4c55f3ca99bde8a5bb2 CI run 42386789300 and companion checks passed except actual-paper-runtime, which failed; run 42386789357 artifact 13579209159 records HALTED/KILL_SWITCH_ACTIVE/scheduler=true/RUNTIME_ERROR_PRESENT. Fresh CI is required after the new allowlist change."
   actual_paper: "Do not rerun #3002 based on diagnostic-only instrumentation; require an identified root-cause fix or justified environment change first. The next #3016 artifact can distinguish the finite public-market connection state without exposing raw error text."
   next: "Push the exact-state diagnostic extension on existing Draft PR #3016, obtain fresh exact-head CI and Actual PAPER artifact, then repair only if repository code is implicated. If a market feed/provider failure is confirmed, keep fail-closed and hold for environment recovery; do not rerun #3002 until a genuine root-cause fix or justified environment change is evidenced."
+closed_by_merge: "PR #3016 (branch WO-0059-PAPER-STARTUP-STABILIZATION-20261107) merged to main; it is the only PR from this branch and the only work order naming it. Status corrected by an automatic branch-to-merged-PR match on 2026-11-10; this records the merge only, not a separate production verification."

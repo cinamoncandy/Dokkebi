@@ -1,6 +1,6 @@
 id: WO-UI-20261007-HERO-FLOW-DYNAMIC
 title: "Make the flow-field hero more dynamic: comets, swirling clusters, landing rings and order sparks"
-status: READY_FOR_REVIEW
+status: COMPLETED
 owner: nusa-development
 repository: cinamoncandy/NUSA
 base_branch: main
@@ -27,3 +27,4 @@ verification_commands:
   - node scripts/lint-mobile.js
   - node --test tests/mobile-*.test.js
 residual: "Skia cannot run in this environment. The scenes (normal, decision in flight, order) were checked by drawing the compiled model with the renderer's draw order on a Chromium canvas. The web prototype used a persistent afterimage buffer; Skia redraws a picture each frame, so the afterimage is replaced by explicit comet tails and the look can differ on a device. Frame time with comets, tails and sparks all active must be checked on a physical device (HUMAN_ENVIRONMENT_ONLY); lower the density if a low-end phone stutters."
+closed_by_merge: "PR #2574 (branch claude/hero-flow-dynamic) merged to main; it is the only PR from this branch and the only work order naming it. Status corrected by an automatic branch-to-merged-PR match on 2026-11-10; this records the merge only, not a separate production verification."

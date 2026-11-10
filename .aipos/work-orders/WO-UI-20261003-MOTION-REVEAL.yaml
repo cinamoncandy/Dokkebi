@@ -1,6 +1,6 @@
 id: WO-UI-20261003-MOTION-REVEAL
 title: "Staggered section reveal on every ScreenFrame screen and the HOME vital tiles"
-status: READY_FOR_REVIEW
+status: COMPLETED
 owner: nusa-development
 repository: cinamoncandy/NUSA
 base_branch: main
@@ -26,3 +26,4 @@ verification_commands:
   - node scripts/lint-mobile.js
   - node --test tests/mobile-*.test.js
 residual: "Not seen on a device here; CI touch-visual emulator run is the visual check. Screens that do not use ScreenFrame (HOME hero, chart, settings details) keep their existing motion. Needs a new app build to reach the phone."
+closed_by_merge: "PR #2497 (branch claude/ui-motion-polish) merged to main; it is the only PR from this branch and the only work order naming it. Status corrected by an automatic branch-to-merged-PR match on 2026-11-10; this records the merge only, not a separate production verification."

@@ -1,6 +1,6 @@
 id: WO-PAPER-20261006-RESEARCH-PROGRESS-TIME-VALIDATION
 title: "Validate research progress times as times, not as counts"
-status: READY_FOR_REVIEW
+status: COMPLETED
 owner: nusa-development
 repository: cinamoncandy/NUSA
 base_branch: main
@@ -24,3 +24,4 @@ verification_commands:
   - node --test tests/personal-paper-operations.test.js
   - node scripts/lint-mobile.js
 residual: "The drop happens in the app's validation of the snapshot (the server's build step keeps the progress as sent), so the fix reaches the owner only with a new Android build; no PAPER server deploy is needed. Until the phone is updated it keeps showing the plain text; the server /health researchCollectionStatus shows the real status meanwhile."
+closed_by_merge: "PR #2535 (branch claude/research-progress-time-validation) merged to main; it is the only PR from this branch and the only work order naming it. Status corrected by an automatic branch-to-merged-PR match on 2026-11-10; this records the merge only, not a separate production verification."

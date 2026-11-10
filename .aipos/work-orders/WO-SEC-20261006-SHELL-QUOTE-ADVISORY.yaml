@@ -1,6 +1,6 @@
 id: WO-SEC-20261006-SHELL-QUOTE-ADVISORY
 title: "Override shell-quote 1.10.0 to 1.11.0 for GHSA-pqg4-j6r4-53mv"
-status: READY_FOR_REVIEW
+status: COMPLETED
 owner: nusa-development
 repository: cinamoncandy/NUSA
 base_branch: main
@@ -23,3 +23,4 @@ verification_commands:
   - pnpm install --frozen-lockfile
   - pnpm run security:gate
 residual: "Other open PRs need this merged (or ported) for their Security gate to pass."
+closed_by_merge: "PR #2555 (branch claude/shell-quote-advisory) merged to main; it is the only PR from this branch and the only work order naming it. Status corrected by an automatic branch-to-merged-PR match on 2026-11-10; this records the merge only, not a separate production verification."

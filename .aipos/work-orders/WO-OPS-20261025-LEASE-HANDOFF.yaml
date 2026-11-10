@@ -1,6 +1,6 @@
 id: WO-OPS-20261025-LEASE-HANDOFF
 title: "Renew the existing PAPER writer lease at the synchronous startup handoff"
-status: LOCAL_VALIDATED_PENDING_EXACT_HEAD_CI
+status: COMPLETED
 owner: nusa
 repository: cinamoncandy/NUSA
 issue: 2770
@@ -50,3 +50,4 @@ verification_commands:
   - git diff --check
 validation: "Fresh protected-main base 54c095daff15bc4ef067e12ed26c666e5fd3d4c0. Build/typecheck PASS; six focused test files PASS; preflight PASS; validate:full PASS; security gate PASS (0 high/critical, 0 secrets); lint:scripts PASS (0 errors, existing warnings); follow-up wiring/AIPOS tests 11/11 PASS; PAPER_ADAPTER exact-source and TARGET_ONLY registry tests 6/6 PASS after source-identity pin rebind. Earlier exact head found stale generated CURRENT_TRUTH, source-shape assertions assuming eager PAPER construction, and a stale PAPER_ADAPTER identity pin; regenerated/updated the checks and identity only. Qualification criteria remain UNVERIFIED. Fresh exact-head CI on the final branch head is pending."
 next: "Draft PR #3022 is open for reopened Issue #2770. Require fresh CI on its current exact head, then fresh independent review and Formal Validator → Audit → Release → protected merge. The current host is Datascale despite the legacy Oracle workflow name; exact-main deployment/runtime acceptance requires separately authorized Infrastructure/Release execution and must not be inferred from local tests."
+closed_by_merge: "PR #3022 (branch codex/2770-late-lease-acquisition-20261108) merged to main; it is the only PR from this branch and the only work order naming it. Status corrected by an automatic branch-to-merged-PR match on 2026-11-10; this records the merge only, not a separate production verification."

@@ -1,7 +1,7 @@
 id: WO-AIPOS-20261019-COMPLETION-STATE-RECONCILIATION
 schema_version: 1
 title: Reconcile merged remediation work-order completion state
-status: IN_PROGRESS
+status: COMPLETED
 priority: 70
 owner: nusa-engineering
 repository: cinamoncandy/NUSA
@@ -77,4 +77,4 @@ completion:
     productionMutationAllowed: false
     aiAuthority: ZERO_AUTHORITY
 next_action: Run the listed local AIPOS checks, then open a documentation-only PR after they pass.
-
+closed_by_merge: "PR #2811 (branch WO-AIPOS-20261019-COMPLETION-STATE-RECONCILIATION) merged to main; it is the only PR from this branch and the only work order naming it. Status corrected by an automatic branch-to-merged-PR match on 2026-11-10; this records the merge only, not a separate production verification."

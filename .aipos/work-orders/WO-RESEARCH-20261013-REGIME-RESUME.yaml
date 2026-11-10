@@ -1,6 +1,6 @@
 id: WO-RESEARCH-20261013-REGIME-RESUME
 title: Resume bounded regime-aware forward research
-status: LOCAL_VALIDATED_PENDING_CANONICAL_CI
+status: COMPLETED
 priority: P1
 authority_impact: none
 risk: MEDIUM
@@ -44,3 +44,4 @@ safety:
 remaining: "Forward candidate evaluator/collection binding, actual holdout evidence and canonical integration are pending; no runtime activation claimed."
 next: "Implement offline Research entry mask and paired canonical backtest; tests must prove exits unchanged and no future access. No production registration."
 validation: "35 focused tests PASS including3 new entry-mask/canonical-pair regressions; build,typecheck,validate:full,security and lint PASS (15 existing warnings). Independent read-only review no actionable P0/P1/P2, not Audit approval. Synthetic tests are not forward market evidence."
+closed_by_merge: "PR #2658 (branch codex/research-regime-resume-20261013) merged to main; it is the only PR from this branch and the only work order naming it. Status corrected by an automatic branch-to-merged-PR match on 2026-11-10; this records the merge only, not a separate production verification."

@@ -1,6 +1,6 @@
 id: WO-RESEARCH-20261007-FAILURE-REASONS
 title: "Classify every non-winning Research validation under one bounded failure reason"
-status: READY_FOR_REVIEW
+status: COMPLETED
 owner: nusa-development
 repository: cinamoncandy/NUSA
 base_branch: main
@@ -24,3 +24,4 @@ verification_commands:
   - node_modules/.bin/tsc -p tsconfig.json
   - node --test tests/research-failure-memory.test.js tests/research-experiment-orchestrator.test.js tests/research-experiment-composition.test.js tests/cloud-runtime-liveness-health.test.js
 residual: "LOW_SAMPLE is reserved for unusable evidence (a missing evaluation or net return, or a coordinator reason other than a completed comparison); a completed comparison that found no clear winner is judged on its metrics. COST_SENSITIVE reads the ledger's cost evidence (gross vs net return) because the evaluator sets netReturn and costAdjustedReturn to the same value. After the next PAPER deploy the FAIL_ counts appear under researchExperimentTicksByInterval."
+closed_by_merge: "PR #2568 (branch claude/failed-strategy-memory) merged to main; it is the only PR from this branch and the only work order naming it. Status corrected by an automatic branch-to-merged-PR match on 2026-11-10; this records the merge only, not a separate production verification."

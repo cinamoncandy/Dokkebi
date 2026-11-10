@@ -1,6 +1,6 @@
 id: WO-PAPER-20261006-MINUTE-BAR-STRATEGY
 title: "Evaluate the PAPER candidate strategy on completed 1-minute closes instead of every ticker event"
-status: READY_FOR_REVIEW
+status: COMPLETED
 owner: nusa-development
 repository: cinamoncandy/NUSA
 base_branch: main
@@ -26,3 +26,4 @@ verification_commands:
   - npx tsc -p tsconfig.json
   - node --test tests/paper-minute-bars.test.js dist/apps/cloud/src/paperCandidateStrategy.test.js dist/apps/cloud/src/cloudRuntimeDashboardHydratorCandidateBinding.test.js
 residual: "Requires a PAPER deploy. Expect far fewer BUY/SELL decisions (minutes, not seconds); 0 trades is a valid result. Because the persisted store survives restarts, the warm-up after a deploy also shortens. Follow-up for the research owner: a validated candidate (OOS/walk-forward with costs) to replace the baseline."
+closed_by_merge: "PR #2546 (branch claude/minute-bar-strategy) merged to main; it is the only PR from this branch and the only work order naming it. Status corrected by an automatic branch-to-merged-PR match on 2026-11-10; this records the merge only, not a separate production verification."
