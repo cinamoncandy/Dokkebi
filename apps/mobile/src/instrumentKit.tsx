@@ -1,7 +1,8 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
-import { AccessibilityInfo, Animated, Easing, Pressable, StyleSheet, Text, View, type PressableProps, type StyleProp, type TextStyle, type ViewStyle } from "react-native";
+import { AccessibilityInfo, Animated, Easing, Pressable, StyleSheet, Text, useWindowDimensions, View, type PressableProps, type StyleProp, type TextStyle, type ViewStyle } from "react-native";
 import { Canvas, Path, Skia } from "@shopify/react-native-skia";
 import { calmColors } from "./uiKitModel";
+import { HERO_FONT_SIZE, heroFontSize } from "./learningScreenModel";
 import { fieldFonts } from "./fieldFonts";
 import { aiIslandMotion, readableFont } from "./designSystem";
 
@@ -213,10 +214,14 @@ const styles = StyleSheet.create({
 /** Screen opener of the instrument design: a mono index ("03 / 안전") over a large two-line statement. */
 export function InstrumentHero({ index, lines, label }: { readonly index: string; readonly lines: readonly { readonly text: string; readonly amber?: boolean; readonly color?: string }[]; readonly label?: string }) {
   const reduced = useReducedMotion();
+  // Shrink all lines together until the widest fits the screen, so no syllable is left alone on an extra line.
+  const { width } = useWindowDimensions();
+  const size = heroFontSize(lines.map((l) => l.text), width - 40);
+  const fit = size === HERO_FONT_SIZE ? null : { fontSize: size, lineHeight: Math.round(size * 58 / HERO_FONT_SIZE), letterSpacing: -2 * size / HERO_FONT_SIZE };
   return <View style={heroStyles.wrap}>
     <Text style={instrumentType.index}>{index}</Text>
     <View style={heroStyles.lines} accessible accessibilityRole="header" accessibilityLabel={label ?? lines.map((l) => l.text).join(" ")}>
-      {lines.map((l, order) => <HeroLine key={`${order}:${l.text}`} text={l.text} reduced={reduced} order={order} style={[instrumentType.heroLine, l.amber ? { color: calmColors.attention } : l.color ? { color: l.color } : null]} />)}
+      {lines.map((l, order) => <HeroLine key={`${order}:${l.text}`} text={l.text} reduced={reduced} order={order} style={[instrumentType.heroLine, fit, l.amber ? { color: calmColors.attention } : l.color ? { color: l.color } : null]} />)}
     </View>
   </View>;
 }

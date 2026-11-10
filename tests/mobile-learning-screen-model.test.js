@@ -49,3 +49,23 @@ test("a long Korean hero sentence splits at a space near the middle and short te
   // the words are unchanged: joining the lines gives the same text back
   for (const t of ["모의투자로 배우는 중이에요", "학습이 잠시 쉬고 있어요", "학습에 오류가 있어요"]) assert.equal(splitHeroLines(t).join(" "), t);
 });
+
+test("hero lines share one font size that fits the widest line and never exceed the designed 54 px", () => {
+  const { heroFontSize, splitHeroLines, HERO_FONT_SIZE } = require("../dist/apps/mobile/src/learningScreenModel.js");
+  assert.equal(HERO_FONT_SIZE, 54);
+  // short lines keep the designed size on a 390 px phone (350 px inside the 20 px margins)
+  assert.equal(heroFontSize(["모두", "정상이에요"], 350), 54);
+  assert.equal(heroFontSize(["오늘의", "로그"], 350), 54);
+  // "배우는 중이에요" is 7 glyphs and a space: at 54 px it is wider than 350 px, so every line shrinks together
+  const fitted = heroFontSize(splitHeroLines("모의투자로 배우는 중이에요"), 350);
+  assert.ok(fitted < 54 && fitted >= 44, `fitted ${fitted}`);
+  const widthAt = (text, size) => Array.from(text).reduce((sum, ch) => sum + (/\s/.test(ch) ? 0.3 : ch.charCodeAt(0) < 0x80 ? 0.62 : 1) * size - 2 * size / 54, 0);
+  assert.ok(widthAt("배우는 중이에요", fitted) <= 350);
+  // narrower phones shrink further but stop at 36 px; a missing or zero width keeps the designed size
+  assert.ok(heroFontSize(["배우는 중이에요"], 320) < fitted);
+  assert.equal(heroFontSize(["가나다라마바사아자차카타파하"], 200), 36);
+  assert.equal(heroFontSize(["멈춤"], 0), 54);
+  assert.equal(heroFontSize([""], 350), 54);
+  // Latin text is narrower than Korean at the same size
+  assert.equal(heroFontSize(["NUSA를", "깨우는 중"], 350), 54);
+});
