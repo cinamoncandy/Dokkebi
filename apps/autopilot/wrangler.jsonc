@@ -12,8 +12,9 @@
     "NUSA_JEV_SHADOW_ENABLED": "true",
     "NUSA_JEV_BOUNDED_ROUTING_ENABLED": "false",
     "NUSA_JEV_MODEL_TIERING_ENABLED": "false",
-    // FORGE L1 one-run window closed after source run 42788936747 / consumer run 42789040136 (docs/FORGE_L1_VERIFICATION_RUNBOOK.md).
-    "NUSA_ISOLATED_CAUSAL_VERIFICATION_ENABLED": "false"
+    // FORGE L1 second attempt window (owner-approved 2026-11-10; docs/FORGE_L1_VERIFICATION_RUNBOOK.md). Attempt 1
+    // (source 42788936747 / consumer 42789040136) failed before any request. Turn back to "false" right after this run.
+    "NUSA_ISOLATED_CAUSAL_VERIFICATION_ENABLED": "true"
   },
   "ai": {
     "binding": "AI"
