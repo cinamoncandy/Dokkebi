@@ -306,10 +306,6 @@ export async function verifyGithubCodingPublisherRun(
  * be bound to this repository by name or by its pinned id, carry no control characters, have a main ref segment if
  * it has one, and never be a pull_request or environment subject. An arbitrary subject is refused.
  */
-export function isolatedConsumerSubjectAllowed(sub: unknown): boolean {
-  return isolatedConsumerSubjectRefusal(sub) === undefined;
-}
-
 /**
  * The fixed reason a subject is refused, or undefined when it is allowed. GitHub repository names are case-insensitive
  * and a subject can carry a different letter case than the `repository` claim (FORGE L1 attempt 5, consumer run
