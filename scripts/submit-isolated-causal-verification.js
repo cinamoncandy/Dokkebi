@@ -1,5 +1,6 @@
 const fs = require("node:fs");
 const path = require("node:path");
+const { readBoundedRejectionStage } = require("./isolated-rejection-stage.js");
 
 const REPOSITORY = "cinamoncandy/NUSA";
 const OIDC_AUDIENCE = "nusa-isolated-causal-verification-v1";
@@ -112,14 +113,7 @@ async function main() {
   }
   if (!response.ok) {
     // Keep only the Worker's fixed stage constant from a bounded error body; never echo anything else.
-    let stage;
-    try {
-      const text = await response.text();
-      if (text.length <= 16 * 1024) {
-        const candidate = JSON.parse(text)?.rejectionStage;
-        if (typeof candidate === "string" && /^[A-Z][A-Z0-9_]{2,95}(?::[A-Za-z0-9_]{1,64}){0,4}$/.test(candidate)) stage = candidate;
-      }
-    } catch { /* no stage */ }
+    const stage = await readBoundedRejectionStage(response);
     fail(`ISOLATED_VERIFICATION_WORKER_REJECTED_${response.status}`, stage);
   }
 

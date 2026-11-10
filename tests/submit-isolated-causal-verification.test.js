@@ -71,11 +71,35 @@ test("the consumer checks out trusted main before it runs the submit script (con
 test("on a Worker rejection the consumer keeps only the Worker's fixed stage constant from a bounded body", () => {
   const source = readFileSync(join(__dirname, "..", "scripts", "submit-isolated-causal-verification.js"), "utf8");
   const reject = source.slice(source.indexOf("if (!response.ok) {"), source.indexOf("let payload;"));
-  assert.match(reject, /text\.length <= 16 \* 1024/);
-  assert.match(reject, /\?\.rejectionStage/);
-  assert.ok(reject.includes("/^[A-Z][A-Z0-9_]{2,95}(?::[A-Za-z0-9_]{1,64}){0,4}$/.test(candidate)"));
+  assert.match(reject, /const stage = await readBoundedRejectionStage\(response\);/);
+  assert.equal(/response\.text\(\)/.test(reject), false, "the rejection path never buffers the whole body");
   assert.match(reject, /fail\(`ISOLATED_VERIFICATION_WORKER_REJECTED_\$\{response\.status\}`, stage\)/);
   const receipt = source.slice(source.indexOf("function writeFailureReceipt"), source.indexOf("const fail ="));
   assert.match(receipt, /workerRejectionStage \}/, "the receipt carries the stage under its own key");
   assert.ok(receipt.includes("/^[A-Z][A-Z0-9_]{2,95}(?::[A-Za-z0-9_]{1,64}){0,4}$/.test(workerRejectionStage)"), "and re-validates it before writing");
+});
+
+test("the bounded reader cancels an oversized or endless rejection body without collecting it", async () => {
+  const { readBoundedRejectionStage, MAX_REJECTION_BODY_BYTES } = require("../scripts/isolated-rejection-stage.js");
+  let pulls = 0;
+  let cancelled = false;
+  const endless = new Response(new (require("node:stream/web").ReadableStream)({
+    pull(controller) { pulls += 1; controller.enqueue(new Uint8Array(4096).fill(0x20)); },
+    cancel() { cancelled = true; },
+  }), { status: 409 });
+  assert.equal(await readBoundedRejectionStage(endless), undefined);
+  assert.equal(cancelled, true, "the stream is cancelled at the cap");
+  assert.ok(pulls <= MAX_REJECTION_BODY_BYTES / 4096 + 2, `stopped after ${pulls} chunks`);
+  const oversized = new Response(JSON.stringify({ rejectionStage: "CAUSAL_X", pad: "a".repeat(MAX_REJECTION_BODY_BYTES) }), { status: 409 });
+  assert.equal(await readBoundedRejectionStage(oversized), undefined);
+});
+
+test("the bounded reader returns only a valid fixed stage", async () => {
+  const { readBoundedRejectionStage } = require("../scripts/isolated-rejection-stage.js");
+  const body = (value) => new Response(value, { status: 409 });
+  assert.equal(await readBoundedRejectionStage(body(JSON.stringify({ rejectionStage: "ISOLATED_CONSUMER_OIDC_INVALID" }))), "ISOLATED_CONSUMER_OIDC_INVALID");
+  assert.equal(await readBoundedRejectionStage(body(JSON.stringify({ rejectionStage: "EXECUTION_REJECTED:missing:1:2" }))), "EXECUTION_REJECTED:missing:1:2");
+  assert.equal(await readBoundedRejectionStage(body(JSON.stringify({ rejectionStage: "token ghp_abc https://x" }))), undefined);
+  assert.equal(await readBoundedRejectionStage(body("{not json")), undefined);
+  assert.equal(await readBoundedRejectionStage(new Response(null, { status: 409 })), undefined);
 });
