@@ -75,10 +75,15 @@
       "secrets": false,
       "environment": null
     },
-    "autopilot-cloudflare-runtime-proof.yml:runtime-proof": {
+    "autopilot-cloudflare-runtime-proof.yml:dispatch-preflight": {
       "write": [
         "actions"
       ],
+      "secrets": false,
+      "environment": null
+    },
+    "autopilot-cloudflare-runtime-proof.yml:runtime-proof": {
+      "write": [],
       "secrets": false,
       "environment": null
     },
