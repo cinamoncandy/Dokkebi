@@ -55,3 +55,25 @@ test("rejects invalid candles and invalid configuration", () => {
   assert.equal(buildWalkForwardWindows({ candles: mk(1980, 2000), endCloseMs: END + 1, config }).reason, "INVALID_CONFIG");
   assert.equal(buildWalkForwardWindows({ candles: mk(1980, 2000), endCloseMs: 0, config }).reason, "INVALID_CONFIG");
 });
+
+test("exchange-confirmed absent closes leave both sides of the missing ratio; our own gaps still count; a mostly-quiet window still refuses", () => {
+  const cfg = { intervalMs: M, trainMs: 100 * M, validationMs: 50 * M, holdoutMs: 50 * M, maxMissingRatio: 0.05 };
+  const end = 1000 * M;
+  // holdout 951..1000; drop 961..970 (10 closes = 20% of the holdout)
+  const without = (drop) => mk(700, 1000).filter((c) => !drop.has(c.timestamp / M));
+  const quiet = new Set(Array.from({ length: 10 }, (_, i) => (961 + i) * M));
+  const dropped = new Set(Array.from({ length: 10 }, (_, i) => 961 + i));
+  assert.equal(buildWalkForwardWindows({ candles: without(dropped), endCloseMs: end, config: cfg }).reason, "TOO_MANY_GAPS", "unexplained: 20% missing");
+  const ok = buildWalkForwardWindows({ candles: without(dropped), endCloseMs: end, config: cfg, excludedCloses: quiet });
+  assert.equal(ok.status, "OK", "the exchange had no candle there: not counted as missing");
+  assert.equal(ok.holdout.length, 40);
+  assert.equal(ok.missing.holdout, 0);
+  // plus three of our own losses in the remaining 40 slots: 3/40 = 7.5% > 5%
+  const ownLoss = new Set([...dropped, 980, 981, 982]);
+  assert.equal(buildWalkForwardWindows({ candles: without(ownLoss), endCloseMs: end, config: cfg, excludedCloses: quiet }).reason, "TOO_MANY_GAPS");
+  // a confirmed-quiet stretch above 20% of a window is refused: too little of the window traded
+  const bigQuiet = new Set(Array.from({ length: 11 }, (_, i) => (961 + i) * M));
+  assert.equal(buildWalkForwardWindows({ candles: without(new Set(Array.from({ length: 11 }, (_, i) => 961 + i))), endCloseMs: end, config: cfg, excludedCloses: bigQuiet }).reason, "TOO_MANY_GAPS");
+  // closes outside every window do nothing; an empty set equals no set
+  assert.deepEqual(buildWalkForwardWindows({ candles: mk(700, 1000), endCloseMs: end, config: cfg, excludedCloses: new Set([5 * M]) }).missing, buildWalkForwardWindows({ candles: mk(700, 1000), endCloseMs: end, config: cfg }).missing);
+});

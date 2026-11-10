@@ -102,3 +102,22 @@ test("material coverage remains fail-closed when receipt metadata is tampered", 
   assert.throws(() => store.hasMaterialCoverage("KRW-BTC", M, 10 * M, 11 * M, "UPBIT_PUBLIC_CANDLES", "f".repeat(64)), (error) => error instanceof ResearchCandleStoreError && error.code === "DATASET_MATERIAL_MISMATCH");
   db.close();
 });
+
+test("an absence run is stored only between two stored candles with nothing inside, is idempotent, and is dropped from reads once it no longer holds", () => {
+  const { SqliteDatabase, SqliteResearchCandleStore } = require("../dist/packages/storage/src/index.js");
+  const M = 60_000;
+  const store = new SqliteResearchCandleStore(new SqliteDatabase(":memory:"));
+  const k = (n) => ({ closeTimeMs: n * M, open: 10, high: 11, low: 9, close: 10.5, volume: 1 });
+  store.append("KRW-XRP", M, [k(100), k(101), k(106)]);
+  const run = { market: "KRW-XRP", intervalMs: M, firstAbsentCloseMs: 102 * M, lastAbsentCloseMs: 105 * M, beforeCloseMs: 101 * M, afterCloseMs: 106 * M, evidenceFingerprintSha256: "a".repeat(64), observedAt: "2026-11-10T00:00:00.000Z" };
+  assert.equal(store.recordAbsence(run), true);
+  assert.equal(store.recordAbsence({ ...run, evidenceFingerprintSha256: "b".repeat(64) }), false, "the first proof of a run is kept");
+  assert.deepEqual(store.listAbsence("KRW-XRP", M, 100 * M, 106 * M).map((r) => [r.firstAbsentCloseMs / M, r.lastAbsentCloseMs / M, r.evidenceFingerprintSha256[0]]), [[102, 105, "a"]]);
+  assert.throws(() => store.recordAbsence({ ...run, firstAbsentCloseMs: 103 * M, beforeCloseMs: 102 * M }), (e) => e.code === "ABSENCE_NOT_BOUNDED", "the before-bound must be stored");
+  assert.throws(() => store.recordAbsence({ ...run, afterCloseMs: 107 * M }), (e) => e.code === "INVALID_ABSENCE", "bounds must touch the run");
+  assert.throws(() => store.recordAbsence({ ...run, evidenceFingerprintSha256: "x" }), (e) => e.code === "INVALID_ABSENCE");
+  // a candle later stored inside the run voids the proof for reads
+  store.append("KRW-XRP", M, [k(103)]);
+  assert.deepEqual(store.listAbsence("KRW-XRP", M, 100 * M, 106 * M), []);
+  assert.throws(() => store.recordAbsence({ ...run, firstAbsentCloseMs: 104 * M, beforeCloseMs: 103 * M, lastAbsentCloseMs: 105 * M }), (e) => e.code === "ABSENCE_CONFLICT", "an overlapping different run is refused");
+});
