@@ -58,6 +58,26 @@ test("Codex WIP client fails closed on wrong repo, invalid task, missing OIDC, a
   assert.equal(workerCalled, true);
 });
 
+test("Codex claim emits no admission when HTTP 200 denies it or coordinator fetch throws", async () => {
+  for (const failure of ["denied", "unavailable"]) {
+    const outputs = [];
+    let workerCalled = false;
+    const fetchImpl = async (input) => {
+      if (String(input).startsWith("https://pipelines.actions.githubusercontent.com/")) return new Response(JSON.stringify({ value: JWT }), { status: 200 });
+      assert.equal(String(input), WORKER_ENDPOINT);
+      workerCalled = true;
+      if (failure === "unavailable") throw new Error("simulated coordinator fetch failure");
+      return new Response(JSON.stringify({ accepted: false }), { status: 200 });
+    };
+    await assert.rejects(
+      () => coordinate("claim", baseEnv(), fetchImpl, (line) => outputs.push(line)),
+      failure === "denied" ? /CODEX_WIP_REJECTED/ : /CODEX_WIP_COORDINATOR_UNAVAILABLE/,
+    );
+    assert.equal(workerCalled, true);
+    assert.deepEqual(outputs, []);
+  }
+});
+
 test("release after a denied or ambiguously acknowledged claim treats an absent claim as an idempotent no-op", async () => {
   const fetchImpl = async (input) => {
     if (String(input).startsWith("https://pipelines.actions.githubusercontent.com/")) return new Response(JSON.stringify({ value: JWT }), { status: 200 });
