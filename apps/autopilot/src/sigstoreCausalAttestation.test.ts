@@ -64,8 +64,9 @@ test("a genuine isolated NUSA attestation verifies and carries the certificate's
 test("the same genuine bundle is still refused for any other source run, sha or attempt", async () => {
   const bundle = JSON.parse(readFileSync(genuineIsolatedPath, "utf8"));
   for (const wrong of [{ ...genuineIsolatedSource, runId: "42812292318" }, { ...genuineIsolatedSource, sha: "b".repeat(40) }, { ...genuineIsolatedSource, runAttempt: "2" }]) {
-    await assert.rejects(verifyIsolatedCausalVerificationAttestation(bundle, wrong));
+    // the signature is genuine, so the refusal must come from the source binding, not from the signer check
+    await assert.rejects(verifyIsolatedCausalVerificationAttestation(bundle, wrong), { message: "ISOLATED_CAUSAL_VERIFICATION_INVALID" });
   }
-  // and it can never pass as a production CI producer attestation (different workflow identity and predicate)
-  await assert.rejects(verifyCausalProducerAttestation(bundle, { repository: "cinamoncandy/NUSA", ...genuineIsolatedSource }));
+  // and it can never pass as a production CI producer attestation: the pinned CI workflow identity rejects its signer
+  await assert.rejects(verifyCausalProducerAttestation(bundle, { repository: "cinamoncandy/NUSA", ...genuineIsolatedSource }), { message: "CAUSAL_ATTESTATION_SIGNER_REJECTED" });
 });
