@@ -23,7 +23,19 @@ test("runtime proof runs hourly away from the scheduler burst and uploads bounde
 });
 
 test("only exact-current runtime proof directly dispatches Credential Preflight", () => {
-  assert.match(workflow, /permissions:\s*\n\s*contents: read\s*\n\s*actions: write/);
+  // #1860: the workflow default is read-only; only the dispatch job, which checks out
+  // nothing and runs no repository code, holds Actions write authority.
+  assert.match(workflow, /\npermissions:\s*\n  contents: read\s*\n\S/);
+  const proofJob = workflow.slice(workflow.indexOf("\n  runtime-proof:"), workflow.indexOf("\n  dispatch-preflight:"));
+  const dispatchJob = workflow.slice(workflow.indexOf("\n  dispatch-preflight:"));
+  assert.equal(proofJob.includes("actions: write"), false);
+  assert.equal(proofJob.includes("/dispatches"), false);
+  assert.match(dispatchJob, /needs: runtime-proof/);
+  assert.match(dispatchJob, /permissions:\s*\n\s*actions: write/);
+  assert.equal(dispatchJob.includes("contents:"), false);
+  assert.equal(dispatchJob.includes("actions/checkout"), false);
+  assert.equal(dispatchJob.includes("node "), false);
+  assert.match(dispatchJob, /if: \$\{\{ always\(\) && github\.event_name != 'pull_request' && needs\.runtime-proof\.outputs\.preflight_eligible == 'true' \}\}/);
   assert.equal(workflow.includes("Dispatch Credential Preflight directly for fresh safety-gate re-verification"), true);
   assert.equal(workflow.includes("single canonical post-runtime ingress"), true);
   assert.equal(workflow.includes("actions/workflows/autopilot-cloudflare-credential-preflight.yml/dispatches"), true);
@@ -32,7 +44,7 @@ test("only exact-current runtime proof directly dispatches Credential Preflight"
   assert.equal(workflow.includes("proof.exactHeadVerified === true"), true);
   assert.equal(workflow.includes("revision === sourceSha"), true);
   assert.equal(workflow.includes("preflight_eligible="), true);
-  assert.match(workflow.slice(dispatchIndex, dispatchIndex + 500), /steps\.proof\.outputs\.preflight_eligible == 'true'/);
+  assert.match(proofJob, /preflight_eligible: \$\{\{ steps\.freshness\.outputs\.current == 'true' && steps\.proof\.outputs\.preflight_eligible == 'true' \}\}/);
 });
 
 test("runtime proof distinguishes scheduler, receipt, and worker failures without exposing credentials", () => {
