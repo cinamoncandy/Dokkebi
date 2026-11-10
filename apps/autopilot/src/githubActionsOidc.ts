@@ -324,10 +324,23 @@ export function isolatedConsumerSubjectRefusal(sub: unknown): "FORMAT" | "REPOSI
   return /(?:^|:)(?:pull_request|environment)(?::|$)/.test(sub) ? "KIND" : undefined;
 }
 
-export function isolatedConsumerSubjectShape(sub: unknown): string {
+/**
+ * For a REPOSITORY refusal only: the subject's repo segment (a public repository name, never a token or secret),
+ * reduced to [A-Za-z0-9_] and 48 characters so it fits the fixed rejection-stage pattern. FORGE L1 attempt 6
+ * (consumer run 42846099154) showed the segment is not cinamoncandy/nusa even case-insensitively; this names it.
+ */
+export function isolatedConsumerSubjectRepositoryShape(sub: unknown): string {
+  if (typeof sub !== "string") return "NOT_STRING";
+  const parts = sub.split(":");
+  if (parts[0] !== "repo") return "NO_REPO_SEGMENT";
+  const reduced = (parts[1] ?? "").replace(/[^A-Za-z0-9]/g, "_").slice(0, 48);
+  return reduced.length === 0 ? "EMPTY" : reduced;
+}
+
+export function isolatedConsumerSubjectShape(sub: unknown, maxKeys = 3): string {
   if (typeof sub !== "string") return "NOT_STRING";
   const keys = sub.split(":").filter((part, index) => index % 2 === 0 && /^[a-z][a-z_]{0,39}$/.test(part));
-  return keys.length === 0 ? "NO_KEYS" : keys.slice(0, 3).join(":");
+  return keys.length === 0 ? "NO_KEYS" : keys.slice(0, maxKeys).join(":");
 }
 
 /** Authenticates only the protected-main isolated consumer, not its source event or runner result. */
@@ -351,6 +364,9 @@ export async function verifyGithubIsolatedConsumerIdentity(
     || typeof workflowSha !== "string" || !/^[a-f0-9]{40}$/i.test(workflowSha)
     || workflowSha.toLowerCase() !== sha.toLowerCase()) fail(ISOLATED_CONSUMER_POLICY, "WORKFLOW_SHA_INVALID");
   const subjectRefusal = isolatedConsumerSubjectRefusal(claims.sub);
+  if (subjectRefusal === "REPOSITORY") {
+    fail(ISOLATED_CONSUMER_POLICY, `SUBJECT_INVALID:REPOSITORY:${isolatedConsumerSubjectRepositoryShape(claims.sub)}:${isolatedConsumerSubjectShape(claims.sub, 2)}`);
+  }
   if (subjectRefusal !== undefined) fail(ISOLATED_CONSUMER_POLICY, `SUBJECT_INVALID:${subjectRefusal}:${isolatedConsumerSubjectShape(claims.sub)}`);
   if (!/^[1-9][0-9]{0,19}$/.test(runId)) fail(ISOLATED_CONSUMER_POLICY, "RUN_ID_INVALID");
   if (!/^[1-9][0-9]{0,9}$/.test(runAttempt)) fail(ISOLATED_CONSUMER_POLICY, "RUN_ATTEMPT_INVALID");
