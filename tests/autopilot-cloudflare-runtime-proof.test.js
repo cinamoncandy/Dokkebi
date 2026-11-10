@@ -35,7 +35,7 @@ test("only exact-current runtime proof directly dispatches Credential Preflight"
   assert.equal(dispatchJob.includes("contents:"), false);
   assert.equal(dispatchJob.includes("actions/checkout"), false);
   assert.equal(dispatchJob.includes("node "), false);
-  assert.match(dispatchJob, /github\.event_name != 'pull_request' && needs\.runtime-proof\.outputs\.preflight_eligible == 'true'/);
+  assert.match(dispatchJob, /if: \$\{\{ always\(\) && github\.event_name != 'pull_request' && needs\.runtime-proof\.outputs\.preflight_eligible == 'true' \}\}/);
   assert.equal(workflow.includes("Dispatch Credential Preflight directly for fresh safety-gate re-verification"), true);
   assert.equal(workflow.includes("single canonical post-runtime ingress"), true);
   assert.equal(workflow.includes("actions/workflows/autopilot-cloudflare-credential-preflight.yml/dispatches"), true);

@@ -108,7 +108,9 @@ jobs:
     # The only job with Actions write authority. It checks out nothing and runs no
     # repository code: it only dispatches Credential Preflight on main (#1860).
     needs: runtime-proof
-    if: ${{ github.event_name != 'pull_request' && needs.runtime-proof.outputs.preflight_eligible == 'true' }}
+    # always(): a later failure in runtime-proof (for example the evidence upload) must not suppress a dispatch the proof
+    # already earned, exactly as when the dispatch was a step before the upload. An unearned proof leaves the output unset.
+    if: ${{ always() && github.event_name != 'pull_request' && needs.runtime-proof.outputs.preflight_eligible == 'true' }}
     runs-on: ubuntu-latest
     timeout-minutes: 5
     permissions:
