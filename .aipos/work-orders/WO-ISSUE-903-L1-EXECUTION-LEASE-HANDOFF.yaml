@@ -362,8 +362,8 @@ v15_claim_binding_20261110:
   focused_tests: "PASS after latest-main patch: Coordinator/Codex claim/worker/scheduled lease and workflow suites, including denied admission, ambiguous response cleanup, snapshot mutation, WIP cap, duplicate/replay, and fail-closed inventory cases."
   build: PASS
   full_suite_prior_failure: "The first suite attempt exposed a stale top-level AIPOS base_commit f875980e4ff9111ab576f1e93294fae510d07167 that is not an ancestor of current protected main. The historical merge remains recorded under WO-0057; only the current global base anchor was aligned to the verified protected main 91959182a10abcf6176cc5b40304838724a01fa5, leaving historical evidence untouched."
-  full_suite: "PASS_1343_ISOLATED_TEST_FILES after integrating protected main 77f9ab88833f3bd11742aaf4e6c98082a4f63135."
-  latest_main_integration: "Protected main 77f9ab88833f3bd11742aaf4e6c98082a4f63135 (PR #3049, isolated verification attempt-3 config) is integrated. Full suite (1,343 isolated test files), typecheck, validate:full, security gate, lint, AIPOS, and diff check pass locally."
+  full_suite: "PASS_1343_ISOLATED_TEST_FILES after integrating protected main a2f69042d6c8b16ea6c461f1ad8aa330ec9aeb9b."
+  latest_main_integration: "Protected main advanced to a2f69042d6c8b16ea6c461f1ad8aa330ec9aeb9b (PR #3050 closes the approved isolated verification attempt-3 config window). Merged into local successor; validation pending on this exact integration."
   inventory_completeness: UNVERIFIED
   selector_and_claim_admission: FAIL_CLOSED
   operational_wip_claims: UNKNOWN

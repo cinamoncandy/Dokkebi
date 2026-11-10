@@ -3,14 +3,14 @@ current_nusa_forge_v15_claim_binding_20261110:
   canonical_issue: 903
   pull_request: 2039
   protected_main_sha_at_initial_verification: 91959182a10abcf6176cc5b40304838724a01fa5
-  latest_protected_main_sha_integrated: 77f9ab88833f3bd11742aaf4e6c98082a4f63135
+  latest_protected_main_sha_integrated: a2f69042d6c8b16ea6c461f1ad8aa330ec9aeb9b
   pr_head_before_local_successor: ad669b83bff7ef3297561a1984770df45a853539
   status: LOCAL_VALIDATION_PASS_PENDING_COMMIT_AND_EXACT_HEAD_CI
   implementation: "Bound new atomic WIP receipts to task ID, protected main SHA, task snapshot digest, lease owner identity, and expiry; strengthened scheduled claim revalidation and Codex pre-run verification; added exact-identity cleanup when persistent admission fails or returns ambiguously."
   focused_tests: PASS
   build: PASS
-  full_suite: PASS_1343_ISOLATED_TEST_FILES_ON_MAIN_77F9AB88_SUCCESSOR
-  latest_main_integration: "Integrated main 3377b6ce2d4c4f34935e668e5fe22e76aeec69ce (PR #3048) and 77f9ab88833f3bd11742aaf4e6c98082a4f63135 (PR #3049, attempt-3 config); full suite, typecheck, validate:full, security, lint, AIPOS, and diff checks pass locally."
+  full_suite: PASS_1343_ISOLATED_TEST_FILES_ON_MAIN_A2F69042_SUCCESSOR
+  latest_main_integration: "Integrated main a2f69042d6c8b16ea6c461f1ad8aa330ec9aeb9b (PR #3050 closes the attempt-3 config window after execution); full suite, typecheck, validate:full, security, lint, AIPOS, and diff checks pass locally."
   aipos_base_anchor_repair: "Updated only the top-level current base_commit from non-ancestor historical anchor f875980e4ff9111ab576f1e93294fae510d07167 to the initially verified protected main, then advanced it to latest protected main 77f9ab88833f3bd11742aaf4e6c98082a4f63135. Historical WO-0057 merge evidence remains unchanged."
   inventory_completeness: UNVERIFIED
   selector_and_claim: FAIL_CLOSED

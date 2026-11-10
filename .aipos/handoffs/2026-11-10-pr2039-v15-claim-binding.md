@@ -21,3 +21,11 @@ A second fresh read found protected main advanced again to `77f9ab88833f3bd11742
 ## Validation after PR #3049 main integration
 
 The local candidate containing protected main `77f9ab88833f3bd11742aaf4e6c98082a4f63135` passed `pnpm test` (1,343 isolated test files), `pnpm run typecheck`, `pnpm run validate:full`, `pnpm run security:gate`, `pnpm run lint` (0 errors, 48 baseline warnings), AIPOS YAML/provenance/CURRENT_TRUTH checks, and `git diff --check`. These are local results only; exact-head remote CI and independent review remain pending. No runner dispatch, claim/lease mutation, deployment, or main merge occurred.
+
+## Protected main PR #3050 update
+
+After the published head's CI completed, main advanced to `a2f69042d6c8b16ea6c461f1ad8aa330ec9aeb9b` through PR #3050. Its sole change restores `NUSA_ISOLATED_CAUSAL_VERIFICATION_ENABLED` to `false` after the authorized attempt-3 window. That latest main was merged locally into the successor and the AIPOS base anchor updated. The already-published `e8f6d882…` CI remains valid for that exact SHA, but the new local successor needs fresh validation and publication before it can be treated as current-main aligned. No deployment or isolated verification dispatch occurred.
+
+## Validation after PR #3050 main integration
+
+The candidate including latest main `a2f69042d6c8b16ea6c461f1ad8aa330ec9aeb9b` passed `pnpm test` (1,343 isolated test files), typecheck, `validate:full`, security gate, lint (0 errors, 48 baseline warnings), AIPOS YAML/provenance/generated-truth checks, and `git diff --check`. This local result does not replace exact-head CI; the published `e8f6d882…` CI is successful only for that older SHA. The latest successor is being prepared for a non-force fast-forward to existing PR #2039. No deployment, dispatch, claim/lease mutation, or merge was performed.

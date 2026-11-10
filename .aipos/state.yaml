@@ -1322,7 +1322,7 @@ wo_0071_validation:
   full_isolated_suite: PASS_586_FILES
   exact_head_ci: PASS_6_OF_6
   safety: PAPER_ONLY_LIVE_NONE_PRODUCTION_MUTATION_FALSE_AI_ZERO_AUTHORITY
-base_commit: 77f9ab88833f3bd11742aaf4e6c98082a4f63135
+base_commit: a2f69042d6c8b16ea6c461f1ad8aa330ec9aeb9b
 repository_maintenance:
   issue: 210
   objective: "Apply the actual NUSA mobile visual redesign without changing product authority or the WO-0053 physical-device gate."
