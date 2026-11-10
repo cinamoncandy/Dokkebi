@@ -36,3 +36,13 @@ The candidate including latest main `a2f69042d6c8b16ea6c461f1ad8aa330ec9aeb9b` p
 After PR #3050, protected main advanced to `c02eec0a3650139eb8df6e8dc33631fe35925472` through PR #3051. The delta adds bounded and sanitized rejection-stage evidence to the existing isolated verification path (`apps/autopilot/src/worker.ts`, its test, and the receipt consumer). It overlaps the PR's Worker file but merged without conflict; the PR's claim/verify/release paths remain present. The AIPOS current base anchor was advanced to `c02eec0…` and CURRENT_TRUTH regenerated.
 
 On this integrated local candidate, the focused rejection-projection tests passed 5/5; `pnpm test` passed all 1,343 isolated test files; typecheck, `validate:full`, security gate, AIPOS YAML/provenance/generated truth/drift/conformance, lint (0 errors, 48 existing warnings), and `git diff --check` passed. The earlier exact-head CI for `10a413c…` passed, but belongs only to that older SHA. The current merged successor still needs publication and exact-head CI. Untracked audit reports remain preserved and unstaged. Inventory point-in-time completeness remains UNVERIFIED; WIP/lease receipts remain UNKNOWN; no actual runner E2E, independent review, Formal Validator, Audit, Release, merge, deployment, dispatch, or operational claim occurred.
+
+
+## Fourth latest-main reconciliation
+
+Protected main advanced to `9848e6f728bb671b6ff3c3eb35c4e62ff4466aac` through owner-approved PR #3052. The delta changes only `apps/autopilot/wrangler.jsonc`, reopening the isolated causal verification route for attempt 4; the main change states it should be switched off after that run. This candidate now includes that main change with no conflict. No workflow dispatch or deployment was performed. All local validation recorded for main `c02eec0…` is historical for this new config-bearing candidate; focused and full validation must be rerun before publication. The route’s PR test configuration is not a runtime execution receipt.
+
+
+## Validation after protected main 9848e6f7
+
+The owner-approved #3052 config change is present in the isolated candidate; no workflow was dispatched and no deploy occurred. Its exact candidate passed `pnpm test` (1,343 isolated files), typecheck, `validate:full`, security gate, AIPOS YAML/provenance/generated truth/drift/conformance, lint (0 errors, 48 existing warnings), and `git diff --check`. Focused rejection-stage tests are 5/5 from the preceding c02eec0 source delta; the isolated Worker tests also ran in the full suite. These are local validations only. The exact successor SHA needs remote publication and fresh CI. The config value opens an owner-approved attempt window, but it is not itself an execution receipt.
