@@ -1,0 +1,19 @@
+id: WO-AUTOPILOT-20261110-ISOLATED-OIDC-SUBJECT-IMMUTABLE
+title: "Accept GitHub's ID-pinned OIDC subject form for the isolated consumer"
+status: READY_FOR_REVIEW
+created: 2026-11-10
+implementation_branch: claude/isolated-oidc-subject-immutable
+authority_impact: none
+finding: "FORGE L1 attempt 7 (source 42850569542, consumer 42850690523) named the subject's repository segment: cinamoncandy_213270074_NUSA_1296492411 (sanitized). This repository's subject uses GitHub's ID-pinned form owner<sep>213270074/NUSA<sep>1296492411; 213270074 is the owner account id and 1296492411 the already pinned repository_id."
+change:
+  - "The repo segment may be the plain name or exactly cinamoncandy<sep>213270074/nusa<sep>1296492411 (one non-alphanumeric separator, names case-insensitive, both ids exact)."
+not_changed:
+  - "All other subject, claim, workflow, run read-back, attestation, claim and authority checks; the route is closed by #3060."
+safety:
+  paper_only: true
+  liveAuthority: NONE
+  productionMutationAllowed: false
+  aiAuthority: ZERO_AUTHORITY
+validation:
+  - "All compiled apps/autopilot tests and the wiring ledger pass; new tests accept the ID-pinned form and refuse a wrong owner id, wrong repository id, other owner name, and a feature ref in that form."
+next_action: "Review, merge; attempt 8 under the owner's standing approval. Later stages are still untested in production."
