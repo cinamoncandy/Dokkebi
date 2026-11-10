@@ -67,3 +67,15 @@ test("the consumer checks out trusted main before it runs the submit script (con
   assert.match(workflow, /permissions:\s*\n\s*actions: read\s*\n\s*contents: read\s*\n\s*id-token: write/);
   assert.equal(/contents: write|actions: write/.test(workflow), false, "no write authority is added");
 });
+
+test("on a Worker rejection the consumer keeps only the Worker's fixed stage constant from a bounded body", () => {
+  const source = readFileSync(join(__dirname, "..", "scripts", "submit-isolated-causal-verification.js"), "utf8");
+  const reject = source.slice(source.indexOf("if (!response.ok) {"), source.indexOf("let payload;"));
+  assert.match(reject, /text\.length <= 16 \* 1024/);
+  assert.match(reject, /\?\.rejectionStage/);
+  assert.ok(reject.includes("/^[A-Z][A-Z0-9_]{2,95}(?::[A-Za-z0-9_]{1,64}){0,4}$/.test(candidate)"));
+  assert.match(reject, /fail\(`ISOLATED_VERIFICATION_WORKER_REJECTED_\$\{response\.status\}`, stage\)/);
+  const receipt = source.slice(source.indexOf("function writeFailureReceipt"), source.indexOf("const fail ="));
+  assert.match(receipt, /workerRejectionStage \}/, "the receipt carries the stage under its own key");
+  assert.ok(receipt.includes("/^[A-Z][A-Z0-9_]{2,95}(?::[A-Za-z0-9_]{1,64}){0,4}$/.test(workerRejectionStage)"), "and re-validates it before writing");
+});
