@@ -73,8 +73,11 @@ export function materializeResearchDatasetManifest(input: {
       ? { sourceIntervalMs, targetIntervalMs: input.intervalMs, ordering: "OPEN_TIME_ASC", missingCandlePolicy: "REJECT" }
       : { sourceIntervalMs, targetIntervalMs: input.intervalMs, ordering: "OPEN_TIME_ASC", missingCandlePolicy: "EXCHANGE_CONFIRMED_ABSENCE_ONLY", confirmedAbsentRuns: absences.map((run) => [run.firstAbsentCloseMs, run.lastAbsentCloseMs, run.evidenceFingerprintSha256]) }),
     schemaContractSha256: hash(["CanonicalResearchCandle", "market", "interval", "openTime", "closeTime", "open", "high", "low", "close", "volume"]),
-    qualitySuiteSha256: hash(["explicit OHLCV", "contiguous source closes", "complete source receipts", "verified source aggregation", "v1"]),
-    qualityResultsSha256: hash({ sourceCandles: baseCandles.length, outputCandles: candles.length, sourceReceipts: materials.length, missingBuckets: materials.reduce((sum, material) => sum + material.missingBuckets, 0), incompleteBuckets: materials.reduce((sum, material) => sum + material.incompleteBuckets, 0), rejectedObservations: materials.reduce((sum, material) => sum + material.rejectedObservations, 0) }),
+    // A gapped dataset must not claim contiguity; gap-free datasets keep the original label and identity.
+    qualitySuiteSha256: hash(gapCloses.length === 0
+      ? ["explicit OHLCV", "contiguous source closes", "complete source receipts", "verified source aggregation", "v1"]
+      : ["explicit OHLCV", "contiguous source closes except exchange-confirmed absences", "complete source receipts", "verified source aggregation", "v1"]),
+    qualityResultsSha256: hash({ sourceCandles: baseCandles.length, outputCandles: candles.length, sourceReceipts: materials.length, missingBuckets: materials.reduce((sum, material) => sum + material.missingBuckets, 0), incompleteBuckets: materials.reduce((sum, material) => sum + material.incompleteBuckets, 0), rejectedObservations: materials.reduce((sum, material) => sum + material.rejectedObservations, 0), ...(gapCloses.length === 0 ? {} : { confirmedAbsentCloses: gapCloses.length, confirmedAbsentRuns: absences.length }) }),
     derivedFeatureLineageSha256: hash({ derivedFeatures: [] }),
     replayRuntimeSha256: hash({ sourceCommitSha: input.sourceCommitSha, nodeVersion: process.version, materializer: "research-dataset-v2-v1" }),
   };

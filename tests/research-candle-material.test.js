@@ -149,3 +149,22 @@ test("a 1m dataset may skip only closes the exchange confirmed absent; our own l
   lossToo.store.recordAbsence({ market: "KRW-BTC", intervalMs: M, firstAbsentCloseMs: 50 * M, lastAbsentCloseMs: 52 * M, beforeCloseMs: 49 * M, afterCloseMs: 53 * M, evidenceFingerprintSha256: "e".repeat(64), observedAt: "2026-11-10T00:00:00.000Z" });
   assert.throws(() => materialize(lossToo), /missing intervals/, "one unconfirmed missing close still refuses the whole dataset");
 });
+
+test("a gapped 1m dataset does not claim contiguity in its quality provenance", () => {
+  const { createHash: h } = require("node:crypto");
+  const sha = (v) => h("sha256").update(JSON.stringify(v), "utf8").digest("hex");
+  const contiguousSuite = sha(["explicit OHLCV", "contiguous source closes", "complete source receipts", "verified source aggregation", "v1"]);
+  const { UPBIT_CANDLE_SOURCE_FINGERPRINT } = require("../dist/apps/cloud/src/researchCandleBackfill.js");
+  const M = 60_000;
+  const build = (gap) => {
+    const db = new SqliteDatabase(":memory:");
+    const store = new SqliteResearchCandleStore(db);
+    const rows = []; for (let k = 1; k <= 60; k += 1) if (!(gap && k >= 30 && k <= 31)) rows.push({ closeTimeMs: k * M, open: 10, high: 11, low: 9, close: 10.5, volume: 1 });
+    store.appendWithMaterial("KRW-BTC", M, rows.filter((r) => r.closeTimeMs < 30 * M), { source: "UPBIT_PUBLIC_CANDLES", sourceFingerprint: UPBIT_CANDLE_SOURCE_FINGERPRINT, evidenceFingerprintSha256: "1".repeat(64), missingBuckets: 0, incompleteBuckets: 0, rejectedObservations: 0 });
+    store.appendWithMaterial("KRW-BTC", M, rows.filter((r) => r.closeTimeMs >= 30 * M), { source: "UPBIT_PUBLIC_CANDLES", sourceFingerprint: UPBIT_CANDLE_SOURCE_FINGERPRINT, evidenceFingerprintSha256: "2".repeat(64), missingBuckets: 0, incompleteBuckets: 0, rejectedObservations: 0 });
+    if (gap) store.recordAbsence({ market: "KRW-BTC", intervalMs: M, firstAbsentCloseMs: 30 * M, lastAbsentCloseMs: 31 * M, beforeCloseMs: 29 * M, afterCloseMs: 32 * M, evidenceFingerprintSha256: "e".repeat(64), observedAt: "2026-11-10T00:00:00.000Z" });
+    return materializeResearchDatasetManifest({ store: new SqliteResearchDatasetManifestStore(db), candleStore: store, market: "KRW-BTC", intervalMs: M, candles: store.read("KRW-BTC", M, 0, 100 * M), source: "upbit-1m-closed:KRW-BTC:60000", createdAt: "2026-11-10T00:00:00.000Z", sourceCommitSha: "f".repeat(40) });
+  };
+  assert.equal(build(false).provenance.qualitySuiteSha256, contiguousSuite, "gap-free keeps the original suite identity");
+  assert.notEqual(build(true).provenance.qualitySuiteSha256, contiguousSuite);
+});
