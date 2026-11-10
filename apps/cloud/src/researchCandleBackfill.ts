@@ -213,6 +213,8 @@ export function createUpbitMinuteCandleFetcher(fetchImpl: typeof fetch = fetch):
 export interface GapFillStore extends BackfillStore {
   latestCloseTime(market: string, intervalMs: number): number | undefined;
   read(market: string, intervalMs: number, fromCloseMs: number, toCloseMs: number): readonly StoredResearchCandle[];
+  /** Optional: records a run of closes the exchange page itself showed as having no candle (see ResearchCandleAbsence). */
+  recordAbsence?: (absence: { readonly market: string; readonly intervalMs: number; readonly firstAbsentCloseMs: number; readonly lastAbsentCloseMs: number; readonly beforeCloseMs: number; readonly afterCloseMs: number; readonly evidenceFingerprintSha256: string; readonly observedAt: string }) => boolean;
 }
 
 export interface GapFillResult {
@@ -227,7 +229,32 @@ export interface GapFillResult {
   readonly nextCursorStartMs?: number;
   /** True only when the request reached the oldest required source candle; false/absent keeps a failed cursor retryable. */
   readonly historyComplete?: boolean;
+  /** Missing closes newly recorded as exchange-confirmed absent in this run (no candle exists upstream). */
+  readonly confirmedAbsent?: number;
   readonly errorCode?: string;
+}
+
+/**
+ * Runs of closes an Upbit page proves have no candle, as [firstAbsentClose, lastAbsentClose] with the bounding closes.
+ * Inside the page: two consecutive candles more than one minute apart. Above the page: Upbit returns candles that START
+ * strictly before the exclusive `to` bound, newest first, so every start between the newest returned candle and `to` has
+ * none; that upper run is only reported when `afterCloseMs` (the candle starting at `to`) is given as stored. A page with
+ * any malformed item proves nothing (the dropped item could be the minute).
+ */
+export function absenceRunsFromPage(candles: readonly StoredResearchCandle[], rejected: number, toStartMs: number | undefined, storedAfterClose: (closeMs: number) => boolean): readonly { readonly beforeCloseMs: number; readonly afterCloseMs: number }[] {
+  if (rejected > 0 || candles.length === 0) return Object.freeze([]);
+  const runs: { beforeCloseMs: number; afterCloseMs: number }[] = [];
+  for (let k = 1; k < candles.length; k += 1) {
+    const before = candles[k - 1]!.closeTimeMs;
+    const after = candles[k]!.closeTimeMs;
+    if (after - before > MINUTE_MS) runs.push({ beforeCloseMs: before, afterCloseMs: after });
+  }
+  const newest = candles[candles.length - 1]!.closeTimeMs;
+  if (toStartMs !== undefined && Number.isSafeInteger(toStartMs) && toStartMs % MINUTE_MS === 0) {
+    const afterClose = toStartMs + MINUTE_MS;
+    if (afterClose - newest > MINUTE_MS && storedAfterClose(afterClose)) runs.push({ beforeCloseMs: newest, afterCloseMs: afterClose });
+  }
+  return Object.freeze(runs.map((run) => Object.freeze(run)));
 }
 
 /**
@@ -277,8 +304,9 @@ export async function fillRecentGaps(input: {
   let previousPageOldestStartMs: number | undefined;
   let nextCursorStartMs: number | undefined;
   let historyComplete = false;
+  let confirmedAbsent = 0;
   const done = (status: GapFillResult["status"], errorCode?: string): GapFillResult =>
-    Object.freeze({ market, status, missing: missingCloses.length, recorded, rejected, pages, ...(nextCursorStartMs === undefined ? {} : { nextCursorStartMs }), ...(historyComplete ? { historyComplete: true } : {}), ...(errorCode === undefined ? {} : { errorCode }) });
+    Object.freeze({ market, status, missing: missingCloses.length, recorded, rejected, pages, ...(nextCursorStartMs === undefined ? {} : { nextCursorStartMs }), ...(historyComplete ? { historyComplete: true } : {}), ...(confirmedAbsent > 0 ? { confirmedAbsent } : {}), ...(errorCode === undefined ? {} : { errorCode }) });
   while (pages < maxPages) {
     let raw: unknown;
     try { raw = await input.fetchPage(market, cursor); } catch (error) {
@@ -306,6 +334,26 @@ export async function fillRecentGaps(input: {
         const existing = new Set(store.read(market, MINUTE_MS, lo, hi).map((candle) => candle.closeTimeMs));
         const fresh = wanted.filter((candle) => !existing.has(candle.closeTimeMs));
         if (fresh.length > 0) recorded += recordPage(store, market, raw, cursor, new Date(input.nowMs).toISOString(), fresh, parsed.rejected);
+      }
+      if (store.recordAbsence != null) {
+        const observedAt = new Date(input.nowMs).toISOString();
+        const evidenceFingerprintSha256 = sha256({ endpoint: UPBIT_MINUTE_CANDLES_URL, market, count: BACKFILL_PAGE_SIZE, to: cursor ?? null, observedAt, response: raw });
+        const runs = absenceRunsFromPage(parsed.candles, parsed.rejected, requestedCursorStartMs, (closeMs) => closeMs <= top && store.read(market, MINUTE_MS, closeMs, closeMs).length === 1);
+        for (const run of runs) {
+          const firstAbsentCloseMs = run.beforeCloseMs + MINUTE_MS;
+          const lastAbsentCloseMs = run.afterCloseMs - MINUTE_MS;
+          // Only runs inside the gap-fill window that this pass is actually trying to fill.
+          if (firstAbsentCloseMs < bottom || lastAbsentCloseMs > top) continue;
+          try {
+            if (store.recordAbsence({ market, intervalMs: MINUTE_MS, firstAbsentCloseMs, lastAbsentCloseMs, beforeCloseMs: run.beforeCloseMs, afterCloseMs: run.afterCloseMs, evidenceFingerprintSha256, observedAt })) {
+              confirmedAbsent += (lastAbsentCloseMs - firstAbsentCloseMs) / MINUTE_MS + 1;
+            }
+          } catch (error) {
+            // A bound no longer stored or a candle inside the run: no proof for this run, the minutes stay plain missing.
+            const code = (error as { code?: unknown })?.code;
+            if (code !== "ABSENCE_NOT_BOUNDED" && code !== "ABSENCE_CONFLICT") throw error;
+          }
+        }
       }
     } catch (error) {
       return done("ERROR", typeof (error as { code?: unknown })?.code === "string" ? (error as { code: string }).code : "STORE_FAILED");

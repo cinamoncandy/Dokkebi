@@ -56,6 +56,9 @@ export function runResearchExperiment(ports: ExperimentRunnerPorts, spec: Experi
   try {
     const now = ports.now();
     const intervalMs = spec.intervalMs;
+    // Closes inside a verified ALLOW manifest that hold no candle: the materializer admitted them only because the
+    // exchange proved they have none, and the content hash below proves the persisted set is exactly that manifest.
+    let excludedCloses: Set<number> | undefined;
     if (ports.datasetManifest != null) {
       if (!spec.datasetId) return skip("DATASET_MANIFEST_ID_MISSING");
       let manifest: ReturnType<NonNullable<ExperimentRunnerPorts["datasetManifest"]>["read"]>;
@@ -73,10 +76,16 @@ export function runResearchExperiment(ports: ExperimentRunnerPorts, spec: Experi
         ? calculateResearchDatasetId(manifest.source, canonical, contentSha256)
         : manifest.provenance == null ? undefined : calculateResearchDatasetIdV2(manifest.source, canonical, contentSha256, manifest.provenance);
       if (contentSha256 !== manifest.contentSha256 || datasetId !== manifest.datasetId) return skip("DATASET_MANIFEST_CONTENT_MISMATCH");
+      if (manifest.schemaVersion === 2 && manifest.missingCandlePolicy === "ALLOW" && manifest.missingCandleCount > 0) {
+        const present = new Set(persisted.map((candle) => candle.closeTimeMs));
+        excludedCloses = new Set<number>();
+        for (let close = manifest.startOpenTime + intervalMs; close <= manifest.endCloseTime; close += intervalMs) if (!present.has(close)) excludedCloses.add(close);
+        if (excludedCloses.size !== manifest.missingCandleCount) return skip("DATASET_MANIFEST_CONTENT_MISMATCH");
+      }
     }
     const total = spec.windows.trainMs + spec.windows.validationMs + spec.windows.holdoutMs;
     const rows = ports.candles.read(spec.market, intervalMs, spec.endCloseMs - total + intervalMs, spec.endCloseMs);
-    const built = buildWalkForwardWindows({ candles: rows.map((r) => ({ timestamp: r.closeTimeMs, open: r.open, high: r.high, low: r.low, close: r.close, volume: 0 })), endCloseMs: spec.endCloseMs, config: spec.windows });
+    const built = buildWalkForwardWindows({ candles: rows.map((r) => ({ timestamp: r.closeTimeMs, open: r.open, high: r.high, low: r.low, close: r.close, volume: 0 })), endCloseMs: spec.endCloseMs, config: spec.windows, ...(excludedCloses == null ? {} : { excludedCloses }) });
     if (built.status === "REFUSED") return skip(`WINDOWS_${built.reason}${built.window ? `_${built.window.toUpperCase()}` : ""}`);
 
     const challengerConfigHash = canonicalSha256(spec.challenger.config);

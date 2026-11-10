@@ -106,3 +106,46 @@ test("tampered candle content is rejected on material read-back", () => {
   assert.throws(() => store.readMaterial("KRW-BTC", 60_000, material.firstCloseTimeMs, material.lastCloseTimeMs, material.storeContentSha256), /research candle (high\/low|checksum)/);
   db.close();
 });
+
+test("a 1m dataset may skip only closes the exchange confirmed absent; our own loss and other intervals still refuse; gap-free identity is unchanged", () => {
+  const { UPBIT_CANDLE_SOURCE_FINGERPRINT } = require("../dist/apps/cloud/src/researchCandleBackfill.js");
+  const M = 60_000;
+  const SHA = "f".repeat(40);
+  const make = (skip) => {
+    const db = new SqliteDatabase(":memory:");
+    const store = new SqliteResearchCandleStore(db);
+    const rows = [];
+    for (let k = 1; k <= 120; k += 1) if (!skip.has(k)) rows.push({ closeTimeMs: k * M, open: 10, high: 11, low: 9, close: 10.5, volume: 1 });
+    // one receipt per contiguous run, as a real page write would leave
+    let run = [];
+    const flush = () => { if (run.length) store.appendWithMaterial("KRW-BTC", M, run, { source: "UPBIT_PUBLIC_CANDLES", sourceFingerprint: UPBIT_CANDLE_SOURCE_FINGERPRINT, evidenceFingerprintSha256: createHash("sha256").update(String(run[0].closeTimeMs)).digest("hex"), missingBuckets: 0, incompleteBuckets: 0, rejectedObservations: 0 }); run = []; };
+    for (const row of rows) { if (run.length && row.closeTimeMs !== run.at(-1).closeTimeMs + M) flush(); run.push(row); }
+    flush();
+    return { store, manifests: new SqliteResearchDatasetManifestStore(db) };
+  };
+  const materialize = ({ store, manifests }) => materializeResearchDatasetManifest({ store: manifests, candleStore: store, market: "KRW-BTC", intervalMs: M, candles: store.read("KRW-BTC", M, 0, 200 * M), source: "upbit-1m-closed:KRW-BTC:60000", createdAt: "2026-11-10T00:00:00.000Z", sourceCommitSha: SHA });
+
+  const clean = materialize(make(new Set()));
+  assert.equal(clean.missingCandlePolicy, "REJECT");
+  assert.equal(clean.missingCandleCount, 0);
+  assert.equal(materialize(make(new Set())).datasetId, clean.datasetId, "gap-free identity is deterministic");
+
+  const gap = new Set([50, 51, 52]);
+  const unconfirmed = make(gap);
+  assert.throws(() => materialize(unconfirmed), /missing intervals/, "our own loss (no exchange proof) is still refused");
+
+  const confirmed = make(gap);
+  confirmed.store.recordAbsence({ market: "KRW-BTC", intervalMs: M, firstAbsentCloseMs: 50 * M, lastAbsentCloseMs: 52 * M, beforeCloseMs: 49 * M, afterCloseMs: 53 * M, evidenceFingerprintSha256: "e".repeat(64), observedAt: "2026-11-10T00:00:00.000Z" });
+  const manifest = materialize(confirmed);
+  assert.equal(manifest.missingCandlePolicy, "ALLOW");
+  assert.equal(manifest.missingCandleCount, 3);
+  assert.equal(manifest.candleCount, 117);
+  assert.ok(manifest.provenance.rawSourceIdentitySha256s.includes("e".repeat(64)), "the exchange page that proves the gap is a bound raw source");
+  assert.notEqual(manifest.datasetId, clean.datasetId);
+
+  const partly = make(gap);
+  partly.store.recordAbsence({ market: "KRW-BTC", intervalMs: M, firstAbsentCloseMs: 50 * M, lastAbsentCloseMs: 52 * M, beforeCloseMs: 49 * M, afterCloseMs: 53 * M, evidenceFingerprintSha256: "e".repeat(64), observedAt: "2026-11-10T00:00:00.000Z" });
+  const lossToo = make(new Set([50, 51, 52, 90]));
+  lossToo.store.recordAbsence({ market: "KRW-BTC", intervalMs: M, firstAbsentCloseMs: 50 * M, lastAbsentCloseMs: 52 * M, beforeCloseMs: 49 * M, afterCloseMs: 53 * M, evidenceFingerprintSha256: "e".repeat(64), observedAt: "2026-11-10T00:00:00.000Z" });
+  assert.throws(() => materialize(lossToo), /missing intervals/, "one unconfirmed missing close still refuses the whole dataset");
+});
