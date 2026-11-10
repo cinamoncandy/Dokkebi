@@ -12,8 +12,9 @@
     "NUSA_JEV_SHADOW_ENABLED": "true",
     "NUSA_JEV_BOUNDED_ROUTING_ENABLED": "false",
     "NUSA_JEV_MODEL_TIERING_ENABLED": "false",
-    // FORGE L1 isolated window closed after attempt 8 (docs/FORGE_L1_VERIFICATION_RUNBOOK.md; run IDs on #1851).
-    "NUSA_ISOLATED_CAUSAL_VERIFICATION_ENABLED": "false"
+    // FORGE L1 attempt 9 window (owner standing approval 2026-11-10; docs/FORGE_L1_VERIFICATION_RUNBOOK.md). #3066 names the
+    // ECDSA digest so genuine bundles verify in workerd. Turn back to "false" right after this run.
+    "NUSA_ISOLATED_CAUSAL_VERIFICATION_ENABLED": "true"
   },
   "ai": {
     "binding": "AI"
