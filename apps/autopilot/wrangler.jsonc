@@ -12,8 +12,9 @@
     "NUSA_JEV_SHADOW_ENABLED": "true",
     "NUSA_JEV_BOUNDED_ROUTING_ENABLED": "false",
     "NUSA_JEV_MODEL_TIERING_ENABLED": "false",
-    // FORGE L1 isolated window closed after attempt 2 (docs/FORGE_L1_VERIFICATION_RUNBOOK.md; run IDs on #1851).
-    "NUSA_ISOLATED_CAUSAL_VERIFICATION_ENABLED": "false"
+    // FORGE L1 attempt 3 window (owner-approved 2026-11-10; docs/FORGE_L1_VERIFICATION_RUNBOOK.md). Attempt 2 was rejected
+    // by the SAN bug fixed in #3048. Turn back to "false" right after this run.
+    "NUSA_ISOLATED_CAUSAL_VERIFICATION_ENABLED": "true"
   },
   "ai": {
     "binding": "AI"
