@@ -21,3 +21,5 @@ safety:
   aiAuthority: ZERO_AUTHORITY
 validation:
   - "validate-aipos-yaml, aipos-work-order-status and aipos-current-truth tests."
+correction:
+  - "Follow-up: 27 of the 252 were restored to their previous status. Their old status was not a plain open/pending-CI spelling (VERIFYING, PARTIAL, RELEASE_GATE_PENDING, ROLLED_BACK, SUPERSEDED_BY_*, PLANNED, PROPOSED and similar). A merged PR does not prove those are complete; for example WO-0056 states it stays VERIFYING until deployment and connector evidence exist. Their closed_by_merge lines were removed with the restore."
