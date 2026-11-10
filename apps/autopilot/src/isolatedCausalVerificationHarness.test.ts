@@ -26,7 +26,7 @@ const verified: VerifiedIsolatedCausalVerification = Object.freeze({
   caseId: "isolated-policy-regression",
   fixtureDigest: "b".repeat(64),
   statementDigest: "c".repeat(64),
-  signerIdentity: Object.freeze({ subjectAlternativeName: workflowRef, issuer: "https://token.actions.githubusercontent.com" }),
+  signerIdentity: Object.freeze({ subjectAlternativeName: `https://github.com/${workflowRef}`, issuer: "https://token.actions.githubusercontent.com" }),
 });
 
 const source: VerifiedIsolatedSourceRun = Object.freeze({

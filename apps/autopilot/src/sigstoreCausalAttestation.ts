@@ -257,6 +257,11 @@ export async function verifyIsolatedCausalVerificationAttestation(
   }
 }
 
+/** The certificate SAN GitHub Actions OIDC produces for a workflow ref such as `owner/repo/.github/workflows/x.yml@refs/heads/main`. */
+export function signerSubjectAlternativeName(workflowRef: string): string {
+  return `https://github.com/${workflowRef}`;
+}
+
 async function verifySignedPredicate(
   bundleInput: unknown,
   workflowRef: string,
@@ -266,6 +271,10 @@ async function verifySignedPredicate(
   readonly statementDigest: string;
   readonly signerIdentity: Readonly<{ subjectAlternativeName: string; issuer: string }>;
 }> {
+  // Fulcio issues GitHub Actions certificates with the workflow identity as a full URL SAN
+  // (https://github.com/<owner>/<repo>/<path>@<ref>), while GITHUB_WORKFLOW_REF has no scheme or host.
+  // Matching the bare ref rejected every genuine NUSA signature (isolated consumer run 42812393804).
+  const expectedSubjectAlternativeName = signerSubjectAlternativeName(workflowRef);
   const rootText = trustedRootText();
   if (await sha256Hex(new TextEncoder().encode(rootText)) !== TRUSTED_ROOT_SHA256) fail();
   const root = TrustedRoot.fromJSON(JSON.parse(rootText));
@@ -278,7 +287,7 @@ async function verifySignedPredicate(
   try {
     try {
       signer = new Verifier(toTrustMaterial(root), { ctlogThreshold: 1, tlogThreshold: 1, timestampThreshold: 1 }).verify(entity, {
-        subjectAlternativeName: new RegExp(`^${workflowRef.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}$`),
+        subjectAlternativeName: new RegExp(`^${expectedSubjectAlternativeName.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}$`),
         extensions: { issuer: OIDC_ISSUER },
       });
     } catch (error) {
@@ -289,7 +298,7 @@ async function verifySignedPredicate(
     restoreDigestAdapter();
   }
   const identity = signer.identity;
-  if (!isIdentity(identity?.subjectAlternativeName) || identity.subjectAlternativeName !== workflowRef
+  if (!isIdentity(identity?.subjectAlternativeName) || identity.subjectAlternativeName !== expectedSubjectAlternativeName
     || identity.extensions?.issuer !== OIDC_ISSUER) fail();
   const dsse = (entity.signature as typeof entity.signature & { env?: { payload?: Uint8Array } }).env;
   if (!(dsse?.payload instanceof Uint8Array) || dsse.payload.byteLength > 64_000) fail();
