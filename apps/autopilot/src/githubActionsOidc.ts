@@ -310,8 +310,10 @@ export function isolatedConsumerSubjectAllowed(sub: unknown): boolean {
   if (typeof sub !== "string" || sub.length === 0 || sub.length > 512 || /[\u0000-\u001f\u007f]/.test(sub)) return false;
   const boundToRepository = sub.startsWith("repo:cinamoncandy/NUSA:") || /(?:^|:)repository_id:1296492411(?::|$)/.test(sub);
   if (!boundToRepository) return false;
-  const ref = /(?:^|:)ref:([^:]*)/.exec(sub);
-  if (ref !== null && ref[1] !== "refs/heads/main") return false;
+  // Every occurrence counts, not only the first: a duplicated, dangling or non-main ref is refused.
+  const parts = sub.split(":");
+  const refValues = parts.flatMap((part, index) => (part === "ref" ? [parts[index + 1]] : []));
+  if (refValues.length > 1 || refValues.some((value) => value !== "refs/heads/main")) return false;
   return !/(?:^|:)(?:pull_request|environment)(?::|$)/.test(sub);
 }
 
