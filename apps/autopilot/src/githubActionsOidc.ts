@@ -306,25 +306,28 @@ export async function verifyGithubCodingPublisherRun(
  * be bound to this repository by name or by its pinned id, carry no control characters, have a main ref segment if
  * it has one, and never be a pull_request or environment subject. An arbitrary subject is refused.
  */
-export function isolatedConsumerSubjectAllowed(sub: unknown): boolean {
-  if (typeof sub !== "string" || sub.length === 0 || sub.length > 512 || /[\u0000-\u001f\u007f]/.test(sub)) return false;
-  const boundToRepository = sub.startsWith("repo:cinamoncandy/NUSA:") || /(?:^|:)repository_id:1296492411(?::|$)/.test(sub);
-  if (!boundToRepository) return false;
-  // Every occurrence counts, not only the first: a duplicated, dangling or non-main ref is refused.
+/**
+ * The fixed reason a subject is refused, or undefined when it is allowed. GitHub repository names are case-insensitive
+ * and a subject can carry a different letter case than the `repository` claim (FORGE L1 attempt 5, consumer run
+ * 42837115055, was refused with a `repo:…:ref:…` subject), so the repository segment is compared case-insensitively;
+ * the case-exact `repository` claim and the pinned repository_id remain the binding identity.
+ */
+export function isolatedConsumerSubjectRefusal(sub: unknown): "FORMAT" | "REPOSITORY" | "REF" | "KIND" | undefined {
+  if (typeof sub !== "string" || sub.length === 0 || sub.length > 512 || /[\u0000-\u001f\u007f]/.test(sub)) return "FORMAT";
   const parts = sub.split(":");
+  const boundByName = parts[0] === "repo" && (parts[1] ?? "").toLowerCase() === "cinamoncandy/nusa";
+  const boundById = /(?:^|:)repository_id:1296492411(?::|$)/.test(sub);
+  if (!boundByName && !boundById) return "REPOSITORY";
+  // Every occurrence counts, not only the first: a duplicated, dangling or non-main ref is refused.
   const refValues = parts.flatMap((part, index) => (part === "ref" ? [parts[index + 1]] : []));
-  if (refValues.length > 1 || refValues.some((value) => value !== "refs/heads/main")) return false;
-  return !/(?:^|:)(?:pull_request|environment)(?::|$)/.test(sub);
+  if (refValues.length > 1 || refValues.some((value) => value !== "refs/heads/main")) return "REF";
+  return /(?:^|:)(?:pull_request|environment)(?::|$)/.test(sub) ? "KIND" : undefined;
 }
 
-/**
- * Names only the claim keys of a refused subject (never a value), so a receipt can show the template's shape.
- * Up to four lowercase key names, each a fixed GitHub claim name; anything else is dropped.
- */
 export function isolatedConsumerSubjectShape(sub: unknown): string {
   if (typeof sub !== "string") return "NOT_STRING";
   const keys = sub.split(":").filter((part, index) => index % 2 === 0 && /^[a-z][a-z_]{0,39}$/.test(part));
-  return keys.length === 0 ? "NO_KEYS" : keys.slice(0, 4).join(":");
+  return keys.length === 0 ? "NO_KEYS" : keys.slice(0, 3).join(":");
 }
 
 /** Authenticates only the protected-main isolated consumer, not its source event or runner result. */
@@ -347,7 +350,8 @@ export async function verifyGithubIsolatedConsumerIdentity(
   if (typeof sha !== "string" || !/^[a-f0-9]{40}$/i.test(sha)
     || typeof workflowSha !== "string" || !/^[a-f0-9]{40}$/i.test(workflowSha)
     || workflowSha.toLowerCase() !== sha.toLowerCase()) fail(ISOLATED_CONSUMER_POLICY, "WORKFLOW_SHA_INVALID");
-  if (!isolatedConsumerSubjectAllowed(claims.sub)) fail(ISOLATED_CONSUMER_POLICY, `SUBJECT_INVALID:${isolatedConsumerSubjectShape(claims.sub)}`);
+  const subjectRefusal = isolatedConsumerSubjectRefusal(claims.sub);
+  if (subjectRefusal !== undefined) fail(ISOLATED_CONSUMER_POLICY, `SUBJECT_INVALID:${subjectRefusal}:${isolatedConsumerSubjectShape(claims.sub)}`);
   if (!/^[1-9][0-9]{0,19}$/.test(runId)) fail(ISOLATED_CONSUMER_POLICY, "RUN_ID_INVALID");
   if (!/^[1-9][0-9]{0,9}$/.test(runAttempt)) fail(ISOLATED_CONSUMER_POLICY, "RUN_ATTEMPT_INVALID");
   return Object.freeze({
