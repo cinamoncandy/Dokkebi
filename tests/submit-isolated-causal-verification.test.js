@@ -56,3 +56,14 @@ test("consumer writes a sanitized fail-closed receipt when OIDC bootstrap is una
     rmSync(directory, { recursive: true, force: true });
   }
 });
+
+test("the consumer checks out trusted main before it runs the submit script (consumer 42789040136 failed with MODULE_NOT_FOUND)", () => {
+  const workflow = require("node:fs").readFileSync(require("node:path").join(__dirname, "..", ".github", "workflows", "causal-verification-consumer.yml"), "utf8");
+  const checkout = workflow.indexOf("uses: actions/checkout@");
+  const submit = workflow.indexOf("node scripts/submit-isolated-causal-verification.js");
+  assert.ok(checkout > 0 && submit > checkout, "checkout must come before the submit step");
+  assert.match(workflow.slice(checkout, submit), /ref: \$\{\{ github\.sha \}\}/);
+  assert.match(workflow.slice(checkout, submit), /persist-credentials: false/);
+  assert.match(workflow, /permissions:\s*\n\s*actions: read\s*\n\s*contents: read\s*\n\s*id-token: write/);
+  assert.equal(/contents: write|actions: write/.test(workflow), false, "no write authority is added");
+});
