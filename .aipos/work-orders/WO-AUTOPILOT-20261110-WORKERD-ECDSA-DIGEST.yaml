@@ -1,0 +1,21 @@
+id: WO-AUTOPILOT-20261110-WORKERD-ECDSA-DIGEST
+title: "Sigstore verification names the ECDSA digest so genuine bundles verify in workerd"
+status: READY_FOR_REVIEW
+created: 2026-11-10
+implementation_branch: claude/forge-workerd-ecdsa-digest
+authority_impact: none
+finding: "FORGE L1 attempt 8 (source 42917354546, consumer 42917501021) passed the consumer OIDC check and was refused at ISOLATED_CAUSAL_VERIFICATION_INVALID. The same bundle verifies in Node. Run in workerd locally (miniflare 4, nodejs_compat) it fails with TLOG_INCLUSION_PROMISE_ERROR: @sigstore/verify calls crypto.verify(data, key, sig) without a digest for the Rekor SET and CT SCT; Node defaults ECDSA to the curve digest, workerd returns false."
+change:
+  - "installWorkerEcdsaDigestDefault: during one synchronous verification only, a missing digest for a P-256/P-384 key is named (sha256/sha384); the shared verify is restored afterwards. Same key, data and signature; other key types unchanged."
+  - "New test emulates workerd's rule in Node and shows the genuine bundle verifies only with the fix (fails without it)."
+not_changed:
+  - "Trusted root, thresholds, SAN/issuer policy, predicate and source binding, claim and authority checks. The route is closed by the attempt-8 off PR."
+safety:
+  paper_only: true
+  liveAuthority: NONE
+  productionMutationAllowed: false
+  aiAuthority: ZERO_AUTHORITY
+validation:
+  - "The real attempt-8 bundle verifies in workerd (miniflare) with the fix and fails without it."
+  - "All compiled apps/autopilot tests, the wiring ledger and lint pass."
+next_action: "Review, merge; attempt 9 under the owner's standing approval. A permanent workerd smoke test in CI is a follow-up."
