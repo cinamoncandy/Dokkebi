@@ -1,0 +1,21 @@
+id: WO-RESEARCH-20261110-GAP-FILL-HISTORY-CATCHUP
+title: "History gap-fill passes catch up within hours, not most of a day"
+status: READY_FOR_REVIEW
+created: 2026-11-10
+implementation_branch: claude/research-gap-fill-catchup
+authority_impact: none
+finding: "KRW-XRP/1m stayed blocked by a 299-minute gap at the back of the 12-day window. A history pass makes one 200-minute page per 30 minutes, so reaching it took about 12 hours; every research tick meanwhile skipped the 1m dataset."
+change:
+  - "RESEARCH_GAP_FILL_HISTORY_PAGES_PER_RUN = 8: a history pass walks at most 8 paced pages per market (150 ms apart). Head passes stay at 1 page."
+  - "composeResearchExperiments accepts historyPagesPerRun (1..8); an invalid value falls back to 1."
+  - "The gap-fill log line adds confirmedAbsent when absence runs were recorded."
+not_changed:
+  - "The 15-minute interval, head/history alternation, cursor semantics, absence proof rules, dataset policy, Upbit rate limit handling, any risk/limit/capital/execution setting."
+safety:
+  paper_only: true
+  liveAuthority: NONE
+  productionMutationAllowed: false
+  aiAuthority: ZERO_AUTHORITY
+validation:
+  - "research-experiment-composition 27/27, including a new test that a history pass makes exactly 8 upstream requests and the head pass 1; all tests/research-*.test.js pass."
+next_action: "Review, merge, release; then confirm on the server that the 1m dataset materializes."
