@@ -13,3 +13,11 @@ Next: after final diff review, create a local successor commit; immediately befo
 ## Latest-main reconciliation update
 
 Immediately before publication, fresh GitHub reads showed PR #2039 still at `ad669b83bff7ef3297561a1984770df45a853539`, while protected main had advanced from the PR base `91959182a10abcf6176cc5b40304838724a01fa5` to `3377b6ce2d4c4f34935e668e5fe22e76aeec69ce` (PR #3048, causal-attestation signer SAN verification). Publication was stopped. The latest main was merged locally into the isolated successor; this creates a new validation target. Previous full-suite and focused results are evidence for the prior PR-base candidate only and are not carried forward. The global AIPOS base anchor now points to `3377b6ce…`; generated CURRENT_TRUTH must be refreshed. The existing PR remote head has not changed, no remote write or dispatch occurred, and all untracked audit reports remain preserved and unstaged.
+
+## Second latest-main reconciliation update
+
+A second fresh read found protected main advanced again to `77f9ab88833f3bd11742aaf4e6c98082a4f63135` via PR #3049 while PR #2039 remained at `ad669b83bff7ef3297561a1984770df45a853539`. The main delta changes `apps/autopilot/wrangler.jsonc` to open the owner-approved isolated causal-verification attempt-3 window after the #3048 signer fix. This exact current main was merged into the local candidate; no operational workflow was dispatched and no deployment occurred. The previous `1,343/1,343` test result belongs to the candidate before this integration; verification is being rerun. No remote PR update has occurred.
+
+## Validation after PR #3049 main integration
+
+The local candidate containing protected main `77f9ab88833f3bd11742aaf4e6c98082a4f63135` passed `pnpm test` (1,343 isolated test files), `pnpm run typecheck`, `pnpm run validate:full`, `pnpm run security:gate`, `pnpm run lint` (0 errors, 48 baseline warnings), AIPOS YAML/provenance/CURRENT_TRUTH checks, and `git diff --check`. These are local results only; exact-head remote CI and independent review remain pending. No runner dispatch, claim/lease mutation, deployment, or main merge occurred.
