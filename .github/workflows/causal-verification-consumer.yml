@@ -24,8 +24,17 @@ jobs:
     timeout-minutes: 15
     permissions:
       actions: read
+      contents: read
       id-token: write
     steps:
+      # The submit step runs scripts/submit-isolated-causal-verification.js, so the trusted main source must be present.
+      # Without this checkout the first real run (consumer 42789040136) failed with MODULE_NOT_FOUND before any request.
+      - name: Checkout protected-main consumer source
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+
       - name: Download the signed bundle from this exact source run
         uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
         with:
