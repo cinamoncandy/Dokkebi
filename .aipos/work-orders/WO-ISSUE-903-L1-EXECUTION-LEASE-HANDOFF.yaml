@@ -376,3 +376,7 @@ v15_claim_binding_20261110:
   actual_ai_coding_e2e: NOT_RUN
   safety: "PAPER_ONLY; liveAuthority=NONE; productionMutationAllowed=false; realOrderAuthority=false; realTransferAuthority=false; aiAuthority=ZERO_AUTHORITY; FAIL-CLOSED"
   next: "Rerun focused and full validation on the successor merged with main 77f9ab88833f3bd11742aaf4e6c98082a4f63135. Then recheck protected main and PR head; publish only if PR HEAD remains ad669b83bff7ef3297561a1984770df45a853539 and the update is fast-forward. Do not dispatch or self-approve."
+
+  latest_main_reconciliation_20261110: "After PR #3050, protected main advanced to c02eec0a3650139eb8df6e8dc33631fe35925472 via PR #3051 (bounded isolated-verification rejection stage projection). This changes apps/autopilot/src/worker.ts, adds isolated-stage tests and bounded receipt parsing. The merge into the PR #2039 candidate was conflict-free; exact candidate validation and CI are pending. Prior SHA evidence is historical."
+
+  latest_main_reconciliation_validation_20261110: "Candidate merged with protected main c02eec0a3650139eb8df6e8dc33631fe35925472 passed bounded rejection-projection focused tests 5/5; pnpm test passed 1,343 isolated test files; typecheck, validate:full, security gate, AIPOS YAML/provenance/current-truth/drift/conformance and diff-check passed; lint 0 errors, 48 existing warnings. This is local evidence for the integrated candidate, not exact-head CI or independent approval."

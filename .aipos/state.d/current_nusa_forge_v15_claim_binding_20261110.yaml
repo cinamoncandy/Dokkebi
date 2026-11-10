@@ -3,24 +3,24 @@ current_nusa_forge_v15_claim_binding_20261110:
   canonical_issue: 903
   pull_request: 2039
   protected_main_sha_at_initial_verification: 91959182a10abcf6176cc5b40304838724a01fa5
-  latest_protected_main_sha_integrated: a2f69042d6c8b16ea6c461f1ad8aa330ec9aeb9b
+  latest_protected_main_sha_integrated: c02eec0a3650139eb8df6e8dc33631fe35925472
   pr_head_before_local_successor: ad669b83bff7ef3297561a1984770df45a853539
-  status: LOCAL_VALIDATION_PASS_PENDING_COMMIT_AND_EXACT_HEAD_CI
+  status: MAIN_C02EEC0A_LOCAL_VALIDATION_PASS_PENDING_EXACT_HEAD_CI
   implementation: "Bound new atomic WIP receipts to task ID, protected main SHA, task snapshot digest, lease owner identity, and expiry; strengthened scheduled claim revalidation and Codex pre-run verification; added exact-identity cleanup when persistent admission fails or returns ambiguously."
   focused_tests: PASS
   build: PASS
-  full_suite: PASS_1343_ISOLATED_TEST_FILES_ON_MAIN_A2F69042_SUCCESSOR
-  latest_main_integration: "Integrated main a2f69042d6c8b16ea6c461f1ad8aa330ec9aeb9b (PR #3050 closes the attempt-3 config window after execution); full suite, typecheck, validate:full, security, lint, AIPOS, and diff checks pass locally."
+  full_suite: PASS_1343_ISOLATED_TEST_FILES_ON_MAIN_C02EEC0_SUCCESSOR
+  latest_main_integration: "PR #3051 main c02eec0a3650139eb8df6e8dc33631fe35925472 adds bounded, sanitized isolated-verification rejection-stage evidence. Merged locally into the existing PR candidate without conflict; focused 5/5, full suite 1,343 isolated files, typecheck, validate:full, security, AIPOS and diff-check PASS; lint 0 errors/48 baseline warnings. Exact-head CI remains pending for the successor."
   aipos_base_anchor_repair: "Updated only the top-level current base_commit from non-ancestor historical anchor f875980e4ff9111ab576f1e93294fae510d07167 to the initially verified protected main, then advanced it to latest protected main 77f9ab88833f3bd11742aaf4e6c98082a4f63135. Historical WO-0057 merge evidence remains unchanged."
   inventory_completeness: UNVERIFIED
   selector_and_claim: FAIL_CLOSED
   operational_wip_claims: UNKNOWN
   writer_lease: UNKNOWN
   actual_runner_e2e: NOT_RUN
-  exact_head_ci: PENDING
+  exact_head_ci: PENDING_FOR_SUCCESSOR_INTEGRATED_WITH_MAIN_C02EEC0
   independent_review: PENDING
   formal_validator: PENDING
   audit: PENDING
   release_authorization: NOT_AUTHORIZED
-  next: "Commit the validated latest-main successor and metadata, then refresh protected main and PR #2039. Publish only if the remote PR head remains ad669b83bff7ef3297561a1984770df45a853539 and the successor is a normal fast-forward; verify exact-head CI and use the existing independent review handoff."
+  next: "Local focused (5/5) and full isolated suite (1,343/1,343), typecheck, validate:full, security, AIPOS, lint and diff-check passed with protected main c02eec0 integrated. Refresh PR/main, publish the descendant by non-force fast-forward to existing PR #2039, then verify new exact-head CI. Independent review, Formal Validator, Audit, Release and runtime E2E remain pending/blocked."
   safety: "PAPER_ONLY; liveAuthority=NONE; productionMutationAllowed=false; realOrderAuthority=false; realTransferAuthority=false; aiAuthority=ZERO_AUTHORITY; FAIL-CLOSED"

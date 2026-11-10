@@ -29,3 +29,10 @@ After the published head's CI completed, main advanced to `a2f69042d6c8b16ea6c46
 ## Validation after PR #3050 main integration
 
 The candidate including latest main `a2f69042d6c8b16ea6c461f1ad8aa330ec9aeb9b` passed `pnpm test` (1,343 isolated test files), typecheck, `validate:full`, security gate, lint (0 errors, 48 baseline warnings), AIPOS YAML/provenance/generated-truth checks, and `git diff --check`. This local result does not replace exact-head CI; the published `e8f6d882…` CI is successful only for that older SHA. The latest successor is being prepared for a non-force fast-forward to existing PR #2039. No deployment, dispatch, claim/lease mutation, or merge was performed.
+
+
+## Third latest-main reconciliation and validation
+
+After PR #3050, protected main advanced to `c02eec0a3650139eb8df6e8dc33631fe35925472` through PR #3051. The delta adds bounded and sanitized rejection-stage evidence to the existing isolated verification path (`apps/autopilot/src/worker.ts`, its test, and the receipt consumer). It overlaps the PR's Worker file but merged without conflict; the PR's claim/verify/release paths remain present. The AIPOS current base anchor was advanced to `c02eec0…` and CURRENT_TRUTH regenerated.
+
+On this integrated local candidate, the focused rejection-projection tests passed 5/5; `pnpm test` passed all 1,343 isolated test files; typecheck, `validate:full`, security gate, AIPOS YAML/provenance/generated truth/drift/conformance, lint (0 errors, 48 existing warnings), and `git diff --check` passed. The earlier exact-head CI for `10a413c…` passed, but belongs only to that older SHA. The current merged successor still needs publication and exact-head CI. Untracked audit reports remain preserved and unstaged. Inventory point-in-time completeness remains UNVERIFIED; WIP/lease receipts remain UNKNOWN; no actual runner E2E, independent review, Formal Validator, Audit, Release, merge, deployment, dispatch, or operational claim occurred.
