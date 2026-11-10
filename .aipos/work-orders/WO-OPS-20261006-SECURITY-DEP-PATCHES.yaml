@@ -1,6 +1,6 @@
 id: WO-OPS-20261006-SECURITY-DEP-PATCHES
 title: "Pin the patched source-map-js and compression versions so the security gate passes again"
-status: READY_FOR_REVIEW
+status: COMPLETED
 owner: nusa-development
 repository: cinamoncandy/NUSA
 base_branch: main
@@ -24,3 +24,4 @@ verification_commands:
   - "node scripts/security-gate-backports.js (locally the two backport-mitigated advisories http-cache-semantics and braces still read as unmitigated because backports are applied at install time in CI; the two new advisories are gone)"
   - "node --test tests/*security*.test.js"
 residual: "CI must confirm the Security gate passes. Other open PRs need this merged before they can pass."
+closed_by_merge: "PR #2530 (branch claude/security-dep-patches) merged to main; it is the only PR from this branch and the only work order naming it. Status corrected by an automatic branch-to-merged-PR match on 2026-11-10; this records the merge only, not a separate production verification."

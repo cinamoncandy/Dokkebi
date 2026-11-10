@@ -1,6 +1,6 @@
 id: WO-AUTOPILOT-20261007-CODEX-OUTCOME
 title: "Record each Autopilot Codex run's outcome"
-status: READY_FOR_REVIEW
+status: COMPLETED
 owner: evolve-autopilot
 repository: cinamoncandy/NUSA
 base_branch: main
@@ -24,3 +24,4 @@ verification_commands:
   - node scripts/validate-workflow-action-pins.js
   - node scripts/validate-workflow-action-inputs.js
 residual: "Codex coding is blocked until the dedicated ChatGPT account's weekly limit resets (owner screen 2026-10-07: weekly 0%, resets in 3 days; credits 0)."
+closed_by_merge: "PR #2564 (branch claude/autopilot-codex-outcome) merged to main; it is the only PR from this branch and the only work order naming it. Status corrected by an automatic branch-to-merged-PR match on 2026-11-10; this records the merge only, not a separate production verification."

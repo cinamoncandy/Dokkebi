@@ -1,6 +1,6 @@
 id: WO-20260927-AUTOPILOT-DETERMINISTIC-CODING-PATCHES
 title: "Construct bounded coding patches from structured edits"
-status: READY_FOR_REVIEW
+status: COMPLETED
 owner: nusa-development
 repository: cinamoncandy/NUSA
 base_branch: main
@@ -49,3 +49,4 @@ safety:
   aiAuthority: ZERO_AUTHORITY
   fail_closed: true
 next_permitted_action: "Commit and publish one canonical successor PR, then obtain exact-head CI, Audit, and Release; do not merge from Development."
+closed_by_merge: "PR #2324 (branch codex/autopilot-build-retry) merged to main; it is the only PR from this branch and the only work order naming it. Status corrected by an automatic branch-to-merged-PR match on 2026-11-10; this records the merge only, not a separate production verification."

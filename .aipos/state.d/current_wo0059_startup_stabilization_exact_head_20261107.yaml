@@ -1,0 +1,14 @@
+current_wo0059_startup_stabilization_exact_head_20261107:
+  work_order: WO-0059-PAPER-STARTUP-STABILIZATION-20261107
+  status: IN_PROGRESS
+  branch: WO-0059-PAPER-STARTUP-STABILIZATION-20261107
+  pull_request: 3016
+  base_sha: 60e4185e7c6abba18fce0c0a80797d0aec4fe92b
+  exact_head: d6b991d1554e3c473b2a3fb8306e14a76c9f82fd
+  exact_head_ci: "42373896085 SUCCESS; five companions 42373894015, 42373896122, 42373896024, 42373895990, 42373896015 SUCCESS"
+  actual_paper: "Run 42373896016 SUCCESS as workflow; artifact 13575405166 digest sha256:24d7d83296fdbe9ac1088dca5cd8e14e0d19b06866cb0daecb9e7196c963c0e0; startup recovered; 60.688s, 11 natural decisions, no truncation; zero order/fill/account-PnL changes; readiness INCOMPLETE_NO_AUTONOMOUS_ORDER_FILL_PNL."
+  observation_diagnosis: "Isolated fresh runtime observed INSUFFICIENT_SMA_OBSERVATIONS:1/20 then 2/20 after restart. This is not evidence about persistent production DB history; that remains UNVERIFIED."
+  skipped: "attest-causal-regression and causal-regression-contract SKIPPED; not PASS evidence."
+  first_broken_transition: "Exact-head implementation/CI and bounded PAPER observation PASS -> fresh-session VALIDATOR review. Actual readiness remains INCOMPLETE pending natural order/fill/account-PnL evidence; production history is UNVERIFIED."
+  next: "Keep PR #3016 Draft and obtain fresh-session VALIDATOR review of exact head d6b991d1554e3c473b2a3fb8306e14a76c9f82fd. Do not self-review, change readiness thresholds, infer production history from the isolated run, or promote skipped jobs."
+  safety: PAPER_ONLY_LIVE_NONE_PRODUCTION_MUTATION_FALSE_REAL_ORDER_FALSE_REAL_TRANSFER_FALSE_AI_ZERO_AUTHORITY_FAIL_CLOSED

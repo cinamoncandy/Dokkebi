@@ -11,7 +11,9 @@
     "NUSA_AUTOPILOT_PAID_OVERFLOW_DAILY_CAP": "25",
     "NUSA_JEV_SHADOW_ENABLED": "true",
     "NUSA_JEV_BOUNDED_ROUTING_ENABLED": "false",
-    "NUSA_JEV_MODEL_TIERING_ENABLED": "false"
+    "NUSA_JEV_MODEL_TIERING_ENABLED": "false",
+    // FORGE L1 one-run window (docs/FORGE_L1_VERIFICATION_RUNBOOK.md). Turn back to "false" right after the single run.
+    "NUSA_ISOLATED_CAUSAL_VERIFICATION_ENABLED": "true"
   },
   "ai": {
     "binding": "AI"

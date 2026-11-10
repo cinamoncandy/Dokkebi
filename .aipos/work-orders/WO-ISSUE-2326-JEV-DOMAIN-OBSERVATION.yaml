@@ -1,6 +1,6 @@
 id: WO-ISSUE-2326-JEV-DOMAIN-OBSERVATION
 title: "Define canonical NUSA-wide Jev domain observation and task-type registry"
-status: BLOCKED
+status: COMPLETED
 owner: nusa-ai-platform
 repository: cinamoncandy/NUSA
 base_branch: main
@@ -53,3 +53,4 @@ safety:
   aiAuthority: ZERO_AUTHORITY
   fail_closed: true
 next_permitted_action: "Run one fresh exact-head CI for this metadata-only reconciliation. Do not retry Audit before 2026-09-28T00:00:00Z; after the persisted provider wait expires, request independent Audit, then canonical Release/merge. No rollout above SHADOW."
+closed_by_merge: "PR #2329 (branch feat/2326-jev-domain-observation-registry) merged to main; it is the only PR from this branch and the only work order naming it. Status corrected by an automatic branch-to-merged-PR match on 2026-11-10; this records the merge only, not a separate production verification."

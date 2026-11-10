@@ -1,0 +1,21 @@
+id: WO-AUTOPILOT-20261110-FORGE-L1-RUNBOOK
+title: "FORGE L1: runbook for one isolated causal verification run (switch on, run once, switch off)"
+status: READY_FOR_REVIEW
+created: 2026-11-10
+implementation_branch: claude/forge-l1-runbook
+parent_work_order: WO-AUTOPILOT-20261030-1851-CAUSAL-ADMISSION
+authority_impact: none
+owner_decision: "Owner, 2026-11-10 (chat): FORGE L1 and the closed learning loop are the core tracks; chose 'write the verification procedure first'. Switching on stays with the owner."
+finding: "All L1 code is on main, but causal-verification.yml and causal-verification-consumer.yml have 0 runs. The isolated Worker route is off by design (NUSA_ISOLATED_CAUSAL_VERIFICATION_ENABLED absent from apps/autopilot/wrangler.jsonc vars). The only production side effect of a run is one isolated claim record in the NUSA_EXECUTION_COORDINATOR Durable Object; the harness uses a deterministic proposal adapter and a no-op sandbox and writes nothing to the repository."
+change:
+  - "docs/FORGE_L1_VERIFICATION_RUNBOOK.md: what one run proves and does not, the one side effect, six steps (switch on via wrangler var PR, confirm deploy, dispatch once, accept receipt fields, switch off, record), failure handling."
+not_changed:
+  - "No code, workflow or wrangler change. NUSA_AUTOPILOT_CODING_ENABLED is not touched."
+safety:
+  paper_only: true
+  liveAuthority: NONE
+  productionMutationAllowed: false
+  aiAuthority: ZERO_AUTHORITY
+validation:
+  - "Receipt fields in the runbook checked against scripts/submit-isolated-causal-verification.js and IsolatedCausalVerificationRunResult; route, workflow names and artifact names checked against main."
+next_action: "Owner approves step 1; then a PR adds the wrangler var, and steps 2-6 follow."

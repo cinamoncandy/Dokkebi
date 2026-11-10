@@ -1,0 +1,23 @@
+current_research_candle_freshness_20261101:
+  work_order: WO-RESEARCH-20261101-CANDLE-FRESHNESS
+  issue: 2815
+  status: IN_PROGRESS
+  branch: WO-RESEARCH-20261101-CANDLE-FRESHNESS
+  base_sha: 3e610394ab9441e925769ac66033d3ec9fedc429
+  finding: "Fresh read-only /health at 2026-11-01T02:04:23Z shows runtime source e1fd3ea9363e2f66d057ecb9dfeb5948a24a64fb, research gap-fill lastRunAt 1793496251513 (about 40 minutes before observation), and the probe's persisted snapshot marks a 1m series stale at 3,270,888 ms when observed at 1793492312557. Current main's only production candle head writer is public Upbit REST gap fill every 60 minutes; probe stale threshold remains 10 minutes. This is a writer-cadence mismatch; historical TICK_ERROR cause remains UNKNOWN."
+  scope: "Historical branch proposal used a 2.5-minute timer under the then-current 10-minute threshold. Integrated successor on the existing #3002 branch uses one page per market every 15 minutes and alternates HEAD/HISTORY for a nominal 30-minute revisit under #2984's two-hour maximum-age cutoff; that cutoff is not a prescribed fetch cadence."
+  review_p1: "Review comment 4434158135 on prior head fcbb9a868b5558d6531bfa143ff093e93805c9a4 identified repeated-page stalls when the newest source close is absent. Successor retains the cursor across existing bounded passes; regression proves older-gap progress while preserving the absent close."
+  review_successor_p1: "Fresh review on c02d38e4b9ce53d2e3e0e37e2eecc92db8290141 found historical scanning could starve newly missing head candles; alternating head and history passes addresses it."
+  review_successor_p2: "Fresh review on c02d38e4b9ce53d2e3e0e37e2eecc92db8290141 found malformed partial pages could discard the saved cursor; they now fail closed as ERROR/MALFORMED_PAGE and preserve the verified cursor."
+  review_successor_p1_head_deadline: "At review time, 0dea3f66d87847e33577987e85e3be38a7ea4446 was evaluated against a strict 10-minute deadline. #2984 subsequently changed the main-merged stale cutoff to two hours. Candidate disposition of the original ten-minute numerical finding is SUPERSEDED, pending independent reviewer confirmation; head refresh remains bounded and monitored."
+  validation: "Integrated #2975/#3002 local candidate: focused Research gap-fill/manifest tests 48/48; pnpm test 1328 isolated test files; build, typecheck, preflight, validate:full, security:gate (0 high/critical, 0 secrets), AIPOS YAML/provenance/drift/conformance, lint (0 errors/47 warnings), and git diff --check PASS. These local results are not exact-head CI, independent review, or runtime acceptance."
+  next: "Local validation and the 2026-11-06 remote snapshot are complete. Publication remains pending under the current read-only scope. After authorization, update only the existing #3002 branch, obtain exact-head CI and an independent disposition, and preserve #2975 threads; no deploy, restart, database mutation, threshold relaxation, or CODE_ACTIONABLE."
+  integration_work_order: WO-RESEARCH-20261105-MULTI-INTERVAL-MANIFESTS
+  candidate_schedule: "15-minute single-page pass; alternate HEAD/HISTORY; nominal head revisit 30 minutes under the 2-hour stale ceiling."
+  durable_cursor_and_replay_guard: LOCAL_TESTS_PASS
+  original_10m_finding_candidate_disposition: SUPERSEDED_PENDING_INDEPENDENT_REVIEW
+  active_head_deadline_thread: PRRT_kwDOTUbne86yW75k
+  reviewed_finding_head: 0dea3f66d87847e33577987e85e3be38a7ea4446
+  exact_head_ci: PENDING
+  runtime_freshness: UNVERIFIED
+  safety: PAPER_ONLY_LIVE_NONE_PRODUCTION_MUTATION_FALSE_REAL_ORDER_FALSE_REAL_TRANSFER_FALSE_AI_ZERO_AUTHORITY

@@ -1,6 +1,6 @@
 id: WO-PAPER-20261003-BASELINE-MULTI-MARKET
 title: "Bind the owner-approved PAPER baseline to every configured market (1-5) instead of only a single-market configuration"
-status: READY_FOR_REVIEW
+status: COMPLETED
 owner: nusa-development
 repository: cinamoncandy/NUSA
 base_branch: main
@@ -26,3 +26,4 @@ verification_commands:
   - npx tsc -p tsconfig.json
   - node --test dist/apps/cloud/src/ownerBaselinePaperStrategy.test.js dist/apps/cloud/src/closedLearningRolloverScheduler.test.js
 residual: "Evidence period covers the first market only. Needs a server deploy and the host setting NUSA_CLOUD_UPBIT_MARKETS to list the markets; the owner adds ADA and SUI only after XRP is stable and this is deployed."
+closed_by_merge: "PR #2487 (branch claude/nusa-repository-j93sd8-baseline-markets) merged to main; it is the only PR from this branch and the only work order naming it. Status corrected by an automatic branch-to-merged-PR match on 2026-11-10; this records the merge only, not a separate production verification."

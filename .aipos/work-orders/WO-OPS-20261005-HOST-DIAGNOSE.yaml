@@ -1,6 +1,6 @@
 id: WO-OPS-20261005-HOST-DIAGNOSE
 title: "Read-only PAPER host diagnosis the owner can run without shell access"
-status: READY_FOR_REVIEW
+status: COMPLETED
 owner: nusa-development
 repository: cinamoncandy/NUSA
 base_branch: main
@@ -23,3 +23,4 @@ verification_commands:
   - node scripts/validate-workflow-authority-map.js
   - node scripts/validate-workflow-action-pins.js
 residual: "The runner user may lack permission to read the service journal; then that section prints an error and only the disk and file sections help. Logs may contain data the redaction misses; output is bounded and the workflow log is visible to repository readers. It diagnoses only, resuming PAPER after the cause is fixed remains an owner decision."
+closed_by_merge: "PR #2507 (branch claude/oracle-host-diagnose) merged to main; it is the only PR from this branch and the only work order naming it. Status corrected by an automatic branch-to-merged-PR match on 2026-11-10; this records the merge only, not a separate production verification."

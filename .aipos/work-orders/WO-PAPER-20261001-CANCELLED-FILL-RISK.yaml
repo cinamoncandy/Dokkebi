@@ -1,6 +1,6 @@
 id: WO-PAPER-20261001-CANCELLED-FILL-RISK
 title: Preserve executed fills in PAPER risk after remainder cancellation
-status: LOCAL_VALIDATED_PENDING_EXACT_HEAD_CI
+status: COMPLETED
 owner: nusa-core
 repository: cinamoncandy/NUSA
 base_branch: main
@@ -39,3 +39,4 @@ evidence:
   adversarial: "Malformed fill timestamp reproduced a RangeError locally; invalid account history now HALTs with RECONCILIATION_FAILED before any date conversion, approval write, or execution."
   ci_repair: "CI 36787916463 coverage-core-3 failed on stale moduleQualificationV1 RISK source blob. Rebind RISK source only; all independent operational qualification criteria remain UNVERIFIED and TARGET_ONLY."
 remaining: "Exact-head CI -> Audit -> Release -> exact-main deployment -> genuine automatic PAPER fill proof."
+closed_by_merge: "PR #2418 (branch codex/paper-cancelled-fill-risk) merged to main; it is the only PR from this branch and the only work order naming it. Status corrected by an automatic branch-to-merged-PR match on 2026-11-10; this records the merge only, not a separate production verification."

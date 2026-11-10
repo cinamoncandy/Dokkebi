@@ -1,6 +1,6 @@
 id: WO-OPS-20261015-STARTUP-EVIDENCE-INVALIDATION
 title: Preserve prepared Research evidence across unrelated PAPER startup writes
-status: READY_FOR_REVIEW
+status: COMPLETED
 owner: nusa-runtime-sre
 branch: fix/paper-startup-evidence-invalidation-20261015
 base_commit: 10c153464b40326a061e548cf44abfb479d07fc0
@@ -42,3 +42,4 @@ safety:
   productionMutationAllowed: false
   aiAuthority: ZERO_AUTHORITY
 next: "Draft exact-head CI and separate fresh VALIDATOR review; keep Draft until review. Then canonical Audit/Release and actual exact-main runtime acceptance. No direct merge."
+closed_by_merge: "PR #2733 (branch fix/paper-startup-evidence-invalidation-20261015) merged to main (d01bfa074, 2026-10-15) by the release authority after CI and Audit; it is the only merged PR from this branch. Status corrected 2026-11-09 from READY_FOR_REVIEW; this records the merge only, not a separate production verification."

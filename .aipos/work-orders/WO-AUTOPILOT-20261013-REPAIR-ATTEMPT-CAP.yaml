@@ -1,6 +1,6 @@
 id: WO-AUTOPILOT-20261013-REPAIR-ATTEMPT-CAP
 title: "Cap scheduled Autopilot coding at three attempts per work item and main SHA"
-status: READY_FOR_REVIEW
+status: COMPLETED
 owner: nusa-development
 repository: cinamoncandy/NUSA
 base_branch: main
@@ -42,3 +42,4 @@ safety:
   productionMutationAllowed: false
   aiAuthority: ZERO_AUTHORITY
   fail_closed: true
+closed_by_merge: "PR #2652 (branch claude/autopilot-repair-attempt-cap) merged to main (f3761251c, 2026-10-13) by the release authority after CI and Audit; it is the only merged PR from this branch. Status corrected 2026-11-09 from READY_FOR_REVIEW; this records the merge only, not a separate production verification."

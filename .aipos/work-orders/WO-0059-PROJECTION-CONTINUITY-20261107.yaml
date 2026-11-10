@@ -1,0 +1,94 @@
+id: WO-0059-PROJECTION-CONTINUITY-20261107
+title: "Bounded PAPER evidence projection anchors under saturated read-only windows"
+status: COMPLETED
+priority: P1
+owner: nusa-development
+repository: cinamoncandy/NUSA
+base_branch: main
+base_commit: 96e8b8bab0580b353541ec6acadf6c080bd0b14b
+implementation_branch: wo-0059-projection-scope-clarification-20261107
+predecessor_pr: 3010
+predecessor_pr_status: MERGED
+predecessor_pr_head: 8e3a105501d02fc489eaa1adbf6704b5ee132a8d
+predecessor_merge_commit: a3ed1608caa355371825006ba0e710bab5026c40
+predecessor_exact_head_review: ABSENT
+source_work_order: .aipos/work-orders/WO-0059-PAPER-OBSERVATION-20261106.yaml
+related_issues:
+  - 1605
+objective: "Keep bounded natural PAPER observation from being marked truncated solely because a valid 250-event newest-first projection is full, fail closed on detectable window gaps, explicitly retain UNKNOWN for uncovered late/backdated events, and do not relax semantic readiness."
+scope:
+  - "Only the existing scripts/actual-paper-runtime-e2e.js observer and its regression tests."
+  - "Validate unique event IDs and descending timestamp / ascending equal-timestamp ID order per canonical read-only projection."
+  - "When a window is saturated, require the prior window's newest event ID to remain present; report this only as an adjacent-window anchor check, not insertion-order or source completeness."
+  - "Preserve EVENT_EVIDENCE_TRUNCATED/INCOMPLETE on missing newest anchor, invalid order, duplicated IDs, or bounded collector overflow."
+  - "Record capped-window anchor counts, ADJACENT_WINDOW_ANCHORS_ONLY proof scope, and late_backdated_event_coverage=UNKNOWN without recording raw IDs or confidential details."
+  - "Keep visible ERROR/HALT failures fail-closed and bounded risk reason codes; upstream omission of unrecorded critical events remains UNKNOWN."
+acceptance:
+  - "Saturated adjacent newest-first 250-event projections with valid unique IDs and a retained newest anchor may complete the observation window after the existing 60s and three natural Decision cycle requirements."
+  - "Saturated projection with a lost newest anchor, duplicate IDs, or inverted timestamps is INCOMPLETE."
+  - "The anchor metric must not imply insertion-order completeness, full event continuity, or autonomous execution readiness; late/backdated event coverage remains UNKNOWN."
+  - "Absent genuine Decision cycles remains INCOMPLETE even when window anchors are verified."
+  - "Any visible HALT/ERROR FAIL still fails closed."
+  - "Autonomous order/fill/PnL absence remains readiness INCOMPLETE, independent of observer status."
+  - "Upstream source omission and missing-event count remain UNKNOWN; no certification is inferred from projection continuity alone."
+  - "A late event backdated below the top-250 cutoff is not detectable; adjacent-window anchoring does not prove insertion order. Without upstream sequence proof, this case is UNKNOWN."
+  - "The adjacent_windows_anchored output is true only for a valid moving saturated window anchored by the prior newest ID, not a static window."
+exclusions:
+  - "No changes to the canonical runtime recorder, 250-event projection cap, 5000-event collector cap, market selector, Risk, writer lease, order/fill or readiness classifier."
+  - "No modification to #3005 Canary, #2996 callback, #3002 Research, merged #3006, protected main, deployed Oracle, or LIVE authority."
+architecture_impact:
+  acknowledged: true
+  analysis: "Conservative change to a read-only evidence consumer. The recorder sorts and prunes by occurredAt and has no insertion-order timestamp guarantee, so late/backdated-event coverage remains UNKNOWN. Adjacent window anchors are not an audit of source completeness or proof of autonomous trading."
+  references:
+    - .aipos/architecture.md
+    - .aipos/AI_HANDOFF_CONTRACT.md
+    - .aipos/work-orders/WO-0059-PAPER-OBSERVATION-20261106.yaml
+safety:
+  paper_only: true
+  liveAuthority: NONE
+  productionMutationAllowed: false
+  realOrderAuthority: false
+  realTransferAuthority: false
+  aiAuthority: ZERO_AUTHORITY
+  fail_closed: "Unverified projection gaps, invalid ordering, missing Decision cycles, runtime faults, and missing autonomous order/fill/PnL never certify readiness."
+verification_commands:
+  - "node --test tests/actual-paper-runtime-observation.test.js"
+  - "node --test tests/actual-paper-runtime-e2e-chaos-boundary.test.js"
+  - "pnpm run preflight"
+  - "pnpm test"
+  - "pnpm run typecheck"
+  - "pnpm run validate:full"
+  - "pnpm run security:gate"
+  - "git diff --check"
+validation:
+  status: PR_OPEN_DRAFT_PENDING_FINAL_EXACT_HEAD_CI_AND_REVIEW
+  p2_dispositions:
+    N1: "UNKNOWN retained: the recorder orders/prunes by occurredAt and event_id and provides no verified monotonic insertion sequence; events backdated below the top-250 cutoff remain outside this observer's proof."
+    N2: "FIXED: the literal-newline comment defect is absent on protected main; the redundant standalone invalid-projection assignment is removed in this successor, while the shared saturated-window gate fails closed and the reverse-timestamp regression asserts INCOMPLETE plus event_evidence_truncated=true."
+    N3: "FIXED_IN_LOCAL_SUCCESSOR: adjacent_windows_anchored is scoped to adjacent anchors; proof_scope is ADJACENT_WINDOW_ANCHORS_ONLY and late_backdated_event_coverage is UNKNOWN."
+    N4: "FIXED_IN_AIPOS: predecessor #3010 merged state and exact-head CI are recorded; the generated CURRENT_TRUTH was refreshed with scripts/generate-aipos-current-truth.js."
+  predecessor_exact_head: "b2398342440a9d36abdc43bf41ca1ff32549785f: CI 42326222552 and Actual PAPER 42326222595 plus companions 42326222626,42326222566,42326222597 SUCCESS. Separate-session Validator comment 5809384978 returned PASS_WITH_NOTES, P0=0/P1=0, with N1-N4 and acceptable N5. Skipped causal-regression/attestation jobs are not positive evidence."
+  predecessor_merge: "PR #3010 merged as 8e3a105501d02fc489eaa1adbf6704b5ee132a8d at protected-main merge commit a3ed1608caa355371825006ba0e710bab5026c40. Submitted review comments cover e7bf812 and b239834 only; no review receipt for merged head 8e3a105 exists. Do not reopen or push to the merged PR branch."
+  latest_protected_main: 96e8b8bab0580b353541ec6acadf6c080bd0b14b
+  latest_remote_ci_run: 42331363127
+  latest_remote_ci_head: 8e3a105501d02fc489eaa1adbf6704b5ee132a8d
+  latest_remote_ci: SUCCESS
+  latest_remote_companions: "42331363044,42331363060,42331363033,42331363112,42331363194 SUCCESS"
+  local_candidate_base_sha: 96e8b8bab0580b353541ec6acadf6c080bd0b14b
+  local_candidate_source_test_patch_sha256: 5a7dc534d9b96bc551b15014c8e9a267e6f96f51407dbf6f9dbda60f378da02f
+  tree_identity: "Merged PR #3010 head 8e3a105501d02fc489eaa1adbf6704b5ee132a8d and protected main a3ed1608caa355371825006ba0e710bab5026c40 had identical source trees. Protected main advanced to 96e8b8bab0580b353541ec6acadf6c080bd0b14b; this local successor was rebased onto that exact commit. Its source/test patch remains scoped to scripts/actual-paper-runtime-e2e.js and tests/actual-paper-runtime-observation.test.js."
+  pre_sync_full_suite: "HISTORICAL: 1335 isolated test files PASS on base a3ed1608caa355371825006ba0e710bab5026c40. The protected-main advance to 96e8b8bab0580b353541ec6acadf6c080bd0b14b makes this prior run stale for the current candidate."
+  local_full_suite: "PASS after current-main synchronization: node scripts/run-tests-isolated.js completed 1335 isolated test files on the candidate source tree based on 96e8b8bab0580b353541ec6acadf6c080bd0b14b. Only AIPOS evidence text changed after this run; targeted CURRENT_TRUTH/AIPOS validators are rerun after metadata updates. The runner's tracked sentinel was restored byte-for-byte from HEAD."
+  local_validation: "After rebasing onto 96e8b8bab0580b353541ec6acadf6c080bd0b14b: focused observer+chaos 33/33; preflight PASS; root/mobile typecheck PASS; build PASS (changed-test fast gate skipped outside primary CI); validate:full PASS; security PASS (0 high/critical, 0 secrets); lint 0 errors / 47 warnings. Candidate full suite 1335 files PASS. Final AIPOS YAML/provenance/drift/conformance/current-truth tests and diff-check PASS after the latest metadata update."
+  successor_commit: CREATED_UNPUBLISHED_ON_IMPLEMENTATION_BRANCH
+  successor_pr: 3011
+  successor_published_initial_head: "f469aa74a703125c4025be5a0d2e99fd7d7347bb; superseded by the AIPOS PR-number recording commit, so do not reuse its CI. Resolve the current exact head from PR #3011 metadata."
+  successor_exact_head_ci: PENDING_FINAL_METADATA_HEAD
+  reviewer_disposition: "PASS_WITH_NOTES on predecessor b2398342440a9d36abdc43bf41ca1ff32549785f only. No fresh disposition for the final PR #3011 head; pending."
+  prior_head: "e7bf8129dd159298ae4c52f517125bdae4d0ca7b failed CI: test fixture nested cycleEvents arrays were sorted without flattening; independent review HOLD."
+  successor_changes: "N1 disclosed as UNKNOWN because occurredAt is not insertion-order proof; N2 restored executable saturated invalid-order guard; N3 narrowed adjacent_windows_anchored to moving validated saturated windows; the emitted evidence now says ADJACENT_WINDOW_ANCHORS_ONLY and late_backdated_event_coverage=UNKNOWN. N4 AIPOS work order/state/current truth record prior and candidate validation separately."
+  dependency_provenance: "The isolated suite and first local gates used the previously verified node_modules symlink targets, whose lockfile hash matched this worktree. After those symlinks were removed, pnpm run aipos:truth detected no node_modules and restored 916 packages from the repository lockfile using the local content-addressed store (0 downloaded); package.json and pnpm-lock.yaml remain unchanged."
+  pnpm_wrapper: "pnpm 11.25.0 commands preflight, typecheck, build, validate:full, security:gate, lint:scripts, and AIPOS truth generation completed; pnpm test was not used because the isolated full suite was run directly."
+  independent_review: PENDING_SUCCESSOR_EXACT_SHA
+  runtime_readiness: INCOMPLETE
+closed_by_merge: "PR #3011 (branch wo-0059-projection-scope-clarification-20261107) merged to main; it is the only PR from this branch and the only work order naming it. Status corrected by an automatic branch-to-merged-PR match on 2026-11-10; this records the merge only, not a separate production verification."

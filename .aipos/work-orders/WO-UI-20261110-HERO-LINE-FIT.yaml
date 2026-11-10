@@ -1,0 +1,21 @@
+id: WO-UI-20261110-HERO-LINE-FIT
+title: "Hero headline lines fit the screen width (no orphaned last syllable)"
+status: READY_FOR_REVIEW
+created: 2026-11-10
+implementation_branch: claude/hero-line-fit
+authority_impact: none
+finding: "Rendered at 390 px, the Learning hero '모의투자로 배우는 중이에요' wrapped as '배우는 중이에 / 요': a 7-glyph Korean line at the fixed 54 px is wider than the 350 px inside the margins."
+change:
+  - "learningScreenModel.heroFontSize(lines, width): one size for all lines so the widest fits; never above the designed 54 px, never below 36 px."
+  - "InstrumentHero uses it with the window width (line height and tracking scale with it). Short headlines are unchanged at 54 px."
+not_changed:
+  - "Words, colours, motion, layout, data, or any non-hero text."
+safety:
+  paper_only: true
+  liveAuthority: NONE
+  productionMutationAllowed: false
+  aiAuthority: ZERO_AUTHORITY
+validation:
+  - "mobile-learning-screen-model 5/5 and the instrument kit tests pass."
+  - "Seen in a temporary react-native-web preview at 390 and 360 px: the headline is two lines. Not verified on an Android device; glyph widths are estimated, so a device font could differ slightly."
+next_action: "Review, merge, then an Android build for the owner to check on the phone."

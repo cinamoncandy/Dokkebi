@@ -1,6 +1,6 @@
 id: WO-RESEARCH-20261016-QUALIFICATION-IDENTITY
 title: Bind canonical qualification results to run and frozen policy identity
-status: IN_PROGRESS
+status: COMPLETED
 priority: P0
 risk: HIGH
 authority_impact: none
@@ -33,3 +33,4 @@ implementation_commit: 72bffc028feada6f37c9fe043b88284c1ccabb53
 validation: "2 RED tests reproduced;59 focused tests and1231 isolated files PASS; build/typecheck/validate:full/security/lint PASS24 existing warnings. Initial restricted-network security audit failed after3 bounded attempts AUDIT_UNAVAILABLE:pnpm; same command with network access PASS, no gate changes."
 independent_review: "Fresh non-author Confucius PASS_WITH_NOTES at72bffc028feada6f37c9fe043b88284c1ccabb53;0P0/0P1/0P2,24 independent tests plus actual finalizer replay/missing identity/object-key reorder probes PASS;4 committed blobs match. Not Audit/Release."
 next: "Final metadata-head review, draft PR/exact-head CI/Audit/Release."
+closed_by_merge: "PR #2738 merged to main (c26eb5b58) by the release authority after CI and Audit. Status corrected 2026-11-09 from a stale IN_PROGRESS; this records the merge only, not a separate production verification."

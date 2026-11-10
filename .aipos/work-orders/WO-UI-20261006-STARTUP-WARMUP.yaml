@@ -1,6 +1,6 @@
 id: WO-UI-20261006-STARTUP-WARMUP
 title: "Warm the server connection during the saved-session read and show where the sign-in wait goes"
-status: READY_FOR_REVIEW
+status: COMPLETED
 owner: nusa-development
 repository: cinamoncandy/NUSA
 base_branch: main
@@ -27,3 +27,4 @@ verification_commands:
   - node --test tests/mobile-connection-warmup.test.js tests/mobile-startup-timing.test.js
   - node scripts/lint-mobile.js
 residual: "The time saved is expected (the handshake's round trips overlapped with the storage read) but not measured on a device. After the next Android build the Settings row will show where the 2.4 s goes; if refresh or identity dominate, the next steps are server-side latency and reducing the sequential requests, which touch authentication and need the owner's approval."
+closed_by_merge: "PR #2539 (branch claude/startup-warmup) merged to main; it is the only PR from this branch and the only work order naming it. Status corrected by an automatic branch-to-merged-PR match on 2026-11-10; this records the merge only, not a separate production verification."

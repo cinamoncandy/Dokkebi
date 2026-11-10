@@ -1,7 +1,7 @@
 id: WO-REDESIGN-TRUTHFUL-HOME-001
 schema_version: 1
 title: "Fail closed HOME status when retained Cloud evidence cannot be refreshed"
-status: LOCAL_VALIDATED_PENDING_PUBLICATION
+status: COMPLETED
 priority: 90
 owner: nusa-development
 base_branch: main
@@ -43,3 +43,4 @@ verification:
   remaining:
     - "Publish the exact local head and validate required remote checks."
 next_action: "Push the exact local head, create one focused PR, and require fresh exact-head CI before review or merge."
+closed_by_merge: "PR #1758 (branch codex/truthful-home-operating-states) merged to main; it is the only PR from this branch and the only work order naming it. Status corrected by an automatic branch-to-merged-PR match on 2026-11-10; this records the merge only, not a separate production verification."

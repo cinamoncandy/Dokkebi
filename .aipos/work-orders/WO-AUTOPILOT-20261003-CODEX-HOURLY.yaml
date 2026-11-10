@@ -1,6 +1,6 @@
 id: WO-AUTOPILOT-20261003-CODEX-HOURLY
 title: "Run the Autopilot Codex coding workflow hourly so it resumes soon after a ChatGPT usage window resets"
-status: READY_FOR_REVIEW
+status: COMPLETED
 owner: nusa-development
 repository: cinamoncandy/NUSA
 base_branch: main
@@ -21,3 +21,4 @@ verification_commands:
   - node scripts/validate-workflow-authority-map.js
   - node scripts/validate-workflow-action-pins.js
 residual: "Hourly runs cost a small amount of GitHub-hosted time for the select job (install + tsc) even when skipped. Usage limits themselves are set by the ChatGPT plan; the owner plans to raise them."
+closed_by_merge: "PR #2498 (branch claude/autopilot-codex-hourly) merged to main; it is the only PR from this branch and the only work order naming it. Status corrected by an automatic branch-to-merged-PR match on 2026-11-10; this records the merge only, not a separate production verification."

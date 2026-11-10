@@ -1,6 +1,6 @@
 id: WO-UI-20261007-APP-ICON-FLOW
 title: "Redraw the app icon family as the flow-edition N monogram"
-status: READY_FOR_REVIEW
+status: COMPLETED
 owner: nusa-development
 repository: cinamoncandy/NUSA
 base_branch: main
@@ -25,3 +25,4 @@ verification_commands:
   - node --test tests/mobile-brand-concept1.test.js tests/mobile-design-system-v1.test.js
   - node scripts/lint-mobile.js
 residual: "Android vector drawables cannot blur, so the adaptive and splash icons draw the streams and particles without the soft glow that the PNG and desktop icons have. How the icon looks on a real home screen and in a themed (monochrome) launcher is HUMAN_ENVIRONMENT_ONLY and needs the next Android build. The generator needs Chromium through @playwright/test and renders the PNGs one page at a time because concurrent pages stalled headless Chromium in a sandboxed host."
+closed_by_merge: "PR #2573 (branch claude/app-icon-flow) merged to main; it is the only PR from this branch and the only work order naming it. Status corrected by an automatic branch-to-merged-PR match on 2026-11-10; this records the merge only, not a separate production verification."

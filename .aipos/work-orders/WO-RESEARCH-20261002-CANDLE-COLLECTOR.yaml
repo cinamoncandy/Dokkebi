@@ -1,6 +1,6 @@
 id: WO-RESEARCH-20261002-CANDLE-COLLECTOR
 title: "One-pass collector: stored ticker observations to closed candles in the durable store (Stage 2b-3; not wired)"
-status: READY_FOR_REVIEW
+status: COMPLETED
 owner: nusa-development
 repository: cinamoncandy/NUSA
 base_branch: main
@@ -24,3 +24,4 @@ verification_commands:
   - node --test tests/research-candle-collector.test.js tests/research-candle-store.test.js tests/closed-candle-aggregator.test.js
   - pnpm run validate
 residual: "Scheduling and production composition, input builder with provenance, champion/challenger evaluators and owner-approved deploy not started. Not run: pnpm run validate (sandbox Node 22)."
+closed_by_merge: "PR #2472 (branch claude/nusa-repository-j93sd8-candle-collector) merged to main; it is the only PR from this branch and the only work order naming it. Status corrected by an automatic branch-to-merged-PR match on 2026-11-10; this records the merge only, not a separate production verification."

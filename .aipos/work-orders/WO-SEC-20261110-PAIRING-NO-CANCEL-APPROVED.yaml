@@ -1,0 +1,23 @@
+id: WO-SEC-20261110-PAIRING-NO-CANCEL-APPROVED
+title: "Same-device pairing start must not cancel an owner-approved request (#1900)"
+status: READY_FOR_REVIEW
+created: 2026-11-10
+implementation_branch: claude/pairing-no-cancel-approved
+authority_impact: none
+objective: "An unauthenticated POST /v1/mobile/pairing/start with only a deviceId must not be able to expire a pairing request the owner already approved."
+finding: "MobileSessionService.startPairing expired every active same-device PENDING or APPROVED request before creating the replacement, so knowing an installation deviceId was enough to cancel an approved pairing before its client exchanged it (Issue #1900)."
+change:
+  - "startPairing now supersedes only a PENDING same-device request. An APPROVED request stays exchangeable until its TTL. A new start while one is APPROVED fails with the existing 'pairing request limit reached' (per-device limit 1)."
+  - "tests/mobile-paper-pairing.test.js: the old test that asserted the approved request is expired is replaced by one that asserts it stays APPROVED and exchangeable, and that a second start is refused."
+accepted_tradeoff:
+  - "A client that retries right after approval waits until the approved request is exchanged or expires (10 minutes) before starting again."
+not_changed:
+  - "Session issuance, exchange, approval, scopes, TTL, global cap, audit events, credentials, thresholds, limits or capital."
+safety:
+  paper_only: true
+  liveAuthority: NONE
+  productionMutationAllowed: false
+  aiAuthority: ZERO_AUTHORITY
+validation:
+  - "Compiled dist tests: mobile-paper-pairing 8/8, mobile-approved-session 10/10, mobile-owner-connection-settings-integration 4/4, mobile-session-http 7/7."
+next_action: "Independent non-author review, then the canonical release path. A server release is needed for the change to take effect."

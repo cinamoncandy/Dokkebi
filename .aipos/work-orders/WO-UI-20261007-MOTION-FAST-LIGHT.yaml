@@ -1,6 +1,6 @@
 id: WO-UI-20261007-MOTION-FAST-LIGHT
 title: "Retune fieldMotion to the owner-approved fast-and-light option (A)"
-status: READY_FOR_REVIEW
+status: COMPLETED
 owner: nusa-development
 repository: cinamoncandy/NUSA
 base_branch: main
@@ -22,3 +22,4 @@ rollback: "Revert the change."
 verification_commands:
   - node --test tests/mobile-motion-tokens.test.js tests/mobile-motion-reveal.test.js tests/mobile-intelligence-field.test.js tests/mobile-presentation-boundary.test.js
 residual: "Feel on a physical device is HUMAN_ENVIRONMENT_ONLY; the owner confirms with screenshots or a screen recording."
+closed_by_merge: "PR #2565 (branch claude/ui-motion-fast-light) merged to main; it is the only PR from this branch and the only work order naming it. Status corrected by an automatic branch-to-merged-PR match on 2026-11-10; this records the merge only, not a separate production verification."

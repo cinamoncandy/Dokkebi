@@ -1,6 +1,6 @@
 id: WO-OPS-20261025-ORACLE-BACKUP-IO-THROTTLE
 title: "Bound verified Oracle state-backup I/O to protect the PAPER writer lease"
-status: LOCAL_VALIDATED_PENDING_FRESH_EXACT_HEAD_CI
+status: COMPLETED
 owner: nusa-server-automation
 repository: cinamoncandy/NUSA
 issue: 2770
@@ -43,3 +43,4 @@ verification_commands:
   - git diff --check
 validation: "At predecessor 0d1877e754946af9a38fa1dd16b74ce6f204be9c, Windows coverage found Git Bash could not parse the multiline shell harness passed as a bash -c command-line argument (unterminated quote). The harness now passes the same source over stdin with bash -s. Local result: topology and release workflow tests 29/29; Node 24.19 preflight, build, validate:full, security:gate (0 advisories/0 secrets), bash -n, and diff check PASS. All predecessor receipts are historical; fresh exact-head CI and independent review remain required. Exact-byte capped throughput remains unmeasured."
 next: "Commit the portable stdin test harness to the existing PR #2874 branch, obtain fresh exact-head CI and independent Validator; after governed merge only, install the exact reviewed root-owned helper before canonical Oracle release."
+closed_by_merge: "PR #2874 (branch fix/oracle-backup-io-priority) merged to main; it is the only PR from this branch and the only work order naming it. Status corrected by an automatic branch-to-merged-PR match on 2026-11-10; this records the merge only, not a separate production verification."

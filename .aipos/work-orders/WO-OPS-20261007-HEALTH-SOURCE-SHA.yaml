@@ -1,6 +1,6 @@
 id: WO-OPS-20261007-HEALTH-SOURCE-SHA
 title: "Publish the running build commit on /health"
-status: READY_FOR_REVIEW
+status: COMPLETED
 owner: nusa-development
 repository: cinamoncandy/NUSA
 base_branch: main
@@ -24,3 +24,4 @@ verification_commands:
   - npx tsc -p tsconfig.json
   - node --test tests/cloud-runtime-liveness-health.test.js tests/cloud-runtime-source-sha-health.test.js
 residual: "Requires a PAPER deploy."
+closed_by_merge: "PR #2558 (branch claude/health-source-sha) merged to main; it is the only PR from this branch and the only work order naming it. Status corrected by an automatic branch-to-merged-PR match on 2026-11-10; this records the merge only, not a separate production verification."

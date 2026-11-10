@@ -1,6 +1,6 @@
 id: WO-OPS-20261016-PAPER-WRITER-CAUSE
 title: Preserve the first PAPER writer lease failure cause without changing authority
-status: IN_PROGRESS
+status: COMPLETED
 owner: nusa-runtime-sre
 branch: codex/paper-writer-lease-cause-20261016
 base_commit: 67630b806996a0774fa41d772e61de6192493a84
@@ -52,3 +52,4 @@ safety:
 next: Commit this latest-main evidence sync, push the resulting exact PR head, require fresh exact-head CI and a
   separate fresh non-author zero-blocking-finding receipt, then use only the canonical deterministic Audit/Release
   chain. After governed merge/deploy, collect natural runtime causal evidence; the initiating lease-loss cause remains unproven.
+closed_by_merge: "PR #2739 (branch codex/paper-writer-lease-cause-20261016) merged to main (7ec5c21fe, 2026-10-18) by the release authority after CI and Audit; it is the only merged PR from this branch. Status corrected 2026-11-09 from IN_PROGRESS; this records the merge only, not a separate production verification."

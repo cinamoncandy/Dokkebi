@@ -172,7 +172,20 @@ export interface PaperAccountState {
   readonly workingOrders?: readonly PaperWorkingOrderRecord[];
   readonly updatedAt: number;
 }
-export interface PaperAccountRepository { save(state: PaperAccountState): void; loadLatest(): PaperAccountState | undefined; loadHistory?: () => readonly PaperAccountState[]; loadFills?: () => readonly PaperFillRecord[]; clear(): void; close?: () => void; }
+export interface PaperAccountRepository { save(state: PaperAccountState): void; loadLatest(): PaperAccountState | undefined; loadHistory?: () => readonly PaperAccountState[]; loadFills?: () => readonly PaperFillRecord[]; clear(): void; startWriterLease?: () => void; close?: () => void; }
+
+/**
+ * Production writer-lease timing. The lease is 120 s because PAPER startup is single-threaded synchronous work on a 1-vCPU host:
+ * three Oracle activations rolled back when one startup phase alone took 24-48 s against the former 30 s lease (WO-PAPER-20261108-LEASE-TTL-120).
+ * The heartbeat stays at 10 s. The takeover age is 210 s so that an expired lease stays takeable for the same 90 s after expiry as with
+ * the 30 s lease (30 s lease + 90 s = 120 s); a takeover age equal to the lease would leave no takeover window at all. The clock-advance
+ * limit is the smallest value the validation allows (the lease itself). A crashed writer's lease therefore blocks a restart for at most 120 s
+ * (fail-closed). Callers that pass their own leaseDurationMs keep the previous derived limits.
+ */
+export const PAPER_WRITER_LEASE_DURATION_MS = 120_000;
+export const PAPER_WRITER_HEARTBEAT_INTERVAL_MS = 10_000;
+export const PAPER_WRITER_MAX_CLOCK_ADVANCE_MS = 120_000;
+export const PAPER_WRITER_MAX_TAKEOVER_AGE_MS = 210_000;
 
 export interface PaperWriterLeaseOptions {
   /** Canonical PAPER account this repository owns; defaults to the legacy account. */
@@ -183,6 +196,8 @@ export interface PaperWriterLeaseOptions {
   readonly ownerId?: string;
   readonly maxClockAdvanceMs?: number;
   readonly maxTakeoverAgeMs?: number;
+  readonly deferWriterLease?: boolean;
+  readonly onWriterLeaseReady?: (initializationMs: number) => void;
 }
 
 /**
@@ -205,8 +220,10 @@ export class SqliteCloudPaperAccountRepository implements PaperAccountRepository
   private readonly heartbeatIntervalMs: number;
   private readonly maxClockAdvanceMs: number;
   private readonly maxTakeoverAgeMs: number;
-  private readonly heartbeat?: ReturnType<typeof setInterval>;
+  private readonly onWriterLeaseReady?: (initializationMs: number) => void;
+  private heartbeat?: ReturnType<typeof setInterval>;
   private closed = false;
+  private writerLeaseStarted = false;
   private leaseLost = false;
   private leaseFailure: unknown;
   private lastObservedNowMs = 0;
@@ -216,20 +233,39 @@ export class SqliteCloudPaperAccountRepository implements PaperAccountRepository
     if (!/^paper-[a-z0-9_-]{1,64}$/.test(this.accountId)) throw new Error("paper account id is invalid");
     this.ownerId = options.ownerId ?? randomUUID();
     this.now = options.now ?? Date.now;
-    this.leaseDurationMs = options.leaseDurationMs ?? 30_000;
-    this.heartbeatIntervalMs = options.heartbeatIntervalMs ?? Math.max(1_000, Math.floor(this.leaseDurationMs / 3));
-    this.maxClockAdvanceMs = options.maxClockAdvanceMs ?? Math.max(this.leaseDurationMs * 2, 60_000);
-    this.maxTakeoverAgeMs = options.maxTakeoverAgeMs ?? this.leaseDurationMs * 4;
+    this.leaseDurationMs = options.leaseDurationMs ?? PAPER_WRITER_LEASE_DURATION_MS;
+    this.heartbeatIntervalMs = options.heartbeatIntervalMs ?? (options.leaseDurationMs === undefined ? PAPER_WRITER_HEARTBEAT_INTERVAL_MS : Math.max(1_000, Math.floor(this.leaseDurationMs / 3)));
+    this.maxClockAdvanceMs = options.maxClockAdvanceMs ?? (options.leaseDurationMs === undefined ? PAPER_WRITER_MAX_CLOCK_ADVANCE_MS : Math.max(this.leaseDurationMs * 2, 60_000));
+    this.maxTakeoverAgeMs = options.maxTakeoverAgeMs ?? (options.leaseDurationMs === undefined ? PAPER_WRITER_MAX_TAKEOVER_AGE_MS : this.leaseDurationMs * 4);
+    this.onWriterLeaseReady = options.onWriterLeaseReady;
     if (!Number.isSafeInteger(this.leaseDurationMs) || this.leaseDurationMs < 1_000) throw new Error("paper writer lease duration is invalid");
     if (!Number.isSafeInteger(this.heartbeatIntervalMs) || this.heartbeatIntervalMs < 1_000 || this.heartbeatIntervalMs >= this.leaseDurationMs) throw new Error("paper writer heartbeat interval is invalid");
     if (!Number.isSafeInteger(this.maxClockAdvanceMs) || this.maxClockAdvanceMs < this.leaseDurationMs) throw new Error("paper writer clock advance limit is invalid");
     if (!Number.isSafeInteger(this.maxTakeoverAgeMs) || this.maxTakeoverAgeMs < this.leaseDurationMs) throw new Error("paper writer takeover age limit is invalid");
-    this.acquireLease();
-    this.recoverRecognizedLegacyAccounting();
-    this.backfillFillLedgerFromHistory();
-    const timer = setInterval(() => this.heartbeatLease(), this.heartbeatIntervalMs);
-    timer.unref?.();
-    this.heartbeat = timer;
+    if (!options.deferWriterLease) this.startWriterLease();
+  }
+  public startWriterLease(): void {
+    if (this.writerLeaseStarted) return;
+    if (this.closed) throw new Error("PAPER_WRITER_REPOSITORY_CLOSED");
+    const startedAt = performance.now();
+    try {
+      this.acquireLease();
+      this.writerLeaseStarted = true;
+      // Each heavy synchronous phase below can outlast the lease on a slow host before the event loop can run the
+      // heartbeat; renew (exact-owner, conditional update, fail-closed) between phases instead of only at the end.
+      this.verifyWriterLease();
+      this.recoverRecognizedLegacyAccounting();
+      this.verifyWriterLease();
+      this.backfillFillLedgerFromHistory();
+      this.verifyWriterLease();
+      const timer = setInterval(() => this.heartbeatLease(), this.heartbeatIntervalMs);
+      timer.unref?.();
+      this.heartbeat = timer;
+      this.onWriterLeaseReady?.(performance.now() - startedAt);
+    } catch (error) {
+      this.close();
+      throw error;
+    }
   }
   public save(state: PaperAccountState): void {
     validateState(state);
@@ -649,6 +685,7 @@ export class SqliteCloudPaperAccountRepository implements PaperAccountRepository
     }
   }
   private assertLeaseHeld(): void {
+    if (!this.writerLeaseStarted) throw new Error("PAPER_WRITER_LEASE_NOT_STARTED");
     if (this.closed || this.leaseLost) throw new Error("PAPER_WRITER_LEASE_LOST", { cause: this.leaseFailure });
     const now = this.now();
     if (!Number.isSafeInteger(now) || now < 0) { this.leaseLost = true; const error = new Error("PAPER_WRITER_CLOCK_INVALID"); this.leaseFailure ??= error; throw error; }

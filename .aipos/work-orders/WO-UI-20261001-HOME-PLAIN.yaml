@@ -1,6 +1,6 @@
 id: WO-UI-20261001-HOME-PLAIN
 title: "HOME renewal: lift the no-order reason under the hero and use plain Korean labels"
-status: READY_FOR_REVIEW
+status: COMPLETED
 owner: nusa-development
 repository: cinamoncandy/NUSA
 base_branch: main
@@ -21,3 +21,4 @@ verification_commands:
   - node --test tests/mobile-home-plain-labels.test.js tests/paper-order-reason.test.js
   - pnpm run validate
 residual: "Physical Android device visual acceptance is HUMAN_ENVIRONMENT_ONLY."
+closed_by_merge: "PR #2426 (branch claude/nusa-repository-j93sd8-home-below) merged to main; it is the only PR from this branch and the only work order naming it. Status corrected by an automatic branch-to-merged-PR match on 2026-11-10; this records the merge only, not a separate production verification."

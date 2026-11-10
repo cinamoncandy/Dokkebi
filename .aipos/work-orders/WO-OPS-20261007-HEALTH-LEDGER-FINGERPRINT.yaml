@@ -1,6 +1,6 @@
 id: WO-OPS-20261007-HEALTH-LEDGER-FINGERPRINT
 title: "Publish a canonical PAPER ledger fingerprint on /health"
-status: READY_FOR_REVIEW
+status: COMPLETED
 owner: nusa-development
 repository: cinamoncandy/NUSA
 base_branch: main
@@ -24,3 +24,4 @@ verification_commands:
   - npx tsc -p tsconfig.json
   - node --test tests/paper-ledger-fingerprint.test.js tests/cloud-runtime-liveness-health.test.js
 residual: "Requires a PAPER deploy; restart evidence is the fingerprint read before and after the next deploy."
+closed_by_merge: "PR #2563 (branch claude/health-ledger-fingerprint) merged to main; it is the only PR from this branch and the only work order naming it. Status corrected by an automatic branch-to-merged-PR match on 2026-11-10; this records the merge only, not a separate production verification."

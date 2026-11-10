@@ -1,6 +1,6 @@
 id: WO-RISK-20261030-ACCOUNT-KEY-PEAK-PERSIST
 title: Key Cloud PAPER risk rows by the real PAPER account id and persist the session drawdown peak
-status: READY_FOR_REVIEW
+status: COMPLETED
 priority: P1
 owner: nusa-development
 repository: cinamoncandy/NUSA
@@ -57,3 +57,4 @@ safety:
 validation: 'See the PR body for the exact commands run and their results.'
 precommit_review: 'Not yet requested; a non-author /grill-me review is required before the draft is marked ready.'
 next: 'Non-author review, exact-head CI, Audit and Release. After merge, a deploy of the exact main SHA is a separate owner/CORE operation (not done here).'
+closed_by_merge: "PR #2938 merged to main (b087468e9) by the release authority after CI and Audit. Status corrected 2026-11-09; this records the merge only, not a separate production verification."

@@ -1,6 +1,6 @@
 id: WO-LEARNING-20261008-LAST-BLOCKED-REASON
 title: "Keep the last BLOCKED/ERROR reason of the closed-learning loop on /health after later ticks succeed"
-status: READY_FOR_REVIEW
+status: COMPLETED
 owner: nusa-development
 repository: cinamoncandy/NUSA
 base_branch: main
@@ -31,3 +31,4 @@ safety:
   productionMutationAllowed: false
   aiAuthority: ZERO_AUTHORITY
   fail_closed: true
+closed_by_merge: "PR #2583 (branch claude/health-last-blocked-reason) merged to main (5db00ebcf, 2026-10-08) by the release authority after CI and Audit; it is the only merged PR from this branch. Status corrected 2026-11-09 from READY_FOR_REVIEW; this records the merge only, not a separate production verification."
