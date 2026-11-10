@@ -1,6 +1,6 @@
 id: WO-UI-20261005-HANJI-INK
 title: "먹과 한지 (ink and hanji) skin and an ink-bloom motion for the HOME sphere"
-status: COMPLETED
+status: SUPERSEDED_BY_WO-UI-20261005-COLD-FUTURE
 owner: nusa-development
 repository: cinamoncandy/NUSA
 base_branch: main
@@ -24,4 +24,3 @@ verification_commands:
   - node scripts/lint-mobile.js
   - node --test tests/mobile-*.test.js tests/uiux-*.test.js
 residual: "Not seen on a device here (no emulator in this environment); CI touch-visual is the only visual check. Subjective taste is the owner's call on the phone after the new build; the palette is one token block so it is cheap to adjust. Decorative Korean motifs (dancheong lines, hanji texture) are not added in this slice."
-closed_by_merge: "PR #2508 (branch claude/ui-hanji-ink) merged to main; it is the only PR from this branch and the only work order naming it. Status corrected by an automatic branch-to-merged-PR match on 2026-11-10; this records the merge only, not a separate production verification."

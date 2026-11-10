@@ -1,7 +1,7 @@
 id: WO-0056
 schema_version: 1
 title: "Read-only MCP gateway over existing NUSA relays"
-status: COMPLETED
+status: VERIFYING
 priority: 90
 owner: nusa-engineering
 repository: cinamoncandy/NUSA
@@ -78,4 +78,3 @@ blockers:
   - "Stable Oracle/HTTPS deployment origin and ChatGPT connector access require external human authority/evidence for external closeout only."
 current_status: "Repository implementation is merged and exact-head CI/safety checks passed. WO-0056 remains VERIFYING only for stable HTTPS deployment and actual ChatGPT connection evidence, which are human-environment-only and do not serialize permitted non-LIVE successors."
 next_action: "Do not reopen repository implementation. Obtain external deployment and ChatGPT read evidence only when human authority/environment is available; otherwise keep those evidence gates pending while permitted non-LIVE successors continue under independent fail-closed contracts."
-closed_by_merge: "PR #538 (branch agent/issue-mcp-readonly-gateway) merged to main; it is the only PR from this branch and the only work order naming it. Status corrected by an automatic branch-to-merged-PR match on 2026-11-10; this records the merge only, not a separate production verification."

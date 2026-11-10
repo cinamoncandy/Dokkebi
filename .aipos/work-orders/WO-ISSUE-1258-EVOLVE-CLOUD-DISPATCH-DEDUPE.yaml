@@ -1,6 +1,6 @@
 id: WO-ISSUE-1258-EVOLVE-CLOUD-DISPATCH-DEDUPE
 title: "Issue #1258 EVOLVE one-event one-effective-dispatch"
-status: COMPLETED
+status: PARTIAL
 priority: P0
 owner: nusa
 repository: cinamoncandy/NUSA
@@ -66,4 +66,3 @@ known_limitations:
   - "Deployed runtime evidence is incomplete: a prior deployed Worker returned /coding/telemetry 404 and a consumer returned HTTP 400 CODING_RUNNER_HEAD_SHA_UNVERIFIED."
   - "Issue #1258 remains open because its real post-change runtime dogfood and deployment evidence are not established here."
 next: "Retain the runtime/deployment gap as external evidence work; repository execution proceeds to an audit of Issue #1094."
-closed_by_merge: "PR #1262 (branch codex/evolve-1258-dispatch-dedupe) merged to main; it is the only PR from this branch and the only work order naming it. Status corrected by an automatic branch-to-merged-PR match on 2026-11-10; this records the merge only, not a separate production verification."
