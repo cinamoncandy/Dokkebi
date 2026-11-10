@@ -1,0 +1,22 @@
+id: WO-AUTOPILOT-20261110-ATTESTATION-SAN-URL
+title: "Causal attestations: match the certificate's full-URL signer identity"
+status: READY_FOR_REVIEW
+created: 2026-11-10
+implementation_branch: claude/attestation-san-prefix
+parent_work_order: WO-AUTOPILOT-20261030-1851-CAUSAL-ADMISSION
+authority_impact: none
+finding: "FORGE L1 isolated attempt 2 (source run 42812292317 on main 7714c22a, consumer run 42812393804) reached the Worker and got HTTP 409. Reproduced locally against the genuine bundle: verifyIsolatedCausalVerificationAttestation throws CAUSAL_ATTESTATION_SIGNER_REJECTED. Fulcio's SAN is https://github.com/cinamoncandy/NUSA/.github/workflows/causal-verification.yml@refs/heads/main; the verifier matched the bare GITHUB_WORKFLOW_REF form without scheme and host, so every genuine NUSA signature, isolated or production CI, was rejected. Tests only ever used a non-NUSA upstream bundle."
+change:
+  - "sigstoreCausalAttestation: signerSubjectAlternativeName(workflowRef) = https://github.com/<workflowRef>; the Sigstore policy and the identity check both use it. The returned signerIdentity is the certificate's real SAN."
+  - "causalRegressionAdmission: both admission paths compare the SAN with https://github.com/<workflowRef>."
+  - "Tests: the genuine bundle from source run 42812292317 is a fixture; it verifies with the full-URL SAN, and is still refused for any other run id, sha or attempt and as a production producer attestation. Admission and harness fixtures use the real SAN format."
+not_changed:
+  - "Trusted root, issuer, workflow path and ref, predicate types, claim, replay guard, Worker routes and switches."
+safety:
+  paper_only: true
+  liveAuthority: NONE
+  productionMutationAllowed: false
+  aiAuthority: ZERO_AUTHORITY
+validation:
+  - "All 99 compiled apps/autopilot test files pass; tests/*.test.js mentioning causal/attest/sigstore pass except paper-startup-lease-budget-2770, which fails identically on main in this sandbox."
+next_action: "Non-author review and merge. Attempt 3 needs the isolated route reopened with owner approval."
