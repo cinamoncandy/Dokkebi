@@ -71,7 +71,7 @@ export function classifyIsolatedCausalVerification(
     || verified.source.job !== "verify-causal-positive" || verified.source.sha !== verified.source.workflowSha
     || !/^[1-9][0-9]{0,19}$/.test(verified.source.runId)
     || !/^[1-9][0-9]{0,9}$/.test(verified.source.runAttempt)
-    || verified.signerIdentity.subjectAlternativeName !== verified.source.workflowRef
+    || verified.signerIdentity.subjectAlternativeName !== `https://github.com/${verified.source.workflowRef}`
     || verified.signerIdentity.issuer !== "https://token.actions.githubusercontent.com") {
     throw new Error("ISOLATED_CAUSAL_VERIFICATION_INVALID");
   }
@@ -149,7 +149,7 @@ export async function createCausalAdmissionReceipt(input: {
     || (observation.caseId === "main-ci-failure" && producer.sourceConclusion !== "failure")
     || (observation.caseId === "main-ci-timeout" && producer.sourceConclusion !== "timed_out")
     || !fingerprints || !SHA256.test(verified.statementDigest)
-    || verified.signerIdentity?.subjectAlternativeName !== WORKFLOW_REF || verified.signerIdentity?.issuer !== OIDC_ISSUER) {
+    || verified.signerIdentity?.subjectAlternativeName !== `https://github.com/${WORKFLOW_REF}` || verified.signerIdentity?.issuer !== OIDC_ISSUER) {
     throw new Error("CAUSAL_ADMISSION_EVIDENCE_INSUFFICIENT");
   }
 
