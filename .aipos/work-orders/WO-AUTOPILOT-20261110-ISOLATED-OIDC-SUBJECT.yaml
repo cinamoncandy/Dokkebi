@@ -6,7 +6,8 @@ implementation_branch: claude/isolated-oidc-subject
 authority_impact: none
 finding: "FORGE L1 attempt 4 (source 42826258388, consumer 42826406914) was refused with workerRejectionStage=ISOLATED_CONSUMER_OIDC_SUBJECT_INVALID. The Worker required sub to equal the GitHub default 'repo:<repo>:ref:refs/heads/main'; the repository's subject template evidently differs. The exact template cannot be read from this sandbox."
 change:
-  - "isolatedConsumerSubjectAllowed: sub must be a bounded string without control characters; a ref segment, if present, must be refs/heads/main; pull_request and environment subjects are refused."
+  - "isolatedConsumerSubjectAllowed (explicit security decision): sub must be a bounded string without control characters, bound to this repository (prefix repo:cinamoncandy/NUSA: or repository_id:1296492411), with a main ref segment if present; pull_request, environment and arbitrary subjects are refused."
+  - "A refused subject names only its claim keys (e.g. SUBJECT_INVALID:repo:ref), never values, so the next receipt shows the real template shape."
   - "Identity still rests on the individually signed, pinned claims: iss, aud, exp/iat, repository, repository_id 1296492411, ref refs/heads/main, event_name workflow_run, workflow_ref of the consumer workflow on main, workflow_sha equal to sha, then the run read-back."
 not_changed:
   - "Every other OIDC, attestation, claim, replay, CodingRunner or authority check; the route stays off."

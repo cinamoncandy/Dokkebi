@@ -300,15 +300,29 @@ export async function verifyGithubCodingPublisherRun(
 
 /**
  * `sub` follows the repository's OIDC subject template, which can differ from the GitHub default (FORGE L1 attempt 4,
- * consumer run 42826406914, was refused here although every other claim was genuine). Identity therefore rests on the
- * individually signed claims already checked: repository, the pinned repository_id, ref, event_name, workflow_ref
- * and workflow_sha. `sub` is only required to be a bounded string whose ref segment, if the template has one, is main.
+ * consumer run 42826406914, was refused at the exact default-template match although the template is not readable here).
+ * Security decision: identity rests on the individually signed, pinned claims already checked (iss, aud, time,
+ * repository, repository_id, ref, event_name, workflow_ref, workflow_sha, then the run read-back). `sub` must in addition
+ * be bound to this repository by name or by its pinned id, carry no control characters, have a main ref segment if
+ * it has one, and never be a pull_request or environment subject. An arbitrary subject is refused.
  */
 export function isolatedConsumerSubjectAllowed(sub: unknown): boolean {
   if (typeof sub !== "string" || sub.length === 0 || sub.length > 512 || /[\u0000-\u001f\u007f]/.test(sub)) return false;
+  const boundToRepository = sub.startsWith("repo:cinamoncandy/NUSA:") || /(?:^|:)repository_id:1296492411(?::|$)/.test(sub);
+  if (!boundToRepository) return false;
   const ref = /(?:^|:)ref:([^:]*)/.exec(sub);
   if (ref !== null && ref[1] !== "refs/heads/main") return false;
   return !/(?:^|:)(?:pull_request|environment)(?::|$)/.test(sub);
+}
+
+/**
+ * Names only the claim keys of a refused subject (never a value), so a receipt can show the template's shape.
+ * Up to four lowercase key names, each a fixed GitHub claim name; anything else is dropped.
+ */
+export function isolatedConsumerSubjectShape(sub: unknown): string {
+  if (typeof sub !== "string") return "NOT_STRING";
+  const keys = sub.split(":").filter((part, index) => index % 2 === 0 && /^[a-z][a-z_]{0,39}$/.test(part));
+  return keys.length === 0 ? "NO_KEYS" : keys.slice(0, 4).join(":");
 }
 
 /** Authenticates only the protected-main isolated consumer, not its source event or runner result. */
@@ -331,7 +345,7 @@ export async function verifyGithubIsolatedConsumerIdentity(
   if (typeof sha !== "string" || !/^[a-f0-9]{40}$/i.test(sha)
     || typeof workflowSha !== "string" || !/^[a-f0-9]{40}$/i.test(workflowSha)
     || workflowSha.toLowerCase() !== sha.toLowerCase()) fail(ISOLATED_CONSUMER_POLICY, "WORKFLOW_SHA_INVALID");
-  if (!isolatedConsumerSubjectAllowed(claims.sub)) fail(ISOLATED_CONSUMER_POLICY, "SUBJECT_INVALID");
+  if (!isolatedConsumerSubjectAllowed(claims.sub)) fail(ISOLATED_CONSUMER_POLICY, `SUBJECT_INVALID:${isolatedConsumerSubjectShape(claims.sub)}`);
   if (!/^[1-9][0-9]{0,19}$/.test(runId)) fail(ISOLATED_CONSUMER_POLICY, "RUN_ID_INVALID");
   if (!/^[1-9][0-9]{0,9}$/.test(runAttempt)) fail(ISOLATED_CONSUMER_POLICY, "RUN_ATTEMPT_INVALID");
   return Object.freeze({

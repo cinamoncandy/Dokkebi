@@ -81,7 +81,11 @@ test("isolated consumer identity pins OIDC, audience, repository, workflow/ref, 
     [{ sub: `repo:${repository}:pull_request` }, /ISOLATED_CONSUMER_OIDC_SUBJECT_INVALID/],
     [{ sub: `repo:${repository}:environment:prod` }, /ISOLATED_CONSUMER_OIDC_SUBJECT_INVALID/],
     [{ sub: "" }, /ISOLATED_CONSUMER_OIDC_SUBJECT_INVALID/],
-    [{ sub: 42 }, /ISOLATED_CONSUMER_OIDC_SUBJECT_INVALID/],
+    [{ sub: 42 }, /ISOLATED_CONSUMER_OIDC_SUBJECT_INVALID:NOT_STRING/],
+    [{ sub: "ARBITRARY_SUBJECT" }, /ISOLATED_CONSUMER_OIDC_SUBJECT_INVALID:NO_KEYS/],
+    [{ sub: "repo:other/NUSA:ref:refs/heads/main" }, /ISOLATED_CONSUMER_OIDC_SUBJECT_INVALID:repo:ref$/],
+    [{ sub: "repository_owner_id:1:repository_id:2:ref:refs/heads/main" }, /ISOLATED_CONSUMER_OIDC_SUBJECT_INVALID:repository_owner_id:repository_id:ref$/],
+    [{ sub: "repo:cinamoncandy/NUSA-fork:ref:refs/heads/main" }, /ISOLATED_CONSUMER_OIDC_SUBJECT_INVALID/],
     [{ exp: now - 100 }, /ISOLATED_CONSUMER_OIDC_EXPIRED/],
   ] as const) {
     const invalid = await signedToken(override);
@@ -148,6 +152,10 @@ test("consumer OIDC accepts a customized subject template while the signed claim
     const identity = await verifyGithubIsolatedConsumerIdentity(fixture.token, repository, fixture.jwksFetch, now);
     assert.equal(identity.ref, "refs/heads/main", sub);
   }
+  const wrongWorkflow = await signedToken({ sub: `repo:${repository}:ref:refs/heads/main`, workflow_ref: `${repository}/.github/workflows/other.yml@refs/heads/main` });
+  await assert.rejects(() => verifyGithubIsolatedConsumerIdentity(wrongWorkflow.token, repository, wrongWorkflow.jwksFetch, now), /ISOLATED_CONSUMER_OIDC_WORKFLOW_INVALID/);
+  const wrongRepository = await signedToken({ sub: `repo:${repository}:ref:refs/heads/main`, repository: "other/NUSA" });
+  await assert.rejects(() => verifyGithubIsolatedConsumerIdentity(wrongRepository.token, repository, wrongRepository.jwksFetch, now), /ISOLATED_CONSUMER_OIDC_REPOSITORY_INVALID/);
   const wrongRef = await signedToken({ sub: `repo:${repository}:ref:refs/heads/main`, ref: "refs/heads/feature" });
   await assert.rejects(() => verifyGithubIsolatedConsumerIdentity(wrongRef.token, repository, wrongRef.jwksFetch, now), /ISOLATED_CONSUMER_OIDC_REF_INVALID/);
 });
