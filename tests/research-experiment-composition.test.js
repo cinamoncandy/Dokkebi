@@ -5,7 +5,7 @@ const { join } = require("node:path");
 const { tmpdir } = require("node:os");
 
 const { SqliteDatabase, SqliteResearchCandleStore, SqliteResearchGapFillProgressStore } = require("../dist/packages/storage/src/index.js");
-const { composeResearchExperiments, readResearchExperimentSettings, RESEARCH_FLAG, RESEARCH_BACKTEST_COST, RESEARCH_GAP_FILL_INTERVAL_MS, RESEARCH_GAP_FILL_MAX_PAGES_PER_RUN } = require("../dist/apps/cloud/src/researchExperimentComposition.js");
+const { composeResearchExperiments, readResearchExperimentSettings, RESEARCH_FLAG, RESEARCH_BACKTEST_COST, RESEARCH_GAP_FILL_INTERVAL_MS, RESEARCH_GAP_FILL_MAX_PAGES_PER_RUN, RESEARCH_GAP_FILL_HISTORY_PAGES_PER_RUN } = require("../dist/apps/cloud/src/researchExperimentComposition.js");
 const { materializeResearchDatasetManifest } = require("../dist/apps/cloud/src/researchDatasetManifestMaterializer.js");
 const { AggregatedResearchCandleSource } = require("../dist/apps/cloud/src/researchCandleAggregation.js");
 const { UPBIT_CANDLE_SOURCE_FINGERPRINT } = require("../dist/apps/cloud/src/researchCandleBackfill.js");
@@ -411,6 +411,7 @@ test("the existing gap-fill timer policy is frequent and bounded, and preserves 
   assert.equal(RESEARCH_GAP_FILL_INTERVAL_MS * 2, 30 * M, "alternating head and history revisits the head every thirty minutes");
   assert.ok(RESEARCH_GAP_FILL_INTERVAL_MS * 2 < 120 * M, "the head revisit period stays inside the two-hour stale ceiling");
   assert.equal(RESEARCH_GAP_FILL_MAX_PAGES_PER_RUN, 1);
+  assert.equal(RESEARCH_GAP_FILL_HISTORY_PAGES_PER_RUN, 8, "history passes stay bounded");
   const db = open();
   const scheduledDelays = [];
   const nativeSetInterval = globalThis.setInterval;
@@ -459,6 +460,163 @@ test("the existing gap-fill timer policy is frequent and bounded, and preserves 
   } finally { composition.stop(); db.close(); }
 });
 
+test("a history pass walks at most the bounded number of pages through a long old gap", async () => {
+  const db = open();
+  const store = new SqliteResearchCandleStore(db, 200_000);
+  const last = Math.floor(T_END / M) * M;
+  const first = last - 3000 * M;
+  const rows = [];
+  for (let close = first; close <= last; close += M) if (close < last - 2800 * M || close > last - 100 * M) rows.push({ closeTimeMs: close, open: 10, high: 11, low: 9, close: 10 });
+  store.append("KRW-BTC", M, rows);
+  const requests = [];
+  const stamp = (ms) => new Date(ms).toISOString().slice(0, 19);
+  const fetchImpl = async (url) => {
+    const to = new URL(url).searchParams.get("to");
+    const upperExclusive = to == null ? last + M : Date.parse(to);
+    const candles = [];
+    for (let start = upperExclusive - M; candles.length < 200 && start >= first; start -= M) {
+      candles.push({ market: "KRW-BTC", candle_date_time_utc: stamp(start), opening_price: 100, high_price: 101, low_price: 99, trade_price: 100.5, candle_acc_trade_volume: 2 });
+    }
+    requests.push(url);
+    return new Response(JSON.stringify(candles), { status: 200, headers: { "content-type": "application/json" } });
+  };
+  const composition = composeResearchExperiments({ env: env({ NUSA_RESEARCH_MARKETS: "KRW-BTC" }), database: db, now: () => T_END, log: () => {}, fetchImpl, sleep: async () => undefined });
+  try {
+    const [head] = await composition.fillGaps();
+    assert.equal(head.pages, RESEARCH_GAP_FILL_MAX_PAGES_PER_RUN, "the head pass stays at one page");
+    const before = requests.length;
+    const [history] = await composition.fillGaps();
+    assert.equal(history.pages, RESEARCH_GAP_FILL_HISTORY_PAGES_PER_RUN, `the history pass walks the bounded number of pages: ${JSON.stringify(history)}`);
+    assert.equal(requests.length - before, RESEARCH_GAP_FILL_HISTORY_PAGES_PER_RUN, "one upstream request per history page, never more");
+    assert.equal(history.status, "PARTIAL");
+    assert.ok(history.recorded > 200 * (RESEARCH_GAP_FILL_HISTORY_PAGES_PER_RUN - 2), `history fills far more than one page: ${JSON.stringify(history)}`);
+  } finally { composition.stop(); db.close(); }
+});
+
+test("a pass that only confirms an exchange absence still refreshes the 1m manifest", async () => {
+  const db = open();
+  const store = new SqliteResearchCandleStore(db, 200_000);
+  const last = Math.floor(T_END / M) * M;
+  const first = last - 150 * M;
+  const absent = new Set();
+  for (let close = last - 80 * M; close <= last - 60 * M; close += M) absent.add(close);
+  const rows = [];
+  for (let close = first; close <= last; close += M) if (!absent.has(close)) rows.push({ closeTimeMs: close, open: 10, high: 11, low: 9, close: 10 });
+  store.append("KRW-BTC", M, rows);
+  const stamp = (ms) => new Date(ms).toISOString().slice(0, 19);
+  const fetchImpl = async (url) => {
+    const to = new URL(url).searchParams.get("to");
+    const upperExclusive = to == null ? last + M : Date.parse(to);
+    const candles = [];
+    for (let start = upperExclusive - M; candles.length < 200 && start >= first - M; start -= M) {
+      if (absent.has(start + M)) continue;
+      candles.push({ market: "KRW-BTC", candle_date_time_utc: stamp(start), opening_price: 100, high_price: 101, low_price: 99, trade_price: 100.5, candle_acc_trade_volume: 2 });
+    }
+    return new Response(JSON.stringify(candles), { status: 200, headers: { "content-type": "application/json" } });
+  };
+  const lines = [];
+  const composition = composeResearchExperiments({ env: env({ NUSA_RESEARCH_MARKETS: "KRW-BTC" }), database: db, now: () => T_END, log: (line) => lines.push(line), fetchImpl, sleep: async () => undefined });
+  try {
+    const [result] = await composition.fillGaps();
+    assert.equal(result.recorded, 0, JSON.stringify(result));
+    assert.ok((result.confirmedAbsent ?? 0) > 0, `the pass proves the absence: ${JSON.stringify(result)}`);
+    assert.ok(lines.some((line) => line.startsWith("[research-manifest] KRW-BTC/1m")), `the 1m manifest is refreshed: ${lines.join("|")}`);
+    assert.ok(lines.some((line) => /confirmedAbsent=\d+/.test(line)), "the gap-fill log line reports the proof");
+  } finally { composition.stop(); db.close(); }
+});
+
+for (const failure of ["RATE_LIMITED", "MALFORMED_PAGE"]) {
+  test(`a ${failure} on a later history page keeps the last verified cursor and the resumed pass loses no minute`, async () => {
+    const db = open();
+    const store = new SqliteResearchCandleStore(db, 200_000);
+    const last = Math.floor(T_END / M) * M;
+    const first = last - 3000 * M;
+    const rows = [];
+    for (let close = first; close <= last; close += M) if (close < last - 2800 * M || close > last - 100 * M) rows.push({ closeTimeMs: close, open: 10, high: 11, low: 9, close: 10 });
+    store.append("KRW-BTC", M, rows);
+    const stamp = (ms) => new Date(ms).toISOString().slice(0, 19);
+    const requests = [];
+    let failOnRequest = Infinity;
+    const fetchImpl = async (url) => {
+      requests.push(url);
+      if (requests.length === failOnRequest) {
+        return failure === "RATE_LIMITED"
+          ? new Response("{}", { status: 429, headers: { "content-type": "application/json" } })
+          : new Response(JSON.stringify([{ market: "KRW-BTC", candle_date_time_utc: "not-a-date" }]), { status: 200, headers: { "content-type": "application/json" } });
+      }
+      const to = new URL(url).searchParams.get("to");
+      const upperExclusive = to == null ? last + M : Date.parse(to);
+      const candles = [];
+      for (let start = upperExclusive - M; candles.length < 200 && start >= first; start -= M) {
+        candles.push({ market: "KRW-BTC", candle_date_time_utc: stamp(start), opening_price: 100, high_price: 101, low_price: 99, trade_price: 100.5, candle_acc_trade_volume: 2 });
+      }
+      return new Response(JSON.stringify(candles), { status: 200, headers: { "content-type": "application/json" } });
+    };
+    const options = { env: env({ NUSA_RESEARCH_MARKETS: "KRW-BTC" }), database: db, now: () => T_END, log: () => {}, fetchImpl, sleep: async () => undefined };
+    let composition = composeResearchExperiments(options);
+    try {
+      await composition.fillGaps(); // head pass, one page
+      const historyStart = requests.length;
+      failOnRequest = historyStart + 4; // the fourth history page fails after three verified pages
+      const [failed] = await composition.fillGaps();
+      assert.equal(failed.errorCode, failure, JSON.stringify(failed));
+      assert.equal(failed.pages, failure === "RATE_LIMITED" ? 3 : 4, JSON.stringify(failed));
+      const verifiedCursor = failed.nextCursorStartMs;
+      assert.ok(Number.isSafeInteger(verifiedCursor), "the last verified page's cursor is kept");
+      const thirdPageTo = new URL(requests[historyStart + 2]).searchParams.get("to");
+      assert.ok(verifiedCursor < Date.parse(thirdPageTo), "the cursor is past the third verified page, never past the failed one");
+      const failedTo = new URL(requests[historyStart + 3]).searchParams.get("to");
+      assert.equal(new Date(verifiedCursor).toISOString().slice(0, 19), failedTo.slice(0, 19), "the failed page is the next one requested");
+      composition.stop();
+      failOnRequest = Infinity;
+      composition = composeResearchExperiments(options); // restart
+      await composition.fillGaps(); // head
+      const resumeIndex = requests.length;
+      await composition.fillGaps(); // history resumes
+      assert.equal(new URL(requests[resumeIndex]).searchParams.get("to").slice(0, 19), failedTo.slice(0, 19), "the resumed pass retries exactly the failed page");
+      for (let pass = 0; pass < 6; pass += 1) await composition.fillGaps();
+      const gap = store.read("KRW-BTC", M, last - 2800 * M, last - 100 * M);
+      assert.equal(gap.length, 2701, "every minute of the old gap is filled; none was skipped");
+    } finally { composition.stop(); db.close(); }
+  });
+}
+
+test("sequential markets each stay inside the bounded history page budget", async () => {
+  const db = open();
+  const store = new SqliteResearchCandleStore(db, 200_000);
+  const last = Math.floor(T_END / M) * M;
+  const first = last - 3000 * M;
+  for (const market of ["KRW-BTC", "KRW-ETH"]) {
+    const rows = [];
+    for (let close = first; close <= last; close += M) if (close < last - 2800 * M || close > last - 100 * M) rows.push({ closeTimeMs: close, open: 10, high: 11, low: 9, close: 10 });
+    store.append(market, M, rows);
+  }
+  const stamp = (ms) => new Date(ms).toISOString().slice(0, 19);
+  const perMarket = new Map();
+  const sleeps = [];
+  const fetchImpl = async (url) => {
+    const parsed = new URL(url);
+    const market = parsed.searchParams.get("market");
+    perMarket.set(market, (perMarket.get(market) ?? 0) + 1);
+    const to = parsed.searchParams.get("to");
+    const upperExclusive = to == null ? last + M : Date.parse(to);
+    const candles = [];
+    for (let start = upperExclusive - M; candles.length < 200 && start >= first; start -= M) {
+      candles.push({ market, candle_date_time_utc: stamp(start), opening_price: 100, high_price: 101, low_price: 99, trade_price: 100.5, candle_acc_trade_volume: 2 });
+    }
+    return new Response(JSON.stringify(candles), { status: 200, headers: { "content-type": "application/json" } });
+  };
+  const composition = composeResearchExperiments({ env: env({ NUSA_RESEARCH_MARKETS: "KRW-BTC,KRW-ETH" }), database: db, now: () => T_END, log: () => {}, fetchImpl, sleep: async (ms) => { sleeps.push(ms); } });
+  try {
+    await composition.fillGaps();
+    perMarket.clear(); sleeps.length = 0;
+    const results = await composition.fillGaps();
+    assert.equal(results.length, 2);
+    for (const market of ["KRW-BTC", "KRW-ETH"]) assert.equal(perMarket.get(market), RESEARCH_GAP_FILL_HISTORY_PAGES_PER_RUN, `${market} stays inside the history budget`);
+    assert.ok(sleeps.length >= 2 * (RESEARCH_GAP_FILL_HISTORY_PAGES_PER_RUN - 1) && sleeps.every((ms) => ms >= 150), `pages are paced: ${sleeps}`);
+  } finally { composition.stop(); db.close(); }
+});
+
 test("bounded gap-fill passes advance past an exchange-missing newest minute", async () => {
   const db = open();
   const store = new SqliteResearchCandleStore(db, 200_000);
@@ -490,7 +648,7 @@ test("bounded gap-fill passes advance past an exchange-missing newest minute", a
     now: () => clock,
     log: () => {},
     fetchImpl,
-    sleep: async () => undefined,
+    sleep: async () => undefined, historyPagesPerRun: 1,
   });
   try {
     const passes = [];
@@ -531,7 +689,7 @@ test("bounded history cursor survives a composition restart and resumes at the n
     { closeTimeMs: first, open: 10, high: 11, low: 9, close: 10 },
     { closeTimeMs: anchor - M, open: 10, high: 11, low: 9, close: 10 },
   ]);
-  let composition = composeResearchExperiments({ env: env({ NUSA_RESEARCH_MARKETS: "KRW-BTC" }), database: db, now: () => T_END, log: () => {}, fetchImpl, sleep: async () => undefined });
+  let composition = composeResearchExperiments({ env: env({ NUSA_RESEARCH_MARKETS: "KRW-BTC" }), database: db, now: () => T_END, log: () => {}, fetchImpl, sleep: async () => undefined, historyPagesPerRun: 1 });
   try {
     const firstPass = (await composition.fillGaps())[0];
     assert.equal(firstPass.status, "PARTIAL");
@@ -543,7 +701,7 @@ test("bounded history cursor survives a composition restart and resumes at the n
   }
 
   db = new SqliteDatabase(filename);
-  composition = composeResearchExperiments({ env: env({ NUSA_RESEARCH_MARKETS: "KRW-BTC" }), database: db, now: () => T_END, log: () => {}, fetchImpl, sleep: async () => undefined });
+  composition = composeResearchExperiments({ env: env({ NUSA_RESEARCH_MARKETS: "KRW-BTC" }), database: db, now: () => T_END, log: () => {}, fetchImpl, sleep: async () => undefined, historyPagesPerRun: 1 });
   try {
     const resumed = (await composition.fillGaps())[0];
     assert.equal(requests[1], anchor - 200 * M, "restart resumes the durable history cursor rather than fetching the newest page again");
@@ -578,7 +736,7 @@ test("a failed head request still yields the next attempt to saved historical pr
     }
     return new Response(JSON.stringify(candles), { status: 200, headers: { "content-type": "application/json" } });
   };
-  const composition = composeResearchExperiments({ env: env({ NUSA_RESEARCH_MARKETS: "KRW-BTC" }), database: db, now: () => clock, log: () => {}, fetchImpl, sleep: async () => undefined });
+  const composition = composeResearchExperiments({ env: env({ NUSA_RESEARCH_MARKETS: "KRW-BTC" }), database: db, now: () => clock, log: () => {}, fetchImpl, sleep: async () => undefined, historyPagesPerRun: 1 });
   try {
     const results = [];
     for (let index = 0; index < 4; index += 1) {
@@ -615,7 +773,7 @@ test("an initial HEAD failure persists only the next pass and restarts into HIST
   for (let close = first; close < anchor; close += M) if (close !== oldGapClose) rows.push({ closeTimeMs: close, open: 10, high: 11, low: 9, close: 10 });
   store.append("KRW-BTC", M, rows);
   const clock = T_END;
-  let composition = composeResearchExperiments({ env: env({ NUSA_RESEARCH_MARKETS: "KRW-BTC" }), database: db, now: () => clock, log: () => {}, fetchImpl, sleep: async () => undefined });
+  let composition = composeResearchExperiments({ env: env({ NUSA_RESEARCH_MARKETS: "KRW-BTC" }), database: db, now: () => clock, log: () => {}, fetchImpl, sleep: async () => undefined, historyPagesPerRun: 1 });
   try {
     const [firstResult] = await composition.fillGaps();
     assert.equal(firstResult.status, "ERROR");
@@ -627,7 +785,7 @@ test("an initial HEAD failure persists only the next pass and restarts into HIST
   } finally { composition.stop(); db.close(); }
 
   db = new SqliteDatabase(filename);
-  composition = composeResearchExperiments({ env: env({ NUSA_RESEARCH_MARKETS: "KRW-BTC" }), database: db, now: () => clock + RESEARCH_GAP_FILL_INTERVAL_MS, log: () => {}, fetchImpl, sleep: async () => undefined });
+  composition = composeResearchExperiments({ env: env({ NUSA_RESEARCH_MARKETS: "KRW-BTC" }), database: db, now: () => clock + RESEARCH_GAP_FILL_INTERVAL_MS, log: () => {}, fetchImpl, sleep: async () => undefined, historyPagesPerRun: 1 });
   try {
     const [historyResult] = await composition.fillGaps();
     assert.equal(requests[1], anchor - M, "HISTORY begins from the actual latest stored candle, not the failed HEAD cursor");
@@ -719,7 +877,7 @@ test("malformed historical pages fail closed without discarding the last verifie
     now: () => clock,
     log: () => {},
     fetchImpl,
-    sleep: async () => undefined,
+    sleep: async () => undefined, historyPagesPerRun: 1,
   });
   try {
     const results = [];
