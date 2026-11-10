@@ -47,10 +47,10 @@ async function requestOidcToken(env, fetchImpl) {
 async function coordinate(action, env = process.env, fetchImpl = fetch, writeOutput = (value) => {
   if (env.GITHUB_OUTPUT) require("node:fs").appendFileSync(env.GITHUB_OUTPUT, `${value}\n`);
 }) {
-  if (action !== "claim" && action !== "release") throw new Error("CODEX_WIP_ACTION_INVALID");
+  if (action !== "claim" && action !== "verify" && action !== "release") throw new Error("CODEX_WIP_ACTION_INVALID");
   const { issueNumber, headSha } = readIdentity(env);
   const taskDigest = env.TASK_DIGEST;
-  if (action === "claim" && !/^[a-f0-9]{64}$/i.test(taskDigest || "")) throw new Error("CODEX_WIP_TASK_DIGEST_INVALID");
+  if (!/^[a-f0-9]{64}$/i.test(taskDigest || "")) throw new Error("CODEX_WIP_TASK_DIGEST_INVALID");
   const token = await requestOidcToken(env, fetchImpl);
   let response;
   try {

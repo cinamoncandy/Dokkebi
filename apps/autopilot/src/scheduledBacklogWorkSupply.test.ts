@@ -12,7 +12,7 @@ function namespace(withPreviousReceipt = false): ExecutionCoordinatorNamespace {
   return {
     idFromName: (name: string) => ({ name }),
     get: () => ({
-      async fetch(input: RequestInfo | URL) {
+      async fetch(input: RequestInfo | URL, init?: RequestInit) {
         const url = String(input);
         if (url.endsWith("/evolve-learning-memory")) return new Response(JSON.stringify({ value: null }), { status: 200, headers: { "content-type": "application/json" } });
         if (url.endsWith("/scheduled-receipt")) {
@@ -29,7 +29,10 @@ function namespace(withPreviousReceipt = false): ExecutionCoordinatorNamespace {
           } : null;
           return new Response(JSON.stringify({ receipt }), { status: 200, headers: { "content-type": "application/json" } });
         }
-        if (url.endsWith("/active-wip/admit")) return new Response(JSON.stringify({ admitted: true }), { status: 201, headers: { "content-type": "application/json" } });
+        if (url.endsWith("/active-wip/admit")) {
+          const body = JSON.parse(String(init?.body)) as Record<string, unknown>;
+          return new Response(JSON.stringify({ admitted: true, claim: { ...body, leaseExpiresAt: Number(body.claimedAt) + 60 * 60 * 1000 } }), { status: 201, headers: { "content-type": "application/json" } });
+        }
         if (url.endsWith("/provider-capacity-wait")) return new Response(JSON.stringify({ wait: null }), { status: 200, headers: { "content-type": "application/json" } });
         if (url.endsWith("/execution")) return new Response(JSON.stringify({ record: null }), { status: 200, headers: { "content-type": "application/json" } });
         if (url.endsWith("/acquire")) return new Response(JSON.stringify({ acquired: true }), { status: 201, headers: { "content-type": "application/json" } });

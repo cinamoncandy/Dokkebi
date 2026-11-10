@@ -26,7 +26,7 @@ function namespace(): ExecutionCoordinatorNamespace {
   };
 }
 
-const claim = { dedupeKey: "evolve-coding:abc:github-issue-2118", executionId: "evolve-coding:abc", canonicalOwner: "apps/autopilot", conflictKeys: ["apps/autopilot/src/concurrencyAdvisor.ts"], claimedAt: 1_000, maxConcurrent: 1 };
+const claim = { dedupeKey: "evolve-coding:abc:github-issue-2118", executionId: "evolve-coding:abc", taskId: "github-issue-2118", protectedMainSha: "a".repeat(40), taskSnapshotDigest: "b".repeat(64), leaseOwnerIdentity: "evolve-scheduled:123", canonicalOwner: "apps/autopilot", conflictKeys: ["apps/autopilot/src/concurrencyAdvisor.ts"], claimedAt: 1_000, maxConcurrent: 1 };
 const RUNNER_CREDENTIAL = "coding-token";
 const env = (ns: ExecutionCoordinatorNamespace) => ({ NUSA_GITHUB_REPOSITORY: "cinamoncandy/NUSA", NUSA_CODING_RUNNER_TOKEN: RUNNER_CREDENTIAL, NUSA_EXECUTION_COORDINATOR: ns }) as unknown as WorkerEnv;
 const post = (body: unknown, bearer = RUNNER_CREDENTIAL) => new Request("https://worker/coding/wip-release", {
@@ -38,7 +38,7 @@ const post = (body: unknown, bearer = RUNNER_CREDENTIAL) => new Request("https:/
 test("a finished coding attempt frees the single WIP slot at once so the next item is admitted", async () => {
   const ns = namespace();
   assert.equal((await admitActiveWip(ns, claim)).admitted, true);
-  const next = { ...claim, dedupeKey: "evolve-coding:abc:github-issue-1605", executionId: "evolve-coding:def", conflictKeys: ["apps/autopilot/src/other.ts"], claimedAt: 2_000 };
+  const next = { ...claim, dedupeKey: "evolve-coding:abc:github-issue-1605", executionId: "evolve-coding:def", taskId: "github-issue-1605", conflictKeys: ["apps/autopilot/src/other.ts"], claimedAt: 2_000 };
   assert.equal((await admitActiveWip(ns, next)).reason, "WIP_LIMIT_REACHED");
 
   const response = await handleCodingWipRelease(post({ dedupeKey: claim.dedupeKey, executionId: claim.executionId }), env(ns));

@@ -114,8 +114,8 @@ owner_approval_20261108:
     - deploy_cloudflare_worker_or_oracle_or_production
     - change_live_risk_broker_or_payment_authorities
     - direct_main_merge_release_or_self_validator_approval
-  evidence_status: "OWNER_SCOPE_APPROVED; local Worker OIDC claim/release integration and adversarial tests implemented; exact-head CI, independent Validator, Audit/Release, runtime integration, and actual Codex E2E remain unverified."
-  next: "Publish the locally validated successor only to existing Draft PR #2039; verify exact-head CI, then obtain a fresh non-author Validator. Keep Codex manually disabled and do not dispatch it."
+  evidence_status: "OWNER_SCOPE_APPROVED; V15 local successor binds active-WIP receipts to task/main/digest/owner/expiry, revalidates scheduled task snapshots before dispatch, verifies the Codex claim/main/task snapshot immediately before runner start, and attempts exact-identity cleanup on ambiguous persistent admission. Focused/build/full suite (1,343 isolated files), typecheck, validate:full, security, AIPOS and lint pass locally. Exact-head CI, independent Validator, Audit/Release, runtime integration, and actual Codex E2E remain unverified."
+  next: "Refresh main and existing PR #2039 HEAD; if the remote remains the verified parent and local candidate is a non-force fast-forward, publish only to that Draft PR and confirm exact-head CI. Keep Codex manual execution gated: inventory snapshot is UNVERIFIED, operational WIP/lease is UNKNOWN, and do not dispatch."
 recovery_20261107:
   protected_main_sha: 01d698b325626e4a2e62b29e8e0b2f99f579ad4a
   predecessor_pr_head: 90726879b4c5dead48327579c59fdfdecda82154
@@ -351,3 +351,27 @@ pr2039_main_alignment_20261110_successor:
   release_authorization: PENDING
   safety: "PAPER_ONLY; liveAuthority=NONE; productionMutationAllowed=false; realOrderAuthority=false; realTransferAuthority=false; aiAuthority=ZERO_AUTHORITY; FAIL_CLOSED"
   next: "Do not repeat publication of this checkpoint. Read live #2039 HEAD and protected main, check that exact HEAD CI and five companion statuses; if PASS seek non-author thread disposition then separate Formal Validator/Audit/Release. If CI fails, repair the concrete failing test and rerun exact-head gates. No operational Claim or Dispatch."
+
+v15_claim_binding_20261110:
+  canonical_issue: 903
+  canonical_pr: 2039
+  base_main_sha_at_start: 91959182a10abcf6176cc5b40304838724a01fa5
+  pr_head_before_local_successor: ad669b83bff7ef3297561a1984770df45a853539
+  candidate_status: LOCAL_VALIDATION_PASS_PENDING_COMMIT_AND_EXACT_HEAD_CI
+  implementation: "Atomic Coordinator claim receipts now persist and validate taskId, protectedMainSha, taskSnapshotDigest, leaseOwnerIdentity, and bounded expiry; scheduled selection hashes source issue/signal state and releases exact leases if pre-dispatch revalidation fails; Codex workflow verifies the exact current main and task digest immediately after claim and before the runner step. Persistent admission failures attempt identity-bound cleanup of both leases."
+  focused_tests: "PASS after latest-main patch: Coordinator/Codex claim/worker/scheduled lease and workflow suites, including denied admission, ambiguous response cleanup, snapshot mutation, WIP cap, duplicate/replay, and fail-closed inventory cases."
+  build: PASS
+  full_suite_prior_failure: "The first suite attempt exposed a stale top-level AIPOS base_commit f875980e4ff9111ab576f1e93294fae510d07167 that is not an ancestor of current protected main. The historical merge remains recorded under WO-0057; only the current global base anchor was aligned to the verified protected main 91959182a10abcf6176cc5b40304838724a01fa5, leaving historical evidence untouched."
+  full_suite: "PASS_1343_ISOLATED_TEST_FILES on the latest PR-base candidate after the fail-closed admission cleanup repair and AIPOS base-anchor reconciliation."
+  inventory_completeness: UNVERIFIED
+  selector_and_claim_admission: FAIL_CLOSED
+  operational_wip_claims: UNKNOWN
+  writer_lease: UNKNOWN
+  exact_head_ci: PENDING_FOR_LOCAL_SUCCESSOR
+  independent_review: PENDING
+  formal_validator: PENDING
+  audit: PENDING
+  release_authorization: NOT_AUTHORIZED
+  actual_ai_coding_e2e: NOT_RUN
+  safety: "PAPER_ONLY; liveAuthority=NONE; productionMutationAllowed=false; realOrderAuthority=false; realTransferAuthority=false; aiAuthority=ZERO_AUTHORITY; FAIL-CLOSED"
+  next: "Create a local candidate commit after final diff review; immediately before push, recheck protected main and PR head, and publish only if remote PR HEAD is still the exact parent and update is fast-forward. Then verify successor exact-head CI; do not dispatch or self-approve."

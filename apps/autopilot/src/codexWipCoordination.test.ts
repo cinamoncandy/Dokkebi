@@ -195,9 +195,9 @@ test("Codex claim is bound to the live OIDC workflow, task selection, and availa
   assert.equal((await linkedIssue.json() as { error: string }).error, "CODEX_WIP_INVENTORY_UNVERIFIABLE");
   assert.equal((await readActiveWip(coordinator)).claims.length, 0);
 
-  await admitActiveWip(coordinator, { dedupeKey: "existing:wip:1", executionId: "existing:exec:1", canonicalOwner: "owner-1", conflictKeys: ["path:1"], claimedAt: NOW, maxConcurrent: 2 });
-  await admitActiveWip(coordinator, { dedupeKey: "existing:wip:2", executionId: "existing:exec:2", canonicalOwner: "owner-2", conflictKeys: ["path:2"], claimedAt: NOW, maxConcurrent: 2 });
-  const full = await admitActiveWip(coordinator, { dedupeKey: "existing:wip:3", executionId: "existing:exec:3", canonicalOwner: "owner-3", conflictKeys: ["path:3"], claimedAt: NOW, maxConcurrent: 2 });
+  await admitActiveWip(coordinator, { dedupeKey: "existing:wip:1", executionId: "existing:exec:1", taskId: "task-1", protectedMainSha: SHA, taskSnapshotDigest: TASK_DIGEST, leaseOwnerIdentity: "test:1:1", canonicalOwner: "owner-1", conflictKeys: ["path:1"], claimedAt: NOW, maxConcurrent: 2 });
+  await admitActiveWip(coordinator, { dedupeKey: "existing:wip:2", executionId: "existing:exec:2", taskId: "task-2", protectedMainSha: SHA, taskSnapshotDigest: TASK_DIGEST, leaseOwnerIdentity: "test:1:1", canonicalOwner: "owner-2", conflictKeys: ["path:2"], claimedAt: NOW, maxConcurrent: 2 });
+  const full = await admitActiveWip(coordinator, { dedupeKey: "existing:wip:3", executionId: "existing:exec:3", taskId: "task-3", protectedMainSha: SHA, taskSnapshotDigest: TASK_DIGEST, leaseOwnerIdentity: "test:1:1", canonicalOwner: "owner-3", conflictKeys: ["path:3"], claimedAt: NOW, maxConcurrent: 2 });
   assert.equal(full.reason, "WIP_LIMIT_REACHED");
   assert.equal((await readActiveWip(coordinator)).claims.length, 2);
 });
@@ -208,6 +208,10 @@ test("Codex release from another run cannot release the original task claim", as
   await admitActiveWip(coordinator, {
     dedupeKey: `codex-wip:${owner.claims.run_id}:${owner.claims.run_attempt}:issue:903:sha:${SHA}`,
     executionId: `codex-execution:${owner.claims.run_id}:${owner.claims.run_attempt}:issue:903:sha:${SHA}`,
+    taskId: "issue-903",
+    protectedMainSha: SHA,
+    taskSnapshotDigest: TASK_DIGEST,
+    leaseOwnerIdentity: `${REPOSITORY}:${owner.claims.run_id}:${owner.claims.run_attempt}`,
     canonicalOwner: "apps/autopilot",
     conflictKeys: ["issue:903"],
     claimedAt: NOW,
@@ -247,6 +251,26 @@ test("Codex claim rejects a moved or unavailable protected main before creating 
   assert.equal(unavailableMain.status, 503);
   assert.equal((await unavailableMain.json() as { error: string }).error, "CODEX_WIP_MAIN_UNAVAILABLE");
   assert.equal((await readActiveWip(coordinator)).claims.length, 0);
+});
+
+test("Codex pre-run verification fails closed when the stored claim exists but fresh inventory is not provable", async () => {
+  const coordinator = namespace();
+  const fixture = await oidcFixture();
+  const dedupeKey = `codex-wip:${fixture.claims.run_id}:${fixture.claims.run_attempt}:issue:903:sha:${SHA}`;
+  const executionId = `codex-execution:${fixture.claims.run_id}:${fixture.claims.run_attempt}:issue:903:sha:${SHA}`;
+  assert.equal((await admitActiveWip(coordinator, {
+    dedupeKey, executionId, taskId: "issue-903", protectedMainSha: SHA,
+    taskSnapshotDigest: TASK_DIGEST,
+    leaseOwnerIdentity: `${REPOSITORY}:${fixture.claims.run_id}:${fixture.claims.run_attempt}`,
+    canonicalOwner: "apps/autopilot", conflictKeys: ["issue:903"], claimedAt: NOW, maxConcurrent: 2,
+  })).admitted, true);
+  const response = await handleCodexWipCoordination(request(fixture.token, "verify"), env(coordinator), {
+    now: () => NOW + 1_000,
+    fetchImpl: githubFetch(fixture),
+  });
+  assert.equal(response.status, 503);
+  assert.equal((await response.json() as { error: string }).error, "CODEX_WIP_INVENTORY_UNVERIFIABLE");
+  assert.equal((await readActiveWip(coordinator)).claims.length, 1, "the authenticated runner cleanup step owns release after verification failure");
 });
 
 test("Codex claim fails closed when a complete cursor inventory cannot be proven", async () => {

@@ -121,8 +121,17 @@ jobs:
           WORKFLOW_SHA: ${{ needs.select.outputs.head_sha }}
           TASK_DIGEST: ${{ needs.select.outputs.task_digest }}
         run: node scripts/autopilot-codex-wip.js claim
+      - name: Revalidate exact main and claim snapshot before starting Codex
+        id: wip_verify
+        if: steps.wip_claim.outcome == 'success'
+        env:
+          ISSUE: ${{ needs.select.outputs.issue }}
+          WORKFLOW_SHA: ${{ needs.select.outputs.head_sha }}
+          TASK_DIGEST: ${{ needs.select.outputs.task_digest }}
+        run: node scripts/autopilot-codex-wip.js verify
       - name: Run Codex without commit or push authority
         id: run
+        if: steps.wip_claim.outcome == 'success' && steps.wip_verify.outcome == 'success'
         shell: bash
         env:
           # Only for the host guard's read of PAPER release runs; removed from Codex's environment.

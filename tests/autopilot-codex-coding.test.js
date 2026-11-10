@@ -80,6 +80,8 @@ test("the workflow pins Codex to the single dedicated-account runner and publish
   assert.match(workflow, /group: autopilot-codex-coding/);
   assert.match(workflow, /head:autopilot\/codex\//, "one open autopilot Codex PR at a time");
   assert.match(codexJob, /Claim shared WIP slot/, "WIP admission happens before the coding model runs");
+  assert.match(codexJob, /Revalidate exact main and claim snapshot before starting Codex/, "the claim is revalidated immediately before model execution");
+  assert.match(codexJob, /steps\.wip_claim\.outcome == 'success' && steps\.wip_verify\.outcome == 'success'/, "Codex starts only after claim and fresh snapshot validation pass");
   assert.match(codexJob, /Release shared WIP slot/);
   assert.match(workflow, /task_digest: \$\{\{ steps\.pick\.outputs\.task_digest \}\}/, "the selected issue snapshot digest follows the prompt into the trusted claim job");
   assert.match(codexJob, /if: always\(\) && steps\.wip_claim\.outcome != 'skipped'/, "release is attempted after every executed claim step, including an ambiguous response failure");

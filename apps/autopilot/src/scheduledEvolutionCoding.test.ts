@@ -8,7 +8,7 @@ const FAILED_SHA = MAIN_SHA;
 const RUN_ID = 9001;
 const NOW = 1_787_968_000_000;
 
-function namespace(acquired = true, record: Record<string, unknown> | null = null, providerWait: Record<string, unknown> | null | "unavailable" = null, activeWip: { admitted: boolean; reason?: string } = { admitted: true }, onAcquire?: (body: Record<string, unknown>) => void): ExecutionCoordinatorNamespace {
+function namespace(acquired = true, record: Record<string, unknown> | null = null, providerWait: Record<string, unknown> | null | "unavailable" = null, activeWip: { admitted: boolean; reason?: string } = { admitted: true }, onAcquire?: (body: Record<string, unknown>) => void, onRelease?: (path: string) => void): ExecutionCoordinatorNamespace {
   return {
     idFromName: (name: string) => ({ name }),
     get: () => ({
@@ -20,7 +20,15 @@ function namespace(acquired = true, record: Record<string, unknown> | null = nul
           return new Response(JSON.stringify({ wait: providerWait }), { status: 200, headers: { "content-type": "application/json" } });
         }
         if (url.endsWith("/execution")) return new Response(JSON.stringify({ record }), { status: 200, headers: { "content-type": "application/json" } });
-        if (url.endsWith("/active-wip/admit")) return new Response(JSON.stringify(activeWip), { status: activeWip.admitted ? 201 : 409, headers: { "content-type": "application/json" } });
+        if (url.endsWith("/active-wip/admit")) {
+          const body = JSON.parse(String(init?.body)) as Record<string, unknown>;
+          const claim = { ...body, leaseExpiresAt: Number(body.claimedAt) + 60 * 60 * 1000 };
+          return new Response(JSON.stringify({ ...activeWip, ...(activeWip.admitted ? { claim } : {}) }), { status: activeWip.admitted ? 201 : 409, headers: { "content-type": "application/json" } });
+        }
+        if (url.endsWith("/active-wip/release") || url.endsWith("/release")) {
+          onRelease?.(url);
+          return new Response(JSON.stringify({ released: true }), { status: 200, headers: { "content-type": "application/json" } });
+        }
         if (url.endsWith("/acquire")) {
           if (onAcquire) onAcquire(JSON.parse(String(init?.body)) as Record<string, unknown>);
           return new Response(JSON.stringify(acquired ? { acquired: true } : { acquired: false, reason: "ALREADY_DISPATCHED" }), { status: acquired ? 201 : 409, headers: { "content-type": "application/json" } });
@@ -318,6 +326,103 @@ test("backlog coding is admitted to canonical active WIP before dispatch", async
   }, recorder.fetchImpl);
   assert.equal(outcome.status, "EXECUTION_ACCEPTED");
   assert.equal(recorder.posted(), true);
+});
+
+test("backlog snapshot change after claim prevents dispatch and releases both leases", async () => {
+  let issueReads = 0;
+  let dispatched = false;
+  const fetchImpl = (async (input: RequestInfo | URL) => {
+    const url = String(input);
+    if (url.includes("/issues/2117")) {
+      issueReads += 1;
+      const issue = issueReads === 1 ? backlogIssue : { ...backlogIssue, title: "[P0][Autopilot] changed after claim" };
+      return new Response(JSON.stringify(issue), { status: 200, headers: { "content-type": "application/json" } });
+    }
+    if (url.includes("/search/issues")) return new Response(JSON.stringify({ total_count: 0, items: [] }), { status: 200, headers: { "content-type": "application/json" } });
+    if (url.endsWith("/dispatches")) { dispatched = true; return new Response(null, { status: 204 }); }
+    if (url.endsWith("/branches/main")) return new Response(JSON.stringify({ commit: { sha: MAIN_SHA } }), { status: 200, headers: { "content-type": "application/json" } });
+    return new Response("not found", { status: 404 });
+  }) as typeof fetch;
+  const outcome = await runScheduledEvolutionCoding({
+    NUSA_GITHUB_TOKEN: "token",
+    NUSA_EXECUTION_COORDINATOR: namespace(),
+  }, {
+    candidates: [],
+    backlogIssues: [backlogIssue],
+    openPulls: [],
+    now: NOW,
+    repository: "cinamoncandy/NUSA",
+    mainSha: MAIN_SHA,
+    workflowRunId: RUN_ID,
+  }, fetchImpl);
+  assert.equal(outcome.status, "ABSTAINED");
+  assert.equal(outcome.reason, "github-issue-pre-dispatch-snapshot-stale");
+  assert.equal(issueReads, 2, "selection-time and immediately pre-dispatch reads are distinct");
+  assert.equal(dispatched, false);
+});
+
+test("backlog WIP claim is released when persistent admission is denied", async () => {
+  const released: string[] = [];
+  const recorder = backlogFetchRecorder();
+  const outcome = await runScheduledEvolutionCoding({
+    NUSA_GITHUB_TOKEN: "token",
+    NUSA_EXECUTION_COORDINATOR: namespace(false, null, null, { admitted: true }, undefined, (path) => released.push(path)),
+  }, {
+    candidates: [],
+    backlogIssues: [backlogIssue],
+    openPulls: [],
+    now: NOW,
+    repository: "cinamoncandy/NUSA",
+    mainSha: MAIN_SHA,
+    workflowRunId: RUN_ID,
+  }, recorder.fetchImpl);
+  assert.equal(outcome.status, "DUPLICATE_SUPPRESSED");
+  assert.deepEqual(released.map((path) => new URL(path).pathname), ["/active-wip/release"]);
+  assert.equal(recorder.posted(), false);
+});
+
+test("ambiguous persistent admission attempts identity-bound cleanup of both leases", async () => {
+  const released: string[] = [];
+  const recorder = backlogFetchRecorder();
+  const outcome = await runScheduledEvolutionCoding({
+    NUSA_GITHUB_TOKEN: "token",
+    NUSA_EXECUTION_COORDINATOR: namespace(true, null, null, { admitted: true }, () => { throw new Error("response lost after commit"); }, (path) => released.push(path)),
+  }, {
+    candidates: [],
+    backlogIssues: [backlogIssue],
+    openPulls: [],
+    now: NOW,
+    repository: "cinamoncandy/NUSA",
+    mainSha: MAIN_SHA,
+    workflowRunId: RUN_ID,
+  }, recorder.fetchImpl);
+  assert.equal(outcome.status, "ABSTAINED");
+  assert.deepEqual(released.map((path) => new URL(path).pathname), ["/release", "/active-wip/release"]);
+  assert.equal(recorder.posted(), false);
+});
+
+test("failed persistent cleanup still attempts active-WIP release", async () => {
+  const released: string[] = [];
+  const recorder = backlogFetchRecorder();
+  const outcome = await runScheduledEvolutionCoding({
+    NUSA_GITHUB_TOKEN: "token",
+    NUSA_EXECUTION_COORDINATOR: namespace(true, null, null, { admitted: true }, () => { throw new Error("response lost after commit"); }, (path) => {
+      released.push(path);
+      if (path.endsWith("/release")) throw new Error("persistent cleanup unavailable");
+    }),
+  }, {
+    candidates: [],
+    backlogIssues: [backlogIssue],
+    openPulls: [],
+    now: NOW,
+    repository: "cinamoncandy/NUSA",
+    mainSha: MAIN_SHA,
+    workflowRunId: RUN_ID,
+  }, recorder.fetchImpl);
+  assert.equal(outcome.status, "ABSTAINED");
+  assert.equal(outcome.reason, "persistent-execution-admission-cleanup-unavailable");
+  assert.deepEqual(released.map((path) => new URL(path).pathname), ["/release", "/active-wip/release"]);
+  assert.equal(recorder.posted(), false);
 });
 
 test("active WIP conflict suppresses backlog coding before dispatch", async () => {

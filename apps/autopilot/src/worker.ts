@@ -417,7 +417,7 @@ export async function handleCodexWipCoordination(
   } catch {
     return json({ accepted: false, error: "CODEX_WIP_REQUEST_INVALID", ...authority }, 400);
   }
-  if ((body.action !== "claim" && body.action !== "release")
+  if ((body.action !== "claim" && body.action !== "verify" && body.action !== "release")
     || typeof body.issueNumber !== "number" || !Number.isSafeInteger(body.issueNumber) || body.issueNumber < 1 || body.issueNumber > 1_000_000) {
     return json({ accepted: false, error: "CODEX_WIP_REQUEST_INVALID", ...authority }, 400);
   }
@@ -428,6 +428,10 @@ export async function handleCodexWipCoordination(
     return json({ accepted: false, error: "CODEX_WIP_HEAD_SHA_MISMATCH", ...authority }, 409);
   }
   const issueNumber = Number(body.issueNumber);
+  if (typeof body.taskDigest !== "string" || !/^[a-f0-9]{64}$/i.test(body.taskDigest)) {
+    return json({ accepted: false, error: "CODEX_WIP_TASK_DIGEST_INVALID", ...authority }, 400);
+  }
+  const taskDigest = body.taskDigest.toLowerCase();
   const dedupeKey = `codex-wip:${identity.runId}:${identity.runAttempt}:issue:${issueNumber}:sha:${identity.sha}`;
   const executionId = `codex-execution:${identity.runId}:${identity.runAttempt}:issue:${issueNumber}:sha:${identity.sha}`;
   if (!WIP_RELEASE_IDENTITY.test(dedupeKey) || !WIP_RELEASE_IDENTITY.test(executionId)) {
@@ -457,11 +461,8 @@ export async function handleCodexWipCoordination(
     if (!selectedTask || selectedTask.issueNumber !== issueNumber || !selectedTask.canonicalOwner || selectedTask.conflictKeys.length === 0) {
       return json({ accepted: false, error: "CODEX_WIP_TASK_NOT_CURRENT_OR_UNCLAIMABLE", ...authority }, 409);
     }
-    if (typeof body.taskDigest !== "string" || !/^[a-f0-9]{64}$/i.test(body.taskDigest)) {
-      return json({ accepted: false, error: "CODEX_WIP_TASK_DIGEST_INVALID", ...authority }, 400);
-    }
     const selectedTaskDigest = await codexBacklogTaskSnapshotDigest(selectedTask);
-    if (!constantTimeEqual(selectedTaskDigest, body.taskDigest.toLowerCase())) {
+    if (!constantTimeEqual(selectedTaskDigest, taskDigest)) {
       return json({ accepted: false, error: "CODEX_WIP_TASK_SNAPSHOT_MISMATCH", ...authority }, 409);
     }
     try {
@@ -475,15 +476,59 @@ export async function handleCodexWipCoordination(
       const result = await admitActiveWip(env.NUSA_EXECUTION_COORDINATOR, {
         dedupeKey,
         executionId,
+        taskId: `issue-${selectedTask.issueNumber}`,
+        protectedMainSha: identity.sha,
+        taskSnapshotDigest: selectedTaskDigest,
+        leaseOwnerIdentity: `${identity.repository}:${identity.runId}:${identity.runAttempt}`,
         canonicalOwner: selectedTask.canonicalOwner,
         conflictKeys: selectedTask.conflictKeys,
         claimedAt: now(),
         maxConcurrent: CODEX_WIP_LIMIT,
       });
       if (!result.admitted) return json({ accepted: false, error: result.reason ?? "CODEX_WIP_ADMISSION_REJECTED", ...authority }, 409);
-      return json({ accepted: true, action: "claim", issueNumber, dedupeKey, executionId, ...authority }, 201);
+      return json({ accepted: true, action: "claim", issueNumber, dedupeKey, executionId, claimReceipt: result.claim, ...authority }, 201);
     } catch {
       return json({ accepted: false, error: "CODEX_WIP_ADMISSION_UNAVAILABLE", ...authority }, 503);
+    }
+  }
+
+  if (body.action === "verify") {
+    try {
+      const active = await readActiveWip(env.NUSA_EXECUTION_COORDINATOR);
+      const claim = active.claims.find((candidate) => candidate.dedupeKey === dedupeKey);
+      if (!claim || claim.executionId !== executionId || claim.taskId !== `issue-${issueNumber}`
+        || claim.protectedMainSha !== identity.sha || claim.taskSnapshotDigest !== taskDigest
+        || claim.leaseOwnerIdentity !== `${identity.repository}:${identity.runId}:${identity.runAttempt}`
+        || !Number.isSafeInteger(claim.leaseExpiresAt) || Number(claim.leaseExpiresAt) <= now()) {
+        return json({ accepted: false, error: "CODEX_WIP_CLAIM_RECEIPT_MISMATCH", ...authority }, 409);
+      }
+      await verifyGithubCodexWipCurrentMainSha(identity, env.NUSA_GITHUB_TOKEN.trim(), fetchImpl as never);
+      const headers = { accept: "application/vnd.github+json", authorization: `Bearer ${env.NUSA_GITHUB_TOKEN.trim()}`, "user-agent": "nusa-autopilot-worker", "x-github-api-version": "2022-11-28" };
+      const inventory = await fetchOpenGithubBacklog(allowedRepository, headers, fetchImpl);
+      if (inventory.consistency.automaticSelectionAllowed !== true || inventory.consistency.pointInTimeSnapshot !== "VERIFIED") {
+        return json({ accepted: false, error: "CODEX_WIP_INVENTORY_UNVERIFIABLE", ...authority }, 503);
+      }
+      const selectedTask = selectCodexBacklogTask(inventory.issues, inventory.pulls);
+      if (!selectedTask || selectedTask.issueNumber !== issueNumber) return json({ accepted: false, error: "CODEX_WIP_TASK_NOT_CURRENT_OR_UNCLAIMABLE", ...authority }, 409);
+      const currentDigest = await codexBacklogTaskSnapshotDigest(selectedTask);
+      if (!constantTimeEqual(currentDigest, taskDigest)) return json({ accepted: false, error: "CODEX_WIP_TASK_SNAPSHOT_MISMATCH", ...authority }, 409);
+      // This final main read is intentionally adjacent to the runner step. GitHub and the DO
+      // admission are not one transaction, so a later repository update remains a bounded race.
+      await verifyGithubCodexWipCurrentMainSha(identity, env.NUSA_GITHUB_TOKEN.trim(), fetchImpl as never);
+      const stillActive = await readActiveWip(env.NUSA_EXECUTION_COORDINATOR);
+      const latestClaim = stillActive.claims.find((candidate) => candidate.dedupeKey === dedupeKey);
+      if (!latestClaim || latestClaim.executionId !== executionId || latestClaim.taskSnapshotDigest !== taskDigest
+        || latestClaim.protectedMainSha !== identity.sha || latestClaim.leaseOwnerIdentity !== claim.leaseOwnerIdentity
+        || !Number.isSafeInteger(latestClaim.leaseExpiresAt) || Number(latestClaim.leaseExpiresAt) <= now()) {
+        return json({ accepted: false, error: "CODEX_WIP_CLAIM_RECEIPT_MISMATCH", ...authority }, 409);
+      }
+      return json({ accepted: true, action: "verify", issueNumber, executionId,
+        claimReceipt: { taskId: latestClaim.taskId, protectedMainSha: latestClaim.protectedMainSha, taskSnapshotDigest: latestClaim.taskSnapshotDigest, leaseOwnerIdentity: latestClaim.leaseOwnerIdentity, leaseExpiresAt: latestClaim.leaseExpiresAt },
+        ...authority }, 200);
+    } catch (error) {
+      const code = error instanceof Error ? error.message : "CODEX_WIP_VERIFY_UNAVAILABLE";
+      const unavailable = code.includes("UNAVAILABLE");
+      return json({ accepted: false, error: unavailable ? "CODEX_WIP_VERIFY_UNAVAILABLE" : "CODEX_WIP_VERIFY_REJECTED", ...authority }, unavailable ? 503 : 409);
     }
   }
 
@@ -496,6 +541,10 @@ export async function handleCodexWipCoordination(
       return json({ accepted: completed, released: false, reason: completed ? "ALREADY_COMPLETED" : "CLAIM_NOT_ACTIVE", ...authority }, completed ? 200 : 409);
     }
     if (claim.executionId !== executionId) return json({ accepted: false, error: "CODEX_WIP_OWNER_MISMATCH", ...authority }, 409);
+    if (claim.taskId !== `issue-${issueNumber}` || claim.protectedMainSha !== identity.sha || claim.taskSnapshotDigest !== taskDigest
+      || claim.leaseOwnerIdentity !== `${identity.repository}:${identity.runId}:${identity.runAttempt}`) {
+      return json({ accepted: false, error: "CODEX_WIP_OWNER_MISMATCH", ...authority }, 409);
+    }
     await completeActiveWip(env.NUSA_EXECUTION_COORDINATOR, {
       dedupeKey,
       executionId,

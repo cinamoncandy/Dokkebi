@@ -17,7 +17,7 @@ const baseEnv = () => ({
 });
 
 test("Codex claim and release mint the audience-bound token and send only task identity", async () => {
-  for (const action of ["claim", "release"]) {
+  for (const action of ["claim", "verify", "release"]) {
     const calls = [];
     const outputs = [];
     const fetchImpl = async (input, init = {}) => {

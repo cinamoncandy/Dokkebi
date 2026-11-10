@@ -7,9 +7,9 @@ Everything below is what the repository's records *claim*. Re-verify on GitHub b
 
 ## Newest handoff
 
-[`.aipos/handoffs/2026-11-09-pr2039-pagination-local-repair.md`](handoffs/2026-11-09-pr2039-pagination-local-repair.md) — CORE handoff — 2026-11-09 — PR #2039 pagination local repair
+[`.aipos/handoffs/2026-11-10-pr2039-v15-claim-binding.md`](handoffs/2026-11-10-pr2039-v15-claim-binding.md) — CORE handoff — 2026-11-10 — #2039 V15 claim binding
 
-> Canonical ownership remains Issue #903 and existing Draft PR #2039. The exact GitHub PR source checked for this local work is `ecdee7bb568db35daf832a92d84b0a141ab40666`, with base `54c095daff15bc4ef067e12ed26c666e5fd3d4c0`. Protected main advanced during validation from `b2186edc2e4422efb0d95d07c1c8c12a61be218d` to `422de99d2444860bc8fbc1e2e141e78d74daa93b`; current main is 64 commits ahead of the PR base. No branch alignment was attempted.
+> Canonical ownership remains Issue #903 and existing Draft PR #2039. Fresh GitHub verification observed protected main `91959182a10abcf6176cc5b40304838724a01fa5` and PR #2039 OPEN/Draft at `ad669b83bff7ef3297561a1984770df45a853539`; that remote PR commit contains the current main as an ancestor. No remote write, merge, deploy, dispatch, claim, or lease mutation was performed.
 
 ## Work orders
 
