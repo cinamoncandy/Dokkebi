@@ -180,6 +180,31 @@ function installEntityScopedWorkerDigestAdapter(entity: SignedEntity): () => voi
   return () => { entity.signature.verifySignature = original; };
 }
 
+/**
+ * Node defaults ECDSA verification to the curve's digest when no algorithm is named; workerd does not and returns
+ * false. @sigstore/verify calls the shared `crypto.verify(data, key, signature)` without a digest for the Rekor
+ * signed entry timestamp and the CT SCT, so in the Worker every genuine bundle failed with
+ * TLOG_INCLUSION_PROMISE_ERROR (FORGE L1 attempt 8, consumer run 42917501021; reproduced in workerd locally).
+ * During one synchronous verification only, a missing digest for a P-256 or P-384 key is named explicitly.
+ * Nothing else changes: the same key, data and signature are verified, and any other key type is left as-is.
+ */
+function installWorkerEcdsaDigestDefault(): () => void {
+  const target = sigstoreCrypto as unknown as { verify: typeof sigstoreCrypto.verify };
+  const original = target.verify;
+  target.verify = function verifyWithExplicitEcdsaDigest(data, key, signature, algorithm) {
+    const keyObject = typeof key === "object" && key !== null
+      ? key as { asymmetricKeyType?: string; asymmetricKeyDetails?: { namedCurve?: string } }
+      : undefined;
+    if (algorithm === undefined && keyObject?.asymmetricKeyType === "ec") {
+      const curve = keyObject.asymmetricKeyDetails?.namedCurve;
+      if (curve === "prime256v1") return original(data, key, signature, "sha256");
+      if (curve === "secp384r1") return original(data, key, signature, "sha384");
+    }
+    return original(data, key, signature, algorithm);
+  } as typeof sigstoreCrypto.verify;
+  return () => { target.verify = original; };
+}
+
 function trustedRootText(): string {
   return SIGSTORE_TRUSTED_ROOT_JSON_TEXT;
 }
@@ -283,6 +308,7 @@ async function verifySignedPredicate(
   const bundle = bundleFromJSON(bundleRecord as never);
   const entity = toSignedEntity(bundle);
   const restoreDigestAdapter = installEntityScopedWorkerDigestAdapter(entity);
+  const restoreEcdsaDefault = installWorkerEcdsaDigestDefault();
   let signer;
   try {
     try {
@@ -295,6 +321,7 @@ async function verifySignedPredicate(
       throw error;
     }
   } finally {
+    restoreEcdsaDefault();
     restoreDigestAdapter();
   }
   const identity = signer.identity;
