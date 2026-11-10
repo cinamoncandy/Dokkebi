@@ -49,6 +49,8 @@ dispatch, approve or merge anything. Earlier records treat this write as an owne
    Independent non-author review of that evidence is still required before L1 is called accepted.
 
 If anything in steps 2-4 fails: switch off first (step 5), then diagnose. Never re-dispatch with a changed fixture.
+A failure after the durable claim burns that source run: it can never be replayed. A retry, if the diagnosis allows one,
+is a new dispatch (a new source run), recorded as a second attempt.
 
 ## Safety
 
