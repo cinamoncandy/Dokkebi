@@ -1,0 +1,22 @@
+id: WO-AUTOPILOT-20261110-ISOLATED-REJECTION-STAGE
+title: "Isolated L1 route: report which fixed stage refused, not only HTTP 409"
+status: READY_FOR_REVIEW
+created: 2026-11-10
+implementation_branch: claude/isolated-rejection-code
+parent_work_order: WO-AUTOPILOT-20261030-1851-CAUSAL-ADMISSION
+authority_impact: none
+finding: "FORGE L1 attempt 3 (source 42819424461 on 77f9ab88, consumer 42819524295) was rejected with HTTP 409 again. Locally, the same bundle passes the Sigstore check and the whole harness with real GitHub reads, so the refusal is in a step that only runs in the Worker (consumer OIDC claims, consumer run read-back, or the CodingRunner's GitHub lookups with the Worker token). The Worker maps every non-UNAVAILABLE error to one 409 body and the consumer script drops the body, so each attempt (and owner approval) told us nothing about which stage refused."
+change:
+  - "worker.ts: the 409/503 body adds rejectionStage = the thrown error constant when it matches ^[A-Z][A-Z0-9_]{2,95}(:[A-Za-z0-9_]{1,64}){0,4}$, else UNCLASSIFIED. Free text, URLs or values are never echoed."
+  - "submit-isolated-causal-verification.js: on a non-2xx response it reads at most 16 KiB, keeps only a rejectionStage matching the same pattern, and writes it to the failure receipt as workerRejectionStage (re-validated before writing)."
+  - "Tests: Worker returns ISOLATED_CONSUMER_OIDC_* for a malformed token; pattern accepts fixed constants and the runner's status/reason tokens, refuses free text; the script keeps the stage under its own key."
+not_changed:
+  - "Every check, status code, switch, claim and authority. The route stays off."
+safety:
+  paper_only: true
+  liveAuthority: NONE
+  productionMutationAllowed: false
+  aiAuthority: ZERO_AUTHORITY
+validation:
+  - "All compiled apps/autopilot test files pass; submit-isolated-causal-verification tests pass; lint 0 errors; workflow authority map PASS."
+next_action: "Review and merge, then attempt 4 under owner approval; its receipt names the refusing stage."
