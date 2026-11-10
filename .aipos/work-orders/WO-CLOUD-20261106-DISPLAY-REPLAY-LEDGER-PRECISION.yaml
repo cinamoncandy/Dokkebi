@@ -1,6 +1,6 @@
 id: WO-CLOUD-20261106-DISPLAY-REPLAY-LEDGER-PRECISION
 title: "Display-only fill replays (today's realized PnL, loss attribution) follow the ledger's 8-decimal rounding"
-status: READY_FOR_REVIEW
+status: COMPLETED
 owner: nusa-development
 repository: cinamoncandy/NUSA
 base_branch: main
@@ -26,3 +26,4 @@ verification_commands:
   - node scripts/validate-aipos-yaml.js
 review: "Draft PR. A separate non-author review is required before it leaves Draft."
 residual: "Server fill history was not read. Only the tests above were run locally; full CI is left to GitHub."
+closed_by_merge: "PR #3003 (branch claude/display-replay-round8) merged to main; it is the only PR from this branch and the only work order naming it. Status corrected by an automatic branch-to-merged-PR match on 2026-11-10; this records the merge only, not a separate production verification."

@@ -1,6 +1,6 @@
 id: WO-PAPER-20261003-ORDERBOOK-RENEW
 title: "Renew the PAPER orderbook REST snapshot before it expires so a steady feed does not fail reconciliation every 30 seconds"
-status: READY_FOR_REVIEW
+status: COMPLETED
 owner: nusa-development
 repository: cinamoncandy/NUSA
 base_branch: main
@@ -23,3 +23,4 @@ verification_commands:
   - npx tsc -p tsconfig.json
   - node --test tests/upbit-orderbook-reconciliation.test.js
 residual: "Whether this is the only cause of the HEALTHY/DEGRADED flapping is unconfirmed: the reconcile expiry is proven by test, but ticker gaps of 31-53 s (FEED_STALE) are a separate, still unexplained source. Confirmation is the live /health state and the app's feed row after a server deploy."
+closed_by_merge: "PR #2491 (branch claude/nusa-repository-j93sd8-orderbook-renew) merged to main; it is the only PR from this branch and the only work order naming it. Status corrected by an automatic branch-to-merged-PR match on 2026-11-10; this records the merge only, not a separate production verification."

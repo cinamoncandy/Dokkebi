@@ -1,6 +1,6 @@
 id: WO-PAPER-20261006-LEDGER-RECONCILIATION-DETAIL
 title: "Name what disagrees when the PAPER ledger reconciliation fails"
-status: READY_FOR_REVIEW
+status: COMPLETED
 owner: nusa-development
 repository: cinamoncandy/NUSA
 base_branch: main
@@ -25,3 +25,4 @@ verification_commands:
   - node --test tests/paper-persistence-failure-detail.test.js tests/mobile-halt-reason.test.js dist/apps/cloud/src/module10XS.test.js dist/apps/cloud/src/paperTradingExecutionLoop.requalification.test.js
   - node scripts/lint-mobile.js
 residual: "The disagreement itself is still unknown until the server runs this version and the next save fails (within seconds). It appears in the app on the PAPER tab, advanced diagnostic line."
+closed_by_merge: "PR #2523 (branch claude/ledger-reconciliation) merged to main; it is the only PR from this branch and the only work order naming it. Status corrected by an automatic branch-to-merged-PR match on 2026-11-10; this records the merge only, not a separate production verification."

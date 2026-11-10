@@ -1,6 +1,6 @@
 id: WO-PAPER-20261003-OWNER-MARKETS
 title: "Owner-decided PAPER markets (XRP first) versioned with the release and applied over the host environment"
-status: READY_FOR_REVIEW
+status: COMPLETED
 owner: nusa-development
 repository: cinamoncandy/NUSA
 base_branch: main
@@ -23,3 +23,4 @@ verification_commands:
   - node --test tests/cloud-runtime-launcher.test.js
   - npx tsc -p tsconfig.json
 residual: "Takes effect only after the server is deployed and restarted (owner standing deploy approval); a restart clears the in-memory observations so the SMA 20 warm-up restarts (about 20 minutes for XRP). Whether one-market operation removes the FEED_STALE degradation is a hypothesis to confirm on the phone afterwards."
+closed_by_merge: "PR #2499 (branch claude/paper-markets-config) merged to main; it is the only PR from this branch and the only work order naming it. Status corrected by an automatic branch-to-merged-PR match on 2026-11-10; this records the merge only, not a separate production verification."

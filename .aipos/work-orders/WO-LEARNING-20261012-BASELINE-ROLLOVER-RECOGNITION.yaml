@@ -1,6 +1,6 @@
 id: WO-LEARNING-20261012-BASELINE-ROLLOVER-RECOGNITION
 title: Restore genuine Research bootstrap across baseline rollover
-status: LOCAL_VALIDATED_PENDING_EXACT_HEAD_CI
+status: COMPLETED
 priority: P1
 risk: MEDIUM
 authority_impact: none
@@ -22,3 +22,4 @@ safety:
 validation: "Frozen implementation commitb6aa4a17774ba096963d906ad889c7db21c73e67: pnpm test1193 isolated files PASS;49 focused tests PASS; build/typecheck/validate:full/security/lint PASS,15 existing lint warnings. Earlier diagnostic run is not used as final evidence. This checkpoint changes AIPOS only; fresh remote exact-head validation required."
 runtime_observation_20261013: "09:08 KST / source4a26f767 / process and workload HEALTHY / hourly3600000 deployed via38218434560 PASS / ticks1968 / realizedPeriods10 / cyclesRecorded0 / bootstrapEXISTING_PAPER_STATE / historical PAPER_RESEARCH_LINEAGE_UNAVAILABLE. Research33 ticks,10 completed sessions; not closed-loop completion."
 next: "Run final frozen-source full suite, publish one PR, exact-head CI and independent canonical Audit/Release; deploy only current protected main with PASS CI. Actual Research connection proof required; no candidate qualification claim."
+closed_by_merge: "PR #2655 (branch codex/research-baseline-rollover-20261012) merged to main; it is the only PR from this branch and the only work order naming it. Status corrected by an automatic branch-to-merged-PR match on 2026-11-10; this records the merge only, not a separate production verification."

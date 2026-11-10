@@ -1,6 +1,6 @@
 id: WO-UI-20261003-KOREAN-CONNECTION-LABEL
 title: "HOME status capsule: plain-Korean connection state instead of English state words"
-status: READY_FOR_REVIEW
+status: COMPLETED
 owner: nusa-development
 repository: cinamoncandy/NUSA
 base_branch: main
@@ -26,3 +26,4 @@ verification_commands:
   - node scripts/lint-mobile.js
   - node --test tests/mobile-connection-label.test.js
 residual: "Needs the automatic app build after merge and an on-device look."
+closed_by_merge: "PR #2492 (branch claude/nusa-repository-j93sd8-ui-labels) merged to main; it is the only PR from this branch and the only work order naming it. Status corrected by an automatic branch-to-merged-PR match on 2026-11-10; this records the merge only, not a separate production verification."

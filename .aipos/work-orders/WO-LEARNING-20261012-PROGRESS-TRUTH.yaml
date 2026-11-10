@@ -1,6 +1,6 @@
 id: WO-LEARNING-20261012-PROGRESS-TRUTH
 title: "Make learning progress replay-safe and expose next-evaluation eligibility"
-status: SYNCHRONIZED_LOCAL_VALIDATED_PENDING_FRESH_CI
+status: COMPLETED
 priority: P1
 base_commit: 957ef5385969f4f12b1310c4519c8654f3a67aed
 implementation_branch: codex/learning-loop-progress-20261012
@@ -35,3 +35,4 @@ validation:
   unverified: "Valid independent Audit PASS, Release, merge and upgraded runtime remain required. Actual cycles0 is not completed learning."
 review_correction: "Independent review found public health projection omitted new fields. Reused existing projection with strict bounds and actual HTTP tests; no gate weakening. Initial test fixture port 0 was rejected by existing contract, corrected to a unique localhost port."
 next: "Merged Audit repair dependency synchronized without history rewrite. New exact-head validation/CI and fresh deployed-Audit verdict required; prior FAIL remains recorded."
+closed_by_merge: "PR #2622 (branch codex/learning-loop-progress-20261012) merged to main; it is the only PR from this branch and the only work order naming it. Status corrected by an automatic branch-to-merged-PR match on 2026-11-10; this records the merge only, not a separate production verification."

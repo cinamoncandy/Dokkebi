@@ -1,6 +1,6 @@
 id: WO-PAPER-20261005-RESEARCH-REFRESH-MEMORY
 title: "Research snapshot refresh checks available memory, with a 350 MB floor"
-status: READY_FOR_REVIEW
+status: COMPLETED
 owner: nusa-development
 repository: cinamoncandy/NUSA
 base_branch: main
@@ -24,3 +24,4 @@ verification_commands:
   - node --test dist/apps/cloud/src/researchSnapshotRefresher.test.js
   - node scripts/validate-aipos-yaml.js && node scripts/validate-aipos-drift.js
 residual: "That memory is why the learning data is missing is an inference from the diagnosis plus the code, not observed on the host (the diagnosis account cannot read the service log). The refresh only runs when the closed-learning bootstrap reports it is waiting for a snapshot. After the next deploy, check the host diagnosis and the app's learning line. Real memory headroom on the 1 GB host during a refresh is unmeasured; a refresh that gets killed would be recorded as FAILED and retried after 6 h. The change takes effect only after the next PAPER deploy."
+closed_by_merge: "PR #2515 (branch claude/research-refresh-memory) merged to main; it is the only PR from this branch and the only work order naming it. Status corrected by an automatic branch-to-merged-PR match on 2026-11-10; this records the merge only, not a separate production verification."

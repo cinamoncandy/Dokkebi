@@ -1,6 +1,6 @@
 id: WO-UI-20261025-BACKGROUND-CACHE-RESUME
 title: "Flush the latest PAPER display snapshot before mobile background suspension"
-status: IMPLEMENTED_PENDING_VALIDATION
+status: COMPLETED
 owner: nusa-development
 repository: cinamoncandy/NUSA
 base_branch: main
@@ -25,3 +25,4 @@ verification_commands:
   - npx tsc -p apps/mobile/tsconfig.json --noEmit
   - node scripts/lint-mobile.js
 residual: "Physical Galaxy background/resume feel remains HUMAN_ENVIRONMENT_ONLY after the governed app build reaches the device."
+closed_by_merge: "PR #2876 (branch fix/mobile-background-cache-resume) merged to main; it is the only PR from this branch and the only work order naming it. Status corrected by an automatic branch-to-merged-PR match on 2026-11-10; this records the merge only, not a separate production verification."

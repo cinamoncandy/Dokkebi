@@ -1,6 +1,6 @@
 id: WO-PAPER-20261005-ENABLE-RESEARCH-COLLECTION
 title: "Owner decision: run the continuous research experiments (learning data collection) on the PAPER server"
-status: READY_FOR_REVIEW
+status: COMPLETED
 owner: nusa-development
 repository: cinamoncandy/NUSA
 base_branch: main
@@ -24,3 +24,4 @@ verification_commands:
   - node --test tests/cloud-runtime-launcher.test.js
   - node --test tests/mobile-research-progress.test.js tests/research-experiment-composition.test.js
 residual: "Resource effect on the 954 MB host is unmeasured. The runtime holds the experiments in the main process: backfill fetches about 16 thousand public 1-minute candles at start and a backtest runs every 30 minutes. After the deploy check the host diagnosis (memory, restarts) and the HOME learning line; if memory pressure shows, the file can be turned off in a reviewed release. Collecting the first 11 days of history takes time before the first experiment can run unless the backfill fills it immediately."
+closed_by_merge: "PR #2520 (branch claude/enable-research-collection) merged to main; it is the only PR from this branch and the only work order naming it. Status corrected by an automatic branch-to-merged-PR match on 2026-11-10; this records the merge only, not a separate production verification."

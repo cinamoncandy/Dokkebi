@@ -1,6 +1,6 @@
 id: WO-RESEARCH-20261003-CANDLE-BACKFILL
 title: "Fill the research candle store from Upbit public 1-minute candles so the first experiment does not wait 11 live days"
-status: READY_FOR_REVIEW
+status: COMPLETED
 owner: nusa-development
 repository: cinamoncandy/NUSA
 base_branch: main
@@ -25,3 +25,4 @@ verification_commands:
   - npx tsc -p tsconfig.json
   - node --test tests/research-candle-backfill.test.js tests/research-experiment-composition.test.js tests/research-candle-collector.test.js tests/research-candle-store.test.js
 residual: "History is exchange candles while later candles are ticker-derived (a seam; minutes without trades are absent upstream). Verified against injected pages only; the first real run happens after a server deploy (owner standing deploy approval) and is visible in the app's research row and the [research-backfill] log lines."
+closed_by_merge: "PR #2490 (branch claude/nusa-repository-j93sd8-candle-backfill) merged to main; it is the only PR from this branch and the only work order naming it. Status corrected by an automatic branch-to-merged-PR match on 2026-11-10; this records the merge only, not a separate production verification."

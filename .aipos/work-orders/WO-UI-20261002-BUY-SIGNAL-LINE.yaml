@@ -1,6 +1,6 @@
 id: WO-UI-20261002-BUY-SIGNAL-LINE
 title: "HOME BUY-signal row: how often the strategy said BUY today and how many did not become an order"
-status: READY_FOR_REVIEW
+status: COMPLETED
 owner: nusa-development
 repository: cinamoncandy/NUSA
 base_branch: main
@@ -26,3 +26,4 @@ verification_commands:
   - node scripts/lint-mobile.js
   - node --test tests/mobile-buy-signal-line.test.js
 residual: "Counts live in memory, so a runtime restart restarts them (the row states the start time), and they are per tick of the canonical decision, not per market. Deploy needs owner approval; until a build with the counters runs on the server the row reads not reported."
+closed_by_merge: "PR #2480 (branch claude/nusa-repository-j93sd8-buy-signal-line) merged to main; it is the only PR from this branch and the only work order naming it. Status corrected by an automatic branch-to-merged-PR match on 2026-11-10; this records the merge only, not a separate production verification."

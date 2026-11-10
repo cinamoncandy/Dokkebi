@@ -1,6 +1,6 @@
 id: WO-LEARNING-20261102-PERIOD-WAITING
 title: "Learning verdict: say why the open PAPER period has not closed (periodWaitingFor) and carry its observation counts"
-status: READY_FOR_REVIEW
+status: COMPLETED
 created: 2026-11-02
 trigger: "The 2026-11-02 host diagnosis showed the open learning period 47 hours old with 990 observations, 0 fills and rollover WAITING_FOR_CANONICAL_BOUNDARY (one PAPER position held since 2026-10-31 16:28 UTC), while the verdict only said CANDLES_STALE / NO_DEPLOYABLE_CANDIDATE. docs/DESIGN_LEARNING_STALL_NO_REALIZED_TRADE.md option A."
 change:
@@ -19,3 +19,4 @@ validation:
   - "tsc clean; learningLoopVerdict.test (8) and /health tests pass; AIPOS validators pass."
 unverified: "The values on the host: the observation status counts need PR #2983 released, and the new verdict fields need a server release."
 next: "After a release, read periodWaitingFor and openPeriod in the diagnosis learning readout; then the owner chooses between the multi-market baseline and a time-stop exit (design note options B and D)."
+closed_by_merge: "PR #2983 merged to main; its title matches this work order (compared by hand 2026-11-10). This records the merge only, not a separate production verification."

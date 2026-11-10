@@ -1,7 +1,7 @@
 version: 1
 id: WO-ISSUE-1543-RESEARCH-REPLAY-SEGMENTED-PERSISTENCE
 title: "Bound Research replay persistence growth without weakening immutable evidence"
-status: READY_FOR_REVIEW
+status: COMPLETED
 owner: nusa-development
 repository: cinamoncandy/NUSA
 issue: 1543
@@ -76,3 +76,4 @@ known_environment_limitations:
   - "The low-memory Oracle development host has ~954 MiB RAM; a full-repository local tsc run exceeded the default Node heap before test execution. Targeted strict typecheck passed; exact-head CI remains the required full-project validation boundary."
   - "Converged-head clean-dist validation ran against a full project build in an isolated worktree; apps/mobile react type errors are worktree-local missing apps/mobile/node_modules artifacts and remain PENDING_EXACT_HEAD_CI."
 next_permitted_action: "Require fresh exact-head CI on the current-main reconvergence; on PASS remain READY_FOR_REVIEW until independent Audit/Release, then deploy and prove successful Research workload/restart recovery. No direct merge, downgrade, or gate bypass."
+closed_by_merge: "PR #1842 (branch fix/research-replay-segmented-persistence-1543) merged to main; it is the only PR from this branch and the only work order naming it. Status corrected by an automatic branch-to-merged-PR match on 2026-11-10; this records the merge only, not a separate production verification."

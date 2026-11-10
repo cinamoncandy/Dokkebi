@@ -1,6 +1,6 @@
 id: WO-20260927-AI-PROVIDER-RELIABILITY
 title: "Provider-neutral AI reliability taxonomy and circuit recovery"
-status: READY_FOR_REVIEW
+status: COMPLETED
 owner: nusa-ai-platform
 repository: cinamoncandy/NUSA
 issue: 1997
@@ -46,3 +46,4 @@ safety:
   aiAuthority: ZERO_AUTHORITY
   fail_closed: true
 next_permitted_action: "Run fresh exact-head CI, resolve any findings, then independent Audit and canonical Release."
+closed_by_merge: "PR #2336 (branch feat/1997-provider-reliability) merged to main; it is the only PR from this branch and the only work order naming it. Status corrected by an automatic branch-to-merged-PR match on 2026-11-10; this records the merge only, not a separate production verification."

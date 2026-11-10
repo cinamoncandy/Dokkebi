@@ -3,6 +3,7 @@ import type { SqliteDatabase } from "./index";
 
 const TABLE = "research_closed_candles";
 const MATERIAL_TABLE = "research_dataset_material";
+const ABSENCE_TABLE = "research_candle_absence";
 const MARKET = /^KRW-[A-Z0-9-]+$/;
 
 /**
@@ -40,6 +41,26 @@ function materialDigest(material: Omit<ResearchDatasetMaterial, "storeContentSha
   return createHash("sha256").update(JSON.stringify(normalized), "utf8").digest("hex");
 }
 
+/**
+ * A run of closes the exchange itself reported as having no candle: one Upbit page (fingerprinted in
+ * `evidenceFingerprintSha256`) listed `beforeCloseMs` and then, with nothing in between, `afterCloseMs`
+ * (or ended at an exclusive `to` bound with `afterCloseMs` stored). Upbit omits a minute with no trades.
+ * This is not our own data loss: it is recorded only from a page that spans the run, and only while
+ * both bounding candles are stored and nothing inside the run is.
+ */
+export interface ResearchCandleAbsence {
+  readonly market: string;
+  readonly intervalMs: number;
+  readonly firstAbsentCloseMs: number;
+  readonly lastAbsentCloseMs: number;
+  readonly beforeCloseMs: number;
+  readonly afterCloseMs: number;
+  readonly evidenceFingerprintSha256: string;
+  readonly observedAt: string;
+}
+
+const absenceDigest = (a: ResearchCandleAbsence): string => createHash("sha256").update(JSON.stringify([a.market, a.intervalMs, a.firstAbsentCloseMs, a.lastAbsentCloseMs, a.beforeCloseMs, a.afterCloseMs, a.evidenceFingerprintSha256, a.observedAt]), "utf8").digest("hex");
+
 export class ResearchCandleStoreError extends Error {
   public constructor(readonly code: string, message: string) {
     super(message);
@@ -75,6 +96,53 @@ export class SqliteResearchCandleStore {
     this.db.connection.exec(`CREATE TABLE IF NOT EXISTS ${TABLE} (market TEXT NOT NULL, interval_ms INTEGER NOT NULL, close_time_ms INTEGER NOT NULL, open REAL NOT NULL, high REAL NOT NULL, low REAL NOT NULL, close REAL NOT NULL, checksum TEXT NOT NULL, PRIMARY KEY (market, interval_ms, close_time_ms))`);
     this.db.connection.exec(`CREATE TABLE IF NOT EXISTS ${MATERIAL_TABLE} (market TEXT NOT NULL, interval_ms INTEGER NOT NULL, first_close_time_ms INTEGER NOT NULL, last_close_time_ms INTEGER NOT NULL, candle_count INTEGER NOT NULL, store_content_sha256 TEXT NOT NULL, source TEXT NOT NULL, source_fingerprint TEXT, evidence_fingerprint_sha256 TEXT, missing_buckets INTEGER NOT NULL, incomplete_buckets INTEGER NOT NULL, rejected_observations INTEGER NOT NULL, material_sha256 TEXT NOT NULL, PRIMARY KEY (market, interval_ms, first_close_time_ms, last_close_time_ms, store_content_sha256))`);
     try { this.db.connection.exec(`ALTER TABLE ${TABLE} ADD COLUMN volume REAL`); } catch { /* existing schema already migrated */ }
+    this.db.connection.exec(`CREATE TABLE IF NOT EXISTS ${ABSENCE_TABLE} (market TEXT NOT NULL, interval_ms INTEGER NOT NULL, first_absent_close_ms INTEGER NOT NULL, last_absent_close_ms INTEGER NOT NULL, before_close_ms INTEGER NOT NULL, after_close_ms INTEGER NOT NULL, evidence_fingerprint_sha256 TEXT NOT NULL, observed_at TEXT NOT NULL, checksum TEXT NOT NULL, PRIMARY KEY (market, interval_ms, first_absent_close_ms, last_absent_close_ms))`);
+  }
+
+  /**
+   * Records one exchange-confirmed run of absent closes. Returns false (and writes nothing) when the run is
+   * already recorded. Throws before writing when a bounding candle is not stored, any close inside the run is
+   * stored, or a different record already exists for the same run.
+   */
+  public recordAbsence(absence: ResearchCandleAbsence): boolean {
+    const a = absence;
+    if (!MARKET.test(a.market)) throw new ResearchCandleStoreError("INVALID_MARKET", "research candle market is invalid");
+    const i = a.intervalMs;
+    const aligned = (ms: number) => Number.isSafeInteger(ms) && ms > 0 && ms % i === 0;
+    if (!Number.isSafeInteger(i) || i < 1_000 || i > 86_400_000 || ![a.firstAbsentCloseMs, a.lastAbsentCloseMs, a.beforeCloseMs, a.afterCloseMs].every(aligned)
+      || a.firstAbsentCloseMs > a.lastAbsentCloseMs || a.beforeCloseMs !== a.firstAbsentCloseMs - i || a.afterCloseMs !== a.lastAbsentCloseMs + i
+      || !/^[a-f0-9]{64}$/.test(a.evidenceFingerprintSha256) || !Number.isFinite(Date.parse(a.observedAt))) throw new ResearchCandleStoreError("INVALID_ABSENCE", "research candle absence is invalid");
+    return this.db.transaction(() => {
+      const stored = this.read(a.market, i, a.beforeCloseMs, a.afterCloseMs).map((candle) => candle.closeTimeMs);
+      if (stored.length !== 2 || stored[0] !== a.beforeCloseMs || stored[1] !== a.afterCloseMs) throw new ResearchCandleStoreError("ABSENCE_NOT_BOUNDED", "an absence must sit between two stored candles with nothing stored inside it");
+      const record: ResearchCandleAbsence = Object.freeze({ market: a.market, intervalMs: i, firstAbsentCloseMs: a.firstAbsentCloseMs, lastAbsentCloseMs: a.lastAbsentCloseMs, beforeCloseMs: a.beforeCloseMs, afterCloseMs: a.afterCloseMs, evidenceFingerprintSha256: a.evidenceFingerprintSha256, observedAt: a.observedAt });
+      const existing = this.db.connection.prepare(`SELECT 1 FROM ${ABSENCE_TABLE} WHERE market = ? AND interval_ms = ? AND first_absent_close_ms = ? AND last_absent_close_ms = ?`).get(a.market, i, a.firstAbsentCloseMs, a.lastAbsentCloseMs);
+      // The first proof of a run is kept; a later page proving the same run again is a no-op.
+      if (existing != null) return false;
+      const overlap = this.db.connection.prepare(`SELECT 1 FROM ${ABSENCE_TABLE} WHERE market = ? AND interval_ms = ? AND first_absent_close_ms <= ? AND last_absent_close_ms >= ?`).get(a.market, i, a.lastAbsentCloseMs, a.firstAbsentCloseMs);
+      if (overlap != null) throw new ResearchCandleStoreError("ABSENCE_CONFLICT", "a different absence run already overlaps this one");
+      this.db.connection.prepare(`INSERT INTO ${ABSENCE_TABLE} (market, interval_ms, first_absent_close_ms, last_absent_close_ms, before_close_ms, after_close_ms, evidence_fingerprint_sha256, observed_at, checksum) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`)
+        .run(a.market, i, a.firstAbsentCloseMs, a.lastAbsentCloseMs, a.beforeCloseMs, a.afterCloseMs, a.evidenceFingerprintSha256, a.observedAt, absenceDigest(record));
+      return true;
+    });
+  }
+
+  /**
+   * Absence runs overlapping [fromCloseMs, toCloseMs], oldest first. Verifies each checksum and that the run is
+   * still bounded by stored candles with nothing stored inside it; a run that no longer holds is not returned.
+   */
+  public listAbsence(market: string, intervalMs: number, fromCloseMs: number, toCloseMs: number): readonly ResearchCandleAbsence[] {
+    if (!MARKET.test(market)) throw new ResearchCandleStoreError("INVALID_MARKET", "research candle market is invalid");
+    if (!Number.isSafeInteger(fromCloseMs) || !Number.isSafeInteger(toCloseMs) || toCloseMs < fromCloseMs) throw new ResearchCandleStoreError("INVALID_WINDOW", "research candle window is invalid");
+    const rows = this.db.connection.prepare(`SELECT first_absent_close_ms AS firstAbsentCloseMs, last_absent_close_ms AS lastAbsentCloseMs, before_close_ms AS beforeCloseMs, after_close_ms AS afterCloseMs, evidence_fingerprint_sha256 AS evidenceFingerprintSha256, observed_at AS observedAt, checksum FROM ${ABSENCE_TABLE} WHERE market = ? AND interval_ms = ? AND last_absent_close_ms >= ? AND first_absent_close_ms <= ? ORDER BY first_absent_close_ms ASC`).all(market, intervalMs, fromCloseMs, toCloseMs) as Array<Record<string, unknown>>;
+    const out: ResearchCandleAbsence[] = [];
+    for (const row of rows) {
+      const record: ResearchCandleAbsence = Object.freeze({ market, intervalMs, firstAbsentCloseMs: Number(row.firstAbsentCloseMs), lastAbsentCloseMs: Number(row.lastAbsentCloseMs), beforeCloseMs: Number(row.beforeCloseMs), afterCloseMs: Number(row.afterCloseMs), evidenceFingerprintSha256: String(row.evidenceFingerprintSha256), observedAt: String(row.observedAt) });
+      if (absenceDigest(record) !== String(row.checksum)) throw new ResearchCandleStoreError("ABSENCE_CHECKSUM_MISMATCH", "research candle absence checksum mismatch");
+      const stored = this.read(market, intervalMs, record.beforeCloseMs, record.afterCloseMs).map((candle) => candle.closeTimeMs);
+      if (stored.length === 2 && stored[0] === record.beforeCloseMs && stored[1] === record.afterCloseMs) out.push(record);
+    }
+    return Object.freeze(out);
   }
 
   /** Returns how many candles were newly recorded. Throws before writing anything if any candle is invalid or conflicts. */

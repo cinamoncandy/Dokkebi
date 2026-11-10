@@ -1,6 +1,6 @@
 id: WO-UI-20261006-TOUCH-VISUAL-CALM
 title: "Re-key the Android touch acceptance gate on the calm-v1 screens"
-status: READY_FOR_REVIEW
+status: COMPLETED
 owner: nusa-development
 repository: cinamoncandy/NUSA
 base_branch: main
@@ -21,3 +21,4 @@ rollback: "Revert the change."
 verification_commands:
   - node --test tests/mobile-product-v5.test.js tests/android-release-pipeline-hardening.test.js
 residual: "The emulator run itself only executes in CI (touch-visual); the failing run's UI dump confirmed the app renders now-screen and the calm tab bar."
+closed_by_merge: "PR #2550 (branch claude/fix-touch-visual-calm) merged to main; it is the only PR from this branch and the only work order naming it. Status corrected by an automatic branch-to-merged-PR match on 2026-11-10; this records the merge only, not a separate production verification."

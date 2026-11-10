@@ -95,17 +95,16 @@ test("same-device retry supersedes a pending request before TTL without preservi
   } finally { db.close(); }
 });
 
-test("same-device retry expires an approved request so its old exchange cannot issue a session", () => {
+test("an unauthenticated same-device start cannot cancel an owner-approved request", () => {
   const { db, service } = fixture();
   try {
     const now = 2_000_000;
     const approved = service.startPairing(DEVICE, now);
     assert.equal(service.approvePairing({ actorUserId: OWNER.userId, actorScopes: OWNER.scopes, targetUserId: "mobile-user", requestId: approved.requestId, verificationCode: approved.verificationCode, now: now + 1 }), true);
 
-    const replacement = service.startPairing(DEVICE, now + 2);
-    assert.equal(service.pairingStatus(approved.requestId, DEVICE, now + 2)?.state, "EXPIRED");
-    assert.equal(service.exchangePairing(approved.requestId, DEVICE, now + 2), undefined);
-    assert.equal(service.pairingStatus(replacement.requestId, DEVICE, now + 2)?.state, "PENDING");
+    assert.throws(() => service.startPairing(DEVICE, now + 2), /pairing request limit reached/);
+    assert.equal(service.pairingStatus(approved.requestId, DEVICE, now + 2)?.state, "APPROVED");
+    assert.ok(service.exchangePairing(approved.requestId, DEVICE, now + 2), "the approved request can still be exchanged by its own client");
   } finally { db.close(); }
 });
 

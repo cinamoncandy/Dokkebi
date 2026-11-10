@@ -1,7 +1,7 @@
 version: 1
 id: WO-20260908-RESEARCH-SOURCE-COMMIT-MISMATCH
 title: "Fail closed on conflicting Research source commit identities"
-status: LOCAL_VALIDATED_CI_PENDING
+status: COMPLETED
 owner: nusa
 repository: cinamoncandy/NUSA
 base_branch: main
@@ -53,3 +53,4 @@ validation:
   diff_check: PASS
 observed_gap: "The Oracle PAPER host exposed different values for NUSA_SOURCE_COMMIT and NUSA_SOURCE_COMMIT_SHA while the Research wrapper preferred the latter. Runtime trading mode remained PAPER-only; this work order changes repository fail-closed behavior only."
 next: "Run focused and repository contract validation locally, then require exact-head protected CI before merge. Production environment reconciliation remains a separate human/environment operation."
+closed_by_merge: "PR #1778 (branch fix/research-source-commit-mismatch) merged to main; it is the only PR from this branch and the only work order naming it. Status corrected by an automatic branch-to-merged-PR match on 2026-11-10; this records the merge only, not a separate production verification."

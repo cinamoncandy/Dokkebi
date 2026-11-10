@@ -1,6 +1,6 @@
 id: WO-UI-20261002-LAUNCH-GRACE
 title: "Keep the PAPER setup notice quiet for 3 seconds after app launch while the session restore starts"
-status: READY_FOR_REVIEW
+status: COMPLETED
 owner: nusa-development
 repository: cinamoncandy/NUSA
 base_branch: main
@@ -25,3 +25,4 @@ verification_commands:
   - node scripts/lint-mobile.js
   - node --test tests/mobile-session-display.test.js
 residual: "Cause not reproduced on a device. Needs a new app build to take effect; install is the owner's. If the notice still flashes longer than 3 s the window may need widening."
+closed_by_merge: "PR #2481 (branch claude/nusa-repository-j93sd8-cold-start) merged to main; it is the only PR from this branch and the only work order naming it. Status corrected by an automatic branch-to-merged-PR match on 2026-11-10; this records the merge only, not a separate production verification."
