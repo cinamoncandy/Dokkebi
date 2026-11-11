@@ -4,7 +4,7 @@ status: IN_PROGRESS
 owner: nusa-development
 repository: cinamoncandy/NUSA
 base_branch: main
-base_commit: 3da5da7b27b2542811092c1fdd071a0e81fc6ad1
+base_commit: 7f8de2167dcef9d67149d021837ce013ae472a8f
 branch: fix/validator-evidence-gate-2760
 issue: 2760
 authority_impact: release_governance_fail_closed
@@ -677,3 +677,25 @@ latest_diff_partition_repair_20261111:
   remote_state_at_prepublication: "At the final prepublication read, protected main and PR base were 4ed922c2947500780fc26de0c67eec8f8c11d523, PR #2772 was Draft at d5b4e0f7ecc6ad078ea5bece8697ae6987dc8e7f, and this validated successor was local only."
   next: "Publish this validated tree as a normal non-force successor to the existing branch. Then wait for exact-head CI/companions and fresh non-author review. Only after required independent validation may Audit run through the canonical gated path; no author approval, direct main merge, or workflow dispatch."
   safety: PAPER_ONLY_LIVE_NONE_PRODUCTION_MUTATION_FALSE_REAL_ORDER_FALSE_REAL_TRANSFER_FALSE_AI_ZERO_AUTHORITY_FAIL_CLOSED
+
+latest_main_sync_20261111:
+  issue: 2760
+  pull_request: 2772
+  branch: fix/validator-evidence-gate-2760
+  protected_main_sha: 7f8de2167dcef9d67149d021837ce013ae472a8f
+  pr_head_before_sync: c473d211ee89e72a9c9f43a580b6d3230902d2a7
+  local_merge_commit_before_aipos_checkpoint: c2fad4b7e67dbf511dae5ba4a975a51e8a4a45ef
+  merge: "Current protected main was merged into the existing PR head without conflicts; no force update or remote write has occurred."
+  diff_partition_against_current_main:
+    status: PASS
+    changed_files: 49
+    total_chars_final_candidate: 369994
+    chunks: "AIPOS 132293; Autopilot runtime/tests 169562; workflow/script/integration 68139; exact coverage 369994."
+    limits: "180000 characters per chunk; maximum 3 chunks / 540000 characters total; original per-input limit unchanged."
+  current_merge_validation: "PASS: preflight, build, typecheck, 1345 isolated test files, all constituent validate:full checks, AIPOS provenance, security gate (0 raw high/critical, 0 unmitigated, 0 secrets), and lint (0 errors, 48 warnings). The composite pnpm validate:full wrapper could not bootstrap because the sandbox blocks its write to /home/agent/.local/share/pnpm."
+  publication: PENDING
+  exact_head_ci: PENDING
+  fresh_non_author_validator: PENDING
+  audit_release_merge: NOT_STARTED
+  next: "Finish local validation on the latest-main merge tree, then re-fetch protected main and PR head. Publish only as a normal fast-forward successor to existing branch fix/validator-evidence-gate-2760 if both refs still match; keep Draft and all threads unresolved. Require exact-head workflows and a fresh non-author Validator before independent Audit or Release."
+  safety: PAPER_ONLY_LIVE_NONE_PRODUCTION_MUTATION_FALSE_REAL_ORDER_FALSE_REAL_TRANSFER_FALSE_AI_ZERO_AUTHORITY_FAIL_CLOSED_WIP_MAX_2

@@ -4,36 +4,38 @@ current_autopilot_validator_diff_partition_20261111:
   issue: 2760
   pull_request: 2772
   branch: fix/validator-evidence-gate-2760
-  protected_main_sha: 4ed922c2947500780fc26de0c67eec8f8c11d523
-  predecessor_head: d5b4e0f7ecc6ad078ea5bece8697ae6987dc8e7f
-  root_cause: "Audit run 43005786185 rejected its immutable base..head input at the 180000-character whole-diff cap before Validator or Audit ran; that failed predecessor comparison was 327142 characters across 46 files. Main merge ancestry is outside the exact comparison."
+  protected_main_sha: 7f8de2167dcef9d67149d021837ce013ae472a8f
+  predecessor_head: c473d211ee89e72a9c9f43a580b6d3230902d2a7
+  local_merge_parent: c2fad4b7e67dbf511dae5ba4a975a51e8a4a45ef
+  root_cause: "Audit run 43005786185 rejected its immutable base..head input at the 180000-character whole-diff cap before Validator or Audit ran; that failed predecessor comparison was 327142 characters across 46 files. Main-merge ancestry is outside the exact comparison."
   repair: "Keep 180000 characters per model input; partition only complete diff-file blocks with exact changed-file metadata binding; hard cap 3 chunks / 540000 total; require once-only file identity and exact full character coverage; fail closed on every missing, duplicate, oversized, or failed segment; aggregate only after all segments and exact PR/base/CI read-back."
   observed_partition:
-    aipos_chars: 130018
+    aipos_chars: 132293
     autopilot_chars: 169562
     workflow_script_integration_chars: 68139
-    exact_coverage_chars: 367719
+    exact_coverage_chars: 369994
     changed_files: 49
-    base_sha: 4ed922c2947500780fc26de0c67eec8f8c11d523
-    candidate_head: "staged successor tree; commit SHA pending"
+    base_sha: 7f8de2167dcef9d67149d021837ce013ae472a8f
+    candidate_head: "AIPOS checkpoint and validation commit pending; partition measured on current candidate tree."
   local_validation:
-    exact_compare_partition: PASS
-    typescript_compile: PASS
-    focused_tests: PASS
+    exact_compare_partition: "PASS (369994 characters across 49 changed files; exact coverage in 3 chunks on the current candidate tree)."
+    predecessor_full_suite: "PASS on c473d211ee89e72a9c9f43a580b6d3230902d2a7; historical after latest-main merge."
+    current_merge_suite: "PASS (1345 isolated test files)."
+    preflight: PASS
     build: PASS
     typecheck: PASS
-    full_suite: "PASS (1345 isolated test files; existing same-version Electron binary supplied through ELECTRON_OVERRIDE_DIST_PATH because network download failed)."
-    validate_full: PASS
-    security_gate: "PASS (0 unmitigated findings, 0 secrets)."
-    lint: "PASS (0 errors, 48 repository warnings; no changed-file warning)."
-    aipos: "PASS (provenance, strict YAML, drift, conformance, generated current truth)."
-    diff_check: PASS
+    validate_full_equivalent: "PASS; every constituent architecture, safety, AIPOS drift, conformance, and inputs check passed individually. The composite pnpm wrapper could not bootstrap because this sandbox blocks its write to /home/agent/.local/share/pnpm."
+    security_gate: "PASS (raw high/critical 0, unmitigated 0, secrets 0)."
+    lint: "PASS (0 errors, 48 repository warnings)."
+    aipos_provenance: PASS
   remote:
-    pr_state_at_predecessor: DRAFT
-    predecessor_ci: "43016532388 failed only at coverage-core-2 because CURRENT_TRUTH.md counted 579/550 after main had 578/549; the generated fix is in this successor."
-    code_publication: PENDING
+    pr_state_before_sync: OPEN_DRAFT_MERGEABLE
+    pr_head_before_sync: c473d211ee89e72a9c9f43a580b6d3230902d2a7
+    main_advanced_to: 7f8de2167dcef9d67149d021837ce013ae472a8f
+    predecessor_ci: "43021380543 and five required companions passed on c473d211; historical after latest-main merge."
+    code_publication: PENDING_NORMAL_FAST_FORWARD
     exact_head_ci: PENDING
     fresh_non_author_validator: PENDING
     audit_release_merge: NOT_STARTED
-  next: "At this prepublication checkpoint the PR is Draft at d5b4e0f7 and all local gates pass. Publish this verified tree only through a normal non-force update of the existing branch; then require fresh exact-head CI/companions and independent non-author validation before Audit or Release."
+  next: "Finish local validation on the latest-main merge successor, re-fetch main and PR #2772, and publish only with a normal fast-forward if the expected refs still match. Then require fresh exact-head CI/companions and independent non-author validation before Audit or Release."
   safety: PAPER_ONLY_LIVE_NONE_PRODUCTION_MUTATION_FALSE_REAL_ORDER_FALSE_REAL_TRANSFER_FALSE_AI_ZERO_AUTHORITY_FAIL_CLOSED_WIP_MAX_2
