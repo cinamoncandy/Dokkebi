@@ -383,6 +383,13 @@ export function tickErrorClass(error: unknown): string {
     const code = typeof rawCode === "string" ? rawCode.replace(/[^A-Za-z0-9]+/g, "_").toUpperCase().slice(0, 64) : "";
     if (/^(ERR_[A-Z0-9_]{1,56}|E[A-Z0-9]{2,20})$/.test(code)) return code;
     const name = typeof error.name === "string" ? error.name.replace(/[^A-Za-z0-9]+/g, "_").toUpperCase().slice(0, 64) : "";
+    // Most NUSA failures are a plain Error whose whole message is a fixed upper-case constant (e.g.
+    // new Error("RESEARCH_MANIFEST_UNAVAILABLE")). A bare ERROR name told the 2026-11-11 08:29 KST TICK_ERROR nothing.
+    // Only a message that is entirely such a constant is published; any other text is never echoed.
+    const message = typeof error.message === "string" ? error.message : "";
+    if ((name === "ERROR" || name === "TYPEERROR" || name === "RANGEERROR") && /^[A-Z][A-Z0-9_]{2,63}$/.test(message)) {
+      return name === "ERROR" ? message : `${name}_${message}`.slice(0, 64);
+    }
     return CODE.test(name) ? name : "UNKNOWN_ERROR";
   } catch { return "UNKNOWN_ERROR"; }
 }

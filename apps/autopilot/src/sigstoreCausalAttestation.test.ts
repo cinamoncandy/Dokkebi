@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
+import nodeCrypto from "node:crypto";
 import test from "node:test";
 import { verifyCausalProducerAttestation, verifyIsolatedCausalVerificationAttestation } from "./sigstoreCausalAttestation";
 
@@ -69,4 +70,24 @@ test("the same genuine bundle is still refused for any other source run, sha or 
   }
   // and it can never pass as a production CI producer attestation: the pinned CI workflow identity rejects its signer
   await assert.rejects(verifyCausalProducerAttestation(bundle, { repository: "cinamoncandy/NUSA", ...genuineIsolatedSource }), { message: "CAUSAL_ATTESTATION_SIGNER_REJECTED" });
+});
+
+test("a genuine bundle verifies under workerd's ECDSA rule that a digest must be named (attempt 8, consumer run 42917501021)", async () => {
+  // workerd returns false for crypto.verify(undefined, data, ecKey, sig); Node silently picks the curve's digest.
+  // Emulating workerd here reproduces the production TLOG_INCLUSION_PROMISE_ERROR without the explicit digest default.
+  const target = nodeCrypto as unknown as { verify: typeof nodeCrypto.verify };
+  const original = target.verify;
+  target.verify = function workerdLikeVerify(algorithm: unknown, data: unknown, key: unknown, signature: unknown) {
+    const ec = typeof key === "object" && key !== null && (key as { asymmetricKeyType?: string }).asymmetricKeyType === "ec";
+    if (ec && (algorithm === undefined || algorithm === null)) return false;
+    return (original as unknown as (...args: unknown[]) => boolean)(algorithm, data, key, signature);
+  } as unknown as typeof nodeCrypto.verify;
+  try {
+    const bundle = JSON.parse(readFileSync(genuineIsolatedPath, "utf8"));
+    const verified = await verifyIsolatedCausalVerificationAttestation(bundle, genuineIsolatedSource);
+    assert.equal(verified.source.runId, genuineIsolatedSource.runId);
+  } finally {
+    target.verify = original;
+  }
+  assert.equal(target.verify, original, "the shared verify function is restored");
 });
