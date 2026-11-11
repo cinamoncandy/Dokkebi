@@ -5,7 +5,7 @@ current_nusa_forge_v15_claim_binding_20261110:
   protected_main_sha_at_initial_verification: 91959182a10abcf6176cc5b40304838724a01fa5
   latest_protected_main_sha_integrated: ad0085fd994f68dd827ed52a022a50ad84057a13
   pr_head_before_local_successor: ad669b83bff7ef3297561a1984770df45a853539
-  status: LOCAL_SUCCESSOR_VALIDATED_PENDING_EXACT_HEAD_CI
+  status: RESOLVE_CURRENT_PR_HEAD_AND_CI
   implementation: "Bound new atomic WIP receipts to task ID, protected main SHA, task snapshot digest, lease owner identity, and expiry; strengthened scheduled claim revalidation and Codex pre-run verification; added exact-identity cleanup when persistent admission fails or returns ambiguously."
   focused_tests: PASS
   build: PASS
@@ -17,12 +17,12 @@ current_nusa_forge_v15_claim_binding_20261110:
   operational_wip_claims: UNKNOWN
   writer_lease: UNKNOWN
   actual_runner_e2e: NOT_RUN
-  exact_head_ci: NOT_RUN_FOR_LOCAL_SUCCESSOR
+  exact_head_ci: CHECK_CURRENT_GITHUB_HEAD
   independent_review: PENDING
   formal_validator: PENDING
   audit: PENDING
   release_authorization: NOT_AUTHORIZED
-  next: "Validate the local successor integrating ad0085fd; refresh main and PR head before any separately permitted publication. Obtain fresh exact-head CI and independent dispositions; do not dispatch or self-approve."
+  next: "Resolve current PR head and its exact-head CI from GitHub; obtain independent dispositions for unresolved threads. Do not dispatch or self-approve."
   published_predecessor_20261111: "PR #2039 head a283a73aa9fa177d4320496328e858017e3ac0a0 was observed published with 16 successful and 3 skipped checks; that evidence is for the predecessor only."
-  successor_gate_20261111: "Local integration of main ad0085fd passed 82 focused tests and 1343 isolated test files; build, typecheck, validate:full, security, lint and AIPOS checks pass. No current successor CI, reviewer disposition, Audit or Release is claimed."
+  successor_gate_20261111: "Integration of main ad0085fd passed 82 focused tests and 1343 isolated test files; build, typecheck, validate:full, security, lint and AIPOS checks pass. Resolve the actual current PR head and CI separately; no reviewer disposition, Audit or Release is claimed."
   safety: "PAPER_ONLY; liveAuthority=NONE; productionMutationAllowed=false; realOrderAuthority=false; realTransferAuthority=false; aiAuthority=ZERO_AUTHORITY; FAIL-CLOSED"

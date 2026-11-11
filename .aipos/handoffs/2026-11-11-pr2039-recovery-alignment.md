@@ -4,7 +4,7 @@ Observed protected main `ad0085fd994f68dd827ed52a022a50ad84057a13`; existing Dra
 
 Local integration validation: 82 focused tests, 1343 isolated test files, non-incremental build, root/mobile typecheck, validate:full, security, AIPOS YAML and workflow authority map PASS; lint reports zero errors and 48 existing warnings. This evidence covers the integrated working tree, not a remote CI or review. Logs are in `nusa-2039-recovery-evidence-20261111`.
 
-Historical handoffs describing unpublished pre-a283 successors are historical; do not repeat their push instructions. The local merge is not yet a published exact head: require local validation, current PR/main recheck, fresh CI for any published successor, and independent non-author disposition of the unresolved review threads. Do not self-approve, dispatch, deploy or merge.
+Historical handoffs describing unpublished pre-a283 successors are historical; do not repeat their push instructions. Resolve the actual PR head and its exact-head CI from GitHub before acting; this document does not assert that its containing commit is unpublished. Require independent non-author disposition of the unresolved review threads. Do not self-approve, dispatch, deploy or merge.
 
 Inventory completeness, operational WIP/lease and automated coding E2E remain unverified. A separate isolated causal receipt for source run 42923997847 and consumer run 42924120287 reports CODE_ACTIONABLE with one bounded CodingRunner execution and replay rejection within one harness; it is tied to source SHA 4b66244310d6fad9abf37b38e8c1b0b030bfb47d, not current-main admission or complete L1.
 
