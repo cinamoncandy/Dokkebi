@@ -38,34 +38,56 @@ export function summarizeCoverage(flags: readonly boolean[], market: string, asO
   return Object.freeze({ schemaVersion: 1 as const, market, windowHours: flags.length, coveredHours: covered, ratio, longestGapHours: longest, meetsStudyBar: ratio >= COVERAGE_REQUIRED_RATIO, asOfMs });
 }
 
-/** The last `hours` full hours ending at the latest full hour at or before `nowMs`, each as a book-at-t check. Read-only; one indexed lookup per hour. */
-export function readOrderBookCoverage(stateDbPath: string, market: string, nowMs: number, hours: number = COVERAGE_WINDOW_HOURS): OrderBookCoverage | undefined {
-  if (!/^KRW-[A-Z0-9-]+$/.test(market) || !Number.isSafeInteger(hours) || hours <= 0 || hours > 24 * 60) return undefined;
+export interface OrderBookCoverageUnavailable {
+  readonly schemaVersion: 1;
+  readonly status: "UNAVAILABLE";
+  /** A fixed upper-case code (never the raw error text, path or market). */
+  readonly reason: string;
+  readonly asOfMs: number;
+}
+
+function failureCode(stage: "OPEN" | "QUERY", error: unknown): string {
+  const code = (error as { errcode?: unknown } | null)?.errcode;
+  return Number.isSafeInteger(code) && (code as number) >= 0 && (code as number) < 100_000 ? `${stage}_FAILED_SQLITE_${code as number}` : `${stage}_FAILED`;
+}
+
+/** The last `hours` full hours ending at the latest full hour at or before `nowMs`, each as a book-at-t check. Read-only; one indexed lookup per hour. A failure is returned as a fixed code, never guessed away. */
+export function readOrderBookCoverageDetailed(stateDbPath: string, market: string, nowMs: number, hours: number = COVERAGE_WINDOW_HOURS): OrderBookCoverage | OrderBookCoverageUnavailable {
   const lastHour = Math.floor(nowMs / HOUR_MS) * HOUR_MS;
+  const unavailable = (reason: string): OrderBookCoverageUnavailable => Object.freeze({ schemaVersion: 1 as const, status: "UNAVAILABLE" as const, reason, asOfMs: lastHour });
+  if (!/^KRW-[A-Z0-9-]+$/.test(market) || !Number.isSafeInteger(hours) || hours <= 0 || hours > 24 * 60) return unavailable("INVALID_INPUT");
   let database: DatabaseSync | undefined;
+  let stage: "OPEN" | "QUERY" = "OPEN";
   try {
     database = new DatabaseSync(stateDbPath, { readOnly: true });
+    stage = "QUERY";
     const lookup = database.prepare("SELECT 1 AS present FROM research_orderbook_samples WHERE market = ? AND captured_at_ms > ? AND captured_at_ms <= ? LIMIT 1");
     const flags: boolean[] = [];
     for (let i = hours - 1; i >= 0; i -= 1) {
       const t = lastHour - i * HOUR_MS;
       flags.push(lookup.get(market, t - BOOK_WINDOW_MS, t) !== undefined);
     }
-    return summarizeCoverage(flags, market, lastHour);
-  } catch { return undefined; } finally { try { database?.close(); } catch { /* display only */ } }
+    return summarizeCoverage(flags, market, lastHour) ?? unavailable("SUMMARY_REJECTED");
+  } catch (error) { return unavailable(failureCode(stage, error)); } finally { try { database?.close(); } catch { /* display only */ } }
+}
+
+/** Compatibility wrapper: the coverage, or undefined when it cannot be read. */
+export function readOrderBookCoverage(stateDbPath: string, market: string, nowMs: number, hours: number = COVERAGE_WINDOW_HOURS): OrderBookCoverage | undefined {
+  const result = readOrderBookCoverageDetailed(stateDbPath, market, nowMs, hours);
+  return "status" in result ? undefined : result;
 }
 
 /** Caches the coverage for an hour so /health never scans the database per request. Never throws. */
 export class OrderBookCoverageWatch {
-  private cached: OrderBookCoverage | undefined;
+  private cached: OrderBookCoverage | OrderBookCoverageUnavailable | undefined;
   private refreshedAt = 0;
   public constructor(private readonly stateDbPath: string, private readonly market: string, private readonly now: () => number = Date.now) {}
 
-  public snapshot(): OrderBookCoverage | undefined {
+  public snapshot(): OrderBookCoverage | OrderBookCoverageUnavailable | undefined {
     const now = this.now();
     if (this.refreshedAt === 0 || now - this.refreshedAt >= REFRESH_MS) {
       this.refreshedAt = now;
-      this.cached = readOrderBookCoverage(this.stateDbPath, this.market, now);
+      this.cached = readOrderBookCoverageDetailed(this.stateDbPath, this.market, now);
     }
     return this.cached;
   }
