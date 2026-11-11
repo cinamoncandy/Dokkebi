@@ -11,7 +11,7 @@ Safety stays: PAPER_ONLY, liveAuthority=NONE, productionMutationAllowed=false, a
 ## 33개를 일의 순서로 묶으면
 | 단계 | 내용 | 장부 항목 수 | 선행 조건 |
 |---|---|---|---|
-| 1 | 실행 상태 기계의 나머지: 보류 걸기·풀기, 병합 준비 승인, 중복 판정, 만료 임대 복구, 제어 평면 보류 해제 | 6 (autonomousExecutionState 5 + executionCoordinator 1) | 2단계의 실행 결과 흐름 |
+| 1 | 실행 상태 기계의 나머지(6개)를 **함수마다** 선택: 조정기가 같은 순수 로직을 쓰게 합치거나(진짜 연결), 중복 모델이면 지운다. 가짜 호출처로 장부 숫자만 줄이지 않는다 | 6 (autonomousExecutionState 5 + executionCoordinator 1) | 함수별 설계 점검(아래 정정 참고) |
 | 2 | 작업자 실행기(#2117): 작업 입장·임대·시작·완료·갱신, 처리량 평가 | 6 (worktreeWorkerPool 5 + workerThroughputEvidence 1) | 격리된 샌드박스(L1에서 검증됨) 위에서만, 처음엔 부수 효과 없이 |
 | 3 | 무엇을 고칠지 정하기: 기회 계획·순위, 진화 선택·순위·검증·승급·차단기 | 14 (opportunityPlanner 2 + evolve* 12) | 1~2단계 |
 | 4 | 외부 호출 보호와 되먹임: 공급자 백프레셔, 결과 평가, 소유자 이슈 초안 | 7 (providerBackpressure 5 + outcomeFeedback 1 + referenceIntelligenceIssueHandoff 1) | 2단계 |
@@ -35,3 +35,13 @@ Safety stays: PAPER_ONLY, liveAuthority=NONE, productionMutationAllowed=false, a
 ## 이 문서 다음 작업
 1. 1단계의 설계 점검: `autonomousExecutionState.ts`의 5개가 어떤 호출처에서 정직하게 쓰이는지, 지금 실행 척추 뒤에 붙일 수 있는 최소 지점이 있는지.
 2. 없다면 2단계(실행기)의 가장 작은 조각부터: 부수 효과 없는 `createWorkerPoolState` 호출처.
+
+## 정정 (2026-11-11, 1단계 설계 점검 결과)
+처음 표의 1단계는 "6개 함수에 호출처를 붙인다"로 읽히지만, 코드를 읽어 보니 그렇게 하면 안 된다.
+- 실제 상태 기록은 Durable Object 조정기 `apps/autopilot/src/executionCoordinator.ts`(1777줄)다. 이미 중복 방지, 임대와 만료 복구, 보류 걸기·풀기(`/control-plane-hold/apply|clear`)를 가진다.
+- `autonomousExecutionState.ts`의 연결 안 된 5개(`applyExecutionHold`, `clearExecutionHold`, `authorizeMergeReady`, `isDuplicateExecution`, `recoverExpiredLease`)는 같은 일을 메모리에서 하는 평행 모델이다. 보류 이유 같은 타입(`ExecutionHold`)은 조정기와 공유한다.
+- `reconcileCodingExecutionEvidence`는 이미 `index.ts`와 `worker.ts`에서 실제로 쓰이며 영수증을 `PR_OPEN`/`IMPLEMENTATION_BLOCKED`로 판정한다. 코딩 실행기(`worker.ts`)는 이미 PR을 게시한다(L1 영수증의 EXECUTION_ACCEPTED).
+- 따라서 1단계는 함수마다 (a) 조정기의 중복 로직을 이 순수 함수로 바꿔 한 곳으로 합치거나 (b) 쓰이지 않는 중복을 지우는 일이다. 어느 쪽이든 운영 조정기를 건드리므로 함수 하나씩, 조정기 시험을 유지한 채, 독립 검토를 받으며 한다. 이 문서는 어느 쪽도 정하지 않는다.
+
+## 소유자 결정이 필요한 한 지점 (코드는 아직 바꾸지 않음)
+실행 봉투(`productionExecutionSpine.ts`의 `prepareProductionExecution`)는 `mutationAllowed: false`로 고정돼 있고 허용 범위도 `apps/autopilot/`, `.github/workflows/`, `scripts/`(최대 12파일)로 좁다. "스스로 코드를 고친다"를 일반 개선까지 넓히려면 이 고정값을 풀어야 하는데, 이는 안전 불변식을 완화하는 일이다. 어느 단계에서도 이 값을 임의로 바꾸지 않고, 독립 Validator 검토와 소유자 승인을 거쳐 별도 PR로만 한다.
