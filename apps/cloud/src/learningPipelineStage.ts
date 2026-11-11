@@ -77,7 +77,14 @@ function datasetStage(runtime: Source): LearningPipelineStageStatus {
   const sessions = int(ticks.sessionsStarted);
   if (sessions === undefined) return "UNKNOWN";
   if (sessions > 0) return "PASS";
-  return manifestMissing ? "DATASET_MANIFEST_MISSING" : "DATASET_NO_SESSION";
+  // A missing manifest always wins: results counted next to it do not prove the dataset is intact now.
+  if (manifestMissing) return "DATASET_MANIFEST_MISSING";
+  // sessionsStarted counts only sessions this process created; after a restart the stored sessions are resumed, so it stays 0 while
+  // they run. Process-local proof of a loaded RUNNING session is a NOT_DUE (emitted only for a RUNNING session whose market has candles; a market with no candles reads NO_CANDLES instead) or a
+  // VALIDATION_* / HOLDOUT_* outcome. FAIL_* and REPEAT_* are recomputed from the durable ledger (all-time), so they prove nothing about this process.
+  const runningSession = Object.entries(counts).some(([key, value]) => (key === "NOT_DUE" || key.startsWith("VALIDATION_") || key.startsWith("HOLDOUT_")) && (int(value) ?? 0) > 0);
+  if (runningSession) return "PASS";
+  return "DATASET_NO_SESSION";
 }
 
 function experimentStage(runtime: Source): LearningPipelineStageStatus {
