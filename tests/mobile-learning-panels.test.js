@@ -11,8 +11,8 @@ const live = { experiments: 15, configurations: 192, discoveryPasses: 15, holdou
 
 test("the study timeline is sorted, marks the next verdict and counts days", () => {
   const rows = m.buildStudyTimeline(Date.parse("2026-10-22T12:00:00Z"));
-  assert.deepEqual(rows.map((r) => r.id), ["호가", "S2~S4", "S5"]);
-  assert.deepEqual(rows.map((r) => r.next), [true, false, false]);
+  assert.deepEqual(rows.map((r) => r.id), ["호가", "호가2", "S2~S4", "S5"]);
+  assert.deepEqual(rows.map((r) => r.next), [true, false, false, false]);
   assert.equal(rows[0].dateLabel, "10-29");
   assert.match(rows[0].status, /결과 대기 · 7일 남음/);
   assert.match(rows[1].status, /설계 고정됨/);
@@ -108,7 +108,8 @@ test("before the verdict time the row is unchanged even if an object is present"
 
 test("other studies are not touched by the result object", () => {
   const rows = m.buildStudyTimeline(Date.parse("2026-12-30T00:00:00Z"), undefined, study);
-  assert.match(rows[1].status, /판정 시점이 지났어요 · 결과를 확인하세요/);
+  assert.deepEqual(rows.map((r) => r.id), ["호가", "호가2", "S2~S4", "S5"]);
+  assert.match(rows[2].status, /판정 시점이 지났어요 · 결과를 확인하세요/);
 });
 
 test("the result is wired from the heartbeat, with no raw colour in the model and CRLF-safe source reads", () => {
@@ -161,4 +162,17 @@ test("the learning screen shows the comparison with a not-evidence label and a n
   assert.match(panels, /r\.diffBp == null \? "데이터 없음"/);
   assert.match(view, /<NullComparison raw=\{learningLoop\} \/>/);
   assert.doesNotMatch(panels.slice(panels.indexOf("export function NullComparison"), panels.indexOf("export function PaperResultBars")), /#[0-9a-fA-F]{3,8}\b/);
+});
+
+test("the second order-book study has its own row that follows only its own result", () => {
+  const second = { ...study, studyId: "ML_ORDERBOOK_60M_20261111", status: "HOLDOUT_PASS", eligible: 120 };
+  const rows = (raw, now) => m.buildStudyTimeline(now, undefined, raw);
+  const find = (list, id) => list.find((r) => r.id === id);
+  const before = rows(undefined, Date.parse("2026-11-12T09:00:00Z"));
+  assert.match(find(before, "호가2").status, /^설계 고정됨 · \d+일 남음$/);
+  const afterEnd = Date.parse("2026-11-18T09:00:00Z");
+  const withResult = rows(second, afterEnd);
+  assert.equal(find(withResult, "호가2").status, "합격 · 앞으로 모의로만 검증할 후보예요 (실전 아님) · 대상 시장 120개");
+  assert.equal(find(withResult, "호가").status, "판정 시점이 지났는데 서버가 결과를 아직 안 보냈어요", "the first study's row never shows the second study's result");
+  assert.equal(find(rows(study, afterEnd), "호가2").status, "판정 시점이 지났는데 서버가 결과를 아직 안 보냈어요", "the second row never shows the first study's result");
 });
