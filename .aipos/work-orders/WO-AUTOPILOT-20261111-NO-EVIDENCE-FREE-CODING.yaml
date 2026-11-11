@@ -1,0 +1,24 @@
+id: WO-AUTOPILOT-20261111-NO-EVIDENCE-FREE-CODING
+title: "Close the evidence-free coding lane: main push, CI success and PR change no longer plan a coding request"
+status: READY_FOR_REVIEW
+created: 2026-11-11
+implementation_branch: claude/no-evidence-free-coding
+authority_impact: none
+trigger: "Owner, 2026-11-11: L1 did not reach self-directed coding; solve it. Evidence in WO-AUTOPILOT-20261111-FORGE-WHY-NO-SELF-CODING."
+finding:
+  - "executionPlanner.planAutopilotExecution turned MAIN_PUSH, CI_SUCCEEDED and PR_CHANGED into a REPOSITORY_AUTOPILOT request with reason continue-from:<kind>. That is the only lane the old Workers AI engine used. Of its last 12 PRs (#1847..#2367) one merged; #2294 and #2367 added redundant conditions (currentWip > 0 above positiveInteger(currentWip); !Number.isNaN after Number.isFinite) and eleven others were superseded duplicates."
+  - "The only consumer of REPOSITORY_AUTOPILOT dispatches is .github/workflows/autopilot-execution-consumer.yml, whose coding job is off by the owner's 2026-10-13 decision (WO-AUTOPILOT-20261013-CODING-OFF)."
+change:
+  - "apps/autopilot/src/executionPlanner.ts: those three kinds now plan a NOOP with reason evidence-free-continue-disabled. Coding is planned only where a request names evidence: CI_FAILED (gha:<run>:<sha>:<conclusion>, which still needs causal admission) and the audit request."
+  - "Tests: executionPlanner.failure.test.ts (the three kinds are NOOP; CI_FAILED still plans the evidence-bound request) and index.test.ts (a main push now answers NO_ACTION)."
+not_changed:
+  - "NUSA_AUTOPILOT_CODING_ENABLED stays off. No workflow, wrangler variable, envelope field, mutationAllowed, scope, limit, threshold, risk, capital or authority. Audit requests and the failure lane are untouched. The change is reversible by reverting this commit."
+safety:
+  paper_only: true
+  liveAuthority: NONE
+  productionMutationAllowed: false
+  aiAuthority: ZERO_AUTHORITY
+validation:
+  - "All 728 compiled apps/autopilot tests pass; dispatch-run-freshness, autopilot-dispatch-retry and build-autopilot-coding-request tests pass (68)."
+effect_today: "None at runtime: the only consumer of these dispatches is switched off. It matters when coding is enabled, because enabling it can no longer start the evidence-free lane."
+next_action: "Review, merge, release (host idle). Then step 1 of the plan: evidence-based tasks with completion tests, and test-first verification (a test that fails before the change and passes after) in the sandbox."
