@@ -160,8 +160,8 @@ test("a dataset whose only gap is exchange-confirmed absent runs; the same gap w
     automation.recover();
     automation.startSession(startInput("research-absence", t.champion, t.challenger));
     const outcome = runResearchExperiment({ runExperiment: (input) => automation.runExperiment(input), candles: proved.store, holdout, now: () => END, datasetManifest: { read: (id) => proved.manifests.read(id), listAbsence: (...args) => proved.store.listAbsence(...args) } }, spec(t, { sessionId: "research-absence", datasetId: manifest.datasetId }));
-    assert.notEqual(outcome.status, "SKIPPED", JSON.stringify(outcome));
-    assert.notEqual(outcome.reason, "WINDOWS_TOO_MANY_GAPS_HOLDOUT");
+    assert.equal(outcome.status, "COMPLETED", JSON.stringify(outcome));
+    assert.ok(outcome.validation, "genuine absence proof must produce validation evidence");
     const guarded = (listAbsence) => runResearchExperiment({ runExperiment: () => { throw new Error("must not evaluate"); }, candles: proved.store, holdout, now: () => END, datasetManifest: { read: (id) => proved.manifests.read(id), listAbsence } }, spec(t, { sessionId: "research-absence", datasetId: manifest.datasetId }));
     assert.equal(guarded(() => []).reason, "DATASET_MANIFEST_ABSENCE_UNVERIFIED");
     assert.equal(guarded(() => { throw new Error("unavailable"); }).reason, "DATASET_MANIFEST_ABSENCE_UNVERIFIED");
