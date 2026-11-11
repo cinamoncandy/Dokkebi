@@ -109,6 +109,9 @@ export interface CloudRuntimeLivenessSnapshot {
   /** Research experiment outcome counts since start (fixed codes, integers) and the latest tick status. */
   /** Research-only microstructure recorder counters (see marketMicrostructureRecorder.ts). */
   readonly dataIntegrity?: Readonly<Record<string, string | number>>;
+  /** Order-book hour coverage for the first research market (market name never published), or UNAVAILABLE with a fixed reason code. */
+  readonly orderBookCoverage?: { readonly schemaVersion: 1; readonly windowHours: number; readonly coveredHours: number; readonly ratio: number; readonly longestGapHours: number; readonly meetsStudyBar: boolean; readonly asOfMs: number }
+    | { readonly schemaVersion: 1; readonly status: "UNAVAILABLE"; readonly reason: string; readonly asOfMs: number };
   readonly orderBookCollector?: { readonly rounds: number; readonly markets: number; readonly samplesStored: number; readonly failures: number; readonly rejected?: number; readonly lastRoundAt?: number };
   readonly futuresCollector?: { readonly rounds: number; readonly marksStored: number; readonly fundingStored: number; readonly klinesStored: number; readonly failures: number; readonly rejected: number; readonly lastRoundAt?: number };
   readonly microstructureRecorder?: { readonly orderBookSamples: number; readonly tradeTicks: number; readonly writeFailures: number; readonly rejectedRows?: number; readonly lastRecordedAt?: number };
@@ -570,6 +573,19 @@ function publicRuntimeLiveness(value: CloudRuntimeLivenessSnapshot): CloudRuntim
     for (const [key, field] of Object.entries(rawIntegrity).slice(0, 40)) if (key !== "status" && /^[a-zA-Z0-9]{1,40}$/.test(key) && Number.isSafeInteger(field) && Number(field) >= 0) value[key] = Number(field);
     dataIntegrity = { dataIntegrity: value };
   }
+  // Order-book hour coverage (display only): fixed numbers and a boolean, or UNAVAILABLE with a fixed upper-case reason. The market name is dropped.
+  const rawCoverage = source.orderBookCoverage as Record<string, unknown> | null | undefined;
+  let orderBookCoverage: { orderBookCoverage?: NonNullable<CloudRuntimeLivenessSnapshot["orderBookCoverage"]> } = {};
+  if (rawCoverage != null && typeof rawCoverage === "object" && !Array.isArray(rawCoverage) && rawCoverage.schemaVersion === 1 && Number.isSafeInteger(rawCoverage.asOfMs) && Number(rawCoverage.asOfMs) > 0) {
+    if (rawCoverage.status === "UNAVAILABLE" && typeof rawCoverage.reason === "string" && /^[A-Z][A-Z0-9_]{2,63}$/.test(rawCoverage.reason)) {
+      orderBookCoverage = { orderBookCoverage: { schemaVersion: 1, status: "UNAVAILABLE", reason: rawCoverage.reason, asOfMs: Number(rawCoverage.asOfMs) } };
+    } else if (rawCoverage.status === undefined && Number.isSafeInteger(rawCoverage.windowHours) && Number(rawCoverage.windowHours) > 0 && Number(rawCoverage.windowHours) <= 1440
+      && Number.isSafeInteger(rawCoverage.coveredHours) && Number(rawCoverage.coveredHours) >= 0 && Number(rawCoverage.coveredHours) <= Number(rawCoverage.windowHours)
+      && Number.isSafeInteger(rawCoverage.longestGapHours) && Number(rawCoverage.longestGapHours) >= 0 && Number(rawCoverage.longestGapHours) <= Number(rawCoverage.windowHours)
+      && typeof rawCoverage.ratio === "number" && Number.isFinite(rawCoverage.ratio) && rawCoverage.ratio >= 0 && rawCoverage.ratio <= 1 && typeof rawCoverage.meetsStudyBar === "boolean") {
+      orderBookCoverage = { orderBookCoverage: { schemaVersion: 1, windowHours: Number(rawCoverage.windowHours), coveredHours: Number(rawCoverage.coveredHours), ratio: rawCoverage.ratio, longestGapHours: Number(rawCoverage.longestGapHours), meetsStudyBar: rawCoverage.meetsStudyBar, asOfMs: Number(rawCoverage.asOfMs) } };
+    }
+  }
   const rawResearch = source.researchCollectionStatus;
   const research = typeof rawResearch === "string" && ["COLLECTING", "DISABLED", "INVALID", "UNAVAILABLE"].includes(rawResearch)
     ? {
@@ -587,7 +603,7 @@ function publicRuntimeLiveness(value: CloudRuntimeLivenessSnapshot): CloudRuntim
     : {};
   // Build identity: only a full lowercase 40-hex commit is published, never other text.
   const sourceCommitSha = typeof source.sourceCommitSha === "string" && /^[0-9a-f]{40}$/.test(source.sourceCommitSha) ? { sourceCommitSha: source.sourceCommitSha } : {};
-  return Object.freeze({ ...sourceCommitSha, ...paperLedger, ...timestamps, ...counters, ...(lastPaperDecisionOutcome === undefined ? {} : { lastPaperDecisionOutcome }), lastError, ...(previousStop === undefined ? {} : { previousStop }), ...stall, ...research, ...funnel, ...lossSession, ...lossAttribution, ...experimentTicks, ...experimentTicksByInterval, ...researchGapFill, ...rollingHoldout, ...closedLearningLoop, ...microstructure, ...orderBookCollector, ...futuresCollector, ...dataIntegrity }) as unknown as CloudRuntimeLivenessSnapshot;
+  return Object.freeze({ ...sourceCommitSha, ...paperLedger, ...timestamps, ...counters, ...(lastPaperDecisionOutcome === undefined ? {} : { lastPaperDecisionOutcome }), lastError, ...(previousStop === undefined ? {} : { previousStop }), ...stall, ...research, ...funnel, ...lossSession, ...lossAttribution, ...experimentTicks, ...experimentTicksByInterval, ...researchGapFill, ...rollingHoldout, ...closedLearningLoop, ...microstructure, ...orderBookCollector, ...orderBookCoverage, ...futuresCollector, ...dataIntegrity }) as unknown as CloudRuntimeLivenessSnapshot;
 }
 
 const PUBLIC_HEALTH_REASONS = new Set(["EVIDENCE_HEALTHY", "EVIDENCE_DEGRADED", "EVIDENCE_FAILED", "EVIDENCE_STALE", "EVIDENCE_MISSING", "EVIDENCE_INVALID_TIME", "RECOVERY_NOT_VERIFIED"]);
