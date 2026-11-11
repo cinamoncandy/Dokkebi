@@ -42,17 +42,33 @@ export function materializeResearchDatasetManifest(input: {
     if (candles[index]!.openTime < previous) throw new Error("canonical dataset has overlapping intervals");
     for (let close = previous + input.intervalMs; close <= candles[index]!.openTime; close += input.intervalMs) gapCloses.push(close);
   }
-  const absences = gapCloses.length === 0 ? [] : input.intervalMs === 60_000
-    ? input.candleStore.listAbsence(input.market, 60_000, gapCloses[0]!, gapCloses.at(-1)!)
-    : [];
-  if (gapCloses.some((close) => !absences.some((run) => close >= run.firstAbsentCloseMs && close <= run.lastAbsentCloseMs))) throw new Error("canonical dataset has missing intervals");
+  // A longer bar is derived only from complete 1-minute buckets (AggregatedResearchCandleSource drops a bucket that lacks any minute),
+  // so a gap in a 15m or 60m series exists exactly where at least one of its 1-minute closes is missing. The same rule then applies
+  // to those minutes: every missing 1-minute close in the dataset's range must lie inside a run the exchange itself proved empty.
+  // Our own data loss is still rejected, and a longer series with no missing minute cannot have a gap at all.
+  let absences: readonly { readonly firstAbsentCloseMs: number; readonly lastAbsentCloseMs: number; readonly evidenceFingerprintSha256: string }[] = [];
+  let gapMinuteCount = gapCloses.length;
+  if (gapCloses.length > 0 && input.intervalMs === 60_000) {
+    absences = input.candleStore.listAbsence(input.market, 60_000, gapCloses[0]!, gapCloses.at(-1)!);
+    if (gapCloses.some((close) => !absences.some((run) => close >= run.firstAbsentCloseMs && close <= run.lastAbsentCloseMs))) throw new Error("canonical dataset has missing intervals");
+  } else if (gapCloses.length > 0) {
+    const firstMinuteClose = candles[0]!.openTime + 60_000;
+    const lastMinuteClose = candles.at(-1)!.closeTime;
+    const present = new Set(input.candleStore.read(input.market, 60_000, firstMinuteClose, lastMinuteClose).map((row) => row.closeTimeMs));
+    const missingMinutes: number[] = [];
+    for (let close = firstMinuteClose; close <= lastMinuteClose; close += 60_000) if (!present.has(close)) missingMinutes.push(close);
+    if (missingMinutes.length === 0) throw new Error("canonical dataset has missing intervals");
+    absences = input.candleStore.listAbsence(input.market, 60_000, missingMinutes[0]!, missingMinutes.at(-1)!);
+    if (missingMinutes.some((close) => !absences.some((run) => close >= run.firstAbsentCloseMs && close <= run.lastAbsentCloseMs))) throw new Error("canonical dataset has missing intervals");
+    gapMinuteCount = missingMinutes.length;
+  }
   const contentSha256 = calculateResearchCandleSha256(candles);
   if (!SHA1.test(input.sourceCommitSha)) throw Object.assign(new Error("dataset replay runtime source commit is unavailable"), { code: "MANIFEST_PROVENANCE_REQUIRED" });
   const sourceIntervalMs = 60_000;
   const firstBaseClose = candles[0]!.openTime + sourceIntervalMs;
   const lastBaseClose = candles.at(-1)!.closeTime;
   const baseCandles = input.candleStore.read(input.market, sourceIntervalMs, firstBaseClose, lastBaseClose);
-  const expectedBaseCount = (lastBaseClose - firstBaseClose) / sourceIntervalMs + 1 - gapCloses.length;
+  const expectedBaseCount = (lastBaseClose - firstBaseClose) / sourceIntervalMs + 1 - gapMinuteCount;
   if (!Number.isSafeInteger(expectedBaseCount) || baseCandles.length !== expectedBaseCount || baseCandles.some((candle) => candle.volume == null)) throw Object.assign(new Error("dataset source candle coverage is incomplete"), { code: "MANIFEST_PROVENANCE_REQUIRED" });
   const derived = new AggregatedResearchCandleSource(input.candleStore, sourceIntervalMs).read(input.market, input.intervalMs, candles[0]!.openTime + input.intervalMs, candles.at(-1)!.closeTime);
   const derivedCanonical = derived.map((candle): CanonicalResearchCandle => ({ market: input.market, interval, openTime: candle.closeTimeMs - input.intervalMs, closeTime: candle.closeTimeMs, open: candle.open, high: candle.high, low: candle.low, close: candle.close, volume: candle.volume! }));

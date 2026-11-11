@@ -168,3 +168,35 @@ test("a gapped 1m dataset does not claim contiguity in its quality provenance", 
   assert.equal(build(false).provenance.qualitySuiteSha256, contiguousSuite, "gap-free keeps the original suite identity");
   assert.notEqual(build(true).provenance.qualitySuiteSha256, contiguousSuite);
 });
+
+test("a 15m dataset may skip bars only when every missing minute is exchange-confirmed absent; unconfirmed minutes still refuse", () => {
+  const { UPBIT_CANDLE_SOURCE_FINGERPRINT } = require("../dist/apps/cloud/src/researchCandleBackfill.js");
+  const { AggregatedResearchCandleSource } = require("../dist/apps/cloud/src/researchCandleAggregation.js");
+  const M = 60_000;
+  const Q = 15 * M;
+  const make = (skip, confirmed) => {
+    const db = new SqliteDatabase(":memory:");
+    const store = new SqliteResearchCandleStore(db);
+    let run = [];
+    const flush = () => { if (run.length) store.appendWithMaterial("KRW-BTC", M, run, { source: "UPBIT_PUBLIC_CANDLES", sourceFingerprint: UPBIT_CANDLE_SOURCE_FINGERPRINT, evidenceFingerprintSha256: createHash("sha256").update(String(run[0].closeTimeMs)).digest("hex"), missingBuckets: 0, incompleteBuckets: 0, rejectedObservations: 0 }); run = []; };
+    for (let k = 1; k <= 120; k += 1) {
+      if (skip.has(k)) { flush(); continue; }
+      const row = { closeTimeMs: k * M, open: 10, high: 11, low: 9, close: 10.5, volume: 1 };
+      if (run.length && row.closeTimeMs !== run.at(-1).closeTimeMs + M) flush();
+      run.push(row);
+    }
+    flush();
+    if (confirmed) store.recordAbsence({ market: "KRW-BTC", intervalMs: M, firstAbsentCloseMs: 20 * M, lastAbsentCloseMs: 40 * M, beforeCloseMs: 19 * M, afterCloseMs: 41 * M, evidenceFingerprintSha256: "e".repeat(64), observedAt: "2026-11-10T00:00:00.000Z" });
+    return { store, manifests: new SqliteResearchDatasetManifestStore(db) };
+  };
+  const materialize = ({ store, manifests }) => materializeResearchDatasetManifest({ store: manifests, candleStore: store, market: "KRW-BTC", intervalMs: Q, candles: new AggregatedResearchCandleSource(store, M).read("KRW-BTC", Q, 0, 200 * M), source: "upbit-1m-closed:KRW-BTC:900000", createdAt: "2026-11-11T00:00:00.000Z", sourceCommitSha: "f".repeat(40) });
+
+  const gap = new Set(Array.from({ length: 21 }, (_, i) => 20 + i));
+  assert.throws(() => materialize(make(gap, false)), /missing intervals/, "no exchange proof: refused");
+  const ok = materialize(make(gap, true));
+  assert.equal(ok.missingCandlePolicy, "ALLOW");
+  assert.ok(ok.missingCandleCount > 0);
+  assert.ok(ok.provenance.rawSourceIdentitySha256s.includes("e".repeat(64)));
+  const extra = new Set([...gap, 90]);
+  assert.throws(() => materialize(make(extra, true)), /missing intervals/, "one unconfirmed minute still refuses the whole dataset");
+});
