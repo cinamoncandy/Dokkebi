@@ -68,3 +68,21 @@ test("only a final result is handed off, atomically, beside the state database",
   assert.equal(saved.schemaVersion, 1);
   assert.equal(fs.existsSync(path.join(dir, `${RESULT_FILE}.tmp`)), false);
 });
+
+test("the default span is the second pre-registered run and the first run's span is still selectable", () => {
+  const { SPANS, STUDY_ID } = require("./run-orderbook-study.js");
+  assert.equal(STUDY_ID, "ML_ORDERBOOK_60M_20261111");
+  const iso = (ms) => new Date(ms).toISOString();
+  const second = SPANS.ML_ORDERBOOK_60M_20261111;
+  assert.deepEqual([iso(second.START), iso(second.VAL), iso(second.HOLD), iso(second.END)], ["2026-11-04T00:00:00.000Z", "2026-11-12T00:00:00.000Z", "2026-11-14T00:00:00.000Z", "2026-11-18T00:00:00.000Z"]);
+  const first = SPANS.ML_ORDERBOOK_60M_20261029;
+  assert.deepEqual([iso(first.START), iso(first.VAL), iso(first.HOLD), iso(first.END)], ["2026-10-15T00:00:00.000Z", "2026-10-23T00:00:00.000Z", "2026-10-25T00:00:00.000Z", "2026-10-29T00:00:00.000Z"]);
+  assert.ok(Object.isFrozen(SPANS) && Object.isFrozen(second));
+});
+
+test("an unknown study id is refused, never mapped to another span", () => {
+  const { spawnSync } = require("node:child_process");
+  const run = spawnSync(process.execPath, ["-e", "require('./scripts/run-orderbook-study.js')"], { cwd: require("node:path").resolve(__dirname, ".."), env: { ...process.env, NUSA_ORDERBOOK_STUDY_ID: "ML_ORDERBOOK_60M_19990101" }, encoding: "utf8" });
+  assert.notEqual(run.status, 0);
+  assert.match(run.stderr, /ORDERBOOK_STUDY_ID_UNKNOWN/);
+});

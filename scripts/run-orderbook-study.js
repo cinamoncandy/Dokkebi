@@ -8,7 +8,7 @@
  * promotion). Bounded: one market's rows in memory at a time, down-sampled to one per minute.
  *
  * Fixed before any order-book row was examined (nothing below may change after this commit):
- * - Span: 2026-10-15T00:00Z .. 2026-10-29T00:00Z (14 days of the all-KRW collector, deployed 2026-10-14 01:22Z).
+ * - Span of the FIRST run: 2026-10-15T00:00Z .. 2026-10-29T00:00Z (14 days of the all-KRW collector, deployed 2026-10-14 01:22Z). The second run uses the span in docs/RESEARCH_PREREG_2026-11-11_ORDERBOOK_60M.md (see SPANS below); every other rule here is shared by both runs.
  *   Train 10-15..10-22, validation 10-23..10-24, holdout 10-25..10-28. Decision rows whose 60m exit would cross into the next
  *   split are dropped.
  * - Book at time t = the last sample captured in (t - 2 min, t]; a decision needs a book at t, t-15m, t-60m, t-240m and t+60m.
@@ -33,10 +33,18 @@ const crypto = require("node:crypto");
 const { orderBookSource } = require("./lib/orderBookSource.js");
 const M = 60_000;
 const H = 60 * M;
-const START = Date.parse("2026-10-15T00:00:00Z");
-const VAL = Date.parse("2026-10-23T00:00:00Z");
-const HOLD = Date.parse("2026-10-25T00:00:00Z");
-const END = Date.parse("2026-10-29T00:00:00Z");
+// Span per pre-registered run. Only the span differs between runs; every rule in this file is shared.
+// ML_ORDERBOOK_60M_20261029: the closed first run (INSUFFICIENT_DATA, docs: WO-RESEARCH-20261014-ORDERBOOK-STUDY).
+// ML_ORDERBOOK_60M_20261111: the second run, docs/RESEARCH_PREREG_2026-11-11_ORDERBOOK_60M.md (forward holdout).
+const SPANS = Object.freeze({
+  ML_ORDERBOOK_60M_20261029: Object.freeze({ START: Date.parse("2026-10-15T00:00:00Z"), VAL: Date.parse("2026-10-23T00:00:00Z"), HOLD: Date.parse("2026-10-25T00:00:00Z"), END: Date.parse("2026-10-29T00:00:00Z") }),
+  ML_ORDERBOOK_60M_20261111: Object.freeze({ START: Date.parse("2026-11-04T00:00:00Z"), VAL: Date.parse("2026-11-12T00:00:00Z"), HOLD: Date.parse("2026-11-14T00:00:00Z"), END: Date.parse("2026-11-18T00:00:00Z") }),
+});
+const DEFAULT_STUDY_ID = "ML_ORDERBOOK_60M_20261111";
+// An unknown id is refused instead of falling back to another span (fail closed).
+const STUDY_ID = process.env.NUSA_ORDERBOOK_STUDY_ID === undefined || process.env.NUSA_ORDERBOOK_STUDY_ID === "" ? DEFAULT_STUDY_ID : process.env.NUSA_ORDERBOOK_STUDY_ID;
+if (!Object.prototype.hasOwnProperty.call(SPANS, STUDY_ID)) throw new Error("ORDERBOOK_STUDY_ID_UNKNOWN");
+const { START, VAL, HOLD, END } = SPANS[STUDY_ID];
 const K = 195;
 const FEE = 0.0005;
 const STRESS_SLIP = 0.0005;
@@ -174,7 +182,7 @@ function writeResult(stateDbPath, result, fs = require("node:fs"), pathLib = req
   return true;
 }
 
-module.exports = { runStudy, writeResult, RESULT_FILE, START, END };
+module.exports = { runStudy, writeResult, RESULT_FILE, START, END, SPANS, STUDY_ID };
 
 if (require.main === module) {
   try {

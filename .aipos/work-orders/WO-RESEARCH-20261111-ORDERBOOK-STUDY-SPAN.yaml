@@ -1,0 +1,21 @@
+id: WO-RESEARCH-20261111-ORDERBOOK-STUDY-SPAN
+title: "The order-book study script runs the second pre-registered span (rules unchanged)"
+status: READY_FOR_REVIEW
+created: 2026-11-11
+implementation_branch: claude/orderbook-study-v2-span
+authority_impact: none
+depends_on: "WO-RESEARCH-20261111-ORDERBOOK-PREREG (#3083) must be merged first: this PR implements exactly the span fixed there."
+change:
+  - "scripts/run-orderbook-study.js: the four span dates move into a frozen SPANS table keyed by study id. The default id is ML_ORDERBOOK_60M_20261111 (train 11-04..11-12, validation 11-12..11-14, holdout 11-14..11-18 UTC); ML_ORDERBOOK_60M_20261029 (the closed first run) stays selectable with NUSA_ORDERBOOK_STUDY_ID. An unknown id throws ORDERBOOK_STUDY_ID_UNKNOWN; there is no fallback."
+  - "Until 2026-11-18T02:00Z the daily job prints WAITING_DATA for the new span; it computes nothing from order-book values before then."
+not_changed:
+  - "Every rule, feature, cost, model, eligibility bar and PASS condition (K = 195, p < 0.05/195). No limit, threshold, risk, capital, authority, service or runtime wiring."
+safety:
+  paper_only: true
+  liveAuthority: NONE
+  productionMutationAllowed: false
+  aiAuthority: ZERO_AUTHORITY
+validation:
+  - "run-orderbook-study 16/16 with the other order-book study tests, including exact span dates for both ids and refusal of an unknown id."
+retention_check: "The archive (research_orderbook_study_rows) keeps minutes 58, 59 and 0 of every hour and minutes 43..45, which is every book this 60m study reads (t, t-15m, t-60m, t-240m, t+60m), so the live 14-day prune does not remove what the run needs."
+next_action: "Review; merge after #3083; release when the host is idle and before 2026-11-18. The run reads its result line from the service journal after 2026-11-18T02:00Z."
