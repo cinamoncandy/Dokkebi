@@ -7,6 +7,7 @@ authority_impact: none
 finding: "15m/60m research manifests have been refused since the 2026-11-08 exchange gap (17:01-22:00 UTC, 299 minutes with no candle, proven by the exchange). The materializer allowed exchange-confirmed absences only on the 1m series, so no 15m/60m candidate could be supplied to the learning loop."
 change:
   - "For a 15m/60m series, every missing 1m close inside its span must be covered by a recorded exchange-confirmed absence run (listAbsence). One unconfirmed missing minute still throws 'canonical dataset has missing intervals'."
+  - "Review P1 fix: the tolerance applies only to 900000 (15m) and 3600000 (60m); every other interval keeps the old refusal."
   - "expectedBaseCount subtracts the confirmed missing minutes; the gapped manifest keeps the ALLOW policy, the absence evidence fingerprints and the non-contiguous quality identity."
 not_changed:
   - "1m behavior, gap-free dataset identity, study rules, thresholds, holdout, risk, execution, authority. Our own data loss is never accepted."

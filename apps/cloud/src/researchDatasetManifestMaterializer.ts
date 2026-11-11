@@ -51,7 +51,7 @@ export function materializeResearchDatasetManifest(input: {
   if (gapCloses.length > 0 && input.intervalMs === 60_000) {
     absences = input.candleStore.listAbsence(input.market, 60_000, gapCloses[0]!, gapCloses.at(-1)!);
     if (gapCloses.some((close) => !absences.some((run) => close >= run.firstAbsentCloseMs && close <= run.lastAbsentCloseMs))) throw new Error("canonical dataset has missing intervals");
-  } else if (gapCloses.length > 0) {
+  } else if (gapCloses.length > 0 && (input.intervalMs === 900_000 || input.intervalMs === 3_600_000)) {
     const firstMinuteClose = candles[0]!.openTime + 60_000;
     const lastMinuteClose = candles.at(-1)!.closeTime;
     const present = new Set(input.candleStore.read(input.market, 60_000, firstMinuteClose, lastMinuteClose).map((row) => row.closeTimeMs));
