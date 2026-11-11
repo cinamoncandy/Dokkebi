@@ -19,7 +19,7 @@ One run of the isolated lane proves exactly that chain. It does **not** enable a
 | Verification | Worker route `/isolated/causal/verify-and-run`, GitHub OIDC consumer identity, source-run read-back |
 | Claim | One `NUSA_ISOLATED_CAUSAL_ATTEMPT_CLAIM_V1` record in the `NUSA_EXECUTION_COORDINATOR` Durable Object |
 | CodingRunner | Real `CodingRunner`, with a deterministic proposal adapter (no Workers AI call) and a no-op sandbox |
-| Output | A sanitized receipt artifact. No branch, no PR, no commit, no repository write |
+| Output | A sanitized receipt artifact. No code or ref writes: no branch, no PR, no commit. The run does record GitHub attestation metadata, Actions artifacts and the one Durable Object claim below |
 
 `NUSA_AUTOPILOT_CODING_ENABLED` (the production coding switch) stays off throughout.
 
