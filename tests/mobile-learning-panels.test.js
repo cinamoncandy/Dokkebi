@@ -164,6 +164,7 @@ test("the learning screen shows the comparison with a not-evidence label and a n
   assert.doesNotMatch(panels.slice(panels.indexOf("export function NullComparison"), panels.indexOf("export function PaperResultBars")), /#[0-9a-fA-F]{3,8}\b/);
 });
 
+<<<<<<< HEAD
 test("the second order-book study has its own row that follows only its own result", () => {
   const second = { ...study, studyId: "ML_ORDERBOOK_60M_20261111", status: "HOLDOUT_PASS", eligible: 120 };
   const rows = (raw, now) => m.buildStudyTimeline(now, undefined, raw);
@@ -175,4 +176,10 @@ test("the second order-book study has its own row that follows only its own resu
   assert.equal(find(withResult, "호가2").status, "합격 · 앞으로 모의로만 검증할 후보예요 (실전 아님) · 대상 시장 120개");
   assert.equal(find(withResult, "호가").status, "판정 시점이 지났는데 서버가 결과를 아직 안 보냈어요", "the first study's row never shows the second study's result");
   assert.equal(find(rows(study, afterEnd), "호가2").status, "판정 시점이 지났는데 서버가 결과를 아직 안 보냈어요", "the second row never shows the first study's result");
+=======
+test("a result of the second order-book study is never shown on the first study's row", () => {
+  const second = { ...study, studyId: "ML_ORDERBOOK_60M_20261111", status: "HOLDOUT_PASS" };
+  const r = row(second);
+  assert.equal(r.status, "판정 시점이 지났는데 서버가 결과를 아직 안 보냈어요");
+>>>>>>> origin/main
 });
