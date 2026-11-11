@@ -477,7 +477,10 @@ function isTransientMarketReconnect(snapshotFailure, response) {
   const diagnostic = safeRuntimeFailureDiagnostic(response, null);
   // PUBLIC_MARKET_RECOVERED is the last error for the moment between the market coming back and the runtime lifting the halt
   // (CI run 42954802110 failed on exactly that sample). It stays inside the same per-episode grace, so a runtime that never resumes still fails.
-  const transientCodes = ["PUBLIC_MARKET_RECONNECTING", "MARKET_DATA_RECONNECTING", "PUBLIC_MARKET_RECOVERED"];
+  // PUBLIC_MARKET_STALE is the same kind of public-feed hiccup: the runtime halts fail-closed when a ticker goes quiet and lifts the halt
+  // when ticks return (CI run 43014397780 on a docs-only PR failed on exactly that sample for KRW-MPLX). A feed that stays stale still
+  // fails once the per-episode grace ends.
+  const transientCodes = ["PUBLIC_MARKET_RECONNECTING", "MARKET_DATA_RECONNECTING", "PUBLIC_MARKET_RECOVERED", "PUBLIC_MARKET_STALE"];
   if (!transientCodes.includes(diagnostic.last_error_code)) return false;
   if (diagnostic.runtime_state === "RUNNING") return true;
   return diagnostic.runtime_state === "HALTED" && diagnostic.runtime_halt_reasons.length === 1
