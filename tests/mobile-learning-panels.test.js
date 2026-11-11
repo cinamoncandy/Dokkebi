@@ -162,3 +162,9 @@ test("the learning screen shows the comparison with a not-evidence label and a n
   assert.match(view, /<NullComparison raw=\{learningLoop\} \/>/);
   assert.doesNotMatch(panels.slice(panels.indexOf("export function NullComparison"), panels.indexOf("export function PaperResultBars")), /#[0-9a-fA-F]{3,8}\b/);
 });
+
+test("a result of the second order-book study is never shown on the first study's row", () => {
+  const second = { ...study, studyId: "ML_ORDERBOOK_60M_20261111", status: "HOLDOUT_PASS" };
+  const r = row(second);
+  assert.equal(r.status, "판정 시점이 지났는데 서버가 결과를 아직 안 보냈어요");
+});
