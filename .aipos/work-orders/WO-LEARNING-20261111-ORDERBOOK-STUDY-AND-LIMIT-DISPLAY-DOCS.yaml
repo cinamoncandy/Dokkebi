@@ -1,0 +1,19 @@
+id: WO-LEARNING-20261111-ORDERBOOK-STUDY-AND-LIMIT-DISPLAY-DOCS
+title: "Two design documents: order-book study draft and daily-limit display proposal (documents only)"
+status: READY_FOR_REVIEW
+created: 2026-11-11
+implementation_branch: claude/orderbook-study-and-limit-display-docs
+authority_impact: none
+change:
+  - "docs/DRAFT_ORDERBOOK_STUDY_DESIGN_20261111.md: structure of a new pre-registered order-book study (start conditions, items to fix at registration, what is not done). Not a pre-registration: it becomes one only when committed with a date before any data is read."
+  - "docs/PROPOSAL_DAILY_LIMIT_DISPLAY_20261111.md: proposal to show a daily-buy-limit rejection as ORDER_LIMIT_REACHED instead of ORDER_INTENT_FAILING, display only."
+not_changed:
+  - "No code, workflow, limit, threshold, risk, capital or authority. The daily buy limit stays as the owner set it (#2997)."
+safety:
+  paper_only: true
+  liveAuthority: NONE
+  productionMutationAllowed: false
+  aiAuthority: ZERO_AUTHORITY
+validation:
+  - "Documents only; AIPOS YAML valid and current truth regenerated."
+next_action: "Owner decides the two items listed in the proposal; the study draft is finalised after /health orderBookCoverage can be read (#3079)."
