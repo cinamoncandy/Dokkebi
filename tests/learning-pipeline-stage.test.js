@@ -83,3 +83,9 @@ test("skipped, error and unknown keys are not proof of a session", () => {
   assert.equal(dataset({ SKIPPED_OTHER: 4, ERROR_X: 2 }), "DATASET_NO_SESSION");
   assert.equal(dataset({ SOMETHING_ELSE: 9 }), "DATASET_NO_SESSION");
 });
+
+test("NO_CANDLES (a market with no candles) is not proof of a session or dataset; NOT_DUE next to it still is (review P2 on #3077)", () => {
+  assert.equal(dataset({ NO_CANDLES: 40 }), "DATASET_NO_SESSION");
+  assert.equal(dataset({ NO_CANDLES: 20, NOT_DUE: 20 }), "PASS", "at least one market was loaded and waiting");
+  assert.equal(dataset({ NO_CANDLES: 40, FAIL_NO_EDGE: 52 }), "DATASET_NO_SESSION", "ledger-derived counts still prove nothing");
+});
