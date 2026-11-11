@@ -7,7 +7,7 @@ repository: cinamoncandy/NUSA
 issue: 903
 pull_request: 2039
 base_branch: main
-base_commit: 54c095daff15bc4ef067e12ed26c666e5fd3d4c0
+base_commit: be8d58f16e60de9f3d37b8bdd9c9648214501536
 implementation_branch: agent/903-canonical-portfolio-autopilot
 objective: "Preserve one durable execution lease across asynchronous producer-to-consumer handoff so a competing producer cannot reacquire while a consumer is running."
 architecture_impact:
@@ -384,3 +384,17 @@ v15_claim_binding_20261110:
   latest_main_reconciliation_20261110_attempt4: "Protected main advanced to 9848e6f728bb671b6ff3c3eb35c4e62ff4466aac via owner-approved PR #3052, which reopens the existing isolated causal verification config window for attempt 4. The config-only delta merged locally into the PR #2039 candidate. No workflow dispatch or deployment was performed. Current integrated candidate passed pnpm test (1,343 isolated files), typecheck, validate:full, security gate, AIPOS validators, lint (0 errors/48 baseline warnings), and diff-check. Exact-head CI remains pending."
 
   recovery_supersession_20261111: "Published #2039 head a283a73aa9fa177d4320496328e858017e3ac0a0 was observed with 16 successful and 3 skipped checks; older commit/push instructions describe predecessor checkpoints only. Main ad0085fd994f68dd827ed52a022a50ad84057a13 is integrated; derive the actual current PR HEAD and its CI from GitHub. No successor non-author review is claimed."
+
+current_main_alignment_20261111:
+  canonical_pr: 2039
+  verified_main: be8d58f16e60de9f3d37b8bdd9c9648214501536
+  aligned_predecessor_head: 3cfaa7335ada5125c7a8f7016373f9125b76fb70
+  method: NON_FORCE_TWO_PARENT_MERGE_EXISTING_DRAFT_PR
+  predecessor_exact_head_ci: "CI 42949466137 and five companion workflows SUCCESS at predecessor head only"
+  next_metadata_successor_exact_head_ci: PENDING
+  independent_non_author_review: PENDING_3_CURRENT_THREADS
+  formal_validator: PENDING
+  audit: PENDING
+  release_authorization: NOT_AUTHORIZED
+  operational_codex_dispatch: DISABLED
+  safety: "PAPER_ONLY; liveAuthority=NONE; productionMutationAllowed=false; aiAuthority=ZERO_AUTHORITY"

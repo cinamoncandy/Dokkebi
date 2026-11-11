@@ -9,7 +9,7 @@ Everything below is what the repository's records *claim*. Re-verify on GitHub b
 
 [`.aipos/handoffs/2026-11-11-pr2039-recovery-alignment.md`](handoffs/2026-11-11-pr2039-recovery-alignment.md) — Issue #903 / PR #2039 recovery alignment
 
-> Observed protected main `ad0085fd994f68dd827ed52a022a50ad84057a13`; existing Draft PR head `a283a73aa9fa177d4320496328e858017e3ac0a0` was published and has 16 successful / 3 skipped checks. These results apply only to that predecessor. It was conflicting with main in generated CURRENT_TRUTH. An isolated local merge regenerates the summary and preserves main's causal verification switch OFF.
+> Protected main `be8d58f16e60de9f3d37b8bdd9c9648214501536` was non-force merged into existing Draft PR #2039 at predecessor head `3cfaa7335ada5125c7a8f7016373f9125b76fb70`; all six PR workflows at that exact head succeeded (CI 42949466137, Actual PAPER 42949466177). This metadata successor requires its own fresh CI and independent review before any Formal Validator, Audit or Release; no Codex dispatch or production mutation is authorized.
 
 ## Work orders
 

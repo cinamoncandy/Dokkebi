@@ -1,6 +1,6 @@
 # Issue #903 / PR #2039 recovery alignment
 
-Observed protected main `ad0085fd994f68dd827ed52a022a50ad84057a13`; existing Draft PR head `a283a73aa9fa177d4320496328e858017e3ac0a0` was published and has 16 successful / 3 skipped checks. These results apply only to that predecessor. It was conflicting with main in generated CURRENT_TRUTH. An isolated local merge regenerates the summary and preserves main's causal verification switch OFF.
+Protected main `be8d58f16e60de9f3d37b8bdd9c9648214501536` was non-force merged into existing Draft PR #2039 at predecessor head `3cfaa7335ada5125c7a8f7016373f9125b76fb70`; all six PR workflows at that exact head succeeded (CI 42949466137, Actual PAPER 42949466177). This metadata successor requires its own fresh CI and independent review before any Formal Validator, Audit or Release; no Codex dispatch or production mutation is authorized.
 
 Local integration validation: 82 focused tests, 1343 isolated test files, non-incremental build, root/mobile typecheck, validate:full, security, AIPOS YAML and workflow authority map PASS; lint reports zero errors and 48 existing warnings. This evidence covers the integrated working tree, not a remote CI or review. Logs are in `nusa-2039-recovery-evidence-20261111`.
 
@@ -9,3 +9,10 @@ Historical handoffs describing unpublished pre-a283 successors are historical; d
 Inventory completeness, operational WIP/lease and automated coding E2E remain unverified. A separate isolated causal receipt for source run 42923997847 and consumer run 42924120287 reports CODE_ACTIONABLE with one bounded CodingRunner execution and replay rejection within one harness; it is tied to source SHA 4b66244310d6fad9abf37b38e8c1b0b030bfb47d, not current-main admission or complete L1.
 
 PAPER_ONLY / ZERO_AUTHORITY / FAIL_CLOSED; no real orders, transfers or production mutation.
+
+## Main alignment checkpoint — 2026-11-11
+
+- Protected main verified at `be8d58f16e60de9f3d37b8bdd9c9648214501536`; two-parent, non-force #2039 merge predecessor `3cfaa7335ada5125c7a8f7016373f9125b76fb70` included main-only PAPER and learning changes and retained the PR's Autopilot code.
+- At `3cfaa733`, six PR workflows passed. Earlier SHA and local evidence in this handoff remain historical and are not validation of the next metadata successor.
+- The work-order base anchor is advanced to verified main. Exact-head CI of the metadata successor, independent P1/P2 thread dispositions, Formal Validator, Audit and Release are not yet authorized or complete.
+- PAPER_ONLY; ZERO_AUTHORITY; no LIVE, real orders, production mutation, workflow dispatch, protected-main merge or reviewer self-approval.
