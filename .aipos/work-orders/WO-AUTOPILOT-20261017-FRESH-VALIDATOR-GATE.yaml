@@ -689,10 +689,16 @@ latest_main_sync_20261111:
   diff_partition_against_current_main:
     status: PASS
     changed_files: 49
-    total_chars_final_candidate: 369994
-    chunks: "AIPOS 132293; Autopilot runtime/tests 169562; workflow/script/integration 68139; exact coverage 369994."
+    total_chars_final_candidate: 370845
+    chunks: "AIPOS 133144; Autopilot runtime/tests 169562; workflow/script/integration 68139; exact coverage 370845."
     limits: "180000 characters per chunk; maximum 3 chunks / 540000 characters total; original per-input limit unchanged."
-  current_merge_validation: "PASS: preflight, build, typecheck, 1345 isolated test files, all constituent validate:full checks, AIPOS provenance, security gate (0 raw high/critical, 0 unmitigated, 0 secrets), and lint (0 errors, 48 warnings). The composite pnpm validate:full wrapper could not bootstrap because the sandbox blocks its write to /home/agent/.local/share/pnpm."
+  current_merge_validation: "PASS: preflight, build, typecheck, 1345 isolated test files, all constituent validate:full checks, AIPOS provenance, security gate (0 raw high/critical, 0 unmitigated, 0 secrets), and lint (0 errors, 48 warnings). The composite pnpm validate:full wrapper could not bootstrap its automatic package-manager setup in this sandbox."
+  first_successor_ci_failure:
+    head: 1d2be861a7389e40dcd2aaf91be06c25f43806ed
+    run: 43026806800
+    failed_step: Preflight
+    cause: "Repository portability validation rejected an environment-specific absolute home path included in the AIPOS validation note."
+    repair: "Removed the environment-specific path; repository portability, strict AIPOS YAML, provenance, drift, and cross-AI conformance validations passed after the correction."
   publication: PENDING
   exact_head_ci: PENDING
   fresh_non_author_validator: PENDING
