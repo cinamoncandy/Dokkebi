@@ -49,7 +49,7 @@ test('preflight verifies the free-tier Worker has no paid Container or Sandbox b
 });
 
 test('preflight waits boundedly for executed exact-main deploy evidence and live Worker revision', () => {
-  assert.match(workflow, /gh api --paginate --slurp "repos\/\$GITHUB_REPOSITORY\/actions\/runs\?head_sha=\$CURRENT_MAIN&status=completed&per_page=100"/);
+  assert.match(workflow, /gh api --paginate --slurp "repos\/\$GITHUB_REPOSITORY\/actions\/runs\?head_sha=\$CURRENT_MAIN&per_page=100"/);
   assert.match(workflow, /nusa-main-runs-pages\.json/);
   assert.match(workflow, /Array\.isArray\(pages\) \? pages\.flatMap/);
   assert.match(workflow, /Autopilot Cloudflare Deploy/);
