@@ -58,3 +58,19 @@ Safety stays: PAPER_ONLY, liveAuthority=NONE, productionMutationAllowed=false, a
 | `clearPersistentControlPlaneHold` | 서버 경로는 있고(`apply`는 `index.ts`에서, `read`는 `worker.ts`에서 쓰인다) 이 클라이언트 함수만 호출처가 없다. | 보류를 거는 원인이 풀렸을 때 풀어 주는 **실행 주체가 아직 없다.** 사람이 풀 때까지 보류를 유지하는 쪽이 안전할 수 있다. 소유자 결정 필요. |
 
 결론: 6개 중 지금 안전하게 줄일 수 있는 것은 보류 걸기·풀기 한 쌍(합치기)과 삭제 후보 두 개(`recoverExpiredLease`, `isDuplicateExecution`)뿐이다. 나머지 둘은 호출처가 생길 때까지 장부에 남긴다. 장부 숫자를 줄이는 것이 목적이 아니다.
+
+## 정정 2: 보류 걸기·풀기 "합치기"도 얻는 것이 거의 없다 (조정기 코드를 줄 단위로 비교한 뒤)
+조정기의 `applyControlPlaneHold`와 `clearControlPlaneHold`(`executionCoordinator.ts` 1235~1300줄)는 `applyExecutionHold`, `clearExecutionHold`와 이름만 닮았다.
+- 조정기의 보류는 저장소에 남는 **자기 기록**이다: 상태가 `ACTIVE`/`CLEARED`이고, 재전송 멱등성은 JSON 비교로, `CLEARED` 뒤의 재전송은 `CONTROL_PLANE_HOLD_REPLAY_AFTER_CLEAR`로 거절하며, SHA를 소문자로 정규화한다.
+- 메모리 모델의 보류는 **실행 상태의 한 단계**(`HOLD`)이고 `heldFromStatus`로 되돌아간다. 종료 상태(`BLOCKED`, `HUMAN_ONLY`, `FINALIZED`)의 우선순위 규칙이 있다. 조정기에는 이 개념이 없다.
+- 겹치는 것은 "해제 차단 조건"(`globalReleaseFreeze`, `blockedHuman`, `reworkRequired` 중 하나라도 참이면 해제 불가)과 필드 형식 검사뿐이다.
+
+따라서 공통 함수로 합쳐도 `applyExecutionHold`/`clearExecutionHold`는 여전히 호출처가 없고, 장부 숫자도 줄지 않는다. 작은 공통 판정(`해제 차단 여부`)을 뽑는 정리는 가능하지만 장부를 줄이지 않으므로 이 로드맵의 일이 아니다.
+
+**수정된 결론:** 1단계의 6개 함수는 지금 어느 것도 정직하게 연결하거나 지울 근거가 충분하지 않다. 메모리 상태 기계는 조정기와 다른 의미를 가진 평행 설계이고, 이를 조정기의 기록으로 쓸지(재설계) 폐기할지(삭제)는 **한 번의 구조 결정**이다. 이 결정은 실제 끝에서 끝까지의 흐름(5단계)이 `HOLD`/`AUDIT` 같은 상태를 실제로 필요로 하는지 본 뒤에 하는 것이 맞다. 그 전에 시험이 통과하는 코드를 지우거나 운영 조정기를 재설계하지 않는다.
+
+## 그러면 "스스로 고쳐 운영에 반영"에 진짜 남은 것
+1. **소유자 결정:** 실행 봉투의 `mutationAllowed=false`와 좁은 허용 범위(최대 12파일)를 어디까지 넓힐지. 안전 불변식이므로 독립 Validator 검토와 소유자 승인이 있어야 한다.
+2. **끝에서 끝까지의 한 번:** 진짜 CI 실패 하나가 PR 게시까지 가는 흐름(5단계). 시험용 회귀 방식은 소유자가 정한다(`FORGE_STATUS_20261103.md`의 A/B).
+3. 병합과 배포는 지금처럼 Audit와 Release 경로가 한다. 자율 코드가 이 경로를 대신하지 않는다.
+나머지 장부 항목(33개)은 위 1~2를 막지 않는다. 호출처가 생길 때 하나씩 줄인다.

@@ -8,6 +8,7 @@ finding: "Reading the code for the stage 1 design check showed the roadmap's sta
 change:
   - "docs/FORGE_L2_ROADMAP_20261111.md: stage 1 now says choose per function between merging the coordinator's duplicated logic into the pure function and removing the unused duplicate; adds a correction section and the single owner decision (the envelope's mutationAllowed=false and narrow scope)."
   - "Adds a per-function disposition table for the 6 stage 1 functions from a read-only comparison with executionCoordinator.ts. Notably isDuplicateExecution must not be wired as is: its cycleId+workItemId rule would block the re-runs that prepareProductionExecution deliberately lets through."
+  - "Correction 2 after comparing the coordinator's apply/clear hold line by line: they are a persisted record with ACTIVE/CLEARED and replay rules, not the in-memory HOLD execution state, so merging them would not wire applyExecutionHold/clearExecutionHold or shrink the ledger. The in-memory state machine is a parallel design; adopting or retiring it is one structural decision to take after the end-to-end flow shows which states it needs. The 33 ledger entries do not block the owner decision on mutationAllowed or the end-to-end proof."
 not_changed:
   - "No code, workflow, flag, limit, threshold, risk, capital or authority. The envelope's mutationAllowed=false stays; changing it needs independent Validator review and owner approval in its own PR."
 safety:
