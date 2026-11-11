@@ -15,5 +15,6 @@ safety:
   liveAuthority: NONE
   productionMutationAllowed: false
   aiAuthority: ZERO_AUTHORITY
+review_p2_20261111: "Independent review P2: added a test that runs the real candidate filter on a mixed fixture (in progress, failure, cancelled, skipped, other sha, other name, other path); only completed successful Deploy runs of the exact sha are candidates. Other status=completed lookups (deployment-convergence-watchdog CI lookup, githubReleaseCompletionResolver) are listed by the reviewer as possibly exposed; not changed here."
 review: "Workflow change: draft until a non-author review. Release is frozen by the very blocker this fixes, so the merge needs the owner (or the preflight recovering on its own)."
 next_action: "Review, owner merge; the next trusted preflight run should pass and close #1461; then the four ready PRs can merge through Audit/Release."
