@@ -582,7 +582,10 @@ function publicRuntimeLiveness(value: CloudRuntimeLivenessSnapshot): CloudRuntim
     } else if (rawCoverage.status === undefined && Number.isSafeInteger(rawCoverage.windowHours) && Number(rawCoverage.windowHours) > 0 && Number(rawCoverage.windowHours) <= 1440
       && Number.isSafeInteger(rawCoverage.coveredHours) && Number(rawCoverage.coveredHours) >= 0 && Number(rawCoverage.coveredHours) <= Number(rawCoverage.windowHours)
       && Number.isSafeInteger(rawCoverage.longestGapHours) && Number(rawCoverage.longestGapHours) >= 0 && Number(rawCoverage.longestGapHours) <= Number(rawCoverage.windowHours)
-      && typeof rawCoverage.ratio === "number" && Number.isFinite(rawCoverage.ratio) && rawCoverage.ratio >= 0 && rawCoverage.ratio <= 1 && typeof rawCoverage.meetsStudyBar === "boolean") {
+      && typeof rawCoverage.ratio === "number" && Number.isFinite(rawCoverage.ratio) && rawCoverage.ratio >= 0 && rawCoverage.ratio <= 1 && typeof rawCoverage.meetsStudyBar === "boolean"
+      // The numbers must agree with each other (independent review P2): ratio is covered/window rounded to 3 decimals, and the bar flag is only ratio >= 0.9.
+      && rawCoverage.ratio === Math.round((Number(rawCoverage.coveredHours) / Number(rawCoverage.windowHours)) * 1000) / 1000
+      && rawCoverage.meetsStudyBar === (rawCoverage.ratio >= 0.9)) {
       orderBookCoverage = { orderBookCoverage: { schemaVersion: 1, windowHours: Number(rawCoverage.windowHours), coveredHours: Number(rawCoverage.coveredHours), ratio: rawCoverage.ratio, longestGapHours: Number(rawCoverage.longestGapHours), meetsStudyBar: rawCoverage.meetsStudyBar, asOfMs: Number(rawCoverage.asOfMs) } };
     }
   }
