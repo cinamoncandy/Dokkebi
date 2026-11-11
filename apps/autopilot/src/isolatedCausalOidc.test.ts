@@ -89,6 +89,9 @@ test("isolated consumer identity pins OIDC, audience, repository, workflow/ref, 
     [{ sub: "repo:cinamoncandy/nusa:pull_request" }, /ISOLATED_CONSUMER_OIDC_SUBJECT_INVALID:KIND:repo:pull_request$/],
     [{ sub: "repo:cinamoncandy/nusa-fork:ref:refs/heads/main" }, /ISOLATED_CONSUMER_OIDC_SUBJECT_INVALID:REPOSITORY:cinamoncandy_nusa_fork:repo:ref$/],
     [{ sub: "repo:cinamoncandy/nusa:ref:refs/heads/main", repository: "cinamoncandy/nusa" }, /ISOLATED_CONSUMER_OIDC_REPOSITORY_INVALID/],
+    [{ sub: "repository_owner_id:1:repository_id:1296492411:ref:refs/heads/main" }, /ISOLATED_CONSUMER_OIDC_SUBJECT_INVALID:REPOSITORY:/],
+    [{ sub: "repository_id:1296492411:ref:refs/heads/main" }, /ISOLATED_CONSUMER_OIDC_SUBJECT_INVALID:REPOSITORY:/],
+    [{ sub: "repository_owner_id:213270074:repository_id:1296492411:repository_id:2:ref:refs/heads/main" }, /ISOLATED_CONSUMER_OIDC_SUBJECT_INVALID:REPOSITORY:/],
     [{ sub: "ARBITRARY_SUBJECT" }, /ISOLATED_CONSUMER_OIDC_SUBJECT_INVALID:REPOSITORY:NO_REPO_SEGMENT:NO_KEYS/],
     [{ sub: "repo:other/NUSA:ref:refs/heads/main" }, /ISOLATED_CONSUMER_OIDC_SUBJECT_INVALID:REPOSITORY:other_NUSA:repo:ref$/],
     [{ sub: "repo:cinamoncandy@213270074/NUSA@1:ref:refs/heads/main" }, /ISOLATED_CONSUMER_OIDC_SUBJECT_INVALID:REPOSITORY:/],
@@ -160,7 +163,7 @@ test("consumer OIDC accepts a customized subject template while the signed claim
     "repo:CINAMONCANDY/nusa:ref:refs/heads/main",
     "repo:cinamoncandy@213270074/NUSA@1296492411:ref:refs/heads/main",
     `repo:${repository}:workflow:NUSA Isolated Causal Verification Consumer:ref:refs/heads/main`,
-    `repository_owner_id:1:repository_id:1296492411:ref:refs/heads/main`,
+    `repository_owner_id:213270074:repository_id:1296492411:ref:refs/heads/main`,
     `repo:${repository}:job_workflow_ref:${repository}/.github/workflows/causal-verification-consumer.yml@refs/heads/main`,
   ]) {
     const fixture = await signedToken({ sub });

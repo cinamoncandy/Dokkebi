@@ -364,6 +364,13 @@ test("a failed tick publishes only a bounded error class, never the message", ()
   assert.equal(tickErrorClass(Object.assign(new Error("secret path /var/lib/x"), { code: "ERR_SQLITE_ERROR" })), "ERR_SQLITE_ERROR");
   assert.equal(tickErrorClass(new TypeError("boom")), "TYPEERROR");
   assert.equal(tickErrorClass("not an error"), "UNKNOWN_ERROR");
+  // a plain Error whose whole message is a fixed constant names that constant; any other text is never echoed
+  assert.equal(tickErrorClass(new Error("RESEARCH_MANIFEST_UNAVAILABLE")), "RESEARCH_MANIFEST_UNAVAILABLE");
+  assert.equal(tickErrorClass(new TypeError("CANDLE_SERIES_INVALID")), "TYPEERROR_CANDLE_SERIES_INVALID");
+  assert.equal(tickErrorClass(new Error("Cannot read properties of undefined")), "ERROR");
+  assert.equal(tickErrorClass(new Error("TOKEN ghp_abc")), "ERROR");
+  assert.equal(tickErrorClass(new Error("lower_case_code")), "ERROR");
+  assert.equal(tickErrorClass(new Error(`A${"B".repeat(80)}`)), "ERROR", "an over-long constant is not echoed");
   const t = new ClosedLearningLoopStatusTracker(3_600_000);
   t.observeError(5, tickErrorClass(new RangeError("x")));
   const snap = t.snapshot();

@@ -636,3 +636,62 @@ test("malformed heartbeat and PAPER authority changes fail closed", async () => 
     assert.match(result.evidence.failure_code, /PAPER_RUNTIME_HEARTBEAT_INVALID|PAPER_AUTHORITY_INVARIANT_VIOLATION/);
   }
 });
+
+const reconnectingOverrides = (from, to) => (readCount) => (readCount >= from && readCount <= to
+  ? { operations: { runtimeState: "HALTED", schedulerRunning: true, runtimeHaltReasons: ["KILL_SWITCH_ACTIVE"], heartbeat: { startedAt: BASE_TIME - 1_000, lastHeartbeatAt: BASE_TIME, lastError: "PUBLIC_MARKET_RECONNECTING" } } }
+  : {});
+
+test("a runner-side public-market reconnect that recovers inside the grace window does not fail the observation", async () => {
+  const fixed = [1, 2, 3].map((cycle) => cycleEvents(cycle, BASE_TIME + cycle * 1_000));
+  const result = await runObservation({
+    maximumDurationMs: 60_000,
+    snapshotOverrides: reconnectingOverrides(2, 6),
+    currentEvents: (readCount) => (readCount < 7 ? [] : fixed),
+  });
+  assert.equal(result.status, "PASS", JSON.stringify({ code: result.evidence.failure_code, stop: result.evidence.stop_reason, diag: result.evidence.failure_diagnostic }));
+  assert.equal(result.evidence.transient_reconnect_episodes, 1);
+  assert.equal(result.evidence.decision_cycles_observed, 3);
+});
+
+test("a reconnect that never recovers still fails closed after the bounded grace", async () => {
+  const result = await runObservation({ maximumDurationMs: 120_000, snapshotOverrides: reconnectingOverrides(2, 10_000) });
+  assert.equal(result.status, "FAIL");
+  assert.equal(result.evidence.stop_reason, "RUNTIME_OR_EVIDENCE_FAILURE");
+  assert.equal(result.evidence.failure_code, "PAPER_RUNTIME_NOT_RUNNING");
+  assert.equal(result.evidence.failure_diagnostic.last_error_code, "PUBLIC_MARKET_RECONNECTING");
+});
+
+const recoveredOverrides = (from, to) => (readCount) => (readCount >= from && readCount <= to
+  ? { operations: { runtimeState: "HALTED", schedulerRunning: true, runtimeHaltReasons: ["KILL_SWITCH_ACTIVE"], heartbeat: { startedAt: BASE_TIME - 1_000, lastHeartbeatAt: BASE_TIME, lastError: "PUBLIC_MARKET_RECOVERED" } } }
+  : {});
+
+test("the moment after the market recovered but before the halt is lifted is inside the same grace (CI run 42954802110)", async () => {
+  const fixed = [1, 2, 3].map((cycle) => cycleEvents(cycle, BASE_TIME + cycle * 1_000));
+  const result = await runObservation({
+    maximumDurationMs: 60_000,
+    snapshotOverrides: recoveredOverrides(2, 4),
+    currentEvents: (readCount) => (readCount < 5 ? [] : fixed),
+  });
+  assert.equal(result.status, "PASS", JSON.stringify({ code: result.evidence.failure_code, stop: result.evidence.stop_reason, diag: result.evidence.failure_diagnostic }));
+  assert.equal(result.evidence.transient_reconnect_episodes, 1);
+});
+
+test("a runtime that stays halted after PUBLIC_MARKET_RECOVERED still fails closed after the grace", async () => {
+  const result = await runObservation({ maximumDurationMs: 120_000, snapshotOverrides: recoveredOverrides(2, 10_000) });
+  assert.equal(result.status, "FAIL");
+  assert.equal(result.evidence.failure_code, "PAPER_RUNTIME_NOT_RUNNING");
+  assert.equal(result.evidence.failure_diagnostic.last_error_code, "PUBLIC_MARKET_RECOVERED");
+});
+
+test("any other halt reason or error fails immediately without grace", async () => {
+  for (const operations of [
+    { runtimeState: "HALTED", schedulerRunning: true, runtimeHaltReasons: ["KILL_SWITCH_ACTIVE", "AI_P0_OPEN"], heartbeat: { startedAt: BASE_TIME - 1_000, lastHeartbeatAt: BASE_TIME, lastError: "PUBLIC_MARKET_RECONNECTING" } },
+    { runtimeState: "HALTED", schedulerRunning: true, runtimeHaltReasons: ["KILL_SWITCH_ACTIVE"], heartbeat: { startedAt: BASE_TIME - 1_000, lastHeartbeatAt: BASE_TIME, lastError: null } },
+    { runtimeState: "STOPPED", schedulerRunning: false, heartbeat: { startedAt: BASE_TIME - 1_000, lastHeartbeatAt: BASE_TIME, lastError: "PUBLIC_MARKET_RECONNECTING" } },
+  ]) {
+    const result = await runObservation({ maximumDurationMs: 60_000, snapshotOverrides: (readCount) => (readCount === 2 ? { operations } : {}) });
+    assert.equal(result.status, "FAIL", JSON.stringify(operations));
+    assert.equal(result.evidence.transient_reconnect_episodes, 0);
+    assert.ok(result.readCount <= 3, "no grace polling for a non-transient failure");
+  }
+});
