@@ -79,3 +79,38 @@ test("CI_FAILED without exact bounded identity fails closed", () => {
   assert.equal(result.reason, "ci-failure-missing-bounded-identity");
   assert.equal(result.mutationAllowed, false);
 });
+
+test("events that carry no evidence of anything to fix plan no coding request (the evidence-free continue lane is closed)", () => {
+  for (const kind of ["MAIN_PUSH", "CI_SUCCEEDED", "PR_CHANGED"] as const) {
+    const result = planAutopilotExecution({
+      kind,
+      repository: "cinamoncandy/NUSA",
+      headSha: "a".repeat(40),
+      prNumber: kind === "PR_CHANGED" ? 7 : null,
+      workflowRunId: kind === "CI_SUCCEEDED" ? 99 : null,
+      workflowRunAttempt: null,
+      reason: "x",
+      mutationAllowed: false,
+    });
+    assert.equal(result.kind, "NOOP", kind);
+    assert.equal(result.reason, "evidence-free-continue-disabled", kind);
+    assert.equal(result.mutationAllowed, false, kind);
+    assert.equal("executionId" in result, false, kind);
+  }
+});
+
+test("a failed CI run still plans an evidence-bound request that names the failed run", () => {
+  const headSha = "b".repeat(40);
+  const result = planAutopilotExecution({
+    kind: "CI_FAILED",
+    repository: "cinamoncandy/NUSA",
+    headSha,
+    prNumber: null,
+    workflowRunId: 123,
+    workflowRunAttempt: 1,
+    reason: "workflow-run:failure",
+    mutationAllowed: false,
+  });
+  assert.equal(result.kind, "REPOSITORY_AUTOPILOT");
+  assert.equal(result.reason, `gha:123:${headSha}:failure`);
+});

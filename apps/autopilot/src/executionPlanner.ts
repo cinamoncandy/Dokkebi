@@ -103,14 +103,20 @@ export function planAutopilotExecution(dispatch: AutopilotDispatchPlan): Autopil
   }
 
   if (dispatch.kind === "MAIN_PUSH" || dispatch.kind === "CI_SUCCEEDED" || dispatch.kind === "PR_CHANGED") {
+    // These events carry no evidence of anything to fix. They used to request a generic coding run
+    // ("continue-from:<kind>"), which is how the Workers AI engine produced twelve PRs of which one
+    // merged, each a +1/-1 redundant condition (#2294 added `currentWip > 0` right above
+    // `positiveInteger(currentWip)`; #2367 added `!Number.isNaN` after `Number.isFinite`). Coding is
+    // admitted only where the request names evidence: a failed run (`gha:`, via causal admission) or an
+    // explicit task. Everything else is a NOOP, so enabling coding later cannot start the evidence-free lane.
     return freeze({
-      kind: "REPOSITORY_AUTOPILOT",
+      kind: "NOOP",
       repository: dispatch.repository,
       headSha: dispatch.headSha,
       prNumber: dispatch.prNumber,
       workflowRunId: dispatch.workflowRunId,
       workflowRunAttempt: dispatch.workflowRunAttempt,
-      reason: `continue-from:${dispatch.kind.toLowerCase()}`,
+      reason: "evidence-free-continue-disabled",
       mutationAllowed: false,
     });
   }
