@@ -1,0 +1,20 @@
+id: WO-OPS-20261110-RELEASE-MERGE-TRANSIENT-RETRY
+title: "The canonical Release merge step survives a transient GitHub API failure"
+status: READY_FOR_REVIEW
+created: 2026-11-10
+implementation_branch: claude/release-merge-transient-retry
+authority_impact: none
+finding: "Release run 42857499288 for #3063 passed Audit and preflight, then the merge PUT failed and the first fail-closed read-back returned an empty body ('unexpected end of JSON input'); under set -e that single read ended the step and invalidated nusa/release-authorized. Code and base were unchanged."
+change:
+  - "The exact-head merge is attempted up to three times with backoff; it stops when the PR is merged or its head moved."
+  - "The fail-closed read-back tolerates a failed or non-JSON read (8 polls) instead of exiting on the first one."
+not_changed:
+  - "The merge stays bound to the exact audited head and base; the verification of parents, main and ancestry is unchanged; no permission or token change."
+safety:
+  paper_only: true
+  liveAuthority: NONE
+  productionMutationAllowed: false
+  aiAuthority: ZERO_AUTHORITY
+validation:
+  - "Workflow action input, pin and authority-map validators pass; the release and audit contract tests pass, including a new test for the retry."
+next_action: "Review, merge through the release path."
