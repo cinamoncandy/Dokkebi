@@ -663,6 +663,7 @@ test("a reconnect at observation time is waited out within the bounded grace and
   assert.equal(result.evidence.stop_reason, "MINIMUM_DURATION_AND_DECISION_CYCLES_REACHED");
   assert.equal(result.evidence.market_reconnect.status, "RECOVERED");
   assert.equal(result.evidence.market_reconnect.episode_count, 1);
+  assert.equal(result.evidence.transient_reconnect_episodes, 1);
   assert.equal(result.evidence.market_reconnect.episodes[0].samples, 5);
   assert.ok(result.evidence.market_reconnect.episodes[0].duration_ms <= result.evidence.market_reconnect.grace_budget_ms);
   assert.deepEqual(result.evidence.market_reconnect.error_codes, ["PUBLIC_MARKET_RECONNECTING"]);

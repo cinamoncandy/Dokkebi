@@ -491,7 +491,7 @@ function safeRuntimeFailureDiagnostic(response, observedAtMs) {
 // non-latched kill switch (cloudRuntimeDashboardHydrator sets killSwitchActive
 // while no executable market data exists). Only this exact locally-owned shape is
 // waitable, for a finite cumulative budget; the kill switch itself is untouched.
-const WAITABLE_RECONNECT_ERRORS = new Set(["PUBLIC_MARKET_DISCONNECTED", "PUBLIC_MARKET_RECONNECTING", "PUBLIC_MARKET_RECOVERED"]);
+const WAITABLE_RECONNECT_ERRORS = new Set(["PUBLIC_MARKET_DISCONNECTED", "PUBLIC_MARKET_RECONNECTING", "PUBLIC_MARKET_RECOVERED", "MARKET_DATA_RECONNECTING"]);
 const MARKET_RECONNECT_GRACE = Object.freeze({ defaultMs: 30_000, minimumMs: 1_000, maximumMs: 60_000, maximumEpisodes: 3 });
 
 function waitableMarketReconnect(response, snapshotFailure, collectionFailure) {
@@ -876,6 +876,7 @@ async function observeAutomaticRuntime({
     ...(failureDiagnostic == null ? {} : { failure_diagnostic: failureDiagnostic }),
     event_evidence_truncated: eventEvidenceTruncated,
     market_reconnect: marketReconnect,
+    transient_reconnect_episodes: reconnectEpisodes.filter((episode) => episode.status === "RECOVERED").length,
     projection_window: {
       maximum_events: 250,
       capped_samples: cappedProjectionSamples,

@@ -32,3 +32,10 @@ verification_commands:
   - "git diff --check"
 local_validation: "PASS 58/58 focused tests; git diff --check clean. check-runtime/validate:full left to CI (Node 24)."
 independent_review: PENDING_FRESH_VALIDATOR_SESSION
+
+main_reconciliation_20261111:
+  aligned_protected_main: be8d58f16e60de9f3d37b8bdd9c9648214501536
+  overlapping_predecessor: "Merged #3073's per-episode 45s proposal is replaced in this Draft PR by the original bounded 30s cumulative/3-episode Work Order acceptance, pending independent validation and owner disposition."
+  preserved_main_compatibility: "Accept MARKET_DATA_RECONNECTING as already allowed on main and retain transient_reconnect_episodes for legacy evidence consumers; require schedulerRunning=true and keep kill-switch behavior unchanged."
+  exact_head_ci: PENDING_FRESH
+  independent_review: PENDING
