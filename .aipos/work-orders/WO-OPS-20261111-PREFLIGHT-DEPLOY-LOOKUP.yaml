@@ -1,0 +1,20 @@
+id: WO-OPS-20261111-PREFLIGHT-DEPLOY-LOOKUP
+title: "The Cloudflare credential preflight finds the exact-main deploy run again"
+status: READY_FOR_REVIEW
+created: 2026-11-11
+implementation_branch: claude/preflight-deploy-lookup
+authority_impact: none
+finding: "Since the merge of #3090 (main 7f8de2167) the trusted preflight fails with 'No successful exact-main Cloudflare deploy', reopened P0 #1461, and Release is serialized, so no PR merges. The deploy run 43022846154 exists and succeeded (deploy and verify steps success). The GitHub API call actions/runs?head_sha=<main>&status=completed omits that run (46 runs, no Deploy), the same call without status returns it (47 runs). Reproduced three times with curl."
+change:
+  - "autopilot-cloudflare-credential-preflight.yml: drop &status=completed from the exact-main runs query. The node filter that follows still requires name, path, head_sha, conclusion === success and the job/step checks, so strictness is unchanged."
+  - "tests/autopilot-cloudflare-credential-preflight.test.js: the expected query no longer carries the status filter."
+not_changed:
+  - "Which deploy evidence counts (deployed or runtime_unchanged), the live-revision checks, the P0 blocker logic, Release, Audit, authority."
+safety:
+  paper_only: true
+  liveAuthority: NONE
+  productionMutationAllowed: false
+  aiAuthority: ZERO_AUTHORITY
+review_p2_20261111: "Independent review P2: added a test that runs the real candidate filter on a mixed fixture (in progress, failure, cancelled, skipped, other sha, other name, other path); only completed successful Deploy runs of the exact sha are candidates. Other status=completed lookups (deployment-convergence-watchdog CI lookup, githubReleaseCompletionResolver) are listed by the reviewer as possibly exposed; not changed here."
+review: "Workflow change: draft until a non-author review. Release is frozen by the very blocker this fixes, so the merge needs the owner (or the preflight recovering on its own)."
+next_action: "Review, owner merge; the next trusted preflight run should pass and close #1461; then the four ready PRs can merge through Audit/Release."
