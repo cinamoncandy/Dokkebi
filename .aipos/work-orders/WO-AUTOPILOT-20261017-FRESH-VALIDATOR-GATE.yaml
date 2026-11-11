@@ -623,3 +623,57 @@ latest_runtime_dependency_review_20261030:
   exact_head_ci_review: PENDING_SUCCESSOR
   next: "Complete local gates; reverify current PR head/main; publish only a non-force successor on the existing branch; require exact-head CI/companions and fresh independent review. Leave threads unresolved and PR Draft."
   safety: PAPER_ONLY_LIVE_NONE_PRODUCTION_MUTATION_FALSE_AI_ZERO_AUTHORITY
+
+latest_diff_partition_repair_20261111:
+  issue: 2760
+  pull_request: 2772
+  branch: fix/validator-evidence-gate-2760
+  protected_main: 4ed922c2947500780fc26de0c67eec8f8c11d523
+  predecessor_head: d5b4e0f7ecc6ad078ea5bece8697ae6987dc8e7f
+  root_cause: "Audit run 43005786185 sent the immutable exact base..head diff (327142 characters across 46 files) to the existing single-input path; fetchPullDiff rejected it at 180000 characters before either Validator or Audit could inspect it. The cap applied to the whole comparison rather than one model input. Main-merge ancestry is excluded by the exact base..head comparison; the rejection is caused by the actual accumulated PR diff."
+  repair:
+    files:
+      - apps/autopilot/src/auditRunner.ts
+      - apps/autopilot/src/auditRunner.test.ts
+      - apps/autopilot/src/auditRunnerResponseSchema.test.ts
+      - apps/autopilot/src/aiCallTelemetry.ts
+      - apps/autopilot/src/aiCallTelemetry.test.ts
+      - tests/autopilot-independent-audit-contract.test.js
+    contract: "Keep MAX_DIFF_CHARS=180000 per model input. Partition only at complete Git file-diff boundaries; bind each block to exact GitHub changed-file metadata; reject duplicate, missing, oversized, over-total, over-count, or incomplete coverage; review every chunk sequentially and aggregate findings only after all segments succeed; re-verify exact PR/base/CI after the final segment."
+    hard_bounds: "At most 3 chunks, 180000 diff characters each, and 540000 total; the complete staged successor comparison partitions into AIPOS=130018, Autopilot=169562, workflow/script/integration=68139 characters (sum exactly 367719)."
+    observability: "C2_AUDIT logs only segment index/count, file count, and diff character count; no diff or source content is logged."
+  local_validation_checkpoint:
+    exact_compare: "PASS on the staged successor tree against protected base 4ed922c2947500780fc26de0c67eec8f8c11d523; 49 changed files; chunk coverage 367719/367719 characters."
+    focused_typescript: PASS
+    focused_tests: "auditRunner and aiCallTelemetry plus independent-audit contracts passed after the repair."
+    full_suite: "PASS: pnpm run test completed all 1345 isolated test files. The suite used the same-version Electron binary already installed in the shared workspace because the isolated dependency install could not download Electron."
+    build: PASS
+    typecheck: PASS
+    validate_full: PASS
+    security_gate: "PASS: rawHighCritical=0, unmitigated=0, secrets=0."
+    lint: "PASS: 0 errors, 48 existing repository warnings; no warning in a changed file."
+    aipos: "PASS: provenance, strict YAML (646 files), drift, conformance, current truth."
+    diff_check: PASS
+  predecessor_exact_head_ci:
+    run: 43016532388
+    result: FAILURE
+    cause: "coverage-core-2 ran tests/aipos-current-truth.test.js, which found the generated work-order count stale at 579/550 after current main had 578/549. This successor contains the generator-produced current-truth repair."
+    companions: "Actual PAPER 43016532330, Capability Guard 43016532579, Activation 43016532417, Transport 43016532297, Read-only Broker 43016532317 all succeeded; predecessor receipts are historical after successor publication."
+  exact_head_ci: PENDING_SUCCESSOR_PUBLICATION
+  fresh_review: PENDING_ON_SUCCESSOR_HEAD
+  review_threads:
+    status: "Nine current non-outdated findings remain unresolved. A read-only source/test recheck found the reported mechanisms addressed; this is author-side technical re-adjudication, not an independent non-author Validator receipt. Keep all threads unresolved."
+    dispositions:
+      - "4379233529: exact-head bounded dependency context is fetched and included; validatorRunner dependency/source tests cover it."
+      - "4384830160: tree data is read from /git/commits/{sha}; validator tests mock this endpoint."
+      - "4384830164: full modified source is appended to bounded context; validator test verifies complete changed source."
+      - "4386945148: removed safety imports are resolved from exact base; tests/auditRunner and validatorRunner cover removed-import context."
+      - "4424899846: emitted .js specifiers map to tracked TS sources; exact dependency resolution is regression tested."
+      - "4434301179: hunkless rename/mode metadata emits deterministic @metadata refs."
+      - "4434364214: metadata-only evidence cannot satisfy SOURCE_CONTENT scope; adversarial scope regression is present."
+      - "4434364217: repository paths reject control characters before evidence refs enter prompts."
+      - "4434412097: trusted validator evidence schema accepts only typed, scope-consistent evidenceScope; tests/fresh-validator-evidence covers positive and mismatched cases."
+  validator_audit_release: NOT_STARTED
+  remote_state_at_prepublication: "At the final prepublication read, protected main and PR base were 4ed922c2947500780fc26de0c67eec8f8c11d523, PR #2772 was Draft at d5b4e0f7ecc6ad078ea5bece8697ae6987dc8e7f, and this validated successor was local only."
+  next: "Publish this validated tree as a normal non-force successor to the existing branch. Then wait for exact-head CI/companions and fresh non-author review. Only after required independent validation may Audit run through the canonical gated path; no author approval, direct main merge, or workflow dispatch."
+  safety: PAPER_ONLY_LIVE_NONE_PRODUCTION_MUTATION_FALSE_REAL_ORDER_FALSE_REAL_TRANSFER_FALSE_AI_ZERO_AUTHORITY_FAIL_CLOSED

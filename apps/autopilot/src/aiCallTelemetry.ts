@@ -35,7 +35,14 @@ export function aiCallUsage(response: unknown): AiCallUsage {
   return Object.freeze({ promptTokens: count(record.prompt_tokens), completionTokens: count(record.completion_tokens) });
 }
 
-export function logAiCall(input: Readonly<{ caller: AiCaller; model: string; attempt: number; promptChars: number; response: unknown }>, log: (line: string) => void = console.log): void {
+export function logAiCall(input: Readonly<{
+  caller: AiCaller;
+  model: string;
+  attempt: number;
+  promptChars: number;
+  response: unknown;
+  reviewSegment?: Readonly<{ index: number; count: number; changedFiles: number; diffChars: number }>;
+}>, log: (line: string) => void = console.log): void {
   try {
     const usage = aiCallUsage(input.response);
     log(JSON.stringify({
@@ -44,6 +51,12 @@ export function logAiCall(input: Readonly<{ caller: AiCaller; model: string; att
       model: input.model,
       attempt: input.attempt,
       promptChars: input.promptChars,
+      ...(input.reviewSegment ? {
+        reviewSegment: input.reviewSegment.index,
+        reviewSegmentCount: input.reviewSegment.count,
+        reviewSegmentFileCount: input.reviewSegment.changedFiles,
+        reviewSegmentDiffChars: input.reviewSegment.diffChars,
+      } : {}),
       promptTokens: usage.promptTokens,
       completionTokens: usage.completionTokens,
       estimatedNeurons: estimateWorkersAiNeurons(input.model, usage),

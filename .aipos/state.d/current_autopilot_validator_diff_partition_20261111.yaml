@@ -1,0 +1,39 @@
+current_autopilot_validator_diff_partition_20261111:
+  work_order: WO-AUTOPILOT-20261017-FRESH-VALIDATOR-GATE
+  status: LOCAL_VALIDATION_PASS_PENDING_PUBLICATION_AND_INDEPENDENT_GATES
+  issue: 2760
+  pull_request: 2772
+  branch: fix/validator-evidence-gate-2760
+  protected_main_sha: 4ed922c2947500780fc26de0c67eec8f8c11d523
+  predecessor_head: d5b4e0f7ecc6ad078ea5bece8697ae6987dc8e7f
+  root_cause: "Audit run 43005786185 rejected its immutable base..head input at the 180000-character whole-diff cap before Validator or Audit ran; that failed predecessor comparison was 327142 characters across 46 files. Main merge ancestry is outside the exact comparison."
+  repair: "Keep 180000 characters per model input; partition only complete diff-file blocks with exact changed-file metadata binding; hard cap 3 chunks / 540000 total; require once-only file identity and exact full character coverage; fail closed on every missing, duplicate, oversized, or failed segment; aggregate only after all segments and exact PR/base/CI read-back."
+  observed_partition:
+    aipos_chars: 130018
+    autopilot_chars: 169562
+    workflow_script_integration_chars: 68139
+    exact_coverage_chars: 367719
+    changed_files: 49
+    base_sha: 4ed922c2947500780fc26de0c67eec8f8c11d523
+    candidate_head: "staged successor tree; commit SHA pending"
+  local_validation:
+    exact_compare_partition: PASS
+    typescript_compile: PASS
+    focused_tests: PASS
+    build: PASS
+    typecheck: PASS
+    full_suite: "PASS (1345 isolated test files; existing same-version Electron binary supplied through ELECTRON_OVERRIDE_DIST_PATH because network download failed)."
+    validate_full: PASS
+    security_gate: "PASS (0 unmitigated findings, 0 secrets)."
+    lint: "PASS (0 errors, 48 repository warnings; no changed-file warning)."
+    aipos: "PASS (provenance, strict YAML, drift, conformance, generated current truth)."
+    diff_check: PASS
+  remote:
+    pr_state_at_predecessor: DRAFT
+    predecessor_ci: "43016532388 failed only at coverage-core-2 because CURRENT_TRUTH.md counted 579/550 after main had 578/549; the generated fix is in this successor."
+    code_publication: PENDING
+    exact_head_ci: PENDING
+    fresh_non_author_validator: PENDING
+    audit_release_merge: NOT_STARTED
+  next: "At this prepublication checkpoint the PR is Draft at d5b4e0f7 and all local gates pass. Publish this verified tree only through a normal non-force update of the existing branch; then require fresh exact-head CI/companions and independent non-author validation before Audit or Release."
+  safety: PAPER_ONLY_LIVE_NONE_PRODUCTION_MUTATION_FALSE_REAL_ORDER_FALSE_REAL_TRANSFER_FALSE_AI_ZERO_AUTHORITY_FAIL_CLOSED_WIP_MAX_2

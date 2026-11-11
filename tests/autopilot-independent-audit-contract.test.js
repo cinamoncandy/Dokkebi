@@ -89,7 +89,11 @@ test("Audit supplies deterministic current diff evidence refs without weakening 
   assert.match(auditRunner, /cannot support source-content claims/);
   assert.match(auditRunner, /AUDIT_VERDICT_FINDING_EVIDENCE_SCOPE_INVALID/);
   assert.match(auditRunner, /\[\\p\{Cc\}\\u2028\\u2029\]/);
-  assert.match(auditRunner, /\.\.\.\[\.\.\.currentDiffEvidenceRefs\(diff, changedFiles\)\]\.sort\(\)/);
+  assert.match(auditRunner, /\.\.\.\[\.\.\.currentDiffEvidenceRefs\(chunk\.diff, chunk\.changedFiles\)\]\.sort\(\)/);
+  assert.match(auditRunner, /Every BLOCKER evidenceRef must be exactly one current ref below/);
+  assert.match(auditRunner, /AUDIT_DIFF_COVERAGE_MISMATCH/);
+  assert.match(auditRunner, /AUDIT_CHUNK_COVERAGE_INCOMPLETE/);
+  assert.match(auditRunner, /AUDIT_DIFF_CHUNK_COUNT_EXCEEDED/);
   assert.match(auditRunner, /Never invent or transform a ref/);
   assert.match(auditRunner, /AUDIT_VERDICT_BLOCKER_EVIDENCE_NOT_CURRENT/);
   assert.match(auditRunner, /!currentRefs\.has\(finding\.evidenceRef\)/);

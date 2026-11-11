@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { currentDiffEvidenceRefs, executeIndependentAudit, executeIndependentValidator, executeProviderGatedAudit, validateAuditModelVerdict, validateAuditRunnerRequest, type AuditRunnerRequest, type ValidatorRunnerRequest } from "./auditRunner";
+import { currentDiffEvidenceRefs, executeIndependentAudit, executeIndependentValidator, executeProviderGatedAudit, partitionReviewDiff, validateAuditModelVerdict, validateAuditRunnerRequest, type AuditRunnerRequest, type ChangedPullFile, type ValidatorRunnerRequest } from "./auditRunner";
 
 const HEAD = "a".repeat(40);
 const BASE = "b".repeat(40);
@@ -13,6 +13,20 @@ const request: AuditRunnerRequest = Object.freeze({
   workflowRunId: 33450000001,
   executionId: "audit:1362:33450000001",
   dedupeKey: `audit:1362:${HEAD}`,
+  mutationAllowed: false,
+  liveAuthority: "NONE",
+  productionMutationAllowed: false,
+  aiAuthority: "ZERO_AUTHORITY",
+});
+const validatorReviewRequest: ValidatorRunnerRequest = Object.freeze({
+  kind: "VALIDATOR_REQUEST",
+  repository: request.repository,
+  prNumber: request.prNumber,
+  headSha: request.headSha,
+  baseSha: request.baseSha,
+  workflowRunId: request.workflowRunId,
+  executionId: "validator:1362:33450000001",
+  dedupeKey: `validator:1362:${request.headSha}`,
   mutationAllowed: false,
   liveAuthority: "NONE",
   productionMutationAllowed: false,
@@ -110,6 +124,26 @@ function fetchSequence(options: {
     if (!next) throw new Error("unexpected fetch");
     return next;
   };
+}
+
+function reviewDiffFixture(filenames: readonly string[], linesPerFile = 500): { readonly changedFiles: readonly ChangedPullFile[]; readonly diff: string; readonly blocks: ReadonlyMap<string, string> } {
+  const changedFiles = Object.freeze(filenames.map((filename) => Object.freeze({ filename, status: "modified" as const })));
+  const blocks = new Map<string, string>();
+  for (const [index, file] of changedFiles.entries()) {
+    const line = `${String.fromCharCode(97 + (index % 26))}${"x".repeat(79)}`;
+    const added = Array.from({ length: linesPerFile }, () => `+${line}`).join("\n");
+    blocks.set(file.filename, [
+      `diff --git a/${file.filename} b/${file.filename}`,
+      `index ${"0".repeat(7)}..${"1".repeat(7)} 100644`,
+      `--- a/${file.filename}`,
+      `+++ b/${file.filename}`,
+      `@@ -1,1 +1,${linesPerFile + 1} @@`,
+      "-before",
+      added,
+      "",
+    ].join("\n"));
+  }
+  return Object.freeze({ changedFiles, diff: [...blocks.values()].join(""), blocks });
 }
 
 function ai(responseBody: unknown) {
@@ -527,6 +561,214 @@ test("fails closed when GitHub diff evidence does not cover every changed file",
     executeIndependentAudit(request, auditEnv(model), fetchSequence({ firstPull: pull(HEAD, BASE, 2), secondPull: pull(HEAD, BASE, 2) }) as never),
     /AUDIT_DIFF_FILE_COUNT_MISMATCH/,
   );
+});
+
+test("partitions a large exact diff by complete review groups and preserves every file block once", () => {
+  const fixture = reviewDiffFixture([
+    ".aipos/evidence/a.yaml",
+    ".aipos/evidence/b.yaml",
+    "apps/autopilot/src/review-a.md",
+    "apps/autopilot/src/review-b.md",
+    "tests/review-a.md",
+    "scripts/review-b.md",
+  ]);
+  const chunks = partitionReviewDiff(fixture.diff, fixture.changedFiles);
+  const chunkBlocks = chunks.flatMap((chunk) => chunk.diff.split(/(?=^diff --git )/m).filter(Boolean));
+  const originalBlocks = [...fixture.blocks.values()];
+
+  assert.ok(fixture.diff.length > 180_000);
+  assert.equal(chunks.length, 3);
+  assert.equal(chunks.reduce((total, chunk) => total + chunk.diff.length, 0), fixture.diff.length);
+  assert.deepEqual(chunkBlocks.sort(), originalBlocks.sort());
+  for (const chunk of chunks) {
+    assert.ok(chunk.diff.length <= 180_000);
+    assert.doesNotThrow(() => currentDiffEvidenceRefs(chunk.diff, chunk.changedFiles));
+    assert.equal(chunk.index >= 1 && chunk.index <= chunk.count, true);
+  }
+  const assignedPaths = chunks.flatMap((chunk) => chunk.changedFiles.map((file) => file.filename));
+  assert.deepEqual([...assignedPaths].sort(), fixture.changedFiles.map((file) => file.filename).sort());
+  assert.equal(new Set(assignedPaths).size, fixture.changedFiles.length);
+});
+
+test("keeps one oversized file and totals beyond the hard bound fail closed", () => {
+  const oversizedFile = reviewDiffFixture(["apps/autopilot/src/oversized.ts"], 2_300);
+  assert.throws(() => partitionReviewDiff(oversizedFile.diff, oversizedFile.changedFiles), /AUDIT_DIFF_FILE_TOO_LARGE/);
+
+  const oversizedTotal = reviewDiffFixture(Array.from({ length: 14 }, (_, index) => `tests/large-${index}.md`));
+  assert.throws(() => partitionReviewDiff(oversizedTotal.diff, oversizedTotal.changedFiles), /AUDIT_DIFF_TOTAL_TOO_LARGE/);
+});
+
+test("does not exceed the bounded chunk count when a review group cannot fit", () => {
+  const fixture = reviewDiffFixture([
+    ".aipos/a.yaml", ".aipos/b.yaml", ".aipos/c.yaml", ".aipos/d.yaml", ".aipos/e.yaml",
+    "apps/autopilot/review.md",
+    "tests/review.md",
+  ]);
+  assert.throws(() => partitionReviewDiff(fixture.diff, fixture.changedFiles), /AUDIT_DIFF_CHUNK_COUNT_EXCEEDED/);
+});
+
+test("Audit reviews all exact diff segments and aggregates their verdicts", async () => {
+  const fixture = reviewDiffFixture([
+    ".aipos/evidence/a.yaml", ".aipos/evidence/b.yaml",
+    "apps/autopilot/src/review-a.md", "apps/autopilot/src/review-b.md",
+    "tests/review-a.md", "scripts/review-b.md",
+  ]);
+  const prompts: string[] = [];
+  const pass = { response: JSON.stringify({ verdict: "PASS", findings: [], blockers: [], safetyInvariantResult: "PASS", mergeAllowed: true }) };
+  const note = { response: JSON.stringify({
+    verdict: "PASS_WITH_NOTES",
+    findings: [{ code: "NON_BLOCKING_NOTE", severity: "NOTE", message: "bounded note", evidenceRef: null }],
+    blockers: [], safetyInvariantResult: "PASS", mergeAllowed: true,
+  }) };
+  const responses = [pass, note, pass];
+  const model = {
+    async run(_model: string, input: unknown) {
+      prompts.push((input as { prompt: string }).prompt);
+      const next = responses.shift();
+      if (!next) throw new Error("unexpected extra AI.run call");
+      return next;
+    },
+  };
+  const changedFileEntries = fixture.changedFiles.map((file) => ({ filename: file.filename, status: file.status }));
+  const result = await executeIndependentAudit(request, auditEnv(model as never), fetchSequence({
+    diff: fixture.diff,
+    firstPull: pull(HEAD, BASE, fixture.changedFiles.length),
+    secondPull: pull(HEAD, BASE, fixture.changedFiles.length),
+    changedFileEntries,
+  }) as never);
+
+  assert.equal(prompts.length, 3);
+  assert.equal(result.verdict, "PASS_WITH_NOTES");
+  assert.equal(result.mergeAllowed, true);
+  assert.equal(result.findings.length, 1);
+  assert.deepEqual(responses, []);
+  for (const prompt of prompts) {
+    for (const file of fixture.changedFiles) assert.ok(prompt.includes(file.filename));
+  }
+});
+
+test("a blocker in any Audit segment fails the aggregate after all segments are reviewed", async () => {
+  const fixture = reviewDiffFixture([
+    ".aipos/evidence/a.yaml", ".aipos/evidence/b.yaml",
+    "apps/autopilot/src/review-a.md", "apps/autopilot/src/review-b.md",
+    "tests/review-a.md", "scripts/review-b.md",
+  ]);
+  const prompts: string[] = [];
+  const pass = { response: JSON.stringify({ verdict: "PASS", findings: [], blockers: [], safetyInvariantResult: "PASS", mergeAllowed: true }) };
+  const blocker = { response: JSON.stringify({
+    verdict: "FAIL",
+    findings: [{ code: "AUDIT_BLOCKER", severity: "BLOCKER", message: "current change is unsafe", evidenceRef: "apps/autopilot/src/review-a.md:+1", evidenceScope: "SOURCE_CONTENT" }],
+    blockers: ["current change is unsafe"], safetyInvariantResult: "FAIL", mergeAllowed: false,
+  }) };
+  const responses = [pass, blocker, pass];
+  const model = {
+    async run(_model: string, input: unknown) {
+      prompts.push((input as { prompt: string }).prompt);
+      const next = responses.shift();
+      if (!next) throw new Error("unexpected extra AI.run call");
+      return next;
+    },
+  };
+  const changedFileEntries = fixture.changedFiles.map((file) => ({ filename: file.filename, status: file.status }));
+  const result = await executeIndependentAudit(request, auditEnv(model as never), fetchSequence({
+    diff: fixture.diff,
+    firstPull: pull(HEAD, BASE, fixture.changedFiles.length),
+    secondPull: pull(HEAD, BASE, fixture.changedFiles.length),
+    changedFileEntries,
+  }) as never);
+
+  assert.equal(prompts.length, 3);
+  assert.equal(result.verdict, "FAIL");
+  assert.equal(result.mergeAllowed, false);
+  assert.equal(result.findings.length, 1);
+});
+
+test("fresh Validator reviews all exact diff segments and reports aggregate P0/P1 counts", async () => {
+  const fixture = reviewDiffFixture([
+    ".aipos/evidence/a.yaml", ".aipos/evidence/b.yaml",
+    "apps/autopilot/notes-a.md", "apps/autopilot/notes-b.md",
+    "tests/review-a.md", "scripts/review-b.md",
+  ]);
+  const prompts: string[] = [];
+  const pass = { response: JSON.stringify({ verdict: "PASS", findings: [], blockers: [], safetyInvariantResult: "PASS", mergeAllowed: true }) };
+  const responses = [pass, pass, pass];
+  const model = {
+    async run(_model: string, input: unknown) {
+      prompts.push((input as { prompt: string }).prompt);
+      const next = responses.shift();
+      if (!next) throw new Error("unexpected extra AI.run call");
+      return next;
+    },
+  };
+  const protocol = `NUSA grill-me protocol\n${"Review exact evidence, safety invariants, and every changed file. ".repeat(8)}`;
+  const changedFileEntries = fixture.changedFiles.map((file) => ({ filename: file.filename, status: file.status }));
+  const sequence = fetchSequence({
+    diff: fixture.diff,
+    firstPull: pull(HEAD, BASE, fixture.changedFiles.length),
+    secondPull: pull(HEAD, BASE, fixture.changedFiles.length),
+    changedFileEntries,
+  });
+  const fetchImpl = async (input: string) => {
+    if (new URL(input).pathname.endsWith("/contents/docs/GRILL_ME_PROTOCOL.md")) return response(200, {}, protocol);
+    return sequence();
+  };
+  const result = await executeIndependentValidator(validatorReviewRequest, {
+    NUSA_AUDIT_GITHUB_TOKEN: "github-token", AI: model as never,
+  }, fetchImpl as never, () => 1234);
+
+  assert.equal(prompts.length, 3);
+  assert.equal(result.verdict, "PASS");
+  assert.equal(result.auditAllowed, true);
+  assert.equal(result.p0, 0);
+  assert.equal(result.p1, 0);
+  for (const prompt of prompts) {
+    for (const file of fixture.changedFiles) assert.ok(prompt.includes(file.filename));
+  }
+});
+
+test("a P1 in any Validator segment blocks Audit and later segments are still reviewed", async () => {
+  const fixture = reviewDiffFixture([
+    ".aipos/evidence/a.yaml", ".aipos/evidence/b.yaml",
+    "apps/autopilot/notes-a.md", "apps/autopilot/notes-b.md",
+    "tests/review-a.md", "scripts/review-b.md",
+  ]);
+  const prompts: string[] = [];
+  const pass = { response: JSON.stringify({ verdict: "PASS", findings: [], blockers: [], safetyInvariantResult: "PASS", mergeAllowed: true }) };
+  const blocker = { response: JSON.stringify({
+    verdict: "FAIL",
+    findings: [{ code: "P1_SEGMENT_BLOCKER", severity: "BLOCKER", message: "segment has a blocking defect", evidenceRef: "apps/autopilot/notes-a.md:+1", evidenceScope: "SOURCE_CONTENT" }],
+    blockers: ["segment has a blocking defect"], safetyInvariantResult: "FAIL", mergeAllowed: false,
+  }) };
+  const responses = [pass, blocker, pass];
+  const model = {
+    async run(_model: string, input: unknown) {
+      prompts.push((input as { prompt: string }).prompt);
+      const next = responses.shift();
+      if (!next) throw new Error("unexpected extra AI.run call");
+      return next;
+    },
+  };
+  const protocol = `NUSA grill-me protocol\n${"Review exact evidence, safety invariants, and every changed file. ".repeat(8)}`;
+  const changedFileEntries = fixture.changedFiles.map((file) => ({ filename: file.filename, status: file.status }));
+  const sequence = fetchSequence({
+    diff: fixture.diff,
+    firstPull: pull(HEAD, BASE, fixture.changedFiles.length),
+    secondPull: pull(HEAD, BASE, fixture.changedFiles.length),
+    changedFileEntries,
+  });
+  const fetchImpl = async (input: string) => {
+    if (new URL(input).pathname.endsWith("/contents/docs/GRILL_ME_PROTOCOL.md")) return response(200, {}, protocol);
+    return sequence();
+  };
+  const result = await executeIndependentValidator(validatorReviewRequest, {
+    NUSA_AUDIT_GITHUB_TOKEN: "github-token", AI: model as never,
+  }, fetchImpl as never, () => 1234);
+
+  assert.equal(prompts.length, 3);
+  assert.equal(result.verdict, "FAIL");
+  assert.equal(result.auditAllowed, false);
+  assert.equal(result.p0, 0);
+  assert.equal(result.p1, 1);
 });
 
 test("strict verdict schema rejects malformed, mutation-shaped, and inconsistent responses", () => {

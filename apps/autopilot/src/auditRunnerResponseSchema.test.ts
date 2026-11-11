@@ -98,7 +98,7 @@ test("format repair is not source evidence and a genuine grounded blocker remain
     const prompt = String(input.prompt);
     assert.match(prompt, /not a defect observed in the repository/);
     assert.match(prompt, /must not itself become a finding, blocker, or safety failure/);
-    assert.match(prompt, /Preserve any genuine source-grounded blocker/);
+    assert.match(prompt, /Preserve genuine source-grounded blockers and safety failures/);
     assert.match(prompt, /do not choose PASS merely to repair JSON/);
     assert.ok(prompt.includes(diff));
     return { response: { verdict: "FAIL", findings: [{ code: "MISSING_INPUT", severity: "BLOCKER", message: "Undefined input is dereferenced.", evidenceRef: "a.ts:+1", evidenceScope: "SOURCE_CONTENT" }], blockers: ["Undefined input is dereferenced."], safetyInvariantResult: "PASS", mergeAllowed: false } };
