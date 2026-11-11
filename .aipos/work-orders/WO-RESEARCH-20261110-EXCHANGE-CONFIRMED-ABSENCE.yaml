@@ -27,7 +27,7 @@ next_action: "Non-author review, merge, release, then read 1m sessionsStarted an
 local_successor_20261111:
   merged_pr: 3041
   merged_commit: e2b1ccb404c021b2e30da9338776039a3b241625
-  base_main: ad0085fd994f68dd827ed52a022a50ad84057a13
+  base_main: 8261c069933956bc27ae9ae686e067469e9b4e12
   predecessor_local_fix: 0e66a22b2f26dca68c2c9f13a53dc60d3d01d84e
   finding: "Generic ALLOW manifests can exempt unproven 1m or 15m gaps from the missing ratio."
   local_fix: "Revalidate bounded 1m absence records and bind their ranges and fingerprints to the manifest before excluding closes."
@@ -35,4 +35,6 @@ local_successor_20261111:
   first_full_suite: "FAIL at researchSnapshotRefresher spawn-failure test: real host memory was below 350 MiB and LOW_MEMORY preceded injected spawn failure. Original log retained."
   test_stabilization: "Inject 900 MiB available memory only in the spawn-failure fixture; existing explicit 350 MiB boundary tests and production policy unchanged. Focused refresher 6/6 PASS."
   full_retry_1: "PASS 1340 isolated test files after deterministic memory injection; first failure log retained."
-  remaining: "Independent review and exact-head CI pending; no PR or deployment. No claim about operational data or L1 completion."
+  validated_candidate: 4a322733745bc386d085567b582732b16b630af8
+  final_validation: "On validated_candidate after integrating protected main 8261c069933956bc27ae9ae686e067469e9b4e12: pnpm test PASS (1340 isolated test files); typecheck PASS; validate:full PASS; security:gate PASS (0 unmitigated advisories, 0 secrets); lint:scripts 0 errors / 48 existing warnings; diff-check PASS."
+  remaining: "Independent review, exact-head CI, and governed post-release operational read-back pending. No claim about production data or L1 completion."
