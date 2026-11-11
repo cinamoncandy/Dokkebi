@@ -14,6 +14,7 @@ export interface RegisteredStudy {
 /** Verdict times are the first print times of the registered designs (UTC). */
 export const REGISTERED_STUDIES: ReadonlyArray<RegisteredStudy> = Object.freeze([
   Object.freeze({ id: "호가", name: "호가 연구(ML)", verdictAtMs: Date.parse("2026-10-29T02:00:00Z"), frozen: false }),
+  Object.freeze({ id: "호가2", name: "호가 연구 2차(ML)", verdictAtMs: Date.parse("2026-11-18T02:00:00Z"), frozen: true }),
   Object.freeze({ id: "S2~S4", name: "긴 보유 · 지정가 · 일간 횡단면", verdictAtMs: Date.parse("2026-12-05T02:00:00Z"), frozen: true }),
   Object.freeze({ id: "S5", name: "호가 불균형 15분 신호", verdictAtMs: Date.parse("2026-12-20T02:00:00Z"), frozen: true }),
 ]);
@@ -27,8 +28,8 @@ export interface StudyRow {
   readonly next: boolean;
 }
 
-/** The one registered study whose result the host Research service reports (server heartbeat `orderBookStudy`). */
-const RESULT_STUDY_ID_BY_ROW: Readonly<Record<string, string>> = Object.freeze({ "호가": "ML_ORDERBOOK_60M_20261029" });
+/** The registered studies whose result the host Research service reports (server heartbeat `orderBookStudy`); each row matches its own study id exactly. */
+const RESULT_STUDY_ID_BY_ROW: Readonly<Record<string, string>> = Object.freeze({ "호가": "ML_ORDERBOOK_60M_20261029", "호가2": "ML_ORDERBOOK_60M_20261111" });
 
 export interface StudyResultView {
   readonly status: "HOLDOUT_PASS" | "HOLDOUT_FAIL";
