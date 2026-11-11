@@ -1,0 +1,19 @@
+id: WO-OPS-20261111-PAPER-E2E-RECOVERED-GRACE
+title: "The paper runtime check also gives the post-recovery halt moment the reconnect grace"
+status: READY_FOR_REVIEW
+created: 2026-11-11
+implementation_branch: claude/paper-e2e-recovered-grace
+authority_impact: none
+finding: "CI run 42954802110 (#3077, attempts 1 and 2) failed actual-paper-runtime with PAPER_RUNTIME_NOT_RUNNING, runtime_state HALTED, halt reason KILL_SWITCH_ACTIVE only, last_error_code PUBLIC_MARKET_RECOVERED, transient_reconnect_episodes 0. The reconnect grace from WO-OPS-20261111-PAPER-E2E-RECONNECT-GRACE only recognised RECONNECTING, so the sample taken after the market came back but before the halt was lifted failed immediately."
+change:
+  - "scripts/actual-paper-runtime-e2e.js isTransientMarketReconnect: PUBLIC_MARKET_RECOVERED is accepted as a transient last error under the same conditions (state RUNNING, or HALTED with KILL_SWITCH_ACTIVE as the only halt reason) and the same per-episode 45 s grace inside the overall budget."
+not_changed:
+  - "Any other halt reason or error still fails immediately. A runtime that stays halted after RECOVERED still fails closed once the grace ends. No threshold, minimum duration, decision-cycle requirement, risk, execution, capital or authority change."
+safety:
+  paper_only: true
+  liveAuthority: NONE
+  productionMutationAllowed: false
+  aiAuthority: ZERO_AUTHORITY
+validation:
+  - "actual-paper-runtime-observation 36/36, with a new recovers-inside-grace case and a stays-halted-after-RECOVERED case."
+next_action: "Review, merge. Then re-run actual-paper-runtime on #3077 and #3076."
