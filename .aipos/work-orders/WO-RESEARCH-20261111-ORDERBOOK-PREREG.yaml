@@ -15,3 +15,7 @@ safety:
   productionMutationAllowed: false
   aiAuthority: ZERO_AUTHORITY
 next_action: "Independent review. Then a separate PR that lets run-orderbook-study.js use this span (must land before 2026-11-18). The run itself waits for the data."
+review_20261111:
+  verdict: "Independent technical review of the merged pre-registration: ACCEPT WITH P2 (non-approving, read-only)."
+  p2_non_viewing_record: "The pre-registration states that no order-book value of the span was examined. The repository cannot prove that for every past manual query, so the facts are recorded here. The authoring session (2026-11-11) read only: /health orderBookCoverage (presence of rows per hour for the first research market: 185/192, longest gap 3 h), /health dataIntegrity counts (orderBookMarkets24h 301, orderBookRows24h 427718, crossed 0, future 0) and orderBookCollector counts. It ran no SELECT of best_bid, best_ask, sizes or any derived price or imbalance, and it never ran scripts/run-orderbook-study.js against the host database. It cannot attest to other sessions or to manual queries before this date; any such query on the host would show in the host shell history, which this session does not have."
+  k_195: "K = 195 is kept as the study's own family (192 configurations + 3 lambdas), as in the closed first run, which never produced a result. The review notes that the ledger now holds more configurations and that K was not re-derived for the whole research history. That question is open and is not resolved here; it does not change the registered rule."
