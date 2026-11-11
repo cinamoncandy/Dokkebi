@@ -24,3 +24,15 @@ validation:
   - "138 research/candle/dataset/storage test files pass from dist; lint 0 errors; portability and platform-independent test validators pass. check-runtime and validate:full left to CI (Node 24)."
   - "Not verified: the production gap fill actually recording the run, the 1m manifest materializing, and sessionsStarted > 0. Read after release via oracle-host-diagnose."
 next_action: "Non-author review, merge, release, then read 1m sessionsStarted and the learning verdict's first broken stage."
+local_successor_20261111:
+  merged_pr: 3041
+  merged_commit: e2b1ccb404c021b2e30da9338776039a3b241625
+  base_main: ad0085fd994f68dd827ed52a022a50ad84057a13
+  predecessor_local_fix: 0e66a22b2f26dca68c2c9f13a53dc60d3d01d84e
+  finding: "Generic ALLOW manifests can exempt unproven 1m or 15m gaps from the missing ratio."
+  local_fix: "Revalidate bounded 1m absence records and bind their ranges and fingerprints to the manifest before excluding closes."
+  focused: "82 tests PASS on local successor, including generic 1m and 15m ALLOW rejection and genuine proof."
+  first_full_suite: "FAIL at researchSnapshotRefresher spawn-failure test: real host memory was below 350 MiB and LOW_MEMORY preceded injected spawn failure. Original log retained."
+  test_stabilization: "Inject 900 MiB available memory only in the spawn-failure fixture; existing explicit 350 MiB boundary tests and production policy unchanged. Focused refresher 6/6 PASS."
+  full_retry_1: "PASS 1340 isolated test files after deterministic memory injection; first failure log retained."
+  remaining: "Independent review and exact-head CI pending; no PR or deployment. No claim about operational data or L1 completion."

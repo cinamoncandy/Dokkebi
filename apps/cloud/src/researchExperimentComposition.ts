@@ -288,7 +288,7 @@ export function composeResearchExperiments(input: {
       featurePipeline: { version: "closed-candle-agg-v1", config: { intervalMs, maxInternalGapMs: 30_000, volume: 0 } },
       experimentFamilyPrefix: `sma-research${tag}`,
       ...(settings.rollingHoldout === "SHADOW" ? { rollingHoldout: { mode: "SHADOW" as const } } : {}),
-      datasetManifest: { read: (datasetId: string) => datasetManifests.read(datasetId) },
+      datasetManifest: { read: (datasetId: string) => datasetManifests.read(datasetId), listAbsence: (targetMarket, targetIntervalMs, from, to) => store.listAbsence(targetMarket, targetIntervalMs, from, to) },
       datasetIdForMarket: (targetMarket: string) => datasetManifests.latest(targetMarket, `${intervalMs / 60_000}m`)?.datasetId ?? "missing-dataset-manifest",
       failureEvidence: () => ledger.list().filter((record) => record.provenance?.windowRole === "VALIDATION" && record.provenance.interval === `${minutes}m`),
     });

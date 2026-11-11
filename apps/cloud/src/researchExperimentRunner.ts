@@ -6,6 +6,7 @@ import { buildRollingFolds, buildWalkForwardWindows, decideRollingHoldout, requi
 import type { HoldoutKey } from "../../../packages/storage/src/researchHoldoutLedger";
 import { createResearchPrecommit, type ResearchPrecommit } from "../../../packages/contracts/src/researchPrecommit";
 import { calculateResearchCandleSha256, calculateResearchDatasetId, calculateResearchDatasetIdV2, type HistoricalDatasetManifest } from "../../../packages/contracts/src/researchDatasetSemantics";
+import { createHash } from "node:crypto";
 
 /**
  * Runs one experiment for one challenger variant: VALIDATION window first; the HOLDOUT window is evaluated only when
@@ -20,7 +21,10 @@ export interface ExperimentRunnerPorts {
   readonly holdout: { claim(key: HoldoutKey, evaluationId: string, usedAtMs: number): "CLAIMED" | "ALREADY_USED"; overlapsUsedHoldout(hash: string, market: string, intervalMs: number, startMs: number, endMs: number): boolean };
   readonly now: () => number;
   readonly precommitStore?: { create(precommit: ResearchPrecommit): ResearchPrecommit };
-  readonly datasetManifest?: { read(datasetId: string): HistoricalDatasetManifest };
+  readonly datasetManifest?: {
+    read(datasetId: string): HistoricalDatasetManifest;
+    listAbsence?: (market: string, intervalMs: number, from: number, to: number) => readonly { readonly firstAbsentCloseMs: number; readonly lastAbsentCloseMs: number; readonly evidenceFingerprintSha256: string }[];
+  };
 }
 
 export interface ExperimentSpec {
@@ -77,10 +81,17 @@ export function runResearchExperiment(ports: ExperimentRunnerPorts, spec: Experi
         : manifest.provenance == null ? undefined : calculateResearchDatasetIdV2(manifest.source, canonical, contentSha256, manifest.provenance);
       if (contentSha256 !== manifest.contentSha256 || datasetId !== manifest.datasetId) return skip("DATASET_MANIFEST_CONTENT_MISMATCH");
       if (manifest.schemaVersion === 2 && manifest.missingCandlePolicy === "ALLOW" && manifest.missingCandleCount > 0) {
+        if (intervalMs !== 60_000 || ports.datasetManifest.listAbsence == null) return skip("DATASET_MANIFEST_ABSENCE_UNVERIFIED");
         const present = new Set(persisted.map((candle) => candle.closeTimeMs));
         excludedCloses = new Set<number>();
         for (let close = manifest.startOpenTime + intervalMs; close <= manifest.endCloseTime; close += intervalMs) if (!present.has(close)) excludedCloses.add(close);
         if (excludedCloses.size !== manifest.missingCandleCount) return skip("DATASET_MANIFEST_CONTENT_MISMATCH");
+        let absences: ReturnType<NonNullable<NonNullable<ExperimentRunnerPorts["datasetManifest"]>["listAbsence"]>>;
+        const missing = [...excludedCloses];
+        try { absences = ports.datasetManifest.listAbsence(spec.market, intervalMs, missing[0]!, missing[missing.length - 1]!); }
+        catch { return skip("DATASET_MANIFEST_ABSENCE_UNVERIFIED"); }
+        const configHash = createHash("sha256").update(JSON.stringify({ sourceIntervalMs: 60_000, targetIntervalMs: intervalMs, ordering: "OPEN_TIME_ASC", missingCandlePolicy: "EXCHANGE_CONFIRMED_ABSENCE_ONLY", confirmedAbsentRuns: absences.map((run) => [run.firstAbsentCloseMs, run.lastAbsentCloseMs, run.evidenceFingerprintSha256]) }), "utf8").digest("hex");
+        if (configHash !== manifest.provenance!.transformationConfigSha256 || absences.some((run) => !manifest.provenance!.rawSourceIdentitySha256s.includes(run.evidenceFingerprintSha256)) || [...excludedCloses].some((close) => !absences.some((run) => close >= run.firstAbsentCloseMs && close <= run.lastAbsentCloseMs))) return skip("DATASET_MANIFEST_ABSENCE_UNVERIFIED");
       }
     }
     const total = spec.windows.trainMs + spec.windows.validationMs + spec.windows.holdoutMs;
