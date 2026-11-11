@@ -586,6 +586,24 @@ test("/health publishes the all-KRW order-book collector counters as non-negativ
   }, 42351);
 });
 
+test("/health publishes the order-book coverage as fixed numbers, or UNAVAILABLE with a fixed reason code, and drops everything else", async () => {
+  const good = { schemaVersion: 1, market: "KRW-XRP", windowHours: 192, coveredHours: 150, ratio: 0.781, longestGapHours: 12, meetsStudyBar: false, asOfMs: 1_792_000_000_000, note: "x" };
+  await withServer({ runtimeLiveness: () => ({ ...LIVENESS, orderBookCoverage: good }) }, async (handle) => {
+    assert.deepEqual(JSON.parse((await request(handle.port, "/health")).body).runtime.orderBookCoverage, { schemaVersion: 1, windowHours: 192, coveredHours: 150, ratio: 0.781, longestGapHours: 12, meetsStudyBar: false, asOfMs: 1_792_000_000_000 }, "the market name and unknown fields are dropped");
+  }, 42361);
+  await withServer({ runtimeLiveness: () => ({ ...LIVENESS, orderBookCoverage: { ...good, coveredHours: 180, ratio: 0.938, longestGapHours: 3, meetsStudyBar: true } }) }, async (handle) => {
+    assert.equal(JSON.parse((await request(handle.port, "/health")).body).runtime.orderBookCoverage.meetsStudyBar, true, "a consistent record that meets the bar is published");
+  }, 42368);
+  await withServer({ runtimeLiveness: () => ({ ...LIVENESS, orderBookCoverage: { schemaVersion: 1, status: "UNAVAILABLE", reason: "QUERY_FAILED_SQLITE_1", asOfMs: 1_792_000_000_000, path: "/var/lib/x" } }) }, async (handle) => {
+    assert.deepEqual(JSON.parse((await request(handle.port, "/health")).body).runtime.orderBookCoverage, { schemaVersion: 1, status: "UNAVAILABLE", reason: "QUERY_FAILED_SQLITE_1", asOfMs: 1_792_000_000_000 });
+  }, 42362);
+  for (const [index, bad] of [{ ...good, ratio: 1.5 }, { ...good, coveredHours: 999 }, { ...good, meetsStudyBar: "yes" }, { ...good, coveredHours: 0, ratio: 1, meetsStudyBar: true }, { ...good, ratio: 0.5 }, { ...good, meetsStudyBar: true }, { ...good, coveredHours: 180, ratio: 0.938, meetsStudyBar: false }, { schemaVersion: 1, status: "UNAVAILABLE", reason: "open failed: /secret/path", asOfMs: 1_792_000_000_000 }, { ...good, schemaVersion: 2 }].entries()) {
+    await withServer({ runtimeLiveness: () => ({ ...LIVENESS, orderBookCoverage: bad }) }, async (handle) => {
+      assert.equal(JSON.parse((await request(handle.port, "/health")).body).runtime.orderBookCoverage, undefined, `invalid shape ${index} is omitted`);
+    }, 42363 + index);
+  }
+});
+
 test("/health publishes the stored-data integrity result as a status plus non-negative integers only", async () => {
   await withServer({ runtimeLiveness: () => ({ ...LIVENESS, dataIntegrity: { status: "FAIL", observedAt: 1_792_000_000_000, candleFuture: 1, note: "x", bad: -2 } }) }, async (handle) => {
     assert.deepEqual(JSON.parse((await request(handle.port, "/health")).body).runtime.dataIntegrity, { status: "FAIL", observedAt: 1_792_000_000_000, candleFuture: 1 });
