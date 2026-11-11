@@ -200,6 +200,29 @@ test("gap fill stops on a rate limit without retrying", async () => {
   assert.equal(calls, 1);
 });
 
+test("gap fill rejects a repeated upstream page before re-recording it or advancing the cursor", async () => {
+  const store = newStore();
+  const first = ANCHOR - 501 * M;
+  store.append(MARKET, M, [stored(first), stored(ANCHOR - M)]);
+  const page = [];
+  for (let start = ANCHOR - 200 * M; page.length < 200; start += M) page.push(candle(start));
+  let calls = 0;
+  const result = await fillRecentGaps({
+    market: MARKET,
+    windowMs: 600 * M,
+    nowMs: NOW,
+    store,
+    maxPages: 2,
+    fetchPage: async () => { calls += 1; return page; },
+    sleep: async () => undefined,
+  });
+  assert.equal(result.status, "ERROR");
+  assert.equal(result.errorCode, "CURSOR_NOT_ADVANCING");
+  assert.equal(result.pages, 2);
+  assert.equal(calls, 2);
+  assert.equal(result.nextCursorStartMs, ANCHOR - 200 * M, "the last advancing cursor is preserved for a later retry");
+});
+
 test("gap fill also fetches the newest closed minutes after the last stored close (the series head is written only by REST candles)", async () => {
   const store = newStore();
   const stale = ANCHOR - 300 * M;
@@ -222,4 +245,56 @@ test("backfill yields to the event loop after each processed page", async () => 
   assert.equal(result.status, "COMPLETE");
   assert.equal(yields, result.pages);
   assert.ok(yields >= 2, "the fixture must exercise multiple bounded pages");
+});
+
+// ---- exchange-confirmed absence (an Upbit page proves a run of minutes has no candle upstream) ----
+const { absenceRunsFromPage } = require("../dist/apps/cloud/src/researchCandleBackfill.js");
+
+test("absence runs come only from what one page proves: gaps inside it, and the run up to the exclusive `to` bound", () => {
+  const c = (close) => ({ closeTimeMs: close, open: 1, high: 1, low: 1, close: 1 });
+  const page = [c(10 * M), c(11 * M), c(15 * M), c(16 * M)];
+  assert.deepEqual(absenceRunsFromPage(page, 0, undefined, () => true), [{ beforeCloseMs: 11 * M, afterCloseMs: 15 * M }]);
+  // `to` = start 20 min: candles starting 16..19 min (closes 17..20) do not exist; the candle starting at 20 (close 21) is stored
+  assert.deepEqual(absenceRunsFromPage(page, 0, 20 * M, (close) => close === 21 * M), [{ beforeCloseMs: 11 * M, afterCloseMs: 15 * M }, { beforeCloseMs: 16 * M, afterCloseMs: 21 * M }]);
+  assert.deepEqual(absenceRunsFromPage(page, 0, 20 * M, () => false), [{ beforeCloseMs: 11 * M, afterCloseMs: 15 * M }], "no stored after-bound, no upper run");
+  assert.deepEqual(absenceRunsFromPage(page, 1, 20 * M, () => true), [], "a malformed item could have been the minute: the page proves nothing");
+  assert.deepEqual(absenceRunsFromPage([], 0, 20 * M, () => true), []);
+  assert.deepEqual(absenceRunsFromPage([c(19 * M), c(20 * M)], 0, 20 * M, () => true), [], "the page reaches the bound: nothing absent");
+});
+
+test("gap fill records an exchange-quiet run as confirmed absent, leaves it unwritten, and keeps our own losses plain missing", async () => {
+  const store = newStore();
+  // stored: closes 0..100 and 106..200 of a 200-minute window; the exchange has no candles starting 100..104 (closes 101..105)
+  const base = ANCHOR - 200 * M;
+  const have = [];
+  for (let k = 0; k <= 200; k += 1) if (k <= 100 || k >= 106) have.push(stored(base + k * M));
+  store.append(MARKET, M, have);
+  const quietStarts = new Set([100, 101, 102, 103, 104].map((k) => base + k * M));
+  const fetchPage = async (market, toIso) => {
+    const upper = toIso === undefined ? ANCHOR + M : Date.parse(`${toIso}Z`);
+    const out = [];
+    for (let start = upper - M; start >= base - 400 * M && out.length < BACKFILL_PAGE_SIZE; start -= M) if (!quietStarts.has(start)) out.push(candle(start));
+    return out;
+  };
+  const result = await fillRecentGaps({ market: MARKET, windowMs: 201 * M, nowMs: NOW, store, fetchPage, sleep: async () => undefined });
+  assert.equal(result.missing, 5);
+  assert.equal(result.recorded, 0, "nothing is invented");
+  assert.equal(result.confirmedAbsent, 5);
+  const runs = store.listAbsence(MARKET, M, base, ANCHOR);
+  assert.equal(runs.length, 1);
+  assert.equal(runs[0].firstAbsentCloseMs, base + 101 * M);
+  assert.equal(runs[0].lastAbsentCloseMs, base + 105 * M);
+  assert.match(runs[0].evidenceFingerprintSha256, /^[a-f0-9]{64}$/);
+  // a second pass proves the same run again: no duplicate, no error
+  const again = await fillRecentGaps({ market: MARKET, windowMs: 201 * M, nowMs: NOW + M, store, fetchPage, sleep: async () => undefined });
+  assert.equal(again.confirmedAbsent, undefined);
+  assert.equal(store.listAbsence(MARKET, M, base, ANCHOR).length, 1);
+
+  // our own loss: the exchange HAS the candles but the page carrying them is malformed -> no absence is recorded
+  const lossy = newStore();
+  lossy.append(MARKET, M, have);
+  const broken = async (market, toIso) => { const page = await fetchPage(market, toIso); return [...page, { market: MARKET, candle_date_time_utc: "bad" }]; };
+  const lost = await fillRecentGaps({ market: MARKET, windowMs: 201 * M, nowMs: NOW, store: lossy, fetchPage: broken, sleep: async () => undefined });
+  assert.equal(lost.confirmedAbsent, undefined);
+  assert.equal(lossy.listAbsence(MARKET, M, base, ANCHOR).length, 0);
 });

@@ -1,0 +1,22 @@
+id: WO-OPS-20261110-WO-STATUS-CLEANUP-4
+title: "Close 3 branchless work orders whose merged PR matches by title"
+status: READY_FOR_REVIEW
+created: 2026-11-10
+authority_impact: none
+trigger: "Follow-up of WO-OPS-20261110-WO-STATUS-CLEANUP-3. 115 open work orders have no implementation_branch. 26 name a merged PR number; each was compared by title."
+method:
+  - "Closed: WO-OPS-20261030-AIPOS-STATUS-ARCHIVE-TRUTH (#2940), WO-LEARNING-20261102-PERIOD-WAITING (#2983), WO-ISSUE-2017-COMPONENT-HEALTH (#2019); the work order title and the PR title describe the same change."
+  - "Not closed: 23. Reasons: opposite or unrelated PR title, design-stage orders whose PRs are display features, or 'next increment' PRs that cannot show a whole order is complete."
+change:
+  - "Status -> COMPLETED and a closed_by_merge line on 3 work orders; baseline and CURRENT_TRUTH.md regenerated."
+rules:
+  - "Records only. closed_by_merge states that the PR merged, not a separate production verification."
+not_changed:
+  - "No code, workflow, threshold, limit, capital or authority. About 112 branchless orders remain open and need a code or host comparison."
+safety:
+  paper_only: true
+  liveAuthority: NONE
+  productionMutationAllowed: false
+  aiAuthority: ZERO_AUTHORITY
+validation:
+  - "validate-aipos-yaml, aipos-work-order-status and aipos-current-truth tests."

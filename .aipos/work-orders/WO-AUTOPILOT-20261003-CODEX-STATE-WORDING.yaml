@@ -1,6 +1,6 @@
 id: WO-AUTOPILOT-20261003-CODEX-STATE-WORDING
 title: "Make Codex write AIPOS state that is true on the published commit so Release is not blocked by a review thread"
-status: READY_FOR_REVIEW
+status: COMPLETED
 owner: nusa-development
 repository: cinamoncandy/NUSA
 base_branch: main
@@ -21,3 +21,4 @@ rollback: "Remove the contract line."
 verification_commands:
   - node --test tests/autopilot-codex-coding.test.js
 residual: "A prompt change reduces but cannot guarantee the bot stays quiet; other legitimate review findings will still block Release until a human or a future review-response capability resolves them. Whether this removes the stall is proven only by the next Codex PR."
+closed_by_merge: "PR #2502 (branch claude/autopilot-contract-state-wording) merged to main; it is the only PR from this branch and the only work order naming it. Status corrected by an automatic branch-to-merged-PR match on 2026-11-10; this records the merge only, not a separate production verification."

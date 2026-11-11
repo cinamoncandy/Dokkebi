@@ -1,0 +1,28 @@
+id: WO-RESEARCH-20261101-ROLLING-HOLDOUT-SHADOW
+title: "Rolling K-of-N holdout: orchestrator SHADOW mode (default OFF), owner-config key and /health summary"
+status: READY_FOR_REVIEW
+created: 2026-11-01
+trigger: "Host diagnosis on 2026-10-31 (e1fd3ea93): candidateFunnel DISCOVERY_ONLY_REJECTED, 18 experiments, 15 discovery passes, 0 holdout passes, overfit 100%. The owner approved N = 3, K = 2, SHADOW first, one rolling check per candidate per day, a separate rolling session per variant and the 33-day history (docs/DESIGN_ROLLING_HOLDOUT_WIRING.md)."
+change:
+  - "apps/cloud/src/researchExperimentOrchestrator.ts: option rollingHoldout { mode: OFF | SHADOW } (absent = OFF). In SHADOW, after the real experiment found validation favourable, shadowRolling checks the same challenger on the K-of-N folds in its own research session <variant>_rolling (own maxExperiments, never the real session). Every rolling call is wrapped: a failure only increments summary.errors. rollingHoldout() returns a separate display summary (fixed codes and integers), not the capped counts."
+  - "isRollingRecord: evaluation records of a *_rolling session are removed from the FAIL_* / REPEAT_* failure recomputation so the real counters cannot move."
+  - "apps/cloud/src/researchExperimentRunner.ts: runRollingResearchExperiment gains an optional newestOutcome. The real experiment already claimed the newest fold's holdout, so its outcome is classified for that fold and only the older folds are run."
+  - "scripts/start-cloud-runtime.js: optional owner-config key rollingHoldout (exactly OFF or SHADOW, anything else fails closed at start) applied as NUSA_RESEARCH_ROLLING_HOLDOUT. deploy/oracle/research-experiments.json is NOT changed, so nothing is enabled by this work order."
+  - "apps/cloud/src/researchExperimentComposition.ts: settings.rollingHoldout is SHADOW only for the exact word, otherwise OFF; rollingHoldoutByInterval() collects each orchestrator's summary. closedLearningProductionRuntime.ts and runtime.ts pass it to the liveness snapshot; server.ts publishes researchRollingHoldout per declared bar length (SHADOW mode, integers, at most 12 code-keyed refusal counts, nothing else)."
+  - ".github/workflows/oracle-host-diagnose.yml: the learning_readout also reads researchRollingHoldout from the saved /health file (same bounded filter)."
+  - "apps/cloud/src/researchExperimentComposition.ts: researchTargetSpanMs. The history target of the backfill, the gap fill and the dataset manifest is unchanged (train + validation + holdout + 1 day) unless the mode is SHADOW, where it is N disjoint sets plus a day (34 days with the 7/2/2 defaults). Upbit requests keep their sequential, spaced, time- and page-bounded behaviour; only the page bound grows with the span."
+rules:
+  - "OFF (the default) changes nothing: the existing orchestrator tests pass unchanged; no rolling session, no summary."
+  - "SHADOW does not touch counts, HOLDOUT_* counters, the meta-learning input, the real sessions or candidate registration (the composition's registerCandidate only logs)."
+  - "A fold that could not be evaluated is INSUFFICIENT, never a pass; a rolling PASS needs at least 2 of exactly 3 fold passes."
+not_changed:
+  - "No pass rule, threshold, daily budget, holdout claim rule, risk limit or authority. No /health field and no backfill change yet: with the current 12-day backfill every SHADOW check is refused with ROLLING_INSUFFICIENT_HISTORY_FOLD_0 (a fixed code) until the owner-approved longer backfill is added."
+safety:
+  paper_only: true
+  liveAuthority: NONE
+  productionMutationAllowed: false
+  aiAuthority: ZERO_AUTHORITY
+validation:
+  - "tsc clean; /health shape test (SHADOW only, declared lengths, integers, code-keyed counts, absent otherwise), launcher test (exact words only, shipped file unchanged, typo means OFF), diagnosis readout test; research-experiment-orchestrator (16: off by default, SHADOW leaves real sessions and published counts identical to a run without SHADOW, a rolling failure never reaches the real flow, short history refuses with a fixed code, rolling records are excluded from failure counters), research-rolling-runner (7), pipeline, composition and all research-* and cloud-runtime-* tests (644) pass; cloud-unreached-baseline 3/3."
+unverified: "The mode is not enabled on the host; the summary on the real /health and in the diagnosis readout; the real 34-day backfill duration and its load on the 4 vCPU / 8 GB host and the Upbit rate limit; the per-experiment manifest read of 34 days of candles (heavier than 12 days, only in SHADOW). Until the backfill completes every SHADOW check is refused with ROLLING_INSUFFICIENT_HISTORY_FOLD_0."
+next: "The owner turns the key on in a reviewed release (add rollingHoldout: SHADOW to deploy/oracle/research-experiments.json); the 34-day backfill then runs once at start and the summary is read after a day (watch the host load and the Upbit rate limit via the diagnosis). ENFORCE stays a separate owner decision and a separate work order."

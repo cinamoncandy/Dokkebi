@@ -1,6 +1,6 @@
 id: WO-OPS-20260929-HOST-MEMORY-RESEARCH-LIMITS
 title: "Keep Research batch work from starving the 1 GB PAPER host"
-status: READY_FOR_REVIEW
+status: COMPLETED
 owner: nusa-development
 repository: cinamoncandy/NUSA
 base_branch: main
@@ -27,3 +27,4 @@ evidence:
   - "Local research snapshot run with --max-old-space-size=256: exit 0, peak process-tree RSS 514,232 KB; 160 MB: exit 1 (peak 416,716 KB); 128 MB: exit 1."
   - "apps/cloud/src/researchSnapshotRefresher.test.ts: low-memory skip not counted as an attempt, heap cap inherited, priority lowered."
 residual: "Root cause of the runner outage is still unconfirmed until host logs (journalctl -k OOM kills) are checked; if memory is not the cause, the next hypothesis (network / reboot without runner auto-start) is investigated."
+closed_by_merge: "PR #2386 (branch claude/nusa-repository-j93sd8-refresh-memory) merged to main; it is the only PR from this branch and the only work order naming it. Status corrected by an automatic branch-to-merged-PR match on 2026-11-10; this records the merge only, not a separate production verification."

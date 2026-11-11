@@ -1,6 +1,6 @@
 id: WO-OPS-20261014-UPBIT-SOCKET-RETIREMENT
 title: Contain asynchronous errors on retired public Upbit sockets
-status: LOCAL_VALIDATED_PENDING_EXACT_HEAD_CI
+status: COMPLETED
 priority: P1
 risk: MEDIUM
 authority_impact: none
@@ -27,3 +27,4 @@ safety:
   productionMutationAllowed: false
   aiAuthority: ZERO_AUTHORITY
 next: "Fresh synchronized exact-head canonical CI/Audit/Release then Oracle PAPER release/runtime verification. Outage initiating cause remains UNVERIFIED."
+closed_by_merge: "PR #2689 (branch codex/upbit-retired-socket-error-20261014) merged to main; it is the only PR from this branch and the only work order naming it. Status corrected by an automatic branch-to-merged-PR match on 2026-11-10; this records the merge only, not a separate production verification."

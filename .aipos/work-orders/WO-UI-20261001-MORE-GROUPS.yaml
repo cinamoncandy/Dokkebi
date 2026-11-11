@@ -1,6 +1,6 @@
 id: WO-UI-20261001-MORE-GROUPS
 title: "More menu renewal: group destinations by task with plain Korean hints"
-status: READY_FOR_REVIEW
+status: COMPLETED
 owner: nusa-development
 repository: cinamoncandy/NUSA
 base_branch: main
@@ -21,3 +21,4 @@ verification_commands:
   - node --test tests/mobile-more-groups.test.js tests/mobile-field-screens.test.js
   - pnpm run validate
 residual: "Physical Android device visual acceptance is HUMAN_ENVIRONMENT_ONLY."
+closed_by_merge: "PR #2427 (branch claude/nusa-repository-j93sd8-more-renewal) merged to main; it is the only PR from this branch and the only work order naming it. Status corrected by an automatic branch-to-merged-PR match on 2026-11-10; this records the merge only, not a separate production verification."

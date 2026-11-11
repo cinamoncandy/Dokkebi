@@ -1,6 +1,6 @@
 id: WO-PAPER-20261006-LEDGER-ROUNDING-TOLERANCE
 title: "Accept last-decimal rounding drift in the PAPER ledger reconciliation"
-status: READY_FOR_REVIEW
+status: COMPLETED
 owner: nusa-development
 repository: cinamoncandy/NUSA
 base_branch: main
@@ -23,3 +23,4 @@ verification_commands:
   - npx tsc -p tsconfig.json
   - node --test tests/cloud-paper-accounting-ledger.test.js tests/cloud-paper-fill-ledger.test.js tests/paper-ledger-projection.test.js tests/paper-ledger-verifier.test.js dist/apps/cloud/src/module10XS.test.js dist/apps/cloud/src/paperTradingExecutionLoop.requalification.test.js
 residual: "After merge and PAPER deploy the next save should succeed; confirm on the PAPER tab that the halt line clears. The halt is not cleared by hand."
+closed_by_merge: "PR #2525 (branch claude/ledger-rounding-tolerance) merged to main; it is the only PR from this branch and the only work order naming it. Status corrected by an automatic branch-to-merged-PR match on 2026-11-10; this records the merge only, not a separate production verification."

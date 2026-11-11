@@ -1,0 +1,19 @@
+id: WO-RESEARCH-20261111-HEALTH-COVERAGE-PASSTHROUGH
+title: "/health finally publishes orderBookCoverage (the public liveness allow-list dropped it)"
+status: READY_FOR_REVIEW
+created: 2026-11-11
+implementation_branch: claude/health-orderbook-coverage-passthrough
+authority_impact: none
+finding: "2026-11-11 15:10 KST, host on 760d836e (includes #3076): runtime.orderBookCoverage is still absent from /health. apps/cloud/src/runtime.ts computes it, but apps/cloud/src/server.ts publicRuntimeLiveness is an allow-list and has no entry for orderBookCoverage, so the field (added by #2956 and given a reason code by #3076) was never published. The earlier guess that the server could not read its database was wrong."
+change:
+  - "server.ts publicRuntimeLiveness: orderBookCoverage passes through only as fixed numbers and a boolean (schemaVersion 1, windowHours, coveredHours, ratio, longestGapHours, meetsStudyBar, asOfMs) with range checks, or as { status UNAVAILABLE, reason ^[A-Z][A-Z0-9_]{2,63}$, asOfMs }. The market name and any other field are dropped; an invalid shape is omitted."
+not_changed:
+  - "Display only. No study rule, 90% bar, window, collector, storage, risk, execution, capital or authority change."
+safety:
+  paper_only: true
+  liveAuthority: NONE
+  productionMutationAllowed: false
+  aiAuthority: ZERO_AUTHORITY
+validation:
+  - "cloud-runtime-liveness-health 39/39, with a new case for valid coverage (market and unknown fields dropped), UNAVAILABLE with a reason, and five invalid shapes omitted."
+next_action: "Review, merge, release (a release must run when the host is idle: the backup step stalls /health for about 25 minutes). Then read orderBookCoverage on /health and pre-register the new order-book study if meetsStudyBar is true."

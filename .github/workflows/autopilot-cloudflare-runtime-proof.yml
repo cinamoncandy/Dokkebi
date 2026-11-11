@@ -24,7 +24,6 @@ on:
 
 permissions:
   contents: read
-  actions: write
 
 concurrency:
   group: nusa-autopilot-cloudflare-runtime-proof
@@ -37,6 +36,8 @@ jobs:
     if: ${{ github.event_name != 'pull_request' && (github.event_name != 'workflow_run' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.head_branch == 'main' && github.event.workflow_run.head_repository.full_name == github.repository)) }}
     runs-on: ubuntu-latest
     timeout-minutes: 26
+    outputs:
+      preflight_eligible: ${{ steps.freshness.outputs.current == 'true' && steps.proof.outputs.preflight_eligible == 'true' }}
     env:
       NUSA_AUTOPILOT_URL: https://nusa-autopilot.desporin12.workers.dev
       NUSA_AUTOPILOT_MAX_RECEIPT_AGE_MS: '180000'
@@ -94,8 +95,28 @@ jobs:
             console.log(`Credential Preflight suppressed until runtime converges: source=${sourceSha} deployment=${revision || 'UNVERIFIED'} exactHeadVerified=${proof.exactHeadVerified === true}`);
           }
           NODE
+      - name: Upload runtime proof evidence
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: autopilot-cloudflare-runtime-proof-${{ github.run_id }}
+          path: artifacts/autopilot/runtime-proof.json
+          if-no-files-found: warn
+          retention-days: 7
+
+  dispatch-preflight:
+    # The only job with Actions write authority. It checks out nothing and runs no
+    # repository code: it only dispatches Credential Preflight on main (#1860).
+    needs: runtime-proof
+    # always(): a later failure in runtime-proof (for example the evidence upload) must not suppress a dispatch the proof
+    # already earned, exactly as when the dispatch was a step before the upload. An unearned proof leaves the output unset.
+    if: ${{ always() && github.event_name != 'pull_request' && needs.runtime-proof.outputs.preflight_eligible == 'true' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      actions: write
+    steps:
       - name: Dispatch Credential Preflight directly for fresh safety-gate re-verification
-        if: steps.freshness.outputs.current == 'true' && steps.proof.outputs.preflight_eligible == 'true'
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
@@ -107,11 +128,3 @@ jobs:
           # this proof has observed the exact current runtime revision.
           gh api --method POST "repos/$GITHUB_REPOSITORY/actions/workflows/autopilot-cloudflare-credential-preflight.yml/dispatches" -f ref=main
           echo "Dispatched Autopilot Cloudflare Credential Preflight for fresh safety-gate re-verification."
-      - name: Upload runtime proof evidence
-        if: always()
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
-        with:
-          name: autopilot-cloudflare-runtime-proof-${{ github.run_id }}
-          path: artifacts/autopilot/runtime-proof.json
-          if-no-files-found: warn
-          retention-days: 7

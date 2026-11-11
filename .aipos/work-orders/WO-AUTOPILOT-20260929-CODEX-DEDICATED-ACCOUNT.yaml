@@ -1,6 +1,6 @@
 id: WO-AUTOPILOT-20260929-CODEX-DEDICATED-ACCOUNT
 title: "Autopilot develops through one dedicated ChatGPT Codex account"
-status: READY_FOR_REVIEW
+status: COMPLETED
 owner: nusa-development
 repository: cinamoncandy/NUSA
 base_branch: main
@@ -42,3 +42,4 @@ recovery_log:
   - "Security remediation ported into the same PR (it blocks security:gate for every PR, including current main): pnpm overrides undici@7.29.0->7.29.1 (GHSA 1240041, 1240050; via electron>@electron/get), undici@6.28.0->6.28.1 (1240042; via electron-builder>node-gyp) and joi@17.13.6->17.13.7 (1240057; via the react-native CLI). Scope: build/dev-tool transitive dependencies only, no runtime, PAPER or credential path. Evidence: pnpm install --frozen-lockfile, security:gate PASS (FAIL on main before), tests/security-gate.test.js asserts each pin and the absence of the vulnerable version. Next action: none beyond merge; future advisories follow the same override-plus-assertion pattern."
   - "Run 36635249238 (350 MiB threshold): the guard admitted Codex, which produced a #2118 patch, but Codex then ran pnpm run typecheck on the shared host; memory fell below the 200 MiB floor and the guard stopped the run and discarded the patch (PAPER stayed healthy). Fix: the Codex prompt now forbids install/build/typecheck/tests on the runner; the publish job already runs every gate on GitHub-hosted hardware."
   - "Review of the no-local-build change: (1) the prompt now states an explicit delegated-validation exception to the AGENTS verification rule for this lane, and heavy tools (pnpm, npm, npx, yarn, tsc, vitest, jest, node --test) are technically blocked on the Codex runner via a PATH shim, so compliance does not depend on the prompt; (2) the publish job now also runs node scripts/run-tests-isolated.js before gh pr create, covering co-located dist tests that tests/*.test.js omits."
+closed_by_merge: "PR #2398 (branch claude/nusa-repository-j93sd8-codex-no-local-build) merged to main; it is the only PR from this branch and the only work order naming it. Status corrected by an automatic branch-to-merged-PR match on 2026-11-10; this records the merge only, not a separate production verification."

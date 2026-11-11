@@ -115,7 +115,7 @@ for (const loss of [
     t.mock.method(console, "error", (...args) => { errors.push(args.join(" ")); });
     t.mock.method(runtime, "startCloudRuntimeFromOptions", (options) => {
       repository = options.paperAccountRepository;
-      return { stop: async () => { runtimeStopped++; }, listPaperRealizedPeriods: () => [], nextPaperRealizedPeriodIndex: () => 0 };
+      return { startPaperRuntime: () => repository.startWriterLease(), recoverResearch: () => {}, stop: async () => { runtimeStopped++; }, listPaperRealizedPeriods: () => [], nextPaperRealizedPeriodIndex: () => 0 };
     });
     let fatalRequests = 0;
     const fatal = new Promise((resolve) => {

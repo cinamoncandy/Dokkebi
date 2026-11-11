@@ -78,6 +78,29 @@ test("isolated consumer identity pins OIDC, audience, repository, workflow/ref, 
     [{ repository_id: "1" }, /ISOLATED_CONSUMER_OIDC_REPOSITORY_ID_INVALID/],
     [{ workflow_sha: "b".repeat(40) }, /ISOLATED_CONSUMER_OIDC_WORKFLOW_SHA_INVALID/],
     [{ sub: `repo:${repository}:ref:refs/heads/feature` }, /ISOLATED_CONSUMER_OIDC_SUBJECT_INVALID/],
+    [{ sub: `repo:${repository}:pull_request` }, /ISOLATED_CONSUMER_OIDC_SUBJECT_INVALID/],
+    [{ sub: `repo:${repository}:environment:prod` }, /ISOLATED_CONSUMER_OIDC_SUBJECT_INVALID/],
+    [{ sub: "" }, /ISOLATED_CONSUMER_OIDC_SUBJECT_INVALID/],
+    [{ sub: 42 }, /ISOLATED_CONSUMER_OIDC_SUBJECT_INVALID:FORMAT:NOT_STRING/],
+    [{ sub: `repo:${repository}:ref:refs/heads/main:ref:refs/heads/feature` }, /ISOLATED_CONSUMER_OIDC_SUBJECT_INVALID/],
+    [{ sub: `repo:${repository}:ref:refs/heads/main:ref:refs/heads/main` }, /ISOLATED_CONSUMER_OIDC_SUBJECT_INVALID/],
+    [{ sub: `repo:${repository}:ref` }, /ISOLATED_CONSUMER_OIDC_SUBJECT_INVALID/],
+    [{ sub: "repo:cinamoncandy/nusa:ref:refs/heads/feature" }, /ISOLATED_CONSUMER_OIDC_SUBJECT_INVALID:REF:repo:ref$/],
+    [{ sub: "repo:cinamoncandy/nusa:pull_request" }, /ISOLATED_CONSUMER_OIDC_SUBJECT_INVALID:KIND:repo:pull_request$/],
+    [{ sub: "repo:cinamoncandy/nusa-fork:ref:refs/heads/main" }, /ISOLATED_CONSUMER_OIDC_SUBJECT_INVALID:REPOSITORY:cinamoncandy_nusa_fork:repo:ref$/],
+    [{ sub: "repo:cinamoncandy/nusa:ref:refs/heads/main", repository: "cinamoncandy/nusa" }, /ISOLATED_CONSUMER_OIDC_REPOSITORY_INVALID/],
+    [{ sub: "repository_owner_id:1:repository_id:1296492411:ref:refs/heads/main" }, /ISOLATED_CONSUMER_OIDC_SUBJECT_INVALID:REPOSITORY:/],
+    [{ sub: "repository_id:1296492411:ref:refs/heads/main" }, /ISOLATED_CONSUMER_OIDC_SUBJECT_INVALID:REPOSITORY:/],
+    [{ sub: "repository_owner_id:213270074:repository_id:1296492411:repository_id:2:ref:refs/heads/main" }, /ISOLATED_CONSUMER_OIDC_SUBJECT_INVALID:REPOSITORY:/],
+    [{ sub: "ARBITRARY_SUBJECT" }, /ISOLATED_CONSUMER_OIDC_SUBJECT_INVALID:REPOSITORY:NO_REPO_SEGMENT:NO_KEYS/],
+    [{ sub: "repo:other/NUSA:ref:refs/heads/main" }, /ISOLATED_CONSUMER_OIDC_SUBJECT_INVALID:REPOSITORY:other_NUSA:repo:ref$/],
+    [{ sub: "repo:cinamoncandy@213270074/NUSA@1:ref:refs/heads/main" }, /ISOLATED_CONSUMER_OIDC_SUBJECT_INVALID:REPOSITORY:/],
+    [{ sub: "repo:cinamoncandy@1/NUSA@1296492411:ref:refs/heads/main" }, /ISOLATED_CONSUMER_OIDC_SUBJECT_INVALID:REPOSITORY:/],
+    [{ sub: "repo:other@213270074/NUSA@1296492411:ref:refs/heads/main" }, /ISOLATED_CONSUMER_OIDC_SUBJECT_INVALID:REPOSITORY:/],
+    [{ sub: "repo:cinamoncandy@213270074/NUSA@1296492411:ref:refs/heads/feature" }, /ISOLATED_CONSUMER_OIDC_SUBJECT_INVALID:REF:/],
+    [{ sub: "repo:x/y-z.w:ref:refs/heads/main" }, /ISOLATED_CONSUMER_OIDC_SUBJECT_INVALID:REPOSITORY:x_y_z_w:repo:ref$/],
+    [{ sub: "repository_owner_id:1:repository_id:2:ref:refs/heads/main" }, /ISOLATED_CONSUMER_OIDC_SUBJECT_INVALID:REPOSITORY:NO_REPO_SEGMENT:repository_owner_id:repository_id$/],
+    [{ sub: "repo:cinamoncandy/NUSA-fork:ref:refs/heads/main" }, /ISOLATED_CONSUMER_OIDC_SUBJECT_INVALID/],
     [{ exp: now - 100 }, /ISOLATED_CONSUMER_OIDC_EXPIRED/],
   ] as const) {
     const invalid = await signedToken(override);
@@ -131,4 +154,26 @@ test("source workflow, attempt, repository and successful producer job are indep
     if (url === base) return { ok: true, status: 200, json: async () => run };
     return { ok: true, status: 200, json: async () => ({ total_count: 2, jobs: [job, { ...job, id: 766 }] }) };
   }), /ISOLATED_SOURCE_JOB_MISMATCH/);
+});
+
+test("consumer OIDC accepts a customized subject template while the signed claims stay pinned", async () => {
+  for (const sub of [
+    `repo:${repository}:ref:refs/heads/main`,
+    "repo:cinamoncandy/nusa:ref:refs/heads/main",
+    "repo:CINAMONCANDY/nusa:ref:refs/heads/main",
+    "repo:cinamoncandy@213270074/NUSA@1296492411:ref:refs/heads/main",
+    `repo:${repository}:workflow:NUSA Isolated Causal Verification Consumer:ref:refs/heads/main`,
+    `repository_owner_id:213270074:repository_id:1296492411:ref:refs/heads/main`,
+    `repo:${repository}:job_workflow_ref:${repository}/.github/workflows/causal-verification-consumer.yml@refs/heads/main`,
+  ]) {
+    const fixture = await signedToken({ sub });
+    const identity = await verifyGithubIsolatedConsumerIdentity(fixture.token, repository, fixture.jwksFetch, now);
+    assert.equal(identity.ref, "refs/heads/main", sub);
+  }
+  const wrongWorkflow = await signedToken({ sub: `repo:${repository}:ref:refs/heads/main`, workflow_ref: `${repository}/.github/workflows/other.yml@refs/heads/main` });
+  await assert.rejects(() => verifyGithubIsolatedConsumerIdentity(wrongWorkflow.token, repository, wrongWorkflow.jwksFetch, now), /ISOLATED_CONSUMER_OIDC_WORKFLOW_INVALID/);
+  const wrongRepository = await signedToken({ sub: `repo:${repository}:ref:refs/heads/main`, repository: "other/NUSA" });
+  await assert.rejects(() => verifyGithubIsolatedConsumerIdentity(wrongRepository.token, repository, wrongRepository.jwksFetch, now), /ISOLATED_CONSUMER_OIDC_REPOSITORY_INVALID/);
+  const wrongRef = await signedToken({ sub: `repo:${repository}:ref:refs/heads/main`, ref: "refs/heads/feature" });
+  await assert.rejects(() => verifyGithubIsolatedConsumerIdentity(wrongRef.token, repository, wrongRef.jwksFetch, now), /ISOLATED_CONSUMER_OIDC_REF_INVALID/);
 });

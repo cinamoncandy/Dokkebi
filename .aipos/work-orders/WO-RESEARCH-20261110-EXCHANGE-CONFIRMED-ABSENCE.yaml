@@ -1,0 +1,26 @@
+id: WO-RESEARCH-20261110-EXCHANGE-CONFIRMED-ABSENCE
+title: "1m research datasets skip only minutes the exchange proved have no candle"
+status: READY_FOR_REVIEW
+created: 2026-11-10
+implementation_branch: claude/exchange-confirmed-absence
+authority_impact: none
+owner_decision: "Owner, 2026-11-10 (chat): the closed learning loop is the core track; chose 'record the gap and skip it' over waiting until about 2026-11-21 or flat-filling."
+finding: "The closed learning loop is first broken at DATASET_NO_SESSION. One 299-minute 1m gap (2026-11-09 02:01-07:00 KST) blocks every 1m dataset manifest (missingCandlePolicy REJECT) and, inside the 2-day validation/holdout windows, also exceeds the 5% walk-forward missing ratio. Verified 2026-11-10: Upbit's public 1m endpoint itself returns no KRW-BTC candle in that span; it is exchange-side, not our loss. 1m shows SKIPPED_DATASET_MANIFEST_RANGE_MISMATCH (stale pre-gap manifest), 15m/60m MANIFEST_NOT_FOUND; sessionsStarted 0."
+change:
+  - "Storage: research_candle_absence table. recordAbsence stores a run only between two stored candles with nothing stored inside; listAbsence re-verifies checksum and bounds on every read. Idempotent; overlapping different runs are refused."
+  - "Gap fill: absenceRunsFromPage derives runs one Upbit page proves (gaps between consecutive candles, and the run up to the exclusive `to` bound when the candle starting at `to` is stored). A page with any malformed item proves nothing. The evidence is the same raw-page fingerprint the material receipts use. Result gains confirmedAbsent."
+  - "Materializer (1m only): a gap is allowed only when every missing close is inside a recorded absence run; any unproven missing close still refuses the dataset. Gap-free datasets keep byte-identical provenance and identity. With gaps: missingCandlePolicy ALLOW, missingCandleCount, the policy and runs in transformationConfig, and the proving pages in rawSourceIdentitySha256s."
+  - "Walk-forward: optional excludedCloses leave exchange-confirmed closes out of both sides of the missing ratio; our own missing still counts in full. A window more than 20% exchange-quiet is refused (MAX_CONFIRMED_ABSENT_RATIO)."
+  - "Runner: excludedCloses are derived only from a verified schema-2 ALLOW manifest (content hash already proves the persisted set) and must equal missingCandleCount."
+not_changed:
+  - "maxMissingRatio, window lengths, holdout rules, statistical bars, 15m/60m (still REJECT; they unblock when the gap ages out), trading, risk, limits, capital."
+safety:
+  paper_only: true
+  liveAuthority: NONE
+  productionMutationAllowed: false
+  aiAuthority: ZERO_AUTHORITY
+validation:
+  - "New tests: absence store, page proof, gap-fill recording and malformed-page refusal, materializer confirmed/unconfirmed/mixed, walk-forward exclusion and the 20% cap, end-to-end runner with a confirmed gap under maxMissingRatio 0."
+  - "138 research/candle/dataset/storage test files pass from dist; lint 0 errors; portability and platform-independent test validators pass. check-runtime and validate:full left to CI (Node 24)."
+  - "Not verified: the production gap fill actually recording the run, the 1m manifest materializing, and sessionsStarted > 0. Read after release via oracle-host-diagnose."
+next_action: "Non-author review, merge, release, then read 1m sessionsStarted and the learning verdict's first broken stage."

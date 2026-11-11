@@ -285,6 +285,11 @@ export async function handleCausalDispatchClaim(request: Request, env: WorkerEnv
     : json({ claimed: false, causalAttestationVerified: causalAdmission !== null, causalAdmissionGranted: false, error: "CAUSAL_DISPATCH_BINDING_REJECTED", ...authority }, 409);
 }
 
+/** A rejection stage is echoed only when it is one of the Worker's own upper-case error constants, optionally followed by up to four colon-separated token segments (status, reason constant, counts). */
+export function isolatedRejectionStage(code: string): string {
+  return /^[A-Z][A-Z0-9_]{2,95}(?::[A-Za-z0-9_]{1,64}){0,4}$/.test(code) ? code : "UNCLASSIFIED";
+}
+
 /** Disabled-by-default isolated proof lane; claim and CodingRunner execution stay inside this Worker. */
 export async function handleIsolatedCausalVerification(
   request: Request,
@@ -339,6 +344,9 @@ export async function handleIsolatedCausalVerification(
     return json({
       accepted: false,
       error: unavailable ? "ISOLATED_VERIFICATION_EVIDENCE_UNAVAILABLE" : "ISOLATED_VERIFICATION_REJECTED",
+      // The fixed constant naming the stage that refused (e.g. ISOLATED_CONSUMER_OIDC_SUBJECT_INVALID). Only an
+      // upper-case code is echoed; anything else (free text, URLs, values) is reported as UNCLASSIFIED.
+      rejectionStage: isolatedRejectionStage(code),
       ...authority,
     }, unavailable ? 503 : 409);
   }

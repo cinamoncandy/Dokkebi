@@ -1,6 +1,6 @@
 id: WO-UI-20261002-PERFORMANCE
 title: "More → 성과 shows real PAPER performance; PAPER tab gets the 7-day equity line"
-status: READY_FOR_REVIEW
+status: COMPLETED
 owner: nusa-development
 repository: cinamoncandy/NUSA
 base_branch: main
@@ -22,3 +22,4 @@ verification_commands:
   - node --test tests/mobile-performance-screen.test.js
   - pnpm run validate
 residual: "Physical Android visual acceptance is HUMAN_ENVIRONMENT_ONLY."
+closed_by_merge: "PR #2452 (branch claude/nusa-repository-j93sd8-performance) merged to main; it is the only PR from this branch and the only work order naming it. Status corrected by an automatic branch-to-merged-PR match on 2026-11-10; this records the merge only, not a separate production verification."

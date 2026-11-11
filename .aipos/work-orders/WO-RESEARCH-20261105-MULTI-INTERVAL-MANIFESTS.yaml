@@ -1,0 +1,320 @@
+id: WO-RESEARCH-20261105-MULTI-INTERVAL-MANIFESTS
+title: "Materialize verified manifests for configured Research intervals"
+status: COMPLETED
+owner: nusa-development
+repository: cinamoncandy/NUSA
+issue: 2815
+pull_request: 3002
+base_branch: main
+base_commit: 01d698b325626e4a2e62b29e8e0b2f99f579ad4a
+implementation_branch: WO-RESEARCH-20261105-MULTI-INTERVAL-MANIFESTS
+objective: "Materialize configured 1m/15m/60m/240m Research manifests only from contiguous verified Upbit REST OHLCV with durable source receipts, without changing Research/PAPER authority."
+scope:
+  - "Reuse existing SQLite candle and manifest stores, strict materializer, HEAD/HISTORY gap-fill and bounded retrier."
+  - "Preserve interval-specific deterministic manifest identities, provenance and complete-bucket requirements."
+  - "Keep one durable work order, one state.d entry, and one handoff; preserve historical contents in these records."
+  - "Record successful per-interval manifest build duration without changing rebuild decisions."
+exclusions:
+  - "No synthetic market candle, no volume/receipt invention, no production DB changes, no Risk/lease/readiness relaxation."
+  - "Do not infer an out-of-window changed row without changed-row timestamp bounds."
+acceptance:
+  - "Real source evidence and complete interval bars required for manifest."
+  - "Exact-head focused/full tests, AIPOS truth, security, CI, companion and PAPER must be evaluated on the final SHA."
+  - "Independent fresh non-author Validator, Formal Validator, Audit and Release remain separate gates."
+current_validation:
+  main_aligned_at: 01d698b325626e4a2e62b29e8e0b2f99f579ad4a
+  merge_commit: 0cc26c12c1c0c219e386cd794bd6136eb8b38f35
+  duration_log_commit: 6d2484fb8edb3d29e549429d712c2f6b550f8b15
+  exact_head_ci: PENDING_METADATA_SUCCESSOR
+  companion_workflows: PENDING_METADATA_SUCCESSOR
+  actual_paper: PENDING_METADATA_SUCCESSOR
+  prior_paper: "9288b8b6565e2f8e571aae860115f429d9cc84a4, run 42370741842 original and bounded retry FAIL PAPER_ORDERBOOK_UNRECONCILED."
+  prior_independent_review: "PASS_WITH_NOTES on 9288b8b6565e2f8e571aae860115f429d9cc84a4 only."
+  formal_validator: PENDING
+  audit: PENDING
+  release_authorization: PENDING
+  runtime_acceptance: UNVERIFIED
+safety:
+  paper_only: true
+  liveAuthority: NONE
+  productionMutationAllowed: false
+  realOrderAuthority: false
+  realTransferAuthority: false
+  aiAuthority: ZERO_AUTHORITY
+  fail_closed: true
+verification_commands:
+  - "pnpm run aipos:truth"
+  - "node --test tests/research-experiment-composition.test.js"
+  - "pnpm run preflight"
+  - "pnpm run build"
+  - "pnpm run typecheck"
+  - "pnpm run validate:full"
+  - "pnpm run security:gate"
+  - "pnpm run lint:scripts"
+  - "pnpm test"
+  - "git diff --check"
+next: "Confirm exact-head generated truth/CI/Actual PAPER, repair on existing branch if failed, obtain fresh non-author review on successor, then Formal Validator/Audit/Release."
+historical_work_order_snapshot: |-
+  id: WO-RESEARCH-20261105-MULTI-INTERVAL-MANIFESTS
+  title: "Materialize verified manifests for configured Research intervals"
+  status: IN_PROGRESS
+  created: 2026-11-05
+  owner: nusa-development
+  repository: cinamoncandy/NUSA
+  issue: 2815
+  base_branch: main
+  base_commit: 60e4185e7c6abba18fce0c0a80797d0aec4fe92b
+  implementation_branch: WO-RESEARCH-20261105-MULTI-INTERVAL-MANIFESTS
+  pull_request: 3002
+  implementation_commit_before_aipos_handoff: 1ccd50f1e39900c679cceeee133ad1c4acd9aaef
+  authority_impact: none
+  trigger: "Current researchExperimentComposition materializes only the 1m manifest after verified Upbit REST candle backfill/gap fill, while configured 15m/60m orchestrators resolve manifests by their own interval and therefore remain missing-manifest. Existing manifest materializer and AggregatedResearchCandleSource already enforce explicit OHLCV, complete contiguous 1m base coverage, raw-source receipts, and deterministic content identity."
+  objective: "Integrate the #2975 bounded REST gap-fill/head-refresh contract with #3002 verified multi-interval manifest materialization, using #2984's current two-hour stale ceiling without treating it as a collection cadence. Preserve strict source provenance and all research safety gates."
+  scope:
+    - "Reuse the existing SqliteResearchDatasetManifestStore, SqliteResearchCandleStore, AggregatedResearchCandleSource, and materializeResearchDatasetManifest."
+    - "For each configured interval, derive complete target candles from the same bounded 1m source window and use an interval-specific stable source identity."
+    - "Keep one existing gap-fill timer at 15 minutes with one source page per market/pass; alternate HEAD and HISTORY attempts so the nominal head revisit is 30 minutes, within the two-hour maximum-age rule. Do not interpret that stale ceiling as a required fetch interval."
+    - "Persist the history cursor and next pass in SQLite per market; retain the last verified cursor on request, malformed-page, or storage failure; reject non-advancing repeated source pages before recording them."
+    - "Do not overwrite historical cursor progress with a HEAD result. Alternate the next pass after failures too, so recurring failure of either work class cannot starve the other. Keep market failures isolated."
+    - "After a complete startup backfill, create a manifest when that interval has none and retry missing manifests at most hourly when source evidence is unchanged; a new source watermark or newly recorded row may trigger an earlier retry. Recalculate existing manifests only when source rows or that interval's complete input close advances, reusing immutable identities otherwise."
+    - "Preserve per-interval fail-closed behavior and safe diagnostic logging; materialization remains impossible without complete raw-source receipts and explicit OHLCV."
+    - "Add production-shaped tests proving 1m/15m/60m manifests are generated from explicit Upbit OHLCV receipts on both success paths, and missing/incomplete source evidence still creates no manifest."
+    - "Add restart, cursor replay, head/history fairness, one-page bounds, and unchanged-manifest no-recompute regression tests."
+    - "Keep all configured intervals, manifest IDs, candle contents, and source receipts deterministic for identical input."
+  exclusions:
+    - "No ticker-derived candles, synthetic candles/volume/receipts, or closedCandleAggregator wiring into canonical OHLCV."
+    - "No change to manifest requirements, PIT/OOS, qualification, session acceptance, risk, writer lease, readiness, execution, LIVE, or AI authority."
+    - "No DB/history rewrite, deployment, restart, production mutation, or issue closure based on tests alone."
+    - "PR #3001 remains display-only; PR #3000 and #2979/#2980 rolling-holdout changes remain separately owned. This order incorporates only the #2975 bounded REST gap-fill, cursor, and freshness scheduling behavior; it does not claim or close #2975 review threads."
+  acceptance:
+    - "Configured 1m, 15m, and 60m orchestrators can resolve only manifests materialized from verified contiguous Upbit 1m OHLCV and complete source receipts."
+    - "An absent candle, absent volume, missing source receipt, mixed/malformed source material, content mismatch, or unsupported interval does not produce a manifest and does not start Research with fabricated evidence."
+    - "Identical source candles and provenance produce the same manifest identity; no manifest is treated as a session, qualification, PAPER, or learning-cycle receipt."
+    - "A repeated/non-advancing provider page returns a fail-closed error and does not advance the durable cursor; progress resumes after process/database reopen."
+    - "A corrupt durable cursor fails closed per market while the next configured market is still processed."
+    - "Unchanged NO_GAPS/FILLED passes do not recompute manifests; changed or newly complete interval input is reconsidered, with missing-manifest retries bounded to hourly when inputs stay unchanged."
+    - "The 30-minute nominal head revisit is below the two-hour stale ceiling with 90 minutes of nominal margin; this is a scheduling target, not proof of runtime freshness."
+    - "Actual market candle freshness, durable manifest presence, session creation, and learning remain UNVERIFIED until governed exact-main read-only runtime evidence exists."
+  safety:
+    paper_only: true
+    liveAuthority: NONE
+    productionMutationAllowed: false
+    realOrderAuthority: false
+    realTransferAuthority: false
+    aiAuthority: ZERO_AUTHORITY
+    fail_closed: true
+  verification_commands:
+    - "node --test tests/research-experiment-composition.test.js"
+    - "pnpm run preflight"
+    - "pnpm run build"
+    - "pnpm run typecheck"
+    - "pnpm run validate:full"
+    - "pnpm run security:gate"
+    - "pnpm run lint:scripts"
+    - "pnpm test"
+    - "git diff --check"
+  validation: "LOCAL_VALIDATION_PASS on published code successor 0d77d4607dce887d984fd2ce2718cd35a94f7b68 based on protected main 60e4185e7c6abba18fce0c0a80797d0aec4fe92b: focused Research tests 50/50; pnpm test 1,336 isolated test files; typecheck, validate:full (including AIPOS drift/conformance and safety invariants), security:gate (0 high/critical, 0 secrets), full lint (0 errors, 47 existing warnings), and git diff --check PASS. The full-test runner's tracked isolated-test-failure.txt deletion was restored from HEAD. These local results do not apply to the following AIPOS metadata-only successor."
+  exact_head_ci: "Latest completed successor checked: PR #3002 exact head 1e47fa402872ed0ef5e94fe93577c23295f4c1e7, CI run 42369972344 and companions 42369972318, 42369972312, 42369972365, 42369972346, 42369972307, and 42369972309 all SUCCESS. The causal-regression-contract and attest-causal-regression jobs were SKIPPED and are not positive causal evidence. These are predecessor results if this work order is changed again; check current PR SHA and its own checks before review."
+  prepublication_snapshot_2026_11_06:
+    protected_main: 185c52c22691a5a35b13fe024cb39d810719a833
+    protection: "Branch metadata reports protected=true and required nusa/release-authorized from App 4935691; direct branch-protection endpoint returned 403 to the connected integration."
+    pr_2975: "OPEN/Draft, head cb6ecce1907eefd99ee39e6311ff0820acceed76, base 3e610394ab9441e925769ac66033d3ec9fedc429, mergeable=false; 14 check runs success and 3 skipped; 7 workflow runs success. Active P1 PRRT_kwDOTUbne86yW75k is unresolved/non-outdated; older P1/P2 threads are unresolved/outdated. Submitted reviews are historical Codex/author comments, with no independent terminal disposition."
+    pr_3002: "OPEN/Draft, head c3984912ff07e5d6747dc7e23c12e38f8e4ee852, base 185c52c22691a5a35b13fe024cb39d810719a833, mergeable=true but blocked; 14 check runs success and 3 skipped; 7 workflow runs success; zero submitted reviews and zero review threads. These checks apply to the remote predecessor, not this integrated local working-tree diff."
+    local_successor: "Uncommitted changes in the existing #3002 worktree; no commit, push, new PR, review request, or thread mutation."
+    superseded_by: current_checkpoint_2026_11_06T0347Z
+  predecessor_validation: "Historical local validation on #3002 predecessor 1ccd50f1e39900c679cceeee133ad1c4acd9aaef: focused research-experiment-composition 15/15; full isolated suite 1327 files; preflight, build, typecheck, validate:full, security:gate, lint:scripts, AIPOS truth/index/YAML/provenance, and diff check PASS; 0 lint errors and 47 baseline warnings. Not evidence for the integrated successor."
+  predecessor_exact_head_ci: "Historical #3002 head 1ccd50f1e39900c679cceeee133ad1c4acd9aaef: CI run 42041990038 and companions 42041989907, 42041989956, 42041990012, 42041989852, 42041990302 succeeded. These runs do not validate this combined diff."
+  independent_research_data_review: PENDING
+  formal_validator: PENDING
+  audit: PENDING
+  release_authorization: PENDING
+  runtime_acceptance: PENDING
+  next: "The latest published #3002 metadata successor 1e47fa402872ed0ef5e94fe93577c23295f4c1e7 passed exact-head CI 42369972344 and six companions. An independent technical review then found the added checkpoint still represented the completed successor CI as pending. This metadata successor records the completed 1e47fa40 checks and marks earlier state entries explicitly as time-bounded snapshots. After this metadata change, obtain exact-head CI for the new SHA and then a fresh independent Research/Data review. Preserve #2975 threads and keep Formal Validator, Audit, Release, merge, and runtime acceptance separate."
+  
+  current_checkpoint_2026_11_06T0347Z:
+    protected_main: 185c52c22691a5a35b13fe024cb39d810719a833
+    implementation_head: 6c85aaa7f7add65913a7150ba91df28b67b7fce5
+    branch: WO-RESEARCH-20261105-MULTI-INTERVAL-MANIFESTS
+    pr: "#3002 OPEN/Draft, mergeable, base=protected main; exact-head CI and seven companions PASS; no reviews, reviewer requests, or review threads."
+    validation: "After a local build generated the ignored dist tree, focused candle/backfill/composition/retry/progress tests passed 45/45. The initial direct node --test invocation before build failed because those tests load dist; no source correction was needed. Exact-head CI run 42155288545 and companions on 6c85 are terminal SUCCESS. Four pre-existing untracked audit reports remain preserved and excluded."
+    review: "Independent Research/Data review is pending. Current repository collaborator enumeration exposes only the PR author cinamoncandy; this CORE session cannot submit independent disposition. Request a fresh exact-head technical review after CI, but do not count it as Formal Validator, Audit, or Release."
+    overlap: "#2975 remains OPEN/Draft and conflicting on an old base. Its active P1 thread PRRT_kwDOTUbne86yW75k remains independently adjudication-owned; #3002 incorporates the bounded cursor behavior but does not close or supersede that thread. #2979/#2980 remain separately owned rolling-holdout branches."
+    runtime_read_only_observation:
+      host: nusa-datascale
+      observed_at_utc: "2026-11-06T03:47:19.530Z"
+      runtime_sha: 185c52c22691a5a35b13fe024cb39d810719a833
+      research: "COLLECTING; 62,633 candles / 15,840 required; 1m sessionsStarted=10; 15m and 60m each have sessionsStarted=10 and cumulative MANIFEST_NOT_FOUND skips=120. These counters do not identify a durable manifest or Research session receipt."
+      learning: "LEARNING_NOT_EVALUATED; cyclesEvaluated=0, cyclesRecorded=0, holdoutPasses=0; NO_DEPLOYABLE_CANDIDATE / REALIZED_TRADE remains pending."
+      freshness: "dataIntegrity reports PASS but its embedded observedAt is 2026-11-06T00:18:51Z, more than three hours before this health observation; it is stale for current freshness acceptance."
+      performance_signal: "The current-main pre-integration /health reports lastMaterializeMs=6047, maxMaterializeMs=7173 and eventLoopMaxStallMs=7123 at approximately the same gap-fill timestamp. This is correlation, not proven causality. Independent review must assess synchronous multi-interval materialization cost and bounded execution before recommending release."
+      access_limit: "Only the bounded read-only /health and service status were queried. Host read allowlist does not expose /var/lib/nusa or /var/backups/nusa; no database read, write, restart, deployment, or timer trigger was performed."
+    status:
+      implementation: PRESENT_ON_EXISTING_PR
+      local_build: PASS
+      focused_tests: PASS_45_OF_45_AFTER_BUILD
+      exact_head_ci: PASS
+      independent_research_data_review: PENDING
+      formal_validator: PENDING
+      audit: PENDING
+      release_authorization: PENDING
+      governed_merge: NOT_DONE
+      runtime_acceptance: UNVERIFIED
+      issue_2815: OPEN
+    next: "Update PR #3002 description to the actual integrated scope and 6c85 evidence, then request exact-head independent technical review with explicit Research/Data, performance, and #2975 P1 disposition questions. Keep Draft; do not resolve threads or claim runtime/L1 acceptance."
+  
+  current_checkpoint_2026_11_06T0441Z:
+    protected_main: ecdf77461771629f81d97a5b28be091414700e6f
+    local_branch: WO-RESEARCH-20261105-MULTI-INTERVAL-MANIFESTS
+    main_reconciliation_commit: 7c8f8b45f5ed9cafd1a60cc174495631b417379e
+    remote_pr_head: eb7af47232d1e26a02ac11f22e30746c228e57ce
+    pr_state: OPEN_DRAFT_BEHIND_MERGEABLE
+    main_reconciliation: "Local merge commit includes current protected main; not yet published. Four pre-existing untracked docs/audits files are preserved and excluded."
+    predecessor_exact_head_evidence: "CI 42159688403 and seven companions are SUCCESS on eb7af472 only; historical for local_head. Intentional causal/audit skips are not positive evidence."
+    local_validation:
+      build: PASS
+      focused_tests: PASS_45_OF_45
+      full_suite: PASS_1333_ISOLATED_TEST_FILES
+      typecheck: PASS
+      validate_full: PASS
+      security_gate: "PASS; high/critical=0, secrets=0."
+      lint_scripts: "PASS; 0 errors, 47 warnings."
+      aipos_provenance_yaml_drift_conformance: PASS
+      diff_check: PASS
+      test_runner_restoration: "Restored isolated-test-failure.txt from HEAD; SHA256 matches pre-test capture 08bc33d87f7961f92502cc48453dfd738a5559161ae447217f36b299e2ca20de."
+      excluded_untracked: "Four 2025-11-05 reports and four 2026-11-06 security-gate reports under docs/audits remain preserved and excluded."
+    independent_research_data_review: PENDING_REVIEWER_UNAVAILABLE
+    runtime_read_only:
+      host: nusa-datascale
+      observed_at_utc: "2026-11-06T04:29:11.775Z"
+      runtime_sha: 185c52c22691a5a35b13fe024cb39d810719a833
+      protected_main_sha: ecdf77461771629f81d97a5b28be091414700e6f
+      runtime_exact_main: false
+      research_candle_count: 62633
+      research_collection: COLLECTING
+      interval_manifest_skips: "15m and 60m each remain at 120 MANIFEST_NOT_FOUND skips; durable manifest identity is not exposed."
+      gap_fill: "24 runs, all FILLED; last materialization 6047ms, max 7173ms, event-loop max stall 7123ms; correlation only, root cause UNKNOWN."
+      data_integrity: "PASS status has embedded observedAt 2026-11-06T00:18:51Z and is stale relative to this health read."
+      learning: "LEARNING_NOT_EVALUATED; cyclesEvaluated=0, cyclesRecorded=0, holdoutPasses=0; no deployable candidate."
+      previous_stop: PAPER_WRITER_CLOCK_ANOMALY
+      database_access: "Read-only host allowlist excludes /var/lib/nusa and /var/backups/nusa; durable candle continuity, source receipts, and manifest rows remain UNVERIFIED. No database or runtime mutation performed."
+    forge_l1_boundary:
+      canonical_scope: "Issue #1851 acceptance plus owner checkpoint comment 6545892314 and WO-AUTOPILOT-20261030-1851-CAUSAL-ADMISSION. Research/Learning completion is separate unless a canonical dependency is established."
+      status: PARTIAL
+      reason: "#2994 is merged, but no genuine protected-producer positive attestation through the isolated verification route, verification-domain CODE_ACTIONABLE receipt, and bounded CodingRunner positive E2E are proven."
+    related_work:
+      pr_2975: "OPEN/Draft/CONFLICTING on stale base; active P1 thread PRRT_kwDOTUbne86yW75k still needs independent disposition. #3002 does not resolve it."
+      pr_3000: "OPEN/Draft/BEHIND; no independent review submitted; existing handoff 6652709639 retained."
+      pr_3001: "OPEN/Draft/BEHIND; display-only health projection; no independent Research/Data review submitted."
+      pr_2994: "MERGED at ecdf7746 via release authority; automatic deployment reports exact revision, but isolated positive consumer remains disabled and L1 acceptance is incomplete."
+    next: "Publish the latest-main reconciled successor to the existing #3002 branch only after AIPOS checkpoint validation; then verify new exact-head CI and hand off for independent Research/Data review. Preserve #2975 threads and keep runtime acceptance separate."
+  
+  current_checkpoint_2026_11_06T0748Z:
+    protected_main: 2224d7f8e2f58081cf3edcd2597ea7048e07f70a
+    pr_3002_preintegration_head: b775b30485f193602ca531db6af7c51fa4e2cfea
+    local_main_integration_commit: c58699281455e1285afd363015e9a01830bd245a
+    integration: "Merged the latest protected main locally into the existing #3002 head. The only overlapping path was generated .aipos/CURRENT_TRUTH.md; regenerated after selecting merged AIPOS sources. Main's rolling-holdout source additions remain the unchanged upstream merge from #2973. No #2975 finding was resolved or modified."
+    local_validation:
+      build: PASS
+      focused_tests: "PASS 56/56 across candle backfill, interval composition, pass persistence, retry behavior, and rolling-runner integration."
+      preflight: PASS
+      typecheck: PASS
+      validate_full: PASS
+      security_gate: "PASS; high/critical=0; secrets=0."
+      lint_scripts: "PASS; 0 errors, 47 existing warnings."
+      full_suite: "PASS 1,335 isolated test files. Initial attempt exposed Windows PATH missing bash; rerun with installed Git Bash on PATH passed."
+      diff_check: PASS
+      test_side_effect_restoration: "Restored isolated-test-failure.txt and seven Android XML assets after the full suite; sentinel SHA-256 restored to 11DB0518C1A8FBD29DB22377CE05D621D3C1BB861A7AA0F1BD576EBACA0BD825."
+      preserved_untracked: "Four existing docs/audits reports were preserved and excluded."
+    github:
+      pr_3002: "OPEN/Draft; remote head still b775b30485f193602ca531db6af7c51fa4e2cfea at last fresh read; behind main and mergeable=false until successor publication."
+      reviews: "0 submitted reviews; 0 review threads. Independent Research/Data reviewer not present in the visible collaborator/review state."
+      exact_head_ci: PENDING_PUBLICATION
+    governance:
+      independent_research_data_review: PENDING_REVIEWER
+      formal_validator: PENDING
+      audit: PENDING
+      release_authorization: PENDING
+      runtime_acceptance: UNVERIFIED
+      issue_2815: OPEN
+    safety: PAPER_ONLY_ZERO_AUTHORITY_FAIL_CLOSED
+    next: "Complete AIPOS state/handoff checkpoint and full metadata validation; publish as a fast-forward successor to existing PR #3002 using expected head b775b30485f193602ca531db6af7c51fa4e2cfea; verify exact-head CI. Keep Draft and do not resolve #2975 threads."
+  
+  current_checkpoint_2026_11_07T1053Z:
+    protected_main: 3241c525ab9575271a1150d8635d87ef9764c069
+    pr_3002_prior_head: 146ab98bad911c2eeb03c13d2f42fd502ebd0232
+    pr_3002_prior_base: 2224d7f8e2f58081cf3edcd2597ea7048e07f70a
+    reconciliation: "Current protected main was merged into the existing #3002 head in an isolated detached worktree. The only conflict was generated .aipos/CURRENT_TRUTH.md; it was regenerated with scripts/generate-aipos-current-truth.js. The existing PR branch/WIP and four untracked audit reports in the original worktree were not overwritten."
+    local_validation:
+      focused_research_tests: "49/49 PASS after build"
+      full_suite: "PASS; 1,336 isolated test files"
+      preflight: PASS
+      build: PASS
+      typecheck: PASS
+      validate_full: PASS
+      security_gate: "PASS; 0 high/critical findings and 0 secrets"
+      lint_scripts: "PASS; 0 errors, 47 existing warnings"
+      aipos_yaml_and_generated_truth: PASS
+      diff_check: PASS
+    remote_state: "PR #3002 remains OPEN/Draft at prior head 146ab98; latest main is 34 commits ahead of its old base. Current successor is local and not published; exact-head CI and independent Research/Data review are pending."
+    runtime_acceptance: "UNVERIFIED: code tests do not prove durable current-market candles, 15m/60m manifests, or Research session materialization."
+    issue_2815: OPEN
+    pr_2975: "No thread disposition made; existing P1 remains independently adjudication-owned."
+    formal_validator: PENDING
+    audit: PENDING
+    release_authorization: PENDING
+    governed_merge: NOT_DONE
+    safety: PAPER_ONLY_ZERO_AUTHORITY_FAIL_CLOSED
+    next: "Complete final diff/AIPOS checks, commit a fast-forward successor on the existing #3002 branch, verify exact-head CI and companions, then request one fresh independent Research/Data review. Do not resolve #2975 threads or claim runtime/L1 acceptance."
+  
+  current_checkpoint_2026_11_07T1059Z:
+    protected_main: 60e4185e7c6abba18fce0c0a80797d0aec4fe92b
+    previous_sync_head: fef4ab937c8895ba9af34916e71c5c696abb11f6
+    reason_for_resync: "Protected main advanced by three commits before successor CI started. The delta touched generated CURRENT_TRUTH, a causal attestation workflow/test, and its AIPOS record; no #3002 Research source files overlapped. Mergeability remained false due generated CURRENT_TRUTH conflict."
+    reconciliation: "Latest main merged into the existing #3002 successor; .aipos/CURRENT_TRUTH.md regenerated by the canonical generator."
+    local_validation: "After the 60e4185e sync: focused Research + causal-workflow + AIPOS tests 60/60; full isolated suite 1,336 files; build, preflight, typecheck, validate:full, security (0 high/critical, 0 secrets), workflow action input/pin/authority-map, AIPOS provenance/YAML/drift/conformance, and diff checks PASS. Lint 0 errors / 47 existing warnings."
+    exact_head_ci: PENDING_LATEST_SUCCESSOR
+    independent_research_data_review: PENDING
+    runtime_acceptance: UNVERIFIED
+    formal_validator: PENDING
+    audit: PENDING
+    release_authorization: PENDING
+    governed_merge: NOT_DONE
+    safety: PAPER_ONLY_ZERO_AUTHORITY_FAIL_CLOSED
+    next: "Rerun affected workflow/AIPOS tests and full suite on the 60e4185e sync, publish a fast-forward successor only after validation, then verify exact-head CI and obtain independent Research/Data review."
+  
+  current_checkpoint_2026_11_07TLOCAL_REVIEW_REPAIR:
+    protected_main: 60e4185e7c6abba18fce0c0a80797d0aec4fe92b
+    pr_3002_predecessor_head: 6da3a1ebac74cee6cdfcf9d98eec2c6f671b67ab
+    review_findings: "Fresh exact-head technical review identified P1: sequential synchronous materialization of configured intervals could stall runtime timers; P2: rejected source observations could still yield a manifest; P2: state.d exact-head CI metadata was pending despite predecessor checks passing."
+    implementation_repair: "Yield to the event loop after every configured interval (including no-op intervals) during backfill and gap-fill; reject any source receipt with rejectedObservations != 0 before manifest creation."
+    local_validation: "Focused Research tests 50/50; pnpm test 1,336 isolated test files; typecheck, validate:full, security:gate PASS; lint 0 errors / 47 existing warnings; git diff --check PASS."
+    full_test_side_effect: "scripts/run-tests-isolated.js deleted the tracked isolated-test-failure.txt during execution; restored byte-for-byte from HEAD after successful completion."
+    pr_3002: "OPEN/Draft/mergeable; published successor HEAD 0d77d4607dce887d984fd2ce2718cd35a94f7b68 against protected base 60e4185e7c6abba18fce0c0a80797d0aec4fe92b."
+    exact_head_ci: "PASS: CI 42369131128; six companions 42369131160, 42369131115, 42369131153, 42369131169, 42369131146, 42369131267 all SUCCESS. Conditional causal-regression-contract and attest-causal-regression jobs were SKIPPED."
+    predecessor_independent_review: "FRESH TECHNICAL REVIEW CHANGES_REQUIRED: P2 stale checkpoint identified in this work-order state at predecessor 0d77d460…. The PR body accurately recorded that predecessor SHA and checks; no attributable GitHub review was submitted. This metadata successor corrects the record."
+    actual_paper_evidence: "Workflow 42369131267 SUCCESS; artifact 13572808292 SHA-256 f1f3a5209acc4c0a658368572944e573af3057ec65236cb7c9f5b3ca0f5fbc84 binds exact source SHA. Result INCOMPLETE after 60.291s / 7 natural decisions; no actionable signal, Risk evaluation, order/fill, or account change."
+    runtime_acceptance: "UNVERIFIED; the PAPER observation was semantically INCOMPLETE and does not prove durable market data/manifests/session acceptance."
+    formal_validator: PENDING
+    audit: PENDING
+    release_authorization: PENDING
+    governed_merge: NOT_DONE
+    safety: PAPER_ONLY_ZERO_AUTHORITY_FAIL_CLOSED
+    next: "Publish this AIPOS correction as a fast-forward successor to existing PR #3002, rerun exact-head CI/companions, and request a fresh independent exact-SHA review. The prior CI and review apply only to 0d77d460…. Keep PR Draft; runtime acceptance, Formal Validator, Audit, Release, and merge remain separate gates."
+  
+  current_checkpoint_2026_11_07T1158Z:
+    protected_main: 60e4185e7c6abba18fce0c0a80797d0aec4fe92b
+    pr_3002_head: 1e47fa402872ed0ef5e94fe93577c23295f4c1e7
+    pr_state: OPEN_DRAFT_MERGEABLE
+    exact_head_ci: "CI 42369972344 plus companions 42369972318, 42369972312, 42369972365, 42369972346, 42369972307, 42369972309 all SUCCESS. causal-regression-contract and attest-causal-regression SKIPPED."
+    predecessor_review: "CHANGES_REQUIRED, P0=0/P1=0/P2=1: state.d successor CI and Work Order next-step text were stale. PR body itself correctly reflected the exact head and checks."
+    metadata_repair: "State entry 1143 is labeled as a historical snapshot of the 0d77d460… checkpoint; Work Order now records exact-head CI on 1e47fa40… and the next action is a new exact-head review after any metadata commit."
+    actual_paper: "Run 42369972309; artifact 13573022335; SHA-256 d9ca816e1ee0ab9c640443a489362eef2e38e5ac272afe10ba20bff89efc9608. INCOMPLETE after 60.433s / 38 natural decisions; no actionable signal, Risk evaluation, order/fill, or account change."
+    runtime_acceptance: UNVERIFIED
+    independent_review_for_1e47fa40: "CHANGES_REQUIRED P2; successor review required after this metadata repair."
+    formal_validator: PENDING
+    audit: PENDING
+    release_authorization: PENDING
+    governed_merge: NOT_DONE
+    safety: PAPER_ONLY_ZERO_AUTHORITY_FAIL_CLOSED
+    next: "This AIPOS successor records the completed 1e47fa40 exact-head run and corrects predecessor timestamp semantics. Obtain checks for the new current SHA, then request fresh independent review."
+closed_by_merge: "PR #3002 (branch WO-RESEARCH-20261105-MULTI-INTERVAL-MANIFESTS) merged to main; it is the only PR from this branch and the only work order naming it. Status corrected by an automatic branch-to-merged-PR match on 2026-11-10; this records the merge only, not a separate production verification."

@@ -48,6 +48,17 @@ test("invalid consumer token is rejected before source verification or Durable O
   const body = await response.json() as Record<string, unknown>;
   assert.equal(body.accepted, false);
   assert.equal(body.error, "ISOLATED_VERIFICATION_REJECTED");
+  assert.match(String(body.rejectionStage), /^ISOLATED_CONSUMER_OIDC_[A-Z_]+$/, "the refusing stage is named by its fixed constant");
   assert.equal(body.productionMutationAllowed, false);
   assert.equal(body.aiAuthority, "ZERO_AUTHORITY");
+});
+
+test("a rejection stage is echoed only when it is a fixed upper-case constant", async () => {
+  const { isolatedRejectionStage } = await import("./worker");
+  assert.equal(isolatedRejectionStage("CAUSAL_ATTESTATION_SIGNER_REJECTED"), "CAUSAL_ATTESTATION_SIGNER_REJECTED");
+  assert.equal(isolatedRejectionStage("CODING_RUNNER_HEAD_SHA_UNVERIFIED"), "CODING_RUNNER_HEAD_SHA_UNVERIFIED");
+  assert.equal(isolatedRejectionStage("ISOLATED_CODING_RUNNER_POSITIVE_E2E_FAILED:REJECTED:CODING_RUNNER_HEAD_SHA_UNVERIFIED:0:0"), "ISOLATED_CODING_RUNNER_POSITIVE_E2E_FAILED:REJECTED:CODING_RUNNER_HEAD_SHA_UNVERIFIED:0:0", "the runner's status and reason tokens survive");
+  for (const unsafe of ["", "x", "Unexpected token < in JSON", "https://example.test/token=abc", "A".repeat(97), "ABC DEF", "abc_def", "A:B", "ABC:has space", "ABC:a:b:c:d:e", "ABC:https://x", "ABC:"]) {
+    assert.equal(isolatedRejectionStage(unsafe), "UNCLASSIFIED", unsafe);
+  }
 });

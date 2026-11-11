@@ -1,6 +1,6 @@
 id: WO-RESEARCH-20261016-RUN-FINGERPRINT
 title: Verify existing Research run fingerprint at qualification boundary
-status: IN_PROGRESS
+status: COMPLETED
 priority: P0
 risk: HIGH
 authority_impact: none
@@ -38,3 +38,4 @@ limitations:
   - Matching digest is consistency, not authentication or durable precommit chronology.
   - Whole A-grade acceptance and actual learning loop remain UNVERIFIED.
 next: "Reconfirm final metadata-only head then draft PR/exact-head CI and canonical Audit/Release."
+closed_by_merge: "PR #2737 merged to main (4b4827592) by the release authority after CI and Audit. Status corrected 2026-11-09 from a stale IN_PROGRESS; this records the merge only, not a separate production verification."

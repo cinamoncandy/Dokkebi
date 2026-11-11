@@ -1,6 +1,6 @@
 id: WO-AI-HOOKS-001-DETERMINISTIC-AGENT-GATE
 title: "Deterministic repository agent safety hook"
-status: IMPLEMENTED_VALIDATION_PENDING
+status: COMPLETED
 owner: nusa
 repository: cinamoncandy/NUSA
 base_branch: main
@@ -50,3 +50,4 @@ validation:
 implementation_status: IMPLEMENTED_BRANCH_VALIDATION_PENDING_PR
 blocker: "Current execution container cannot resolve github.com and provides Node 22 rather than NUSA-required Node 24, while the connected GitHub interface has no arbitrary workflow-dispatch action. Do not claim exact-branch pnpm preflight until it actually runs."
 next: "Run pnpm run preflight on an exact checkout of this branch with Node 24; if PASS, open exactly one PR, verify exact-head protected checks, and merge only when green."
+closed_by_merge: "PR #968 (branch feat/deterministic-agent-safety-hooks) merged to main; it is the only PR from this branch and the only work order naming it. Status corrected by an automatic branch-to-merged-PR match on 2026-11-10; this records the merge only, not a separate production verification."

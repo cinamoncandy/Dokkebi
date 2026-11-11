@@ -1,6 +1,6 @@
 id: WO-LEARNING-20261007-EVIDENCE-CORRELATION
 title: "Publish learning-loop correlation identities on /health"
-status: READY_FOR_REVIEW
+status: COMPLETED
 owner: nusa-development
 repository: cinamoncandy/NUSA
 base_branch: main
@@ -27,3 +27,4 @@ verification_commands:
   - node --test tests/closed-learning-loop-status.test.js tests/cloud-runtime-liveness-health.test.js
 owner_decision: "2026-10-07 in chat ('a'): Feedback N for the learning-loop acceptance is the closed-learning Research decision (cycle evidence fingerprint -> decision id/reference), which already consumes the realized PAPER evidence. evaluatePaperGovernanceFeedback is not wired into the loop and is not required for this acceptance."
 residual: "Fill, ledger and performance fingerprints per fill are not exposed (the realized period carries the canonical outcome receipt fingerprint)."
+closed_by_merge: "PR #2560 (branch claude/health-learning-correlation) merged to main; it is the only PR from this branch and the only work order naming it. Status corrected by an automatic branch-to-merged-PR match on 2026-11-10; this records the merge only, not a separate production verification."

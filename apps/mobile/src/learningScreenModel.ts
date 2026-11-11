@@ -73,3 +73,25 @@ export function splitHeroLines(text: string): readonly string[] {
   if (best < 0) return Object.freeze([text]);
   return Object.freeze([chars.slice(0, best).join("").trim(), chars.slice(best + 1).join("").trim()].filter((line) => line !== ""));
 }
+
+/** The hero type as designed: 54 px with -2 px tracking. */
+export const HERO_FONT_SIZE = 54;
+const HERO_MIN_FONT_SIZE = 36;
+
+/**
+ * One font size for every hero line so the widest line fits the given width on one line (a 7-glyph Korean line at 54 px is
+ * wider than a 390 px phone and used to drop its last syllable onto a line of its own). Never grows above the designed size
+ * and never shrinks below 36 px; below that the line may wrap. Widths are estimated: a full-width glyph is 1 em, an ASCII
+ * glyph 0.62 em, a space 0.3 em, each with the designed tracking (-2 px at 54 px, scaled).
+ */
+export function heroFontSize(lines: readonly string[], availableWidth: number): number {
+  if (!Number.isFinite(availableWidth) || availableWidth <= 0) return HERO_FONT_SIZE;
+  let widestEm = 0;
+  for (const line of lines) {
+    let em = 0;
+    for (const ch of Array.from(line)) em += (/\s/.test(ch) ? 0.3 : ch.charCodeAt(0) < 0x80 && ch.length === 1 ? 0.62 : 1) - 2 / HERO_FONT_SIZE;
+    if (em > widestEm) widestEm = em;
+  }
+  if (widestEm <= 0) return HERO_FONT_SIZE;
+  return Math.max(HERO_MIN_FONT_SIZE, Math.min(HERO_FONT_SIZE, Math.floor(availableWidth / widestEm)));
+}

@@ -237,3 +237,13 @@ test("Release preflights expected review blocks before merge API and keeps them 
   assert.ok(preflightIndex >= 0 && mergeIndex > preflightIndex);
   assert.match(workflow, /Revoke authorization if merge preflight blocks activation/);
 });
+
+test("a transient GitHub API failure in the merge step retries instead of ending the release path", () => {
+  const merge = workflow.slice(workflow.indexOf("- name: Canonical expected-head merge"), workflow.indexOf('echo "merged_main=$verified_merge_sha"'));
+  assert.match(merge, /for merge_attempt in 1 2 3; do/, "the exact-head merge is attempted up to three times");
+  assert.match(merge, /"false \$EXPECTED_HEAD"\) ;;/, "an unchanged unmerged head retries");
+  assert.match(merge, /"false "\*\) echo "PR head moved; not retrying the merge\."; break ;;/, "a moved head stops the retry");
+  assert.match(merge, /if ! pr="\$\(gh api "repos\/\$GITHUB_REPOSITORY\/pulls\/\$PR_NUMBER" 2>\/dev\/null\)" \|\| ! jq -e \. /, "a failed read-back retries instead of exiting");
+  assert.match(merge, /sha="\$EXPECTED_HEAD"/, "the merge stays bound to the exact audited head");
+  assert.match(merge, /\[ "\$base" = "\$AUDITED_BASE" \]/, "the read-back still requires the audited base");
+});

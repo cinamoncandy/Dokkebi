@@ -46,7 +46,7 @@ test("the production composition feeds every loop tick into the status and hands
   assert.match(src, /loopStatus\.observeRollover\(await runClosedLearningRolloverAsync\(\), Date\.now\(\)\);\r?\n\s*persistLastBlocked\(\);/, "a blocked tick persists its reason");
   assert.match(src, /loopStatus\.seedLastBlocked\(readClosedLearningBlocked\(config\.cloudStateDbPath\)\)/, "the persisted reason seeds the status after a restart");
   assert.match(src, /loopStatus\.observePeriods\(periods\.listOpenPeriods\(\)\[0\], periods\.listRealizedPeriods\(\)(?:, pendingPeriods\.dispositions\(\))?\)/, "every tick reads the canonical period identities");
-  assert.match(src, /closedLearningStatus: \(\) => loopStatus\.snapshot\(\),\r?\n\s*researchIntervalTicks: \(\) => researchExperiments\?\.experimentTicksByInterval\(\) \?\? null,\r?\n\s*microstructureRecorder,\r?\n\s*orderBookCollector,\r?\n\s*futuresCollector,\r?\n\s*\}\);/);
+  assert.match(src, /closedLearningStatus: \(\) => loopStatus\.snapshot\(\),\r?\n\s*researchIntervalTicks: \(\) => researchExperiments\?\.experimentTicksByInterval\(\) \?\? null,\r?\n\s*researchRollingHoldout: \(\) => researchExperiments\?\.rollingHoldoutByInterval\(\) \?\? null,\r?\n\s*microstructureRecorder,\r?\n\s*orderBookCollector,\r?\n\s*futuresCollector,\r?\n\s*\}\);/);
 });
 
 test("evidence correlates the open period, the latest realized period and the latest Research cycle", () => {
@@ -364,6 +364,13 @@ test("a failed tick publishes only a bounded error class, never the message", ()
   assert.equal(tickErrorClass(Object.assign(new Error("secret path /var/lib/x"), { code: "ERR_SQLITE_ERROR" })), "ERR_SQLITE_ERROR");
   assert.equal(tickErrorClass(new TypeError("boom")), "TYPEERROR");
   assert.equal(tickErrorClass("not an error"), "UNKNOWN_ERROR");
+  // a plain Error whose whole message is a fixed constant names that constant; any other text is never echoed
+  assert.equal(tickErrorClass(new Error("RESEARCH_MANIFEST_UNAVAILABLE")), "RESEARCH_MANIFEST_UNAVAILABLE");
+  assert.equal(tickErrorClass(new TypeError("CANDLE_SERIES_INVALID")), "TYPEERROR_CANDLE_SERIES_INVALID");
+  assert.equal(tickErrorClass(new Error("Cannot read properties of undefined")), "ERROR");
+  assert.equal(tickErrorClass(new Error("TOKEN ghp_abc")), "ERROR");
+  assert.equal(tickErrorClass(new Error("lower_case_code")), "ERROR");
+  assert.equal(tickErrorClass(new Error(`A${"B".repeat(80)}`)), "ERROR", "an over-long constant is not echoed");
   const t = new ClosedLearningLoopStatusTracker(3_600_000);
   t.observeError(5, tickErrorClass(new RangeError("x")));
   const snap = t.snapshot();

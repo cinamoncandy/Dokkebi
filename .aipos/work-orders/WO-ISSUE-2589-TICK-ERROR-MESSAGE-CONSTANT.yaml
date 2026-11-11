@@ -1,0 +1,20 @@
+id: WO-ISSUE-2589-TICK-ERROR-MESSAGE-CONSTANT
+title: "A closed-learning TICK_ERROR names the thrown fixed constant, not just ERROR"
+status: READY_FOR_REVIEW
+created: 2026-11-11
+implementation_branch: claude/tick-error-class-detail
+issue: 2589
+authority_impact: none
+finding: "Daily host check 2026-11-11 09:28 KST: a new TICK_ERROR at 08:29 KST (lastBlockedAt 1794355762352) with lastErrorClass=ERROR. NUSA throws plain Error objects whose message is a fixed constant, so the class named only the JavaScript type."
+change:
+  - "tickErrorClass: for Error/TypeError/RangeError, a message that is entirely an upper-case constant (^[A-Z][A-Z0-9_]{2,63}$) is published (prefixed by the type for TypeError/RangeError). Any other message is never echoed."
+not_changed:
+  - "ERR_*/errno code handling, persistence, receipts, thresholds, risk and authority."
+safety:
+  paper_only: true
+  liveAuthority: NONE
+  productionMutationAllowed: false
+  aiAuthority: ZERO_AUTHORITY
+validation:
+  - "closed-learning-loop-status 28/28 with new cases (constant published; free text, secret-like, lower-case and over-long messages refused); governance wiring and liveness health pass."
+next_action: "Review, merge, release; read the class at the next TICK_ERROR."

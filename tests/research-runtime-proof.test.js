@@ -6,7 +6,7 @@ const source = fs.readFileSync(path.join(__dirname, "../.github/workflows/oracle
 test("existing diagnostic includes Research timer and bounded projection without mutation", () => {
   assert.match(source, /nusa-research\.service nusa-research\.timer/);
   assert.match(source, /NextElapseUSecRealtime,LastTriggerUSec/);
-  assert.match(source, /-n 200/); assert.match(source, /cut -c1-4096/);
+  assert.match(source, /--since "-26 hours"/); assert.match(source, /cut -c1-4096/);
   assert.match(source, /FORWARD_EXECUTION_EVIDENCE_UNAVAILABLE/);
   assert.doesNotMatch(source, /systemctl\s+(?:restart|start|enable|stop)|run-regime-forward-study\.js/);
 });

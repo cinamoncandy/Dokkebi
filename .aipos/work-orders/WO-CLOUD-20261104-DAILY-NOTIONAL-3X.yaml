@@ -1,6 +1,6 @@
 id: WO-CLOUD-20261104-DAILY-NOTIONAL-3X
 title: "Raise the PAPER daily buy and sell notional limits from 1x to 3x capital (owner decision)"
-status: READY_FOR_REVIEW
+status: COMPLETED
 owner: nusa-development
 repository: cinamoncandy/NUSA
 base_branch: main
@@ -30,3 +30,4 @@ verification_commands:
   - node scripts/validate-aipos-yaml.js
 review: "Draft PR; a separate non-author session reviews it under docs/GRILL_ME_PROTOCOL.md. Server effect needs an owner-approved oracle-paper-release run."
 residual: "Effect on the live server is verified only after the release (daily rejection counts, realized periods). Higher daily turnover also means more simulated fees; this change does not alter strategy behaviour. Bound: at the full new daily limits (KRW 300,000 buy plus KRW 300,000 sell) and the 0.05% PAPER fee per side, fees are at most about KRW 300 per day, far below the KRW 10,000 daily loss limit; slippage is not included in that figure."
+closed_by_merge: "PR #2997 (branch claude/daily-notional-3x) merged to main; it is the only PR from this branch and the only work order naming it. Status corrected by an automatic branch-to-merged-PR match on 2026-11-10; this records the merge only, not a separate production verification."

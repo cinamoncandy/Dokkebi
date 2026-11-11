@@ -7,29 +7,29 @@ Everything below is what the repository's records *claim*. Re-verify on GitHub b
 
 ## Newest handoff
 
-[`.aipos/handoffs/2026-11-07-main-handoff.md`](handoffs/2026-11-07-main-handoff.md) — CORE handoff — 2026-11-07 — #2772 completed consumer proof
+[`.aipos/handoffs/2026-11-08-core-speed-p0-p1-2770.md`](handoffs/2026-11-08-core-speed-p0-p1-2770.md) — CORE P0/P1 handoff — Issue #2770 late PAPER lease acquisition
 
-> Observed at `2026-11-07T15:42Z`.
+> Observed: `2026-11-08` (Asia/Seoul)
 
 ## Work orders
 
-535 total: 506 in `.aipos/work-orders/`, 29 closed and merged in `.aipos/work-orders/archive/`.
-Of the 506 active files, 96 carry a closed status that has not been archived (merge not proven, or the path is still referenced) and 410 are open or unclassified.
+577 total: 548 in `.aipos/work-orders/`, 29 closed and merged in `.aipos/work-orders/archive/`.
+Of the 548 active files, 376 carry a closed status that has not been archived (merge not proven, or the path is still referenced) and 172 are open or unclassified.
 
 Most common statuses among the open files (new orders use only `READY_FOR_REVIEW`, `IN_PROGRESS`, `BLOCKED`, `COMPLETED`, `SUPERSEDED`, `ABANDONED`):
 
 | Status | Files |
 |---|---|
-| READY_FOR_REVIEW | 231 |
-| IN_PROGRESS | 37 |
-| LOCAL_VALIDATED_PENDING_CI | 20 |
+| READY_FOR_REVIEW | 45 |
+| LOCAL_VALIDATED_PENDING_CI | 17 |
+| IN_PROGRESS | 14 |
 | VERIFYING | 14 |
-| LOCAL_VALIDATED_PENDING_EXACT_HEAD_CI | 13 |
 | completed | 7 |
 | COMPLETED_NO_SURVIVOR | 6 |
-| LOCAL_VALIDATED_PENDING_REVIEW_CI | 6 |
+| LOCAL_VALIDATED_PENDING_REVIEW_CI | 5 |
+| BLOCKED | 3 |
 
-### In progress or blocked (44)
+### In progress or blocked (19)
 
 | Work order | Status | Title |
 |---|---|---|
@@ -38,43 +38,20 @@ Most common statuses among the open files (new orders use only `READY_FOR_REVIEW
 | `WO-0009` | BLOCKED | Harden repository and release-artifact security gates |
 | `WO-0010` | BLOCKED | Resolve remaining repository P0/P1 gaps before release-target changes |
 | `WO-0051` | IN_PROGRESS | Constitutional Production Transition Human/Environment Gate |
-| `WO-0059-PAPER-OBSERVATION-20261106` | IN_PROGRESS | Bounded observation of natural PAPER decision and execution outcomes |
-| `WO-0059-PROJECTION-CONTINUITY-20261107` | IN_PROGRESS | Bounded PAPER evidence projection anchors under saturated read-only windows |
 | `WO-20260924-MOBILE-DELIVERY-RESIDUAL-GATES` | BLOCKED | Residual Android delivery and device gates from closed mobile UI work orders |
-| `WO-20260927-AUTOPILOT-CODING-RECEIPT-RECONCILIATION` | IN_PROGRESS | Autopilot coding receipt reconciliation |
 | `WO-20260927-AUTOPILOT-SCHEDULED-RECEIPT-RECOVERY` | IN_PROGRESS | Recover malformed scheduled runtime receipt state |
-| `WO-20260927-JEV-CODING-MODEL-TIERING` | IN_PROGRESS | Jev bounded coding model tier selection |
-| `WO-20260927-PR1991-REVIEW-HARDENING` | IN_PROGRESS | Restore qualification evidence integrity after latest-main reconvergence |
-| `WO-20260927-PROVIDER-BACKPRESSURE` | IN_PROGRESS | Provider rate-limit governor and adaptive backpressure primitive |
-| `WO-20260928-JEV-NATIVE-RUNTIME-SHADOW` | BLOCKED | Wire native Workers AI Jev into Autopilot SHADOW runtime |
-| `WO-AIPOS-20261019-COMPLETION-STATE-RECONCILIATION` | IN_PROGRESS | Reconcile merged remediation work-order completion state |
-| `WO-AUTOPILOT-20260929-CAPACITY-EFFICIENCY` | IN_PROGRESS | Reduce Autopilot provider-wait overhead and optional Jev SHADOW neuron use |
 | `WO-AUTOPILOT-20261017-FRESH-VALIDATOR-GATE` | IN_PROGRESS | Machine-enforce fresh non-author VALIDATOR evidence before Audit and Release |
 | `WO-AUTOPILOT-20261030-1851-CAUSAL-ADMISSION` | IN_PROGRESS | Bind publisher and source evidence before autonomous coding admission |
 | `WO-FUTURES-20261015-BINANCE-PUBLIC-COLLECTOR` | IN_PROGRESS | Research-only public Binance USD-M futures collector (BTCUSDT, ETHUSDT) |
-| `WO-ISSUE-2326-JEV-DOMAIN-OBSERVATION` | BLOCKED | Define canonical NUSA-wide Jev domain observation and task-type registry |
 | `WO-ISSUE-2589-TICK-ERROR-CLASS` | IN_PROGRESS | Make a failed closed-learning tick root-causable: publish a bounded error class |
 | `WO-ISSUE-659-LIVE-READINESS-PRODUCTION-WIRING` | IN_PROGRESS | Issue #659 LIVE-readiness production reader wiring |
-| `WO-ISSUE-661-SHADOW-TRANSPORT-UNIFIED-MONITOR` | IN_PROGRESS | Issue #661 Shadow transport, durable replay, and unified PAPER/SHADOW monitor |
-| `WO-OPS-20261015-DIAGNOSE-HEALTH-FRESHNESS` | IN_PROGRESS | Prevent failed host health probes from publishing stale response files |
 | `WO-OPS-20261015-DISK-CONSUMERS` | IN_PROGRESS | Read-only host diagnosis: where the 90% full root disk goes |
-| `WO-OPS-20261015-LEARNING-FATAL-SHUTDOWN` | IN_PROGRESS | Route daemon scheduler fatal failure through existing bounded shutdown |
 | `WO-OPS-20261015-RELEASE-RETENTION` | IN_PROGRESS | Keep fewer old releases on the PAPER host (RELEASE_RETENTION 4 to 2) |
-| `WO-OPS-20261015-RESEARCH-STARTUP-RECOVERY` | IN_PROGRESS | Move repeated Research evidence validation outside PAPER writer startup window |
-| `WO-OPS-20261016-PAPER-WRITER-CAUSE` | IN_PROGRESS | Preserve the first PAPER writer lease failure cause without changing authority |
-| `WO-OPS-20261018-PERIOD-DISPOSITION-CONSUMER-V2` | IN_PROGRESS | Make canonical PAPER pending consumers recovery-safe across immutable schemaVersion=2 dis… |
-| `WO-OPS-20261019-ORACLE-STABILITY-ROLLBACK` | IN_PROGRESS | Prevent false Oracle stability rollback and converge Autopilot identity on rollback |
-| `WO-OPS-20261030-AIPOS-STATUS-ARCHIVE-TRUTH` | IN_PROGRESS | One work-order status enum, an archive for closed merged orders, and a generated current-… |
-| `WO-PAPER-20261006-ANON-OBSERVATION` | IN_PROGRESS | Restore truthful mobile PAPER observation without widening authority |
-| `WO-POLICY-20261015-PAPER-LOSS-LIMIT` | IN_PROGRESS | Owner-approved removal of Cloud spot PAPER consecutive-loss halt |
 | `WO-RESEARCH-20261015-RAIM-VENUESPEC` | IN_PROGRESS | RAIM regime-adaptive market-making research: VenueSpec gate (step 2 of the validation ord… |
-| `WO-RESEARCH-20261016-A-GRADE-VALIDATION` | IN_PROGRESS | Canonical A-grade anti-overfit validation convergence |
-| `WO-RESEARCH-20261016-CLOUD-IDENTITY` | IN_PROGRESS | Preserve and verify qualification identity across Cloud worker response |
-| `WO-RESEARCH-20261016-QUALIFICATION-IDENTITY` | IN_PROGRESS | Bind canonical qualification results to run and frozen policy identity |
-| `WO-RESEARCH-20261016-RUN-FINGERPRINT` | IN_PROGRESS | Verify existing Research run fingerprint at qualification boundary |
-| `WO-RESEARCH-20261021-ORDERBOOK-RETENTION` | IN_PROGRESS | Order-book retention is 14 days: the pre-registered studies lose their training data befo… |
-
-…and 4 more. Full list: `node scripts/aipos-work-order-index.js`.
+| `WO-RESEARCH-20261101-CANDLE-FRESHNESS` | IN_PROGRESS | Keep the REST-backed Research candle head within the existing freshness window |
+| `WO-UI-20261019-LEARNING-FUNNEL` | IN_PROGRESS | Learning screen redesign step 2: Research funnel (tested -> discovery -> holdout) |
+| `WO-UI-20261019-NOW-RISK-GATE` | IN_PROGRESS | Now screen redesign step 1: show where the flow stopped (risk gate motion) |
+| `WO-UI-20261019-SAFETY-RECORDS-MOTION` | IN_PROGRESS | Redesign step 3: Safety lock rings and Records 'today' timeline |
 
 ## Refresh
 

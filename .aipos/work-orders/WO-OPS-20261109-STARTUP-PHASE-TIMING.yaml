@@ -1,0 +1,25 @@
+id: WO-OPS-20261109-STARTUP-PHASE-TIMING
+title: "Log the duration of each synchronous PAPER startup phase (attribute the 40-100 s startup seen in four rolled-back Oracle-named activations on the Datascale host)"
+status: COMPLETED
+owner: nusa-development
+repository: cinamoncandy/NUSA
+base_branch: main
+implementation_branch: claude/startup-phase-timing
+authority_impact: none
+objective: "Four activations (54c095d, 7879d1e, 6c7f1ea, e9219fb) rolled back. Startup (compositionToFirstLoopTurn) grew 39.9 s -> 51.9 s -> 63.9/80.1 s -> 100.0 s. The last one failed on the release helper's 300 s readiness budget after a 31 s writer-lease-conflict retry forced a second full startup. The code opens the database with a full-file integrity check before anything else, but which phase takes the time is unmeasured. Add one fixed-name log line per synchronous phase (database-open, cloud-ai-runtime, research-compose, cloud-runtime-listening, paper-runtime-start, research-recover, research-start) with time since process start and since the previous mark."
+scope:
+  - "apps/cloud/src/closedLearningProductionRuntime.ts"
+exclusions:
+  - "Log only: fixed names and integers, no input, no behaviour change, no new dependency. The full-file integrity check, the lease, Risk limits, thresholds, capital and the release helper are unchanged."
+safety:
+  paper_only: true
+  liveAuthority: NONE
+  productionMutationAllowed: false
+  aiAuthority: ZERO_AUTHORITY
+  fail_closed: "console.log of two integers and a fixed name; nothing reads it."
+verification_commands:
+  - npx tsc -p tsconfig.json
+  - node -r ./tests/register-dist.cjs --test tests/paper-writer-lease-liveness.test.js tests/research-startup-recovery.test.js tests/cloud-runtime-options.test.js
+review: "Draft PR; non-author review before Ready."
+residual: "It measures; it does not shorten startup. The cause of the 100 s is unproven until the next activation attempt prints these lines (they are in the journal and in the release job's activation log)."
+closed_by_merge: "PR #3026 (branch claude/startup-phase-timing) merged to main; it is the only PR from this branch and the only work order naming it. Status corrected by an automatic branch-to-merged-PR match on 2026-11-10; this records the merge only, not a separate production verification."

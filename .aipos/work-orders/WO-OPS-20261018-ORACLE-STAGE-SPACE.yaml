@@ -1,6 +1,6 @@
 id: WO-OPS-20261018-ORACLE-STAGE-SPACE
 title: "Avoid duplicate Oracle release staging bytes without weakening disk guards"
-status: VALIDATOR_P1_REPAIRED_PENDING_EXACT_HEAD_CI
+status: COMPLETED
 owner: nusa-development
 repository: cinamoncandy/NUSA
 issue: 2791
@@ -44,3 +44,4 @@ validation: "Exact head 0dabdbfb087f83979eac3d72df096f0a01325cbc: full CI and co
 previous_pr_head: 0dabdbfb087f83979eac3d72df096f0a01325cbc
 previous_pr_head_ci: "Full CI PASS, but superseded by fresh Validator P1 unsafe mv fallback finding."
 residual: "The exact-main release will continue refusing to run until the reviewed root-owned host helper is installed through its canonical infrastructure path. No Oracle server mutation or runtime proof is claimed."
+closed_by_merge: "PR #2805 (branch WO-OPS-20261018-ORACLE-STAGE-SPACE) merged to main; it is the only PR from this branch and the only work order naming it. Status corrected by an automatic branch-to-merged-PR match on 2026-11-10; this records the merge only, not a separate production verification."

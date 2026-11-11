@@ -1,7 +1,7 @@
 id: WO-UI-20260928-FIELD-THEME
 title: "Make the Intelligence Field language the app-wide default theme"
 superseded_in_part_by: WO-UI-20260930-LIME-THEME  # amber primary and small radii below were replaced by lime primary and rounder radii
-status: READY_FOR_REVIEW
+status: COMPLETED
 owner: nusa-development
 repository: cinamoncandy/NUSA
 base_branch: main
@@ -25,3 +25,4 @@ verification_commands:
   - node --test tests/mobile-field-screens.test.js
   - pnpm run validate
 residual: "Physical Android device visual acceptance is HUMAN_ENVIRONMENT_ONLY."
+closed_by_merge: "PR #2350 (branch claude/nusa-repository-j93sd8-field-theme) merged to main; it is the only PR from this branch and the only work order naming it. Status corrected by an automatic branch-to-merged-PR match on 2026-11-10; this records the merge only, not a separate production verification."

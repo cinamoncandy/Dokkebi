@@ -1,0 +1,18 @@
+id: WO-AUTOPILOT-20261111-FORGE-L2-ROADMAP
+title: "Roadmap from the verified L1 to autonomous fix and release (document only)"
+status: READY_FOR_REVIEW
+created: 2026-11-11
+implementation_branch: claude/forge-l2-roadmap
+authority_impact: none
+change:
+  - "docs/FORGE_L2_ROADMAP_20261111.md: groups the 33 unwired control-plane functions into four wiring stages plus an end-to-end proof and the L2 hold decision, with prerequisites and the rules each stage keeps."
+not_changed:
+  - "No code, workflow, flag, limit, threshold, risk, capital or authority. Merging stays with the Audit and Release path; the author never merges."
+safety:
+  paper_only: true
+  liveAuthority: NONE
+  productionMutationAllowed: false
+  aiAuthority: ZERO_AUTHORITY
+validation:
+  - "Counts taken from apps/autopilot/src/unwiredControlPlaneDebt.ts (33 entries: 6 + 6 + 14 + 7)."
+next_action: "Stage 1 design check, then the smallest stage 2 piece, each as its own draft PR that shrinks the ledger."

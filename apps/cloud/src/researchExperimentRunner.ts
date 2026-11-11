@@ -56,6 +56,9 @@ export function runResearchExperiment(ports: ExperimentRunnerPorts, spec: Experi
   try {
     const now = ports.now();
     const intervalMs = spec.intervalMs;
+    // Closes inside a verified ALLOW manifest that hold no candle: the materializer admitted them only because the
+    // exchange proved they have none, and the content hash below proves the persisted set is exactly that manifest.
+    let excludedCloses: Set<number> | undefined;
     if (ports.datasetManifest != null) {
       if (!spec.datasetId) return skip("DATASET_MANIFEST_ID_MISSING");
       let manifest: ReturnType<NonNullable<ExperimentRunnerPorts["datasetManifest"]>["read"]>;
@@ -73,10 +76,16 @@ export function runResearchExperiment(ports: ExperimentRunnerPorts, spec: Experi
         ? calculateResearchDatasetId(manifest.source, canonical, contentSha256)
         : manifest.provenance == null ? undefined : calculateResearchDatasetIdV2(manifest.source, canonical, contentSha256, manifest.provenance);
       if (contentSha256 !== manifest.contentSha256 || datasetId !== manifest.datasetId) return skip("DATASET_MANIFEST_CONTENT_MISMATCH");
+      if (manifest.schemaVersion === 2 && manifest.missingCandlePolicy === "ALLOW" && manifest.missingCandleCount > 0) {
+        const present = new Set(persisted.map((candle) => candle.closeTimeMs));
+        excludedCloses = new Set<number>();
+        for (let close = manifest.startOpenTime + intervalMs; close <= manifest.endCloseTime; close += intervalMs) if (!present.has(close)) excludedCloses.add(close);
+        if (excludedCloses.size !== manifest.missingCandleCount) return skip("DATASET_MANIFEST_CONTENT_MISMATCH");
+      }
     }
     const total = spec.windows.trainMs + spec.windows.validationMs + spec.windows.holdoutMs;
     const rows = ports.candles.read(spec.market, intervalMs, spec.endCloseMs - total + intervalMs, spec.endCloseMs);
-    const built = buildWalkForwardWindows({ candles: rows.map((r) => ({ timestamp: r.closeTimeMs, open: r.open, high: r.high, low: r.low, close: r.close, volume: 0 })), endCloseMs: spec.endCloseMs, config: spec.windows });
+    const built = buildWalkForwardWindows({ candles: rows.map((r) => ({ timestamp: r.closeTimeMs, open: r.open, high: r.high, low: r.low, close: r.close, volume: 0 })), endCloseMs: spec.endCloseMs, config: spec.windows, ...(excludedCloses == null ? {} : { excludedCloses }) });
     if (built.status === "REFUSED") return skip(`WINDOWS_${built.reason}${built.window ? `_${built.window.toUpperCase()}` : ""}`);
 
     const challengerConfigHash = canonicalSha256(spec.challenger.config);
@@ -176,10 +185,14 @@ export interface RollingExperimentOutcome {
 const refuseRolling = (reason: string): RollingExperimentOutcome => Object.freeze({ decision: decideRollingHoldout([]), folds: Object.freeze([]), refusal: reason });
 
 /**
- * Runs the existing single-fold experiment once per fold. This exported composition is
- * deliberately not called by the orchestrator, scheduler, ledger, backfill, or /health.
+ * Runs the existing single-fold experiment once per fold. Only the orchestrator's SHADOW mode calls it (default OFF); it is not
+ * used by the scheduler, ledger, backfill, or /health.
+ *
+ * `newestOutcome`: the outcome the caller already obtained for `spec` itself, which IS the newest fold (same end, same holdout window).
+ * The newest fold's holdout claim is already used by that run, so running it again could only report HOLDOUT_ALREADY_USED; the given
+ * outcome is classified instead and the older folds are the only ones run here.
  */
-export function runRollingResearchExperiment(ports: ExperimentRunnerPorts, spec: ExperimentSpec, folds: number = ROLLING_FOLDS): RollingExperimentOutcome {
+export function runRollingResearchExperiment(ports: ExperimentRunnerPorts, spec: ExperimentSpec, folds: number = ROLLING_FOLDS, newestOutcome?: ExperimentOutcome): RollingExperimentOutcome {
   // K stays 2, so only N=3 keeps "2 of 3" as strict as designed; any other N would be an easier bar and is refused.
   if (folds !== ROLLING_FOLDS) return refuseRolling("ROLLING_UNSUPPORTED_FOLD_COUNT");
   try {
@@ -190,7 +203,7 @@ export function runRollingResearchExperiment(ports: ExperimentRunnerPorts, spec:
 
     const results = built.folds.map((fold) => {
       const endCloseMs = fold.bounds.holdout.endCloseMs;
-      const outcome = runResearchExperiment(ports, { ...spec, endCloseMs });
+      const outcome = newestOutcome !== undefined && fold.index === folds - 1 ? newestOutcome : runResearchExperiment(ports, { ...spec, endCloseMs });
       let classified: FoldOutcome, note: string;
       if (outcome.status !== "COMPLETED") { classified = "INSUFFICIENT"; note = `${outcome.status}_${outcome.reason}`; }
       else if (outcome.holdout != null) { classified = outcome.holdout.result === "CHALLENGER_BETTER" ? "CHALLENGER_BETTER" : "NOT_BETTER"; note = "HOLDOUT_EVALUATED"; }

@@ -1,6 +1,6 @@
 id: WO-AUTOPILOT-20261008-RUNNER-READINESS
 title: "Coding runner readiness preflight names what is missing (Autopilot completion convergence, P0 step 3)"
-status: READY_FOR_REVIEW
+status: COMPLETED
 owner: nusa-development
 repository: cinamoncandy/NUSA
 base_branch: main
@@ -34,3 +34,4 @@ safety:
   productionMutationAllowed: false
   aiAuthority: ZERO_AUTHORITY
   fail_closed: true
+closed_by_merge: "PR #2587 (branch claude/autopilot-runner-preflight) merged to main (2fe595125, 2026-10-08) by the release authority after CI and Audit; it is the only merged PR from this branch. Status corrected 2026-11-09 from READY_FOR_REVIEW; this records the merge only, not a separate production verification."

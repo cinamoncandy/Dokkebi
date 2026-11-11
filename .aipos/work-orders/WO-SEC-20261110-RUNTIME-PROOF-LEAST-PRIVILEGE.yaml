@@ -1,0 +1,27 @@
+id: WO-SEC-20261110-RUNTIME-PROOF-LEAST-PRIVILEGE
+title: "Runtime proof: only a code-free dispatch job holds Actions write (#1860)"
+status: READY_FOR_REVIEW
+created: 2026-11-10
+implementation_branch: claude/runtime-proof-least-privilege
+authority_impact: "reduces workflow token authority; no new authority"
+objective: "The job that checks out the repository and runs repository scripts must not hold Actions write authority."
+finding: "autopilot-cloudflare-runtime-proof.yml declared workflow-level contents: read plus actions: write, so the runtime-proof job ran scripts/autopilot-runtime-proof-self-heal.mjs with a token that can dispatch workflows (Issue #1860). PR runs were already excluded by the job condition."
+change:
+  - "Workflow-level permissions are contents: read only."
+  - "runtime-proof exposes a preflight_eligible job output (freshness current AND proof eligible) and no longer dispatches."
+  - "New dispatch-preflight job: needs runtime-proof, never runs on pull_request, permissions actions: write only, no checkout, no repository code; it makes the same single Credential Preflight dispatch on main."
+  - ".github/workflow-authority-map.json: write authority moves from runtime-proof (now none) to dispatch-preflight (actions)."
+  - "tests/autopilot-cloudflare-runtime-proof.test.js asserts the split."
+not_changed:
+  - "When the dispatch happens (exact current main, runtime converged), its target, the proof script, schedule, triggers, concurrency, secrets, thresholds or limits."
+residual:
+  - "Issue #1860 also asks for protected-environment style controls; not part of this change."
+safety:
+  paper_only: true
+  liveAuthority: NONE
+  productionMutationAllowed: false
+  aiAuthority: ZERO_AUTHORITY
+validation:
+  - "tests/autopilot-cloudflare-runtime-proof.test.js and autopilot-cloudflare-deploy.test.js pass (38); workflow-authority-map test 13/13; workflow action input, action pin and authority map validators PASS; YAML parses."
+  - "Not verifiable before merge: the real hourly run on main. First post-merge run must show dispatch-preflight dispatching (or being skipped when not eligible)."
+next_action: "Non-author review, then the release path. After merge, read the first scheduled run."

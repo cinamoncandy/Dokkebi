@@ -1,6 +1,6 @@
 id: WO-20260923-AUTOPILOT-RATE-LIMIT-NON2XX-FOLLOWUP
 title: "Autopilot rate-limit non-2xx stop normalization"
-status: READY_FOR_REVIEW
+status: COMPLETED
 owner: nusa-development
 repository: cinamoncandy/NUSA
 base_branch: main
@@ -63,3 +63,4 @@ safety:
   fail_closed: true
   human_environment_only: true
 next_permitted_action: "Push exact head b03055ae9b3b5bce9b5b4a3c10d0d5c66e1ddf7f, obtain fresh exact-head CI, then request independent Audit; do not merge from Development."
+closed_by_merge: "PR #2229 (branch codex/autopilot-rate-limit-waiting-20260923) merged to main; it is the only PR from this branch and the only work order naming it. Status corrected by an automatic branch-to-merged-PR match on 2026-11-10; this records the merge only, not a separate production verification."

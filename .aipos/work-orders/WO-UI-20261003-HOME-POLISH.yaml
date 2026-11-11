@@ -1,6 +1,6 @@
 id: WO-UI-20261003-HOME-POLISH
 title: "UI polish app-wide: HOME key tiles up front, readable text floor on every screen, Korean labels on the monitors"
-status: READY_FOR_REVIEW
+status: COMPLETED
 owner: nusa-development
 repository: cinamoncandy/NUSA
 base_branch: main
@@ -31,3 +31,4 @@ verification_commands:
   - node scripts/lint-mobile.js
   - node --test tests/mobile-home-vitals.test.js
 residual: "Raising 9-11 px text to 11-12 px can wrap text that used to fit (pills, tracked labels); nothing was looked at on a device, so the layout is reasoned from the style tokens. Not looked at on a device: layout was reasoned from the style tokens, so the tile height and wrapping need an owner screenshot. Depends on the traded-coin row (PR 2493)."
+closed_by_merge: "PR #2494 (branch claude/nusa-repository-j93sd8-design-polish) merged to main; it is the only PR from this branch and the only work order naming it. Status corrected by an automatic branch-to-merged-PR match on 2026-11-10; this records the merge only, not a separate production verification."

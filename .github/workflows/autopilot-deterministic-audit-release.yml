@@ -453,33 +453,51 @@ jobs:
         run: |
           set -euo pipefail
           merge_api_ok=false
-          if result="$(gh api --method PUT "repos/$GITHUB_REPOSITORY/pulls/$PR_NUMBER/merge" -f sha="$EXPECTED_HEAD" -f merge_method=merge)"; then
-            if jq -e '.merged == true' <<<"$result" >/dev/null; then merge_api_ok=true; else echo "Merge API returned without merged=true; verifying fail-closed whether an equivalent exact-head merge completed concurrently."; fi
-          else
-            echo "Merge API failed; verifying fail-closed whether an equivalent exact-head merge completed concurrently."
-          fi
+          # A transient GitHub API failure (e.g. an empty 5xx body) must not end the release path: the exact-head
+          # merge is attempted up to three times, and the fail-closed read-back below tolerates a failed read.
+          for merge_attempt in 1 2 3; do
+            if result="$(gh api --method PUT "repos/$GITHUB_REPOSITORY/pulls/$PR_NUMBER/merge" -f sha="$EXPECTED_HEAD" -f merge_method=merge)"; then
+              if jq -e '.merged == true' <<<"$result" >/dev/null 2>&1; then merge_api_ok=true; break; fi
+              echo "Merge API returned without merged=true (attempt $merge_attempt/3)."
+            else
+              echo "Merge API failed (attempt $merge_attempt/3)."
+            fi
+            pr_state="$(gh api "repos/$GITHUB_REPOSITORY/pulls/$PR_NUMBER" --jq '"\(.merged) \(.head.sha)"' 2>/dev/null || true)"
+            # Stop retrying once the PR is merged or its head moved; an unreadable state retries.
+            case "$pr_state" in
+              "true "*) break ;;
+              "false $EXPECTED_HEAD") ;;
+              "false "*) echo "PR head moved; not retrying the merge."; break ;;
+            esac
+            sleep $((merge_attempt * 5))
+          done
+          echo "Verifying fail-closed that the exact-head merge is bound to the audited base."
           verified_merge_sha=''
-          for poll in $(seq 1 5); do
-            pr="$(gh api "repos/$GITHUB_REPOSITORY/pulls/$PR_NUMBER")"
+          for poll in $(seq 1 8); do
+            if ! pr="$(gh api "repos/$GITHUB_REPOSITORY/pulls/$PR_NUMBER" 2>/dev/null)" || ! jq -e . >/dev/null 2>&1 <<<"$pr"; then
+              echo "PR read-back failed (poll $poll/8); retrying."
+              sleep 3
+              continue
+            fi
             merged="$(jq -r '.merged // false' <<<"$pr")"
             head="$(jq -r '.head.sha // empty' <<<"$pr")"
             base_ref="$(jq -r '.base.ref // empty' <<<"$pr")"
             base="$(jq -r '.base.sha // empty' <<<"$pr")"
             merge_sha="$(jq -r '.merge_commit_sha // empty' <<<"$pr")"
             if [ "$merged" = "true" ] && [ "$head" = "$EXPECTED_HEAD" ] && [ "$base_ref" = "main" ] && [ "$base" = "$AUDITED_BASE" ] && [[ "$merge_sha" =~ ^[0-9a-fA-F]{40}$ ]]; then
-              merge_commit="$(gh api "repos/$GITHUB_REPOSITORY/git/commits/$merge_sha")"
+              merge_commit="$(gh api "repos/$GITHUB_REPOSITORY/git/commits/$merge_sha" 2>/dev/null || echo '{}')"
               parent_count="$(jq -r '.parents | length' <<<"$merge_commit")"
               parent_base="$(jq -r '.parents[0].sha // empty' <<<"$merge_commit")"
               parent_head="$(jq -r '.parents[1].sha // empty' <<<"$merge_commit")"
               if [ "$parent_count" = "2" ] && [ "$parent_base" = "$AUDITED_BASE" ] && [ "$parent_head" = "$EXPECTED_HEAD" ]; then
-                current_main="$(gh api "repos/$GITHUB_REPOSITORY/branches/main" --jq '.commit.sha')"
+                current_main="$(gh api "repos/$GITHUB_REPOSITORY/branches/main" --jq '.commit.sha' 2>/dev/null || true)"
                 if [ "$current_main" = "$merge_sha" ]; then verified_merge_sha="$merge_sha"; break; fi
                 ancestry="$(gh api "repos/$GITHUB_REPOSITORY/compare/$merge_sha...$current_main" --jq '.status' 2>/dev/null || true)"
                 if [ "$ancestry" = "ahead" ]; then verified_merge_sha="$merge_sha"; break; fi
               fi
             fi
-            echo "Waiting for exact-head merge race to settle (poll $poll/5)..."
-            sleep 1
+            echo "Waiting for exact-head merge race to settle (poll $poll/8)..."
+            sleep 2
           done
           if [ -z "$verified_merge_sha" ]; then
             if [ "$merge_api_ok" = "true" ]; then echo "::error::Merge API reported success, but the resulting merge could not be bound to audited base $AUDITED_BASE and exact head $EXPECTED_HEAD."; else echo "::error::Merge API failed and no equivalent audited exact-head merge could be proven."; fi

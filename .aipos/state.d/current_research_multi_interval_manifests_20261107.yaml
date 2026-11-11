@@ -1,0 +1,207 @@
+current_research_multi_interval_manifests_20261107:
+  work_order: WO-RESEARCH-20261105-MULTI-INTERVAL-MANIFESTS
+  issue: 2815
+  pr: 3002
+  branch: WO-RESEARCH-20261105-MULTI-INTERVAL-MANIFESTS
+  aligned_main: 01d698b325626e4a2e62b29e8e0b2f99f579ad4a
+  source_merge_commit: 0cc26c12c1c0c219e386cd794bd6136eb8b38f35
+  source_duration_log_commit: 6d2484fb8edb3d29e549429d712c2f6b550f8b15
+  exact_head_ci: PENDING_THIS_METADATA_SUCCESSOR
+  companions: PENDING_THIS_METADATA_SUCCESSOR
+  actual_paper: PENDING_THIS_METADATA_SUCCESSOR
+  prior_paper_failures: "HEAD 9288b8b6565e2f8e571aae860115f429d9cc84a4; run 42370741842 attempt 1 and 2 both FAIL PAPER_ORDERBOOK_UNRECONCILED; 0 decision/order/fill."
+  independent_review: "PASS_WITH_NOTES for predecessor 9288b8b6565e2f8e571aae860115f429d9cc84a4 ONLY; successor requires fresh review."
+  formal_validator: PENDING
+  audit: PENDING
+  release_authorization: PENDING
+  governed_merge: NOT_DONE
+  runtime_acceptance: UNVERIFIED
+  first_broken_transition: "metadata successor exact-head CI and PAPER, followed by independent new-head Validator."
+  safety: PAPER_ONLY_ZERO_AUTHORITY_FAIL_CLOSED
+  historical_snapshots:
+    snapshot_current_research_multi_interval_manifests_20261105_yaml: |-
+      current_research_multi_interval_manifests_20261105:
+        work_order: WO-RESEARCH-20261105-MULTI-INTERVAL-MANIFESTS
+        issue: 2815
+        observed_at_utc: "2026-11-05T14:15:19Z"
+        protected_main: 185c52c22691a5a35b13fe024cb39d810719a833
+        branch: WO-RESEARCH-20261105-MULTI-INTERVAL-MANIFESTS
+        pull_request: 3002
+        implementation_commit_before_aipos_handoff: 1ccd50f1e39900c679cceeee133ad1c4acd9aaef
+        status: LOCAL_VALIDATED_PENDING_EXACT_HEAD_CI
+        first_broken_transition: "verified base candle material -> configured interval manifest -> Research dataset lookup"
+        evidence:
+          source_fingerprint_aggregator: "PR #2879 is merged; current main accepts distinct well-formed event fingerprints from one source and rejects mixed source identities. The aggregator/collector pair is not wired to the canonical OHLCV writer."
+          canonical_writer: "researchCandleBackfill.ts writes explicit Upbit minute OHLCV and material receipts; researchExperimentComposition.ts currently materializes only the 1m interval."
+          configured_intervals: "Research settings permit 1m, 15m, 60m, and 240m; each orchestrator reads a manifest keyed to its own interval."
+          active_overlap: "PR #2975 changes gap-fill cadence/progress in researchExperimentComposition.ts; PR #2979/#2980 change rolling-holdout composition/target span. They remain separately owned and require fresh diff/base review before publication."
+        implementation:
+          interval_materialization: PASS
+          fail_closed_receipt_checks: PASS
+          manifest_determinism: PASS
+          local_validation: "Focused 15/15; full isolated suite 1327 test files PASS; preflight/build/typecheck/validate:full/security:gate/lint:scripts/AIPOS/diff-check PASS; lint 0 errors, 47 baseline warnings."
+          exact_head_ci: PENDING_FOR_SUCCESSOR_SHA
+          independent_research_data_review: PENDING
+          formal_validator: PENDING
+          audit: PENDING
+          release_authorization: PENDING
+        runtime:
+          actual_candle_freshness: UNVERIFIED
+          manifest_presence: UNVERIFIED
+          research_session: UNVERIFIED
+          learning_cycle: UNVERIFIED
+        safety: PAPER_ONLY_LIVE_NONE_PRODUCTION_MUTATION_FALSE_REAL_ORDER_FALSE_REAL_TRANSFER_FALSE_AI_ZERO_AUTHORITY
+        next: "Refresh exact-head CI on PR #3002 after this AIPOS handoff commit, then obtain independent Research/Data review. Runtime acceptance is not claimed."
+    snapshot_current_research_multi_interval_manifests_20261106_yaml: |-
+      current_research_multi_interval_manifests_20261106:
+        work_order: WO-RESEARCH-20261105-MULTI-INTERVAL-MANIFESTS
+        issue: 2815
+        observed_at_utc: "2026-11-06T04:41:39Z"
+        protected_main: ecdf77461771629f81d97a5b28be091414700e6f
+        branch: WO-RESEARCH-20261105-MULTI-INTERVAL-MANIFESTS
+        main_reconciliation_commit: 7c8f8b45f5ed9cafd1a60cc174495631b417379e
+        remote_pr_head: eb7af47232d1e26a02ac11f22e30746c228e57ce
+        pull_request: 3002
+        pr_state: OPEN_DRAFT_BEHIND_MERGEABLE
+        main_reconciliation: "Local merge commit 7c8f8b45 includes protected main ecdf7746; not yet pushed. The four pre-existing untracked docs/audits reports remain preserved and excluded."
+        prior_exact_head_ci: "Historical PASS on eb7af472: CI 42159688403 plus seven companion workflow runs; not evidence for the current local successor."
+        exact_head_ci: PENDING_SUCCESSOR_PUBLICATION_AND_VALIDATION
+        companion_workflows: PENDING_SUCCESSOR_PUBLICATION_AND_VALIDATION
+        prior_exact_head_skips: "On eb7af472, attest-causal-regression, causal-regression-contract, and audit-dispatch-fallback were SKIPPED; none is positive causal evidence."
+        local_validation:
+          source_tree: "Current-main reconciled #3002 worktree rooted at 7c8f8b45, with AIPOS checkpoint metadata included."
+          build: PASS
+          focused_tests: PASS_45_OF_45
+          full_suite: PASS_1333_ISOLATED_TEST_FILES
+          typecheck: PASS
+          validate_full: PASS
+          security_gate: "PASS; high/critical=0, secrets=0."
+          lint_scripts: "PASS; 0 errors, 47 warnings (same verified baseline)."
+          aipos_provenance_yaml_drift_conformance: PASS
+          diff_check: PASS_AFTER_RESTORING_TRACKED_TEST_SENTINEL
+          test_runner_side_effect: "pnpm test removed tracked isolated-test-failure.txt; restored from HEAD and verified original SHA256 08bc33d87f7961f92502cc48453dfd738a5559161ae447217f36b299e2ca20de."
+          preserved_untracked: "Four 2025-11-05 reports and four 2026-11-06 security-gate reports under docs/audits remain unmodified and excluded."
+        independent_research_data_review: PENDING_REVIEWER_UNAVAILABLE
+        publish_status: "Current-main validated successor is local only; publish to existing #3002 branch, then obtain fresh exact-head CI before any reviewer handoff."
+        formal_validator: PENDING
+        audit: PENDING
+        release_authorization: PENDING
+        runtime_acceptance: UNVERIFIED
+        runtime_read_only:
+          host: nusa-datascale
+          service: ACTIVE
+          runtime_sha: 185c52c22691a5a35b13fe024cb39d810719a833
+          research_collection: COLLECTING
+          candle_count: 62633
+          required_candle_count: 15840
+          interval_manifest_skips: "15m and 60m each show 120 cumulative MANIFEST_NOT_FOUND skips; counters do not prove durable manifest identity."
+          integrity_snapshot: "PASS but embedded observedAt is 2026-11-06T00:18:51Z, stale at the 04:29Z health read."
+          previous_stop: PAPER_WRITER_CLOCK_ANOMALY
+          paper_observation: "Read-only /health showed 90 PAPER orders and 90 PAPER fills; this is not real-order evidence or candidate-bound PAPER acceptance."
+          learning: "LEARNING_NOT_EVALUATED; cyclesEvaluated=0, cyclesRecorded=0, holdoutPasses=0; NO_DEPLOYABLE_CANDIDATE remains."
+          performance_signal: "lastMaterializeMs=6047, maxMaterializeMs=7173, eventLoopMaxStallMs=7123 at approximately the gap-fill timestamp; correlated only, root cause UNKNOWN. Review multi-interval synchronous cost."
+          database_access: "Not available in the host read allowlist; no DB read/write, deployment, restart, or timer trigger."
+        related_work:
+          pr_2975: "OPEN/Draft/CONFLICTING; active P1 remains independent-review-owned; no author resolution."
+          pr_3000: "OPEN/Draft; existing handoff 6652709639 retained; no submitted review."
+          pr_3001: "OPEN/Draft; display-only health projection, CI PASS, no submitted review."
+          pr_2994: "MERGED by release authority at ecdf7746. The merged isolated verification endpoint remains disabled on the deployed Worker; this is not a positive L1 receipt."
+        status:
+          issue_2815: OPEN
+          l1: PARTIAL
+          l2: HOLD
+          learning_loop_verified: false
+          performance_improvement: UNPROVEN
+          safety: PAPER_ONLY_ZERO_AUTHORITY_FAIL_CLOSED
+        next: "Publish the locally validated successor to the existing #3002 branch, wait for exact-head CI/companions, then hand off to an eligible independent Research/Data reviewer. Keep #2975 thread disposition and #2815 runtime acceptance separate."
+    snapshot_current_research_multi_interval_manifests_20261106T0748Z_yaml: |-
+      current_research_multi_interval_manifests_20261106T0748Z:
+        work_order: WO-RESEARCH-20261105-MULTI-INTERVAL-MANIFESTS
+        issue: 2815
+        observed_at_utc: "2026-11-06T07:48:12Z"
+        protected_main: 2224d7f8e2f58081cf3edcd2597ea7048e07f70a
+        pr_3002_remote_head_before_publication: b775b30485f193602ca531db6af7c51fa4e2cfea
+        pr_3002_base_before_publication: ecdf77461771629f81d97a5b28be091414700e6f
+        local_main_integration_commit: c58699281455e1285afd363015e9a01830bd245a
+        main_integration: "Latest protected main merged locally into existing PR head; only shared path was generated .aipos/CURRENT_TRUTH.md, regenerated after merge."
+        local_validation:
+          build: PASS
+          focused_tests: "56/56 PASS"
+          preflight: PASS
+          typecheck: PASS
+          validate_full: PASS
+          security_gate: "PASS; high_critical=0; secrets=0"
+          lint_scripts: "PASS; errors=0; existing_warnings=47"
+          full_suite: "PASS; 1,335 isolated test files"
+          diff_check: PASS
+          sentinel_restored_sha256: 11DB0518C1A8FBD29DB22377CE05D621D3C1BB861A7AA0F1BD576EBACA0BD825
+        remote_state:
+          pr_3002: OPEN_DRAFT_MERGEABLE_FALSE_AT_LAST_READ
+          reviews: 0
+          review_threads: 0
+          exact_head_ci_for_successor: PENDING_PUBLICATION
+        independent_research_data_review: BLOCKED_REVIEWER_NOT_PRESENT
+        formal_validator: PENDING
+        audit: PENDING
+        release_authorization: PENDING
+        runtime_acceptance: UNVERIFIED
+        issue_2815: OPEN
+        safety: PAPER_ONLY_ZERO_AUTHORITY_FAIL_CLOSED
+        next: "Complete AIPOS validation, then publish a fast-forward successor to existing #3002 only if its head is still b775b30485f193602ca531db6af7c51fa4e2cfea; confirm exact-head CI and hand off for independent Research/Data review."
+    snapshot_current_research_multi_interval_manifests_20261107_yaml: |-
+      current_research_multi_interval_manifests_20261107:
+        work_order: WO-RESEARCH-20261105-MULTI-INTERVAL-MANIFESTS
+        issue: 2815
+        pr: 3002
+        protected_main: 3241c525ab9575271a1150d8635d87ef9764c069
+        prior_pr_head: 146ab98bad911c2eeb03c13d2f42fd502ebd0232
+        current_pr_base_before_sync: 2224d7f8e2f58081cf3edcd2597ea7048e07f70a
+        local_merge: "Current main merged into isolated detached worktree; only conflict was generated .aipos/CURRENT_TRUTH.md, regenerated through the canonical generator. No commit or push yet."
+        focused_tests: PASS_49_OF_49
+        full_suite: PASS_1336_ISOLATED_TEST_FILES
+        build_typecheck_validate_full_security_preflight: PASS
+        lint_scripts: "PASS; 0 errors, 47 existing warnings"
+        aipos_truth_yaml_diff_check: PASS
+        exact_head_ci: PENDING_SUCCESSOR_PUBLICATION
+        independent_research_data_review: PENDING
+        runtime_acceptance: UNVERIFIED
+        formal_validator: PENDING
+        audit: PENDING
+        release_authorization: PENDING
+        safety: PAPER_ONLY_ZERO_AUTHORITY_FAIL_CLOSED
+    snapshot_current_research_multi_interval_manifests_20261107_1059_yaml: |-
+      current_research_multi_interval_manifests_20261107_1059:
+        work_order: WO-RESEARCH-20261105-MULTI-INTERVAL-MANIFESTS
+        issue: 2815
+        pr: 3002
+        protected_main: 60e4185e7c6abba18fce0c0a80797d0aec4fe92b
+        previous_sync_head: fef4ab937c8895ba9af34916e71c5c696abb11f6
+        latest_main_delta: "Three commits; generated CURRENT_TRUTH conflict plus causal attestation workflow/test and AIPOS evidence, no #3002 Research source overlap."
+        latest_main_merged: true
+        regenerated_current_truth: true
+        latest_sync_validation: PASS_FOCUSED_60_FULL_1336_TYPECHECK_VALIDATE_SECURITY_AIPOS_WORKFLOW_DIFF
+        exact_head_ci: PENDING_SUCCESSOR_PUBLICATION
+        independent_research_data_review: PENDING
+        runtime_acceptance: UNVERIFIED
+        safety: PAPER_ONLY_ZERO_AUTHORITY_FAIL_CLOSED
+    snapshot_current_research_multi_interval_manifests_20261107_1143_yaml: |-
+      current_research_multi_interval_manifests_20261107_1143:
+        work_order: WO-RESEARCH-20261105-MULTI-INTERVAL-MANIFESTS
+        issue: 2815
+        pr: 3002
+        protected_main: 60e4185e7c6abba18fce0c0a80797d0aec4fe92b
+        reviewed_predecessor_sha: 0d77d4607dce887d984fd2ce2718cd35a94f7b68
+        exact_head_ci: "PASS: CI 42369131128; companions 42369131160, 42369131115, 42369131153, 42369131169, 42369131146, and 42369131267 all SUCCESS."
+        conditional_jobs: "causal-regression-contract and attest-causal-regression SKIPPED; not positive causal evidence."
+        independent_technical_review: "CHANGES_REQUIRED; P0=0, P1=0, P2=1. The reviewer found stale status text in the Work Order; code fixes were verified. This metadata successor corrects that record. No GitHub review was submitted."
+        local_validation: "Focused Research 50/50; full suite 1,336 isolated test files; typecheck, validate:full, security:gate, full lint (0 errors/47 existing warnings), AIPOS YAML/provenance/drift/conformance, and diff-check PASS."
+        actual_paper: "Workflow 42369131267; artifact 13572808292, sha256:f1f3a5209acc4c0a658368572944e573af3057ec65236cb7c9f5b3ca0f5fbc84. INCOMPLETE after 60.291s and 7 natural decisions; no actionable signal, Risk evaluation, order/fill, or account change."
+        runtime_acceptance: UNVERIFIED
+        checkpoint_scope: "Historical snapshot recorded before metadata successor 1e47fa402872ed0ef5e94fe93577c23295f4c1e7 was published. The following status fields describe the state at this checkpoint only; query GitHub for the current PR SHA and its checks/review."
+        successor_ci_status_at_recorded_checkpoint: "PENDING at the time this state entry was added; exact-head CI/companions later completed on 1e47fa402872ed0ef5e94fe93577c23295f4c1e7."
+        successor_review_status_at_recorded_checkpoint: "PENDING at the time this state entry was added; fresh review is SHA-bound and must be checked for the current PR head."
+        formal_validator: PENDING
+        audit: PENDING
+        release_authorization: PENDING
+        governed_merge: NOT_DONE
+        safety: PAPER_ONLY_ZERO_AUTHORITY_FAIL_CLOSED

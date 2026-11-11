@@ -1,5 +1,6 @@
 const fs = require("node:fs");
 const path = require("node:path");
+const { readBoundedRejectionStage } = require("./isolated-rejection-stage.js");
 
 const REPOSITORY = "cinamoncandy/NUSA";
 const OIDC_AUDIENCE = "nusa-isolated-causal-verification-v1";
@@ -7,7 +8,7 @@ const WORKER_ENDPOINT = "https://nusa-autopilot.desporin12.workers.dev/isolated/
 let receiptPathForFailure;
 let eventForFailure;
 
-function writeFailureReceipt(code) {
+function writeFailureReceipt(code, workerRejectionStage) {
   if (!receiptPathForFailure) return;
   const run = eventForFailure?.workflow_run;
   const sourceSha = typeof run?.head_sha === "string" && /^[a-f0-9]{40}$/.test(run.head_sha) ? run.head_sha : null;
@@ -19,6 +20,7 @@ function writeFailureReceipt(code) {
     domain: "NUSA_ISOLATED_CAUSAL_VERIFICATION_V1",
     outcome: "FAIL_CLOSED_OR_UNKNOWN",
     failureCode: code,
+    ...(typeof workerRejectionStage === "string" && /^[A-Z][A-Z0-9_]{2,95}(?::[A-Za-z0-9_]{1,64}){0,4}$/.test(workerRejectionStage) ? { workerRejectionStage } : {}),
     sourceSha,
     sourceRunId,
     sourceRunAttempt,
@@ -34,9 +36,9 @@ function writeFailureReceipt(code) {
   catch { /* Preserve an existing receipt and never mask the primary failure. */ }
 }
 
-const fail = (code) => {
-  writeFailureReceipt(code);
-  console.error(code);
+const fail = (code, workerRejectionStage) => {
+  writeFailureReceipt(code, workerRejectionStage);
+  console.error(workerRejectionStage ? `${code} ${workerRejectionStage}` : code);
   process.exit(1);
 };
 
@@ -109,7 +111,11 @@ async function main() {
   } catch {
     fail("ISOLATED_VERIFICATION_WORKER_UNAVAILABLE");
   }
-  if (!response.ok) fail(`ISOLATED_VERIFICATION_WORKER_REJECTED_${response.status}`);
+  if (!response.ok) {
+    // Keep only the Worker's fixed stage constant from a bounded error body; never echo anything else.
+    const stage = await readBoundedRejectionStage(response);
+    fail(`ISOLATED_VERIFICATION_WORKER_REJECTED_${response.status}`, stage);
+  }
 
   let payload;
   try {

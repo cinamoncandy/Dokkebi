@@ -1,6 +1,6 @@
 id: WO-ISSUE-2017-COMPONENT-HEALTH
 title: "Canonical PAPER process and workload health projection"
-status: REVIEW_REPAIR_LOCAL_VALIDATED_PENDING_EXACT_HEAD_CI
+status: COMPLETED
 priority: P0
 owner: observability
 repository: cinamoncandy/NUSA
@@ -34,3 +34,4 @@ safety:
   productionMutationAllowed: false
   aiAuthority: ZERO_AUTHORITY
 next: "Update existing PR #2019, collect fresh exact-head CI and independent Audit/Release, then verify /health on exact-main Oracle deployment."
+closed_by_merge: "PR #2019 merged to main; its title matches this work order (compared by hand 2026-11-10). This records the merge only, not a separate production verification."

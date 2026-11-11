@@ -1,6 +1,6 @@
 id: WO-UI-20261002-GRACE-NOTICE
 title: "Resume grace keeps the HOME connection notice quiet too"
-status: READY_FOR_REVIEW
+status: COMPLETED
 owner: nusa-development
 repository: cinamoncandy/NUSA
 base_branch: main
@@ -18,3 +18,4 @@ verification_commands:
   - node --test tests/mobile-session-display.test.js
   - pnpm run validate
 residual: "Physical Android acceptance is HUMAN_ENVIRONMENT_ONLY."
+closed_by_merge: "PR #2462 (branch claude/nusa-repository-j93sd8-grace-notice) merged to main; it is the only PR from this branch and the only work order naming it. Status corrected by an automatic branch-to-merged-PR match on 2026-11-10; this records the merge only, not a separate production verification."

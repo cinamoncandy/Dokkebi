@@ -1,6 +1,6 @@
 id: WO-UI-20261005-COLD-FUTURE
 title: "Cold-future skin replacing the rejected 먹과 한지 skin"
-status: READY_FOR_REVIEW
+status: COMPLETED
 owner: nusa-development
 repository: cinamoncandy/NUSA
 base_branch: main
@@ -24,3 +24,4 @@ verification_commands:
   - node scripts/lint-mobile.js
   - node --test tests/mobile-*.test.js tests/uiux-*.test.js
 residual: "Not seen on a device here; taste is the owner's call on the new build."
+closed_by_merge: "PR #2509 (branch claude/ui-cold-future) merged to main; it is the only PR from this branch and the only work order naming it. Status corrected by an automatic branch-to-merged-PR match on 2026-11-10; this records the merge only, not a separate production verification."
