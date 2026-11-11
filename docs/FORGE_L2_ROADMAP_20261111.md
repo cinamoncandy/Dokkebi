@@ -45,3 +45,16 @@ Safety stays: PAPER_ONLY, liveAuthority=NONE, productionMutationAllowed=false, a
 
 ## 소유자 결정이 필요한 한 지점 (코드는 아직 바꾸지 않음)
 실행 봉투(`productionExecutionSpine.ts`의 `prepareProductionExecution`)는 `mutationAllowed: false`로 고정돼 있고 허용 범위도 `apps/autopilot/`, `.github/workflows/`, `scripts/`(최대 12파일)로 좁다. "스스로 코드를 고친다"를 일반 개선까지 넓히려면 이 고정값을 풀어야 하는데, 이는 안전 불변식을 완화하는 일이다. 어느 단계에서도 이 값을 임의로 바꾸지 않고, 독립 Validator 검토와 소유자 승인을 거쳐 별도 PR로만 한다.
+
+## 1단계 함수별 처분안 (읽기 전용 점검, 코드 변경 없음)
+`executionCoordinator.ts`와 `autonomousExecutionState.ts`를 나란히 읽은 결과다. 처분은 제안이며, 실행 전에 함수마다 독립 검토를 받는다.
+
+| 함수 | 조정기에서 대응하는 것 | 제안 처분 |
+|---|---|---|
+| `applyExecutionHold`, `clearExecutionHold` | `/control-plane-hold/apply`, `/clear`가 같은 검사(충돌, 차단 중, 낡은 해제)를 인라인으로 한다. 오류 이름만 다르다(`CONTROL_PLANE_HOLD_*` 대 `AUTONOMOUS_EXECUTION_HOLD_*`). | **합치기 후보.** 검사 부분을 공유 순수 함수로 빼고, 조정기는 지금의 오류 이름을 그대로 돌려주는 어댑터로 둔다. 위험은 중간(호출자가 오류 이름에 의존). |
+| `recoverExpiredLease` | `acquire`가 만료된 `LEASED`를 인라인으로 다시 잡게 한다(`leaseExpiresAt > now`이면 `LEASE_ACTIVE`). | 합쳐서 얻는 것이 적다. **중복 모델 삭제 후보.** |
+| `isDuplicateExecution` | 조정기는 `dedupeKey` 하나로만 중복을 판단한다. 이 함수의 "같은 `cycleId` + `workItemId`"는 조정기에 없다. | **연결하지 않는다.** `dedupeKey`에 실행 시도 번호가 들어 있어 재실행은 일부러 다른 키를 받는다(`prepareProductionExecution`의 주석: 첫 시도와 충돌하면 영구히 굶는다). 이 기준을 붙이면 재실행이 막힌다. 삭제하거나, 의미를 정한 뒤 다시 쓴다. |
+| `authorizeMergeReady` | 조정기에 `AUDIT` 상태가 없다. 병합 준비는 브랜치 보호와 감사 워크플로가 강제한다. | **지금은 호출처가 없다.** 상태가 `AUDIT`에 닿는 경로가 생기기 전에는 연결할 수 없다. 삭제 후보 또는 5단계 이후. |
+| `clearPersistentControlPlaneHold` | 서버 경로는 있고(`apply`는 `index.ts`에서, `read`는 `worker.ts`에서 쓰인다) 이 클라이언트 함수만 호출처가 없다. | 보류를 거는 원인이 풀렸을 때 풀어 주는 **실행 주체가 아직 없다.** 사람이 풀 때까지 보류를 유지하는 쪽이 안전할 수 있다. 소유자 결정 필요. |
+
+결론: 6개 중 지금 안전하게 줄일 수 있는 것은 보류 걸기·풀기 한 쌍(합치기)과 삭제 후보 두 개(`recoverExpiredLease`, `isDuplicateExecution`)뿐이다. 나머지 둘은 호출처가 생길 때까지 장부에 남긴다. 장부 숫자를 줄이는 것이 목적이 아니다.

@@ -7,6 +7,7 @@ authority_impact: none
 finding: "Reading the code for the stage 1 design check showed the roadmap's stage 1 (attach callers to the 6 unwired state-machine functions) was wrong. executionCoordinator.ts already implements dedupe, leases, expiry and control-plane hold apply/clear as the persisted state of record; the 5 unwired autonomousExecutionState functions are a parallel in-memory model. reconcileCodingExecutionEvidence is already used by index.ts and worker.ts, and worker.ts already publishes PRs."
 change:
   - "docs/FORGE_L2_ROADMAP_20261111.md: stage 1 now says choose per function between merging the coordinator's duplicated logic into the pure function and removing the unused duplicate; adds a correction section and the single owner decision (the envelope's mutationAllowed=false and narrow scope)."
+  - "Adds a per-function disposition table for the 6 stage 1 functions from a read-only comparison with executionCoordinator.ts. Notably isDuplicateExecution must not be wired as is: its cycleId+workItemId rule would block the re-runs that prepareProductionExecution deliberately lets through."
 not_changed:
   - "No code, workflow, flag, limit, threshold, risk, capital or authority. The envelope's mutationAllowed=false stays; changing it needs independent Validator review and owner approval in its own PR."
 safety:
