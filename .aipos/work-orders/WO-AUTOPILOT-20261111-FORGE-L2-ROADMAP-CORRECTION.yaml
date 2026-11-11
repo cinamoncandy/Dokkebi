@@ -1,0 +1,19 @@
+id: WO-AUTOPILOT-20261111-FORGE-L2-ROADMAP-CORRECTION
+title: "Correct stage 1 of the FORGE L2 roadmap: the state of record is the Durable Object coordinator (document only)"
+status: READY_FOR_REVIEW
+created: 2026-11-11
+implementation_branch: claude/forge-l2-roadmap-correction
+authority_impact: none
+finding: "Reading the code for the stage 1 design check showed the roadmap's stage 1 (attach callers to the 6 unwired state-machine functions) was wrong. executionCoordinator.ts already implements dedupe, leases, expiry and control-plane hold apply/clear as the persisted state of record; the 5 unwired autonomousExecutionState functions are a parallel in-memory model. reconcileCodingExecutionEvidence is already used by index.ts and worker.ts, and worker.ts already publishes PRs."
+change:
+  - "docs/FORGE_L2_ROADMAP_20261111.md: stage 1 now says choose per function between merging the coordinator's duplicated logic into the pure function and removing the unused duplicate; adds a correction section and the single owner decision (the envelope's mutationAllowed=false and narrow scope)."
+  - "Adds a per-function disposition table for the 6 stage 1 functions from a read-only comparison with executionCoordinator.ts. Notably isDuplicateExecution must not be wired as is: its cycleId+workItemId rule would block the re-runs that prepareProductionExecution deliberately lets through."
+  - "Correction 2 after comparing the coordinator's apply/clear hold line by line: they are a persisted record with ACTIVE/CLEARED and replay rules, not the in-memory HOLD execution state, so merging them would not wire applyExecutionHold/clearExecutionHold or shrink the ledger. The in-memory state machine is a parallel design; adopting or retiring it is one structural decision to take after the end-to-end flow shows which states it needs. The 33 ledger entries do not block the owner decision on mutationAllowed or the end-to-end proof."
+not_changed:
+  - "No code, workflow, flag, limit, threshold, risk, capital or authority. The envelope's mutationAllowed=false stays; changing it needs independent Validator review and owner approval in its own PR."
+safety:
+  paper_only: true
+  liveAuthority: NONE
+  productionMutationAllowed: false
+  aiAuthority: ZERO_AUTHORITY
+next_action: "Per-function disposition study (read executionCoordinator.ts against each of the 6), then one small draft PR per function that shrinks the ledger, with the coordinator tests unchanged."

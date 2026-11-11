@@ -177,7 +177,7 @@ function writeResult(stateDbPath, result, fs = require("node:fs"), pathLib = req
   if (result.status !== "HOLDOUT_PASS" && result.status !== "HOLDOUT_FAIL") return false;
   const target = pathLib.join(pathLib.dirname(stateDbPath), RESULT_FILE);
   const temporary = `${target}.tmp`;
-  fs.writeFileSync(temporary, JSON.stringify({ schemaVersion: 1, studyId: STUDY_ID, ...result }));
+  fs.writeFileSync(temporary, JSON.stringify({ ...result, schemaVersion: 1, studyId: STUDY_ID }));
   fs.renameSync(temporary, target);
   return true;
 }

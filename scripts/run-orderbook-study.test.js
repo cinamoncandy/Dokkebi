@@ -69,6 +69,9 @@ test("only a final result is handed off, atomically, beside the state database",
   assert.equal(saved.studyId, "ML_ORDERBOOK_60M_20261111");
   assert.equal(saved.schemaVersion, 1);
   assert.equal(fs.existsSync(path.join(dir, `${RESULT_FILE}.tmp`)), false);
+  // a caller-supplied studyId or schemaVersion can never override the selected study (review P2 on #3084)
+  assert.equal(writeResult(dbPath, { status: "HOLDOUT_FAIL", eligible: 9, discoveryPass: false, datasetFingerprint: "b".repeat(64), studyId: "ML_ORDERBOOK_60M_20261029" }), true);
+  assert.equal(JSON.parse(fs.readFileSync(path.join(dir, RESULT_FILE), "utf8")).studyId, STUDY_ID);
 });
 
 test("the default span is the second pre-registered run and the first run's span is still selectable", () => {

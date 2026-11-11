@@ -21,3 +21,4 @@ validation:
   - "111 pass across run-orderbook-study, researchStudyResult, mobile-learning-panels, personal-paper contract, liveness-health, host-diagnose and the other order-book study tests, including exact span dates for both ids and refusal of an unknown id."
 retention_check: "The archive (research_orderbook_study_rows) keeps minutes 58, 59 and 0 of every hour and minutes 43..45, which is every book this 60m study reads (t, t-15m, t-60m, t-240m, t+60m), so the live 14-day prune does not remove what the run needs."
 next_action: "Review; merge after #3083; release when the host is idle and before 2026-11-18. The run reads its result line from the service journal after 2026-11-18T02:00Z."
+review_p2_20261111: "writeResult spreads the result first and then pins schemaVersion and studyId, so a caller-supplied studyId can never override the selected study; regression test added."

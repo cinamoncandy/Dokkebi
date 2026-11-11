@@ -1,0 +1,26 @@
+id: WO-AUTOPILOT-20261111-FORGE-WHY-NO-SELF-CODING
+title: "Evidence: why FORGE has not reached self-directed coding, and the order to fix it (document only)"
+status: READY_FOR_REVIEW
+created: 2026-11-11
+implementation_branch: claude/forge-self-coding-gap
+authority_impact: none
+trigger: "Owner, 2026-11-11: L1 did not reach the self code development stage; solve it."
+finding:
+  - "The coding switch NUSA_AUTOPILOT_CODING_ENABLED is off by the owner's 2026-10-13 decision (WO-AUTOPILOT-20261013-CODING-OFF): the Workers AI engine merged 1 of 12 PRs in its lifetime and 0 of 119 merged PRs in the last week."
+  - "Its last 12 PRs (#1847..#2367) were one merged (#2294) and the rest closed; #2294, #2295 and #2367 are all a +1/-1 change to apps/autopilot/src/concurrencyAdvisor.ts, the rest superseded duplicates."
+  - "Task selection is not wired: opportunityPlanner.ts and the evolve*.ts selection and ranking functions are in unwiredControlPlaneDebt.ts, and the execution envelope objective is a generic sentence."
+  - "L1 itself ran a deterministic proposal adapter and a no-op sandbox; it never ran a real code-writing model."
+change:
+  - "docs/FORGE_WHY_NO_SELF_CODING_20261111.md: the evidence above, what enabling the switch alone would do, and the order to fix it (concrete tasks, duplicate filtering, sandbox-verified proposals, engine choice, then the switch)."
+not_changed:
+  - "No code, workflow, variable, flag, limit, threshold, risk, capital or authority. The switch stays off; mutationAllowed=false and the 12-file scope stay."
+safety:
+  paper_only: true
+  liveAuthority: NONE
+  productionMutationAllowed: false
+  aiAuthority: ZERO_AUTHORITY
+owner_only:
+  - "Coding engine, cost limit and any secret it needs."
+  - "Whether to widen mutationAllowed=false and the 12-file scope (independent Validator review required)."
+  - "Setting the repository variable NUSA_AUTOPILOT_CODING_ENABLED (repository setting, not reachable from this session's tools)."
+next_action: "Step 1: build the evidence-based opportunity list with completion tests as its own draft PR; then step 2 duplicate filtering."
