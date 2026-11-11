@@ -394,6 +394,55 @@ export async function verifyGithubCodingPublisherRun(
   }
 }
 
+/**
+ * `sub` follows the repository's OIDC subject template, which can differ from the GitHub default (FORGE L1 attempt 4,
+ * consumer run 42826406914, was refused at the exact default-template match although the template is not readable here).
+ * Security decision: identity rests on the individually signed, pinned claims already checked (iss, aud, time,
+ * repository, repository_id, ref, event_name, workflow_ref, workflow_sha, then the run read-back). `sub` must in addition
+ * be bound to this repository by name or by its pinned id, carry no control characters, have a main ref segment if
+ * it has one, and never be a pull_request or environment subject. An arbitrary subject is refused.
+ */
+/**
+ * The fixed reason a subject is refused, or undefined when it is allowed. GitHub repository names are case-insensitive
+ * and a subject can carry a different letter case than the `repository` claim (FORGE L1 attempt 5, consumer run
+ * 42837115055, was refused with a `repo:…:ref:…` subject), so the repository segment is compared case-insensitively;
+ * the case-exact `repository` claim and the pinned repository_id remain the binding identity.
+ */
+export function isolatedConsumerSubjectRefusal(sub: unknown): "FORMAT" | "REPOSITORY" | "REF" | "KIND" | undefined {
+  if (typeof sub !== "string" || sub.length === 0 || sub.length > 512 || /[\u0000-\u001f\u007f]/.test(sub)) return "FORMAT";
+  const parts = sub.split(":");
+  const repoSegment = parts[0] === "repo" ? parts[1] ?? "" : "";
+  // Either the plain name or GitHub's ID-pinned form owner<sep>ownerId/repo<sep>repoId. FORGE L1 attempt 7 (consumer run
+  // 42850690523) showed this repository's subject uses the ID-pinned form; both ids are pinned exactly here.
+  const boundByName = repoSegment.toLowerCase() === "cinamoncandy/nusa"
+    || /^cinamoncandy[^A-Za-z0-9:/]213270074\/nusa[^A-Za-z0-9:/]1296492411$/i.test(repoSegment);
+  const boundById = /(?:^|:)repository_id:1296492411(?::|$)/.test(sub);
+  if (!boundByName && !boundById) return "REPOSITORY";
+  // Every occurrence counts, not only the first: a duplicated, dangling or non-main ref is refused.
+  const refValues = parts.flatMap((part, index) => (part === "ref" ? [parts[index + 1]] : []));
+  if (refValues.length > 1 || refValues.some((value) => value !== "refs/heads/main")) return "REF";
+  return /(?:^|:)(?:pull_request|environment)(?::|$)/.test(sub) ? "KIND" : undefined;
+}
+
+/**
+ * For a REPOSITORY refusal only: the subject's repo segment (a public repository name, never a token or secret),
+ * reduced to [A-Za-z0-9_] and 48 characters so it fits the fixed rejection-stage pattern. FORGE L1 attempt 6
+ * (consumer run 42846099154) showed the segment is not cinamoncandy/nusa even case-insensitively; this names it.
+ */
+export function isolatedConsumerSubjectRepositoryShape(sub: unknown): string {
+  if (typeof sub !== "string") return "NOT_STRING";
+  const parts = sub.split(":");
+  if (parts[0] !== "repo") return "NO_REPO_SEGMENT";
+  const reduced = (parts[1] ?? "").replace(/[^A-Za-z0-9]/g, "_").slice(0, 48);
+  return reduced.length === 0 ? "EMPTY" : reduced;
+}
+
+export function isolatedConsumerSubjectShape(sub: unknown, maxKeys = 3): string {
+  if (typeof sub !== "string") return "NOT_STRING";
+  const keys = sub.split(":").filter((part, index) => index % 2 === 0 && /^[a-z][a-z_]{0,39}$/.test(part));
+  return keys.length === 0 ? "NO_KEYS" : keys.slice(0, maxKeys).join(":");
+}
+
 /** Authenticates only the protected-main isolated consumer, not its source event or runner result. */
 export async function verifyGithubIsolatedConsumerIdentity(
   token: string,
@@ -414,7 +463,11 @@ export async function verifyGithubIsolatedConsumerIdentity(
   if (typeof sha !== "string" || !/^[a-f0-9]{40}$/i.test(sha)
     || typeof workflowSha !== "string" || !/^[a-f0-9]{40}$/i.test(workflowSha)
     || workflowSha.toLowerCase() !== sha.toLowerCase()) fail(ISOLATED_CONSUMER_POLICY, "WORKFLOW_SHA_INVALID");
-  if (claims.sub !== `repo:${allowedRepository}:ref:refs/heads/main`) fail(ISOLATED_CONSUMER_POLICY, "SUBJECT_INVALID");
+  const subjectRefusal = isolatedConsumerSubjectRefusal(claims.sub);
+  if (subjectRefusal === "REPOSITORY") {
+    fail(ISOLATED_CONSUMER_POLICY, `SUBJECT_INVALID:REPOSITORY:${isolatedConsumerSubjectRepositoryShape(claims.sub)}:${isolatedConsumerSubjectShape(claims.sub, 2)}`);
+  }
+  if (subjectRefusal !== undefined) fail(ISOLATED_CONSUMER_POLICY, `SUBJECT_INVALID:${subjectRefusal}:${isolatedConsumerSubjectShape(claims.sub)}`);
   if (!/^[1-9][0-9]{0,19}$/.test(runId)) fail(ISOLATED_CONSUMER_POLICY, "RUN_ID_INVALID");
   if (!/^[1-9][0-9]{0,9}$/.test(runAttempt)) fail(ISOLATED_CONSUMER_POLICY, "RUN_ATTEMPT_INVALID");
   return Object.freeze({

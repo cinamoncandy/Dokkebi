@@ -7,20 +7,20 @@ Everything below is what the repository's records *claim*. Re-verify on GitHub b
 
 ## Newest handoff
 
-[`.aipos/handoffs/2026-11-10-pr2039-v15-claim-binding.md`](handoffs/2026-11-10-pr2039-v15-claim-binding.md) — CORE handoff — 2026-11-10 — #2039 V15 claim binding
+[`.aipos/handoffs/2026-11-11-pr2039-recovery-alignment.md`](handoffs/2026-11-11-pr2039-recovery-alignment.md) — Issue #903 / PR #2039 recovery alignment
 
-> Canonical ownership remains Issue #903 and existing Draft PR #2039. Fresh GitHub verification observed protected main `91959182a10abcf6176cc5b40304838724a01fa5` and PR #2039 OPEN/Draft at `ad669b83bff7ef3297561a1984770df45a853539`; that remote PR commit contains the current main as an ancestor. No remote write, merge, deploy, dispatch, claim, or lease mutation was performed.
+> Observed protected main `ad0085fd994f68dd827ed52a022a50ad84057a13`; existing Draft PR head `a283a73aa9fa177d4320496328e858017e3ac0a0` was published and has 16 successful / 3 skipped checks. These results apply only to that predecessor. It was conflicting with main in generated CURRENT_TRUTH. An isolated local merge regenerates the summary and preserves main's causal verification switch OFF.
 
 ## Work orders
 
-561 total: 532 in `.aipos/work-orders/`, 29 closed and merged in `.aipos/work-orders/archive/`.
-Of the 532 active files, 376 carry a closed status that has not been archived (merge not proven, or the path is still referenced) and 156 are open or unclassified.
+567 total: 538 in `.aipos/work-orders/`, 29 closed and merged in `.aipos/work-orders/archive/`.
+Of the 538 active files, 376 carry a closed status that has not been archived (merge not proven, or the path is still referenced) and 162 are open or unclassified.
 
 Most common statuses among the open files (new orders use only `READY_FOR_REVIEW`, `IN_PROGRESS`, `BLOCKED`, `COMPLETED`, `SUPERSEDED`, `ABANDONED`):
 
 | Status | Files |
 |---|---|
-| READY_FOR_REVIEW | 29 |
+| READY_FOR_REVIEW | 35 |
 | LOCAL_VALIDATED_PENDING_CI | 17 |
 | IN_PROGRESS | 14 |
 | VERIFYING | 14 |

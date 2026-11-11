@@ -23,6 +23,12 @@ const M = 60_000;
 export const RESEARCH_GAP_FILL_INTERVAL_MS = 15 * M;
 /** Periodic repairs make bounded progress; the existing timer revisits older gaps on later passes. */
 export const RESEARCH_GAP_FILL_MAX_PAGES_PER_RUN = 1;
+/**
+ * A history pass walks back through older gaps. One page (200 minutes) per 30 minutes needed most of a day to reach a
+ * gap at the back of the 12-day window, and the 1m dataset stayed blocked meanwhile. Eight pages (about 27 hours of
+ * minutes, at most eight paced upstream requests per market) reach it within a few hours. Head passes stay at one page.
+ */
+export const RESEARCH_GAP_FILL_HISTORY_PAGES_PER_RUN = 8;
 const MISSING_MANIFEST_RETRY_MS = 60 * M;
 const DAY_MS = 86_400_000;
 export const RESEARCH_FLAG = "NUSA_CLOUD_RESEARCH_EXPERIMENTS";
@@ -143,6 +149,8 @@ export function composeResearchExperiments(input: {
   readonly yieldControl?: () => Promise<void>;
   /** Meta-learning steering: the longer bar lengths tick every N-th scheduled tick (1 = every tick). Read on every tick. */
   readonly longBarTickEvery?: () => number;
+  /** Pages per history gap-fill pass; an integer from 1 to RESEARCH_GAP_FILL_HISTORY_PAGES_PER_RUN (the default). */
+  readonly historyPagesPerRun?: number;
 }): ResearchExperimentComposition | undefined {
   const log = input.log ?? (() => undefined);
   const parsed = readResearchExperimentSettings(input.env);
@@ -156,6 +164,10 @@ export function composeResearchExperiments(input: {
   const store = new SqliteResearchCandleStore(db);
   const datasetManifests = new SqliteResearchDatasetManifestStore(db);
   const gapFillProgress = new SqliteResearchGapFillProgressStore(db);
+  const requestedHistoryPages = input.historyPagesPerRun ?? RESEARCH_GAP_FILL_HISTORY_PAGES_PER_RUN;
+  // Fail closed to the smallest bounded pass on an invalid override; never above the published ceiling.
+  const historyPagesPerRun = Number.isSafeInteger(requestedHistoryPages) && requestedHistoryPages >= 1 &&
+    requestedHistoryPages <= RESEARCH_GAP_FILL_HISTORY_PAGES_PER_RUN ? requestedHistoryPages : 1;
   const manifestRetrySchedule = new SqliteResearchManifestRetryStore(db);
   const holdout = new SqliteResearchHoldoutLedger(db);
   const ledger = new SqliteResearchEvaluationLedger(db);
@@ -381,7 +393,7 @@ export function composeResearchExperiments(input: {
           const historyStartBeforeMs = headPass ? undefined : previous?.historyCursorStartMs ?? store.latestCloseTime(market, M);
           const fillStarted = performance.now();
           const result = await fillRecentGaps({ market, windowMs: targetSpanMs, nowMs: now(), store, fetchPage, sleep,
-            maxPages: RESEARCH_GAP_FILL_MAX_PAGES_PER_RUN,
+            maxPages: headPass ? RESEARCH_GAP_FILL_MAX_PAGES_PER_RUN : historyPagesPerRun,
             ...(historyStartBeforeMs === undefined ? {} : { startBeforeMs: historyStartBeforeMs }) });
           fillMs += performance.now() - fillStarted;
           // A head probe must never replace an older history cursor; only history continuation advances it.
@@ -396,17 +408,19 @@ export function composeResearchExperiments(input: {
             else gapFillProgress.saveNextPass(market, nextPass, updatedAtMs);
           }
           results.push(result);
-          if (result.recorded > 0 || result.status === "NO_GAPS" || result.status === "FILLED") {
+          // A newly confirmed absence changes what the 1m manifest may allow, exactly like a recorded candle.
+          const newAbsence = (result.confirmedAbsent ?? 0) > 0;
+          if (result.recorded > 0 || newAbsence || result.status === "NO_GAPS" || result.status === "FILLED") {
             const firstClose = store.earliestCloseTime(market, M);
             const lastClose = store.latestCloseTime(market, M);
             if (firstClose != null && lastClose != null) {
-              const shouldRefresh = result.recorded > 0;
+              const shouldRefresh = result.recorded > 0 || newAbsence;
               const materializeStarted = performance.now();
               try { await materializeConfiguredManifests(market, firstClose, lastClose, shouldRefresh); }
               finally { materializeMs += performance.now() - materializeStarted; }
             }
           }
-          log(`[research-gap-fill] ${market} ${result.status} missing=${result.missing} recorded=${result.recorded} rejected=${result.rejected} pages=${result.pages}${result.errorCode === undefined ? "" : ` error=${result.errorCode}`}`);
+          log(`[research-gap-fill] ${market} ${result.status} missing=${result.missing} recorded=${result.recorded} rejected=${result.rejected} pages=${result.pages}${result.confirmedAbsent === undefined ? "" : ` confirmedAbsent=${result.confirmedAbsent}`}${result.errorCode === undefined ? "" : ` error=${result.errorCode}`}`);
         } catch (error) {
           results.push({ market, status: "ERROR", missing: 0, recorded: 0, rejected: 0, pages: 0, errorCode: typeof (error as { code?: unknown })?.code === "string" ? (error as { code: string }).code : "GAP_FILL_FAILED" });
           log(`[research-gap-fill] ${market} ERROR code=${typeof (error as { code?: unknown })?.code === "string" ? (error as { code: string }).code : "GAP_FILL_FAILED"}`);

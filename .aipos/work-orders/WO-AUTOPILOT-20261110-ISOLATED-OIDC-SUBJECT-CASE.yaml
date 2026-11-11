@@ -1,0 +1,20 @@
+id: WO-AUTOPILOT-20261110-ISOLATED-OIDC-SUBJECT-CASE
+title: "The consumer OIDC subject's repository segment is compared case-insensitively"
+status: READY_FOR_REVIEW
+created: 2026-11-10
+implementation_branch: claude/isolated-oidc-subject-case
+authority_impact: none
+finding: "FORGE L1 attempt 5 (source 42836948284, consumer 42837115055) was refused with workerRejectionStage=ISOLATED_CONSUMER_OIDC_SUBJECT_INVALID:repo:ref: the subject has the default repo/ref shape yet failed the case-exact 'repo:cinamoncandy/NUSA:' prefix. GitHub repository names are case-insensitive; the most likely cause is a different letter case in the subject (not directly observable)."
+change:
+  - "isolatedConsumerSubjectRefusal returns FORMAT, REPOSITORY, REF or KIND; the repository segment is compared case-insensitively and must equal cinamoncandy/nusa exactly (no prefix match)."
+  - "The rejection stage now names the reason as well as up to three claim keys, e.g. SUBJECT_INVALID:REF:repo:ref."
+not_changed:
+  - "The case-exact repository claim, pinned repository_id, ref, event, workflow_ref, workflow_sha and run read-back checks; the route stays off."
+safety:
+  paper_only: true
+  liveAuthority: NONE
+  productionMutationAllowed: false
+  aiAuthority: ZERO_AUTHORITY
+validation:
+  - "All compiled apps/autopilot tests pass, including lowercase and uppercase subjects (accepted), a fork-like name, feature ref, pull_request and a lowercase repository claim (refused)."
+next_action: "Review, merge; then attempt 6 under the owner's standing approval."
