@@ -1,0 +1,21 @@
+id: WO-OPS-20261111-PAPER-E2E-RECONNECT-GRACE
+title: "actual-paper-runtime waits out a runner-side public-market reconnect before failing"
+status: READY_FOR_REVIEW
+created: 2026-11-11
+implementation_branch: claude/paper-e2e-reconnect-grace
+authority_impact: none
+finding: "actual-paper-runtime failed on #3041, #3053 and #3070 (runs incl. 42834424111, 42935952276) with PAPER_RUNTIME_NOT_RUNNING, HALTED + KILL_SWITCH_ACTIVE, last_error PUBLIC_MARKET_RECONNECTING: the GitHub runner's public Upbit connection reconnected during observation. Each passed on one re-run; none of the PRs touched the runtime."
+change:
+  - "observeAutomaticRuntime: when the only failure is a public-market reconnect (last error PUBLIC_/MARKET_DATA_RECONNECTING and the runtime RUNNING or HALTED solely by KILL_SWITCH_ACTIVE), keep polling for up to reconnectGraceMs (45 s, bounded <= 60 s) per episode inside the existing total budget."
+  - "A reconnect that does not resume fails closed exactly as before, with the diagnostic from when it began. Any other halt reason, error or state fails immediately."
+  - "Evidence records transient_reconnect_episodes."
+not_changed:
+  - "Kill switch, risk, authority, minimum/maximum observation budget, decision-cycle requirement, event and fill validation."
+safety:
+  paper_only: true
+  liveAuthority: NONE
+  productionMutationAllowed: false
+  aiAuthority: ZERO_AUTHORITY
+validation:
+  - "actual-paper-runtime-observation 34/34 including recovered, never-recovered and non-transient cases (the recovered case fails without the change); the other actual-paper-runtime test files pass; lint 0 errors."
+next_action: "Review, merge."
