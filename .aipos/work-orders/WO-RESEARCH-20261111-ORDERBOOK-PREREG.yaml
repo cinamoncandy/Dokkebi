@@ -1,0 +1,17 @@
+id: WO-RESEARCH-20261111-ORDERBOOK-PREREG
+title: "Pre-register the second ORDERBOOK 60m study: same rules, new span, forward holdout"
+status: READY_FOR_REVIEW
+created: 2026-11-11
+implementation_branch: claude/prereg-orderbook-60m-20261111
+authority_impact: none
+trigger: "/health orderBookCoverage on 2026-11-11 08:00Z: 185/192 hours (96.4%), longest gap 3 h, meetsStudyBar true; the draft's start condition is met."
+change:
+  - "docs/RESEARCH_PREREG_2026-11-11_ORDERBOOK_60M.md: fixes the span (train 2026-11-04..11-12, validation 11-12..11-14, holdout 11-14..11-18, UTC) and restates that every rule is the closed study's, unchanged. The holdout is in the future on purpose; the run may not start before 2026-11-18T00:30Z."
+not_changed:
+  - "No code, service, limit, threshold, risk, capital or authority. The first run never produced a number, so no rule is tuned to a result."
+safety:
+  paper_only: true
+  liveAuthority: NONE
+  productionMutationAllowed: false
+  aiAuthority: ZERO_AUTHORITY
+next_action: "Independent review. Then a separate PR that lets run-orderbook-study.js use this span (must land before 2026-11-18). The run itself waits for the data."
