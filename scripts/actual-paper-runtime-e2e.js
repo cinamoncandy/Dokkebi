@@ -487,6 +487,26 @@ function safeRuntimeFailureDiagnostic(response, observedAtMs) {
   };
 }
 
+// A runner-side public-market reconnect is projected by the runtime as a derived,
+// non-latched kill switch (cloudRuntimeDashboardHydrator sets killSwitchActive
+// while no executable market data exists). Only this exact locally-owned shape is
+// waitable, for a finite cumulative budget; the kill switch itself is untouched.
+const WAITABLE_RECONNECT_ERRORS = new Set(["PUBLIC_MARKET_DISCONNECTED", "PUBLIC_MARKET_RECONNECTING", "PUBLIC_MARKET_RECOVERED"]);
+const MARKET_RECONNECT_GRACE = Object.freeze({ defaultMs: 30_000, minimumMs: 1_000, maximumMs: 60_000, maximumEpisodes: 3 });
+
+function waitableMarketReconnect(response, snapshotFailure, collectionFailure) {
+  if (collectionFailure != null || response?.httpStatus !== 200) return null;
+  if (snapshotFailure !== "PAPER_RUNTIME_NOT_RUNNING" && snapshotFailure !== "PAPER_MARKET_TRANSPORT_NOT_ONLINE" && !WAITABLE_RECONNECT_ERRORS.has(snapshotFailure)) return null;
+  const operations = response.body?.operations;
+  if (operations?.schedulerRunning !== true) return null;
+  const lastError = operations?.heartbeat?.lastError;
+  if (typeof lastError !== "string" || !WAITABLE_RECONNECT_ERRORS.has(lastError)) return null;
+  const halted = operations.runtimeState === "HALTED" && Array.isArray(operations.runtimeHaltReasons) &&
+    operations.runtimeHaltReasons.length === 1 && operations.runtimeHaltReasons[0] === "KILL_SWITCH_ACTIVE";
+  if (!halted && operations.runtimeState !== "DEGRADED" && operations.runtimeState !== "RUNNING") return null;
+  return lastError;
+}
+
 function accountProjectionChanged(before, after) {
   const left = before?.portfolio?.account;
   const right = after?.portfolio?.account;
@@ -515,6 +535,7 @@ async function observeAutomaticRuntime({
   maximumDurationMs = PAPER_OBSERVATION.maximumDurationMs,
   minimumDecisionCycles = PAPER_OBSERVATION.minimumDecisionCycles,
   pollIntervalMs = PAPER_OBSERVATION.pollIntervalMs,
+  reconnectGraceMs = MARKET_RECONNECT_GRACE.defaultMs,
   now = () => performance.now(),
   wallNow = () => Date.now(),
   delay = sleep,
@@ -523,6 +544,7 @@ async function observeAutomaticRuntime({
   if (!Number.isSafeInteger(minimumDurationMs) || minimumDurationMs < 1_000 || !Number.isSafeInteger(maximumDurationMs) || maximumDurationMs < minimumDurationMs || maximumDurationMs > PAPER_OBSERVATION.maximumDurationMs) throw new Error("PAPER observation duration is invalid or unbounded");
   if (!Number.isSafeInteger(minimumDecisionCycles) || minimumDecisionCycles < 1 || minimumDecisionCycles > 256) throw new Error("PAPER observation Decision-cycle count is invalid");
   if (!Number.isSafeInteger(pollIntervalMs) || pollIntervalMs < 100 || pollIntervalMs > 10_000) throw new Error("PAPER observation poll interval is invalid");
+  if (!Number.isSafeInteger(reconnectGraceMs) || reconnectGraceMs < MARKET_RECONNECT_GRACE.minimumMs || reconnectGraceMs > MARKET_RECONNECT_GRACE.maximumMs) throw new Error("PAPER market reconnect grace is invalid or unbounded");
 
   const startedMonotonic = now();
   const startedAtMs = wallNow();
@@ -570,6 +592,10 @@ async function observeAutomaticRuntime({
   let failureCode = null;
   let failureDiagnostic = null;
   let stopReason = "MAX_OBSERVATION_BUDGET_EXHAUSTED";
+  const reconnectEpisodes = [];
+  let reconnectSpentMs = 0;
+  let activeReconnect = null;
+  const reconnectCodes = new Set();
 
   const appendSample = (sample) => {
     if (samples.length < PAPER_OBSERVATION.maximumSamples) samples.push(sample);
@@ -731,7 +757,40 @@ async function observeAutomaticRuntime({
     const snapshotFailure = observationSnapshotFailure(response);
     const collectionFailure = Array.isArray(response.body?.paperLearning?.events) ? collectSnapshot(response.body, observedAtMs) : null;
     failureCode = snapshotFailure ?? collectionFailure;
+    const reconnectCode = failureCode == null ? null : waitableMarketReconnect(response, snapshotFailure, collectionFailure);
+    if (reconnectCode != null) {
+      if (activeReconnect == null) {
+        activeReconnect = { startedMonotonic: elapsedMs, started_at: new Date(observedAtMs).toISOString(), samples: 0 };
+        reconnectEpisodes.push(activeReconnect);
+      }
+      activeReconnect.samples += 1;
+      activeReconnect.lastFailure = { code: failureCode, diagnostic: safeRuntimeFailureDiagnostic(response, observedAtMs) };
+      reconnectCodes.add(reconnectCode);
+      const episodeMs = elapsedMs - activeReconnect.startedMonotonic;
+      const withinBudget = reconnectSpentMs + episodeMs < reconnectGraceMs && reconnectEpisodes.length <= MARKET_RECONNECT_GRACE.maximumEpisodes && elapsedMs < maximumDurationMs;
+      if (withinBudget) {
+        failureCode = null;
+        await delay(Math.max(1, Math.min(pollIntervalMs, maximumDurationMs - elapsedMs, reconnectGraceMs - reconnectSpentMs - episodeMs)));
+        continue;
+      }
+      activeReconnect.status = "NOT_RECOVERED";
+      activeReconnect.duration_ms = Math.round(episodeMs);
+      reconnectSpentMs += episodeMs;
+      activeReconnect = null;
+    } else if (activeReconnect != null && failureCode == null) {
+      const episodeMs = elapsedMs - activeReconnect.startedMonotonic;
+      activeReconnect.status = "RECOVERED";
+      activeReconnect.recovered_at = new Date(observedAtMs).toISOString();
+      activeReconnect.duration_ms = Math.round(episodeMs);
+      reconnectSpentMs += episodeMs;
+      activeReconnect = null;
+    }
     if (failureCode != null) {
+      if (activeReconnect != null) {
+        activeReconnect.status = "INTERRUPTED_BY_FAILURE";
+        activeReconnect.duration_ms = Math.round(elapsedMs - activeReconnect.startedMonotonic);
+        activeReconnect = null;
+      }
       failureDiagnostic = safeRuntimeFailureDiagnostic(response, observedAtMs);
       stopReason = "RUNTIME_OR_EVIDENCE_FAILURE";
       break;
@@ -756,6 +815,25 @@ async function observeAutomaticRuntime({
 
   const endedAtMs = wallNow();
   const elapsedMs = Math.round(Math.max(0, now() - startedMonotonic));
+  if (activeReconnect != null) {
+    // The observation budget ended mid-reconnect: never count it as recovered.
+    activeReconnect.status = "NOT_RECOVERED";
+    activeReconnect.duration_ms = Math.round(elapsedMs - activeReconnect.startedMonotonic);
+    if (failureCode == null) {
+      failureCode = activeReconnect.lastFailure.code;
+      failureDiagnostic = activeReconnect.lastFailure.diagnostic;
+      stopReason = "MARKET_RECONNECT_NOT_RECOVERED";
+    }
+    activeReconnect = null;
+  }
+  const marketReconnect = {
+    status: reconnectEpisodes.length === 0 ? "NO_MARKET_RECONNECT" : reconnectEpisodes.every((episode) => episode.status === "RECOVERED") ? "RECOVERED" : "NOT_RECOVERED",
+    grace_budget_ms: reconnectGraceMs,
+    maximum_episodes: MARKET_RECONNECT_GRACE.maximumEpisodes,
+    episode_count: reconnectEpisodes.length,
+    error_codes: [...reconnectCodes].sort(),
+    episodes: reconnectEpisodes.map(({ startedMonotonic: _ignored, lastFailure: _private, ...episode }) => episode),
+  };
   const decisionCycles = [...cyclesById.values()]
     .filter((cycle) => cycle.decision != null)
     .sort((left, right) => left.decision.occurred_at.localeCompare(right.decision.occurred_at) || left.cycle_ref_sha256.localeCompare(right.cycle_ref_sha256));
@@ -797,6 +875,7 @@ async function observeAutomaticRuntime({
     ...(failureCode == null ? {} : { failure_code: failureCode }),
     ...(failureDiagnostic == null ? {} : { failure_diagnostic: failureDiagnostic }),
     event_evidence_truncated: eventEvidenceTruncated,
+    market_reconnect: marketReconnect,
     projection_window: {
       maximum_events: 250,
       capped_samples: cappedProjectionSamples,
@@ -1191,4 +1270,4 @@ if (require.main === module) {
   });
 }
 
-module.exports = { availablePort, buildBoundPaperChaosRestartEvidence, canonical, observeAutomaticRuntime, paperChaosStateFromSnapshot, readPersistedPaperLearningIds, run, scrubPrivateExchangeEnv, sha256, snapshotObservedAt, summarizeSnapshot, waitForHealth, waitForStablePaperObservationStart };
+module.exports = { MARKET_RECONNECT_GRACE, availablePort, buildBoundPaperChaosRestartEvidence, canonical, observeAutomaticRuntime, paperChaosStateFromSnapshot, readPersistedPaperLearningIds, run, scrubPrivateExchangeEnv, sha256, snapshotObservedAt, summarizeSnapshot, waitForHealth, waitForStablePaperObservationStart };

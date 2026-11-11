@@ -1,0 +1,34 @@
+id: WO-0059-PAPER-RECONNECT-GRACE-20261111
+title: "Wait out a runner-side public-market reconnect during PAPER observation for a bounded time"
+status: IN_PROGRESS
+priority: P1
+owner: nusa-development
+repository: cinamoncandy/NUSA
+base_branch: main
+implementation_branch: claude/vibrant-hopper-ohuku5
+source_work_order: .aipos/work-orders/WO-0059-PAPER-STARTUP-STABILIZATION-20261107.yaml
+finding:
+  workflow_runs: [42834424111, 42935952276]
+  affected_prs: [3041, 3053, 3070]
+  failure: "runtime_observation.failure_code=PAPER_RUNTIME_NOT_RUNNING; failure_diagnostic runtime_state=HALTED, runtime_halt_reasons=[KILL_SWITCH_ACTIVE], last_error_code=PUBLIC_MARKET_RECONNECTING. Each passed on a single re-run; none touched the PAPER runtime."
+  root_cause: "apps/cloud/src/cloudRuntimeDashboardHydrator.ts sets killSwitchActive=!hasExecutableMarketData. While the public Upbit feed reconnects there are no executable decisions, so the derived (non-latched) kill switch is active and runtime.ts projects runtimeState=HALTED with KILL_SWITCH_ACTIVE. It clears when market data returns. observeAutomaticRuntime failed on the first such snapshot, so a short runner-side reconnect ended the observation."
+scope:
+  - "scripts/actual-paper-runtime-e2e.js only: a bounded cumulative reconnect grace (default 30s, valid 1-60s, at most 3 episodes) inside the existing 60-180s observation budget."
+  - "Waitable only when schedulerRunning=true, heartbeat.lastError is exactly PUBLIC_MARKET_DISCONNECTED/RECONNECTING/RECOVERED, runtime halt reasons are exactly [KILL_SWITCH_ACTIVE] (or DEGRADED/RUNNING), authority invariants hold and evidence collection has no failure."
+  - "Record market_reconnect evidence (status, episodes, durations, codes) in the artifact."
+acceptance:
+  - "A reconnect at observation time that recovers within the grace continues observation and is evaluated normally."
+  - "A reconnect that never recovers fails with the original PAPER_RUNTIME_NOT_RUNNING code and diagnostic after the bounded grace."
+  - "Other halt reasons, PUBLIC_MARKET_FAILED, missing error, or scheduler not running fail immediately."
+exclusions:
+  - "No change to runtime, kill switch, Risk, thresholds, classifier or workflow. The check is not skipped or disabled."
+safety:
+  paper_only: true
+  liveAuthority: NONE
+  productionMutationAllowed: false
+  aiAuthority: ZERO_AUTHORITY
+verification_commands:
+  - "npx tsc -p tsconfig.json && node -r ./tests/register-dist.cjs --test tests/actual-paper-runtime-observation.test.js tests/actual-paper-runtime-e2e-chaos-boundary.test.js tests/actual-paper-runtime-persisted-replay.test.js tests/actual-paper-runtime-readiness-classification.test.js tests/exact-head-paper-readiness-certification.test.js"
+  - "git diff --check"
+local_validation: "PASS 58/58 focused tests; git diff --check clean. check-runtime/validate:full left to CI (Node 24)."
+independent_review: PENDING_FRESH_VALIDATOR_SESSION
