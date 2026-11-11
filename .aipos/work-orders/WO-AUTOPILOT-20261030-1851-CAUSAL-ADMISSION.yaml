@@ -894,3 +894,10 @@ implementation_checkpoint_20261104T0344Z:
   l1: PARTIAL
   l2: HOLD
   safety: PAPER_ONLY_LIVE_NONE_PRODUCTION_MUTATION_FALSE_REAL_ORDER_FALSE_REAL_TRANSFER_FALSE_AI_ZERO_AUTHORITY
+l1_isolated_verification_20261111:
+  result: "PASS on attempt 9: source run 42923997847 (main 4b66244310d6fad9abf37b38e8c1b0b030bfb47d), consumer run 42924120287; runtime proof 42923865408 exactHeadVerified=true before dispatch."
+  receipt: "domain NUSA_ISOLATED_CAUSAL_VERIFICATION_V1, decision CODE_ACTIONABLE, classification REPOSITORY_CODE_REGRESSION, durableReplayGuard SQLITE_DURABLE_OBJECT_CLAIMED, codingRunnerStatus EXECUTION_ACCEPTED, proposalAdapterCalls 1, sandboxExecutions 1, dedupe REPLAY_REJECTED_WITHIN_SINGLE_HARNESS, mutationAllowed false, liveAuthority NONE, productionMutationAllowed false, aiAuthority ZERO_AUTHORITY."
+  fixes_on_the_way: "#3045 consumer checkout; #3048 Fulcio SAN URL; #3051/#3061 rejection-stage diagnostics; #3055/#3058/#3062 ID-pinned OIDC subject; #3066 workerd ECDSA digest default."
+  acceptance: "Owner accepted the L1 evidence on 2026-11-11 KST (recorded on #1851). A read-only validator review of the same evidence was started; its verdict is added on #1851 when it finishes."
+  route: "Closed again by #3069; NUSA_AUTOPILOT_CODING_ENABLED unchanged (off)."
+  not_accepted_by_this: "Autonomous coding, any production repository write, or any authority change."
