@@ -71,7 +71,7 @@ test("a spawn failure never throws and stop terminates a running refresh", () =>
   const unavailable = new ResearchSnapshotRefresher({ cloudStateDbPath: ":memory:" });
   assert.equal(unavailable.requestIfDue(), "UNAVAILABLE");
   const { dir } = harness();
-  const throwing = new ResearchSnapshotRefresher({ cloudStateDbPath: path.join(dir, "state.sqlite"), spawn: () => { throw new Error("EAGAIN"); } });
+  const throwing = new ResearchSnapshotRefresher({ cloudStateDbPath: path.join(dir, "state.sqlite"), availableMemoryBytes: () => 900 * 1024 * 1024, spawn: () => { throw new Error("EAGAIN"); } });
   assert.equal(throwing.requestIfDue(), "UNAVAILABLE");
   const { spawned, make } = harness();
   const refresher = make();
