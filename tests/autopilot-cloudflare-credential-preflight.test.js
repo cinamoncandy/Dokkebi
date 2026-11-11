@@ -49,7 +49,7 @@ test('preflight verifies the free-tier Worker has no paid Container or Sandbox b
 });
 
 test('preflight waits boundedly for executed exact-main deploy evidence and live Worker revision', () => {
-  assert.match(workflow, /gh api --paginate --slurp "repos\/\$GITHUB_REPOSITORY\/actions\/runs\?head_sha=\$CURRENT_MAIN&status=completed&per_page=100"/);
+  assert.match(workflow, /gh api --paginate --slurp "repos\/\$GITHUB_REPOSITORY\/actions\/runs\?head_sha=\$CURRENT_MAIN&per_page=100"/);
   assert.match(workflow, /nusa-main-runs-pages\.json/);
   assert.match(workflow, /Array\.isArray\(pages\) \? pages\.flatMap/);
   assert.match(workflow, /Autopilot Cloudflare Deploy/);
@@ -170,4 +170,34 @@ test('a runtime-unchanged exact main is accepted only with proof against the liv
   assert.match(step, /health\.zeroCreditMode !== expectedZeroCredit/);
   assert.doesNotMatch(step, /health\.zeroCreditMode !== '(ENFORCED|DISABLED)'/);
   assert.match(workflow, /fetch-depth: 0/);
+});
+
+test('without a status filter only a completed, successful Deploy run of the exact main sha becomes a candidate', () => {
+  const { spawnSync } = require('node:child_process');
+  const os = require('node:os');
+  const match = workflow.match(/DEPLOY_CANDIDATES < <\(CURRENT_MAIN="\$CURRENT_MAIN" node - <<'NODE'\n([\s\S]*?)\n\s*NODE\n/);
+  assert.ok(match, 'candidate filter snippet is present');
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'nusa-preflight-'));
+  try {
+    const main = '7f8de2167dcef9d67149d021837ce013ae472a8f';
+    const deploy = (id, over) => ({ id, name: 'Autopilot Cloudflare Deploy', path: '.github/workflows/autopilot-cloudflare-deploy.yml', head_sha: main, conclusion: 'success', status: 'completed', ...over });
+    const pages = [{ workflow_runs: [
+      deploy(10),
+      deploy(11, { conclusion: null, status: 'in_progress' }),
+      deploy(12, { conclusion: 'failure' }),
+      deploy(13, { conclusion: 'cancelled' }),
+      deploy(14, { conclusion: 'skipped' }),
+      deploy(15, { head_sha: 'a'.repeat(40) }),
+      deploy(16, { name: 'Deployment Convergence Receipt' }),
+      deploy(17, { path: '.github/workflows/other.yml' }),
+    ] }, { workflow_runs: [deploy(20, { head_sha: main.toUpperCase() })] }];
+    const file = path.join(dir, 'runs.json');
+    fs.writeFileSync(file, JSON.stringify(pages));
+    const script = match[1].replace('/tmp/nusa-main-runs-pages.json', file.replace(/\\/g, '/'));
+    const result = spawnSync(process.execPath, ['-e', script], { env: { ...process.env, CURRENT_MAIN: main }, encoding: 'utf8' });
+    assert.equal(result.status, 0, result.stderr);
+    assert.deepEqual(result.stdout.trim().split('\n'), ['20', '10']);
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
 });
