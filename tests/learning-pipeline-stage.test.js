@@ -58,3 +58,12 @@ test("/health derives learningPipeline only from the already-public runtime obje
   assert.match(server, /const runtime = publicRuntimeLiveness\(liveness\);\r?\n\s+const learningPipeline = learningPipelineProjection\(runtime as unknown as Readonly<Record<string, unknown>>, now\);/);
   assert.match(server, /\.\.\.\(pipeline \?\? \{\}\),/);
 });
+
+test("experiments that produced results after a restart read DATASET PASS even though sessionsStarted is 0 (sessions are resumed, not started)", () => {
+  const afterRestart = { ...stalled, researchExperimentTicks: { lastTickAt: NOW, lastStatus: "OK", ticks: 4, sessionsStarted: 0, counts: { NOT_DUE: 40, FAIL_EXCESSIVE_DRAWDOWN: 168, FAIL_NO_EDGE: 52 } } };
+  assert.equal(learningPipelineProjection(afterRestart, NOW).research.stages.DATASET, "PASS");
+  const onlyIdle = { ...stalled, researchExperimentTicks: { lastTickAt: NOW, lastStatus: "OK", ticks: 4, sessionsStarted: 0, counts: { NOT_DUE: 40 } } };
+  assert.equal(learningPipelineProjection(onlyIdle, NOW).research.stages.DATASET, "DATASET_NO_SESSION", "idle alone is not proof");
+  const skippedOnly = { ...stalled, researchExperimentTicks: { lastTickAt: NOW, lastStatus: "OK", ticks: 4, sessionsStarted: 0, counts: { SKIPPED_DATASET_MANIFEST_MANIFEST_NOT_FOUND: 4, ERROR_X: 2 } } };
+  assert.equal(learningPipelineProjection(skippedOnly, NOW).research.stages.DATASET, "DATASET_MANIFEST_MISSING", "skipped and errors are not results");
+});

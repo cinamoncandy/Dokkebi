@@ -1,0 +1,19 @@
+id: WO-LEARNING-20261111-DATASET-STAGE-RESTART
+title: "The learning pipeline no longer reads DATASET_NO_SESSION after a restart while experiments are running"
+status: READY_FOR_REVIEW
+created: 2026-11-11
+implementation_branch: claude/learning-dataset-no-session
+authority_impact: none
+finding: "2026-11-11 12:44 KST /health: learningLoopVerdict FAILED at DATASET_NO_SESSION while researchExperimentTicks showed 168 FAIL_EXCESSIVE_DRAWDOWN and 52 FAIL_NO_EDGE results in the same process. sessionsStarted counts only sessions this process created; stored sessions are resumed after a restart, so it stays 0 while experiments run. The first broken stage was therefore a false alarm and hid the real blocker (no candidate passes holdout: 0 of 18)."
+change:
+  - "apps/cloud/src/learningPipelineStage.ts datasetStage: sessionsStarted > 0 still passes; additionally an experiment that produced a result (a count key that is not NOT_DUE, SKIPPED_* or ERROR*, with value > 0) proves a session and dataset existed and passes. MANIFEST_NOT_FOUND-only and idle-only ticks still read as before."
+not_changed:
+  - "Display only. No experiment, study rule, threshold, holdout, risk, execution, capital or authority change. Nothing is fed back into the runtime."
+safety:
+  paper_only: true
+  liveAuthority: NONE
+  productionMutationAllowed: false
+  aiAuthority: ZERO_AUTHORITY
+validation:
+  - "learning-pipeline-stage, learning-pipeline-alarm and learningLoopVerdict suites pass (20), including a new restart case plus idle-only and skipped-only negatives."
+next_action: "Review, merge, release; /health should then show the real first broken stage (learning not evaluated because no candidate passes holdout)."

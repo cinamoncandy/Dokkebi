@@ -77,6 +77,10 @@ function datasetStage(runtime: Source): LearningPipelineStageStatus {
   const sessions = int(ticks.sessionsStarted);
   if (sessions === undefined) return "UNKNOWN";
   if (sessions > 0) return "PASS";
+  // sessionsStarted counts only sessions this process created. After a restart the stored sessions are resumed, so it stays 0 while
+  // experiments run. An experiment that produced a result (not NOT_DUE, SKIPPED or ERROR) proves a session and dataset existed.
+  const ranExperiment = Object.entries(counts).some(([key, value]) => key !== "NOT_DUE" && !key.startsWith("SKIPPED_") && !key.startsWith("ERROR") && (int(value) ?? 0) > 0);
+  if (ranExperiment) return "PASS";
   return manifestMissing ? "DATASET_MANIFEST_MISSING" : "DATASET_NO_SESSION";
 }
 
