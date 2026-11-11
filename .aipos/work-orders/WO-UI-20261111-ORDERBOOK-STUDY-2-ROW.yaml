@@ -1,0 +1,19 @@
+id: WO-UI-20261111-ORDERBOOK-STUDY-2-ROW
+title: "The 학습 timeline gets a row for the second order-book study"
+status: READY_FOR_REVIEW
+created: 2026-11-11
+implementation_branch: claude/mobile-orderbook-study-row
+authority_impact: none
+follows: "Independent review of #3084 (result attributed to its own study id). The mobile row matched only the first study, so a second-run result could never be shown."
+change:
+  - "apps/mobile/src/learningPanelsModel.ts: a new registered row 호가2 (호가 연구 2차(ML), verdict print 2026-11-18T02:00Z, frozen by docs/RESEARCH_PREREG_2026-11-11_ORDERBOOK_60M.md) and its mapping to ML_ORDERBOOK_60M_20261111. Each row matches its own study id exactly."
+not_changed:
+  - "Display only. No server, study script, rule, limit, threshold, risk, capital or authority. The wording of pass and fail (paper-only candidate, never live) is the existing text."
+safety:
+  paper_only: true
+  liveAuthority: NONE
+  productionMutationAllowed: false
+  aiAuthority: ZERO_AUTHORITY
+validation:
+  - "mobile-learning-panels and mobile-research-progress 25/25, with a test that the second row follows only its own result and the first row never shows it."
+next_action: "Review, merge, release with the study span change (#3084) before 2026-11-18."
