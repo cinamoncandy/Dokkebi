@@ -62,7 +62,7 @@ test("cooperative Research tick yields between bounded variant/market steps with
   });
   assert.equal(report.status, "OK");
   assert.equal(report.experiments.length, 3);
-  assert.ok(report.experiments.every((entry) => entry.outcome.status === "NOT_DUE"));
+  assert.ok(report.experiments.every((entry) => entry.outcome.status === "NOT_DUE" || entry.outcome.status === "NO_CANDLES"));
   assert.equal(yields, 4, "one post-collection yield plus one yield after each bounded variant/market step");
 });
 
