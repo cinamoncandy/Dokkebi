@@ -4,7 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, it } from "node:test";
 import { DatabaseSync } from "node:sqlite";
-import { COVERAGE_REQUIRED_RATIO, OrderBookCoverageWatch, readOrderBookCoverage, summarizeCoverage } from "./orderBookCoverage";
+import { COVERAGE_REQUIRED_RATIO, OrderBookCoverageWatch, readOrderBookCoverage, readOrderBookCoverageDetailed, summarizeCoverage } from "./orderBookCoverage";
 
 const HOUR = 3_600_000;
 const NOW = Date.parse("2026-10-31T10:30:00Z");
@@ -78,6 +78,23 @@ describe("order-book hour coverage watch", () => {
       now += HOUR;
       assert.notEqual(watch.snapshot(), first, "recomputed after an hour");
     } finally { rmSync(dir, { recursive: true, force: true }); }
-    assert.equal(new OrderBookCoverageWatch(join(tmpdir(), "no-such-dir", "x.sqlite"), "KRW-XRP", () => NOW).snapshot(), undefined);
+    const unreadable = new OrderBookCoverageWatch(join(tmpdir(), "no-such-dir", "x.sqlite"), "KRW-XRP", () => NOW).snapshot();
+    assert.ok(unreadable != null && "status" in unreadable && unreadable.status === "UNAVAILABLE", "an unreadable database is named, not hidden");
+  });
+
+  it("names why the coverage cannot be read with a fixed code, never raw text", () => {
+    const missing = readOrderBookCoverageDetailed(join(tmpdir(), "no-such-dir-coverage", "state.sqlite"), "KRW-XRP", NOW, 6);
+    assert.equal("status" in missing && missing.status, "UNAVAILABLE");
+    assert.match("reason" in missing ? missing.reason : "", /^[A-Z][A-Z0-9_]{2,63}$/);
+    const dir = mkdtempSync(join(tmpdir(), "coverage-"));
+    try {
+      const path = join(dir, "state.sqlite");
+      new DatabaseSync(path).close();
+      const noTable = readOrderBookCoverageDetailed(path, "KRW-XRP", NOW, 6);
+      assert.match("reason" in noTable ? noTable.reason : "", /^QUERY_FAILED/);
+      assert.equal(readOrderBookCoverage(path, "KRW-XRP", NOW, 6), undefined);
+      const bad = readOrderBookCoverageDetailed(path, "xrp", NOW, 6);
+      assert.equal("reason" in bad && bad.reason, "INVALID_INPUT");
+    } finally { rmSync(dir, { recursive: true, force: true }); }
   });
 });
