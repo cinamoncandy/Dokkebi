@@ -18,5 +18,6 @@ safety:
   productionMutationAllowed: false
   aiAuthority: ZERO_AUTHORITY
 validation:
-  - "closed-learning-research-worker 10/10; league-allocation-single-candidate-gap 2/2."
+  - "closed-learning-research-worker 10/10; league-allocation-single-candidate-gap 3/3."
+review_20261112: "Independent review ACCEPT WITH P2. P2 fixed: the proposal table and the characterization test now say that 'zero' also covers candidates that exist but are not eligible, not QUALIFIED_FOR_LEAGUE, or below the 0.5 evidence breadth (all give NO_ALLOCATABLE_CANDIDATES); the new test pins exactly 0.49 (refused) vs 0.5 (kept), eligible=false, INSUFFICIENT outcome, and two candidates at 0.5 (capacity refusal). league-allocation-single-candidate-gap 3/3."
 next_action: "Independent review, merge, release; read bootstrapReasons for the refusal code; then the owner decides on option A or B only if the cause is not 'no qualified candidate'."

@@ -10,11 +10,13 @@
 
 | 자격 통과 후보 | 결과 |
 |---|---|
-| 0 | 거부 `NO_ALLOCATABLE_CANDIDATES` |
-| 1 | 거부 `INSUFFICIENT_DIVERSIFICATION_CAPACITY` (후보 1개는 최대 40%라서 100%를 못 나눈다) |
+| 0 (후보가 없거나, 있어도 `eligible`이 아니거나 `QUALIFIED_FOR_LEAGUE`가 아니거나 증거 폭이 0.5 미만이라 모두 걸러진 경우) | 거부 `NO_ALLOCATABLE_CANDIDATES` |
+| 1 (위 세 조건을 모두 통과한 후보) | 거부 `INSUFFICIENT_DIVERSIFICATION_CAPACITY` (후보 1개는 최대 40%라서 100%를 못 나눈다) |
 | 2 | 거부 `INSUFFICIENT_DIVERSIFICATION_CAPACITY` |
 | 3~5 | 항목 3~5개 → 워커가 `ALLOCATION_NOT_SINGLE_CANDIDATE`로 배포 불가 |
 | 6 이상 | 항목 5개 → 같은 이유로 배포 불가 |
+
+   표의 "자격 통과 후보"는 배분이 실제로 쓰는 조건, 즉 `eligible=true`, `QUALIFIED_FOR_LEAGUE`, 증거 폭 0.5 이상을 모두 만족하는 후보를 뜻한다(독립 검토의 P2 반영, 시험으로 고정). 후보가 있어도 이 조건을 못 넘으면 0개와 같은 거부가 난다.
 
    **항목이 정확히 1개가 되는 경우가 없다.** 후보 품질과 무관하게 이 경로로는 배포 가능 판정이 나올 수 없다.
 4. 소유자 기준선 전략은 `maximumCandidateWeight: 1, maximumCandidateCount: 1, maximumFamilyWeight: 1` 정책(`apps/cloud/src/ownerBaselinePaperStrategy.ts`)을 따로 써서 이 문제가 없다. 그 정책이면 후보가 4개여도 1순위 한 개만 항목이 된다.
@@ -23,7 +25,7 @@
 
 2026-11-12 `/health`: `bootstrap=RESEARCH_NOT_DEPLOYABLE`, `bootstrapReasons=["NO_ALLOCATION_ADVISORY"]`, 연구 과적합률 95%. 이 이유만으로는 아래 둘을 구분할 수 없다.
 
-- (가) 자격 통과 후보가 0개 (`NO_ALLOCATABLE_CANDIDATES`): 관문이 제 역할을 하는 중이며 풀 이유가 없다.
+- (가) 배분 조건을 통과한 후보가 0개 (`NO_ALLOCATABLE_CANDIDATES`; 후보는 있어도 자격이나 증거 폭이 모자란 경우 포함): 관문이 제 역할을 하는 중이며 풀 이유가 없다.
 - (나) 후보 1~2개 (`INSUFFICIENT_DIVERSIFICATION_CAPACITY`): 위 구조적 불일치.
 
 동반 변경(워커가 거부 코드를 `ALLOCATION_<코드>` 이유로 함께 내보냄)이 릴리스되면 둘을 구분해서 읽을 수 있다. **구분이 되기 전에는 아래 선택지를 실행하지 않는다.**
