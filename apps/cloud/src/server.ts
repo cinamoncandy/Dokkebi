@@ -468,8 +468,11 @@ function publicRuntimeLiveness(value: CloudRuntimeLivenessSnapshot): CloudRuntim
     const cadence = rawLoop.evaluationPeriodMs;
     if (cadence === 3_600_000 || cadence === 86_400_000) loop.evaluationPeriodMs = cadence;
     // Why Research was not deployable: at most five codes that already are fixed upper-case codes; one bad entry drops the whole list.
-    if (loop.bootstrap === "RESEARCH_NOT_DEPLOYABLE" && Array.isArray(rawLoop.bootstrapReasons) && rawLoop.bootstrapReasons.length >= 1 && rawLoop.bootstrapReasons.length <= 5
-      && rawLoop.bootstrapReasons.every((reason) => typeof reason === "string" && /^[A-Z][A-Z0-9_]{2,63}$/.test(reason))) loop.bootstrapReasons = Object.freeze([...(rawLoop.bootstrapReasons as string[])]);
+    // Array.from makes holes of a sparse array explicit (every() skips them and they would serialize as null).
+    if (loop.bootstrap === "RESEARCH_NOT_DEPLOYABLE" && Array.isArray(rawLoop.bootstrapReasons) && rawLoop.bootstrapReasons.length >= 1 && rawLoop.bootstrapReasons.length <= 5) {
+      const dense: unknown[] = Array.from(rawLoop.bootstrapReasons as unknown[]);
+      if (dense.every((reason) => typeof reason === "string" && /^[A-Z][A-Z0-9_]{2,63}$/.test(reason))) loop.bootstrapReasons = Object.freeze([...(dense as string[])]);
+    }
     const periodStart = (rawLoop.evidence as Record<string, unknown> | null)?.openPeriodStartAt;
     const isHourlyBoundary = cadence === 3_600_000 && Number.isSafeInteger(periodStart) && Number(periodStart) >= 0 && Number(periodStart) <= Number(loop.lastTickAt) && Number(eligibleAt) === Number(periodStart) + cadence;
     if (["WAITING_FOR_KST_DAY_ROLLOVER", "WAITING_FOR_EVALUATION_WINDOW"].includes(String(loop.rollover)) && Number.isSafeInteger(eligibleAt) && Number(eligibleAt) > Number(loop.lastTickAt)
