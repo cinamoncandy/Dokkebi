@@ -33,17 +33,26 @@ test("unsafe, non-owner, blocked or already-linked issues are never selected", (
   assert.equal(selectCodexBacklogTask(issues, [{ title: "fix", body: "Refs #23" }]), null);
 });
 
-test("the production Codex selector rejects cursor scans without a point-in-time snapshot contract", () => {
+test("the production Codex selector rejects an unpinned inventory and accepts only protected-main AIPOS sources", () => {
   assert.throws(() => selectFromGithubInventory({
     issues: [issue(900, "P0: eligible-looking task", `Autopilot task.\n${SAFE}`)],
     pulls: [],
     consistency: {
-      pagination: "GRAPHQL_CURSOR",
-      repeatedScansMatched: true,
-      pointInTimeSnapshot: "UNVERIFIED",
+      source: "PROTECTED_MAIN_AIPOS_WORK_ORDERS",
+      mainSha: "UNVERIFIED",
+      treeSha: "UNVERIFIED",
       automaticSelectionAllowed: false,
     },
-  }), /no verified point-in-time snapshot/);
+  }), /Protected-main AIPOS work-order inventory is not verified/);
+  assert.equal(selectFromGithubInventory({
+    task: null,
+    consistency: {
+      source: "PROTECTED_MAIN_AIPOS_WORK_ORDERS",
+      mainSha: "a".repeat(40),
+      treeSha: "b".repeat(40),
+      automaticSelectionAllowed: true,
+    },
+  }), null, "a complete immutable inventory with no explicitly READY order yields no task");
 });
 
 test("Codex refuses to select backlog work without canonical WIP owner and conflict metadata", () => {

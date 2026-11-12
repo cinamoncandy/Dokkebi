@@ -75,6 +75,7 @@ jobs:
         if: steps.open.outputs.count == '0'
         env:
           GITHUB_TOKEN: ${{ github.token }}
+          NUSA_CODEX_CHECKED_OUT_SHA: ${{ steps.head.outputs.sha }}
           NUSA_CODEX_PROMPT_FILE: codex-prompt.txt
         run: node scripts/autopilot-codex-select.js
       - name: Upload Codex prompt

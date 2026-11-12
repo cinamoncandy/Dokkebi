@@ -62,6 +62,10 @@ export const UNWIRED_CONTROL_PLANE_DEBT: readonly string[] = Object.freeze([
   "providerBackpressure.ts#recordProviderSuccess",
   "outcomeFeedback.ts#assessOutcome",
   "referenceIntelligenceIssueHandoff.ts#buildReferenceOwnerIssueDraft",
+  // The global issue/PR inventory is retained for diagnostics and regression coverage only:
+  // GitHub exposes no point-in-time token for its paginated connections, so Codex selection and
+  // claim admission now use the immutable protected-main Work Order reader instead.
+  "githubIssueBacklogClient.ts#fetchOpenGithubBacklog",
   // #2128 states plainly that the worker pool creates no branches, worktrees or side effects, so
   // these having no caller yet is the declared design rather than a missed wiring. They stay listed
   // because the ledger is a measurement, not a judgement: #2117's runner integration is what removes

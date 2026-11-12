@@ -9,7 +9,29 @@ import { CODEX_WIP_AUDIENCE } from "./githubActionsOidc";
 const REPOSITORY = "cinamoncandy/NUSA";
 const WORKFLOW_PATH = ".github/workflows/autopilot-codex-coding.yml";
 const SHA = "a".repeat(40);
+const TREE_SHA = "b".repeat(40);
 const NOW = 1_800_000_000_000;
+const WORK_ORDER_PATH = ".aipos/work-orders/WO-TEST-CODEX-903.yaml";
+const WORK_ORDER_SOURCE = `id: WO-TEST-CODEX-903
+title: Test Codex work order
+status: IN_PROGRESS
+issue: 903
+dependencies: []
+codex_selection:
+  status: READY
+  issue: 903
+  capability: AUTOPILOT_TYPESCRIPT
+  canonicalOwner: apps/autopilot
+  conflictKeys:
+    - issue:903
+    - module:apps/autopilot/src
+  dependencies: []
+  linkedIssues: []
+  linkedPullRequests: []
+`;
+
+const gitBlobSha = (source: string) => createHash("sha1").update(`blob ${Buffer.byteLength(source)}\0`).update(source).digest("hex");
+const WORK_ORDER_BLOB_SHA = gitBlobSha(WORK_ORDER_SOURCE);
 
 class MemoryStorage {
   private readonly values = new Map<string, unknown>();
@@ -85,10 +107,34 @@ const issue = (number = 903) => ({
 });
 const selectedIssue = selectCodexBacklogTask([issue()], []);
 assert.ok(selectedIssue);
-const TASK_DIGEST = createHash("sha256").update(codexBacklogTaskSnapshot(selectedIssue)).digest("hex");
+const issueSnapshot = {
+  number: 903,
+  title: issue().title,
+  body: issue().body,
+  state: "open",
+  author_association: "OWNER",
+  created_at: "2026-11-08T00:00:00Z",
+  updated_at: "2026-11-08T00:00:00Z",
+  labels: [],
+};
+const crossReferenceDigest = createHash("sha256").update(JSON.stringify({ issue: issueSnapshot, linkedReferences: [] })).digest("hex");
+const TASK_SOURCE = {
+  mainSha: SHA,
+  treeSha: TREE_SHA,
+  workOrderId: "WO-TEST-CODEX-903",
+  workOrderPath: WORK_ORDER_PATH,
+  workOrderBlobSha: WORK_ORDER_BLOB_SHA,
+  issueCrossReferenceDigest: crossReferenceDigest,
+};
+const TASK_DIGEST = createHash("sha256").update(JSON.stringify({ task: codexBacklogTaskSnapshot(selectedIssue), source: TASK_SOURCE })).digest("hex");
 
-function githubFetch(fixture: Awaited<ReturnType<typeof oidcFixture>>, options: { run?: Record<string, unknown>; issue?: unknown; pulls?: unknown; inventoryErrors?: boolean; mainSha?: string | null; mainShas?: Array<string | null> } = {}) {
+function githubFetch(fixture: Awaited<ReturnType<typeof oidcFixture>>, options: { run?: Record<string, unknown>; issue?: unknown; pulls?: unknown; inventoryErrors?: boolean; ready?: boolean; treeTruncated?: boolean; blobShaMismatch?: boolean; workOrderSource?: string; mainSha?: string | null; mainShas?: Array<string | null> } = {}) {
   let mainCheck = 0;
+  const workOrderSource = options.ready === false
+    ? "id: WO-TEST-CODEX-903\ntitle: Test Codex work order\nstatus: IN_PROGRESS\nissue: 903\ndependencies: []\n"
+    : options.workOrderSource ?? WORK_ORDER_SOURCE;
+  const workOrderBlobSha = gitBlobSha(workOrderSource);
+  const workOrderSize = Buffer.byteLength(workOrderSource);
   const defaultRun = {
     id: Number(fixture.claims.run_id),
     run_attempt: Number(fixture.claims.run_attempt),
@@ -111,39 +157,51 @@ function githubFetch(fixture: Awaited<ReturnType<typeof oidcFixture>>, options: 
       ? new Response("unavailable", { status: 503 })
       : new Response(JSON.stringify({ object: { sha: currentSha } }), { status: 200 });
     }
+    if (url.endsWith(`/git/commits/${SHA}`)) return new Response(JSON.stringify({ sha: SHA, tree: { sha: TREE_SHA } }), { status: 200 });
+    if (url.endsWith(`/git/trees/${TREE_SHA}?recursive=1`)) return new Response(JSON.stringify({
+      sha: TREE_SHA,
+      truncated: options.treeTruncated ?? false,
+      tree: [{ path: WORK_ORDER_PATH, mode: "100644", type: "blob", sha: workOrderBlobSha, size: workOrderSize }],
+    }), { status: 200 });
     if (url.endsWith("/graphql")) {
-      const query = JSON.parse(String(init?.body)) as { query: string; variables: { after: string | null } };
-      const resource = query.query.includes("pullRequests(first:") ? "pullRequests" : "issues";
-      if (resource === "issues" && options.inventoryErrors) {
+      const query = JSON.parse(String(init?.body)) as { query: string; variables: Record<string, unknown> };
+      if (query.query.includes("PinnedAiposWorkOrderBlobs")) {
+        if (options.inventoryErrors) return new Response(JSON.stringify({ errors: [{ message: "fixture inventory unavailable" }] }), { status: 200 });
+        return new Response(JSON.stringify({ data: { repository: { f0: { __typename: "Blob", oid: options.blobShaMismatch ? "c".repeat(40) : workOrderBlobSha, text: workOrderSource } } } }), { status: 200 });
+      }
+      if (query.query.includes("CodexWorkOrderIssue")) {
+        if (options.inventoryErrors) return new Response(JSON.stringify({ errors: [{ message: "fixture issue unavailable" }] }), { status: 200 });
+        const rawIssue: Record<string, unknown> = (options.issue as Record<string, unknown> | undefined) ?? issue();
+        const rawPulls = options.pulls as Array<Record<string, unknown>> | undefined;
+        const edges = (rawPulls ?? []).map((pull, index) => ({
+          cursor: `cross-reference:${index + 1}`,
+          node: { source: {
+            __typename: "PullRequest",
+            number: pull.number ?? index + 1,
+            title: pull.title ?? "Fix issue",
+            body: pull.body ?? "",
+            state: String(pull.state ?? "open").toUpperCase(),
+            createdAt: pull.created_at ?? "2026-11-08T00:00:00Z",
+            updatedAt: pull.updated_at ?? "2026-11-08T00:00:00Z",
+          } },
+        }));
+        return new Response(JSON.stringify({ data: { repository: { issue: {
+          __typename: rawIssue.__typename ?? "Issue",
+          number: rawIssue.number,
+          title: rawIssue.title,
+          body: rawIssue.body,
+          state: String(rawIssue.state ?? "open").toUpperCase(),
+          authorAssociation: rawIssue.author_association ?? "OWNER",
+          createdAt: rawIssue.created_at ?? "2026-11-08T00:00:00Z",
+          updatedAt: rawIssue.updated_at ?? "2026-11-08T00:00:00Z",
+          labels: { edges: (Array.isArray(rawIssue.labels) ? rawIssue.labels : []).map((label) => ({ node: { name: typeof label === "string" ? label : (label as { name?: string }).name } })), pageInfo: { hasNextPage: false } },
+          timelineItems: { edges, pageInfo: { hasNextPage: false, endCursor: edges.at(-1)?.cursor ?? null } },
+        } } } }), { status: 200 });
+      }
+      if (options.inventoryErrors) {
         return new Response(JSON.stringify({ errors: [{ message: "fixture inventory unavailable" }] }), { status: 200 });
       }
-      const rawNodes = resource === "issues"
-        ? [options.issue ?? issue()]
-        : options.pulls ?? [];
-      const nodes = (rawNodes as Array<Record<string, unknown>>).map((value) => resource === "issues"
-        ? {
-          number: value.number,
-          title: value.title,
-          body: value.body,
-          state: String(value.state ?? "open").toUpperCase(),
-          authorAssociation: value.author_association,
-          createdAt: value.created_at ?? "2026-11-08T00:00:00Z",
-          updatedAt: value.updated_at ?? "2026-11-08T00:00:00Z",
-          labels: { edges: (Array.isArray(value.labels) ? value.labels : []).map((label) => ({ node: { name: typeof label === "string" ? label : (label as { name?: string }).name } })), pageInfo: { hasNextPage: false } },
-        }
-        : {
-          number: value.number,
-          title: value.title,
-          body: value.body,
-          state: String(value.state ?? "open").toUpperCase(),
-          createdAt: value.created_at ?? "2026-11-08T00:00:00Z",
-          updatedAt: value.updated_at ?? "2026-11-08T00:00:00Z",
-        });
-      const afterNumber = Number(query.variables.after?.split(":").at(-1) ?? 0);
-      const page = nodes.filter((value) => Number(value.number) > afterNumber).slice(0, 100);
-      const edges = page.map((value) => ({ cursor: `${resource}:${value.number}`, node: value }));
-      const hasNextPage = nodes.some((value) => Number(value.number) > Number(page.at(-1)?.number ?? 0));
-      return new Response(JSON.stringify({ data: { repository: { [resource]: { edges, totalCount: nodes.length, pageInfo: { hasNextPage, endCursor: edges.at(-1)?.cursor ?? null } } } } }), { status: 200 });
+      return new Response(JSON.stringify({ errors: [{ message: "unexpected GraphQL query" }] }), { status: 400 });
     }
     return new Response("not found", { status: 404 });
   };
@@ -165,13 +223,26 @@ function env(coordinator: ExecutionCoordinatorNamespace): WorkerEnv {
   } as unknown as WorkerEnv;
 }
 
-test("Codex does not admit a task from a stable cursor scan without point-in-time inventory proof", async () => {
+test("Codex verifies the immutable Work Order tree and admits no task when no entry is explicitly READY", async () => {
   const coordinator = namespace();
   const fixture = await oidcFixture();
-  const fetchImpl = githubFetch(fixture);
+  const fetchImpl = githubFetch(fixture, { ready: false });
   const response = await handleCodexWipCoordination(request(fixture.token, "claim"), env(coordinator), { now: () => NOW, fetchImpl });
-  assert.equal(response.status, 503);
-  assert.equal((await response.json() as { error: string }).error, "CODEX_WIP_INVENTORY_UNVERIFIABLE");
+  assert.equal(response.status, 409);
+  assert.equal((await response.json() as { error: string }).error, "CODEX_WIP_TASK_NOT_CURRENT_OR_UNCLAIMABLE");
+  assert.equal((await readActiveWip(coordinator)).claims.length, 0);
+});
+
+test("Codex excludes a READY Work Order that declares an unrepresented dependency", async () => {
+  const coordinator = namespace();
+  const fixture = await oidcFixture();
+  const workOrderSource = WORK_ORDER_SOURCE.replace("dependencies: []\ncodex_selection:", "dependencies: []\ndepends_on: WO-OTHER-1\ncodex_selection:");
+  const response = await handleCodexWipCoordination(request(fixture.token, "claim"), env(coordinator), {
+    now: () => NOW,
+    fetchImpl: githubFetch(fixture, { workOrderSource }),
+  });
+  assert.equal(response.status, 409);
+  assert.equal((await response.json() as { error: string }).error, "CODEX_WIP_TASK_NOT_CURRENT_OR_UNCLAIMABLE");
   assert.equal((await readActiveWip(coordinator)).claims.length, 0);
 });
 
@@ -192,7 +263,7 @@ test("Codex claim is bound to the live OIDC workflow, task selection, and availa
     fetchImpl: githubFetch(valid, { pulls: [{ number: 100, title: "fix", body: "Refs #903" }] }),
   });
   assert.equal(linkedIssue.status, 503);
-  assert.equal((await linkedIssue.json() as { error: string }).error, "CODEX_WIP_INVENTORY_UNVERIFIABLE");
+  assert.equal((await linkedIssue.json() as { error: string }).error, "CODEX_WIP_TASK_UNAVAILABLE");
   assert.equal((await readActiveWip(coordinator)).claims.length, 0);
 
   await admitActiveWip(coordinator, { dedupeKey: "existing:wip:1", executionId: "existing:exec:1", taskId: "task-1", protectedMainSha: SHA, taskSnapshotDigest: TASK_DIGEST, leaseOwnerIdentity: "test:1:1", canonicalOwner: "owner-1", conflictKeys: ["path:1"], claimedAt: NOW, maxConcurrent: 2 });
@@ -200,6 +271,23 @@ test("Codex claim is bound to the live OIDC workflow, task selection, and availa
   const full = await admitActiveWip(coordinator, { dedupeKey: "existing:wip:3", executionId: "existing:exec:3", taskId: "task-3", protectedMainSha: SHA, taskSnapshotDigest: TASK_DIGEST, leaseOwnerIdentity: "test:1:1", canonicalOwner: "owner-3", conflictKeys: ["path:3"], claimedAt: NOW, maxConcurrent: 2 });
   assert.equal(full.reason, "WIP_LIMIT_REACHED");
   assert.equal((await readActiveWip(coordinator)).claims.length, 2);
+});
+
+test("Codex admits the exact protected-main Work Order once and rejects a duplicate claim", async () => {
+  const coordinator = namespace();
+  const fixture = await oidcFixture();
+  const fetchImpl = githubFetch(fixture);
+  const admitted = await handleCodexWipCoordination(request(fixture.token, "claim"), env(coordinator), { now: () => NOW, fetchImpl });
+  assert.equal(admitted.status, 201);
+  const body = await admitted.json() as { claimReceipt: { taskId: string; taskSnapshotDigest: string; protectedMainSha: string; canonicalOwner: string; conflictKeys: string[] } };
+  assert.equal(body.claimReceipt.taskId, "issue-903");
+  assert.equal(body.claimReceipt.taskSnapshotDigest, TASK_DIGEST);
+  assert.equal(body.claimReceipt.protectedMainSha, SHA);
+  assert.equal(body.claimReceipt.canonicalOwner, "apps/autopilot");
+  assert.deepEqual(body.claimReceipt.conflictKeys, ["issue:903", "module:apps/autopilot/src"]);
+  const replay = await handleCodexWipCoordination(request(fixture.token, "claim"), env(coordinator), { now: () => NOW + 1, fetchImpl });
+  assert.equal(replay.status, 409);
+  assert.equal((await readActiveWip(coordinator)).claims.length, 1);
 });
 
 test("Codex release from another run cannot release the original task claim", async () => {
@@ -253,7 +341,7 @@ test("Codex claim rejects a moved or unavailable protected main before creating 
   assert.equal((await readActiveWip(coordinator)).claims.length, 0);
 });
 
-test("Codex pre-run verification fails closed when the stored claim exists but fresh inventory is not provable", async () => {
+test("Codex pre-run verification fails closed on work-order lookup failure and leaves cleanup to the claim owner", async () => {
   const coordinator = namespace();
   const fixture = await oidcFixture();
   const dedupeKey = `codex-wip:${fixture.claims.run_id}:${fixture.claims.run_attempt}:issue:903:sha:${SHA}`;
@@ -266,14 +354,14 @@ test("Codex pre-run verification fails closed when the stored claim exists but f
   })).admitted, true);
   const response = await handleCodexWipCoordination(request(fixture.token, "verify"), env(coordinator), {
     now: () => NOW + 1_000,
-    fetchImpl: githubFetch(fixture),
+    fetchImpl: githubFetch(fixture, { inventoryErrors: true }),
   });
   assert.equal(response.status, 503);
-  assert.equal((await response.json() as { error: string }).error, "CODEX_WIP_INVENTORY_UNVERIFIABLE");
+  assert.equal((await response.json() as { error: string }).error, "CODEX_WIP_VERIFY_UNAVAILABLE");
   assert.equal((await readActiveWip(coordinator)).claims.length, 1, "the authenticated runner cleanup step owns release after verification failure");
 });
 
-test("Codex claim fails closed when a complete cursor inventory cannot be proven", async () => {
+test("Codex claim fails closed with 503 when the pinned Work Order or issue lookup fails", async () => {
   const coordinator = namespace();
   const fixture = await oidcFixture();
   const response = await handleCodexWipCoordination(request(fixture.token, "claim"), env(coordinator), {
@@ -285,7 +373,46 @@ test("Codex claim fails closed when a complete cursor inventory cannot be proven
   assert.equal((await readActiveWip(coordinator)).claims.length, 0);
 });
 
-test("Codex claim rejects even a stable issue scan while snapshot consistency is unverified", async () => {
+test("Codex Work Order cannot select a pull request as its issue", async () => {
+  const coordinator = namespace();
+  const fixture = await oidcFixture();
+  const response = await handleCodexWipCoordination(request(fixture.token, "claim"), env(coordinator), {
+    now: () => NOW,
+    fetchImpl: githubFetch(fixture, { issue: { ...issue(), __typename: "PullRequest" } }),
+  });
+  assert.equal(response.status, 503);
+  assert.equal((await response.json() as { error: string }).error, "CODEX_WIP_TASK_UNAVAILABLE");
+  assert.equal((await readActiveWip(coordinator)).claims.length, 0);
+});
+
+test("Codex inventory rejects truncated trees and blob identity mismatches with 503", async () => {
+  for (const invalid of [{ treeTruncated: true }, { blobShaMismatch: true }]) {
+    const coordinator = namespace();
+    const fixture = await oidcFixture();
+    const response = await handleCodexWipCoordination(request(fixture.token, "claim"), env(coordinator), {
+      now: () => NOW,
+      fetchImpl: githubFetch(fixture, invalid),
+    });
+    assert.equal(response.status, 503);
+    assert.equal((await response.json() as { error: string }).error, "CODEX_WIP_TASK_UNAVAILABLE");
+    assert.equal((await readActiveWip(coordinator)).claims.length, 0);
+  }
+});
+
+test("Codex task digest is bound to the exact Work Order blob as well as the issue snapshot", async () => {
+  const coordinator = namespace();
+  const fixture = await oidcFixture();
+  const changedWorkOrder = WORK_ORDER_SOURCE.replace("Test Codex work order", "Updated Codex work order");
+  const response = await handleCodexWipCoordination(request(fixture.token, "claim"), env(coordinator), {
+    now: () => NOW,
+    fetchImpl: githubFetch(fixture, { workOrderSource: changedWorkOrder }),
+  });
+  assert.equal(response.status, 409);
+  assert.equal((await response.json() as { error: string }).error, "CODEX_WIP_TASK_SNAPSHOT_MISMATCH");
+  assert.equal((await readActiveWip(coordinator)).claims.length, 0);
+});
+
+test("Codex claim rejects a stale selected issue snapshot before Coordinator admission", async () => {
   const coordinator = namespace();
   const fixture = await oidcFixture();
   const changedIssue = { ...issue(), body: `${issue().body}\nchanged after selection` };
@@ -293,20 +420,20 @@ test("Codex claim rejects even a stable issue scan while snapshot consistency is
     now: () => NOW,
     fetchImpl: githubFetch(fixture, { issue: changedIssue }),
   });
-  assert.equal(response.status, 503);
-  assert.equal((await response.json() as { error: string }).error, "CODEX_WIP_INVENTORY_UNVERIFIABLE");
+  assert.equal(response.status, 409);
+  assert.equal((await response.json() as { error: string }).error, "CODEX_WIP_TASK_SNAPSHOT_MISMATCH");
   assert.equal((await readActiveWip(coordinator)).claims.length, 0);
 });
 
-test("Codex claim remains fail-closed when cursor scans match but have no snapshot contract", async () => {
+test("Codex claim rejects main movement during immutable Work Order and issue lookup", async () => {
   const coordinator = namespace();
   const fixture = await oidcFixture();
   const response = await handleCodexWipCoordination(request(fixture.token, "claim"), env(coordinator), {
     now: () => NOW,
-    fetchImpl: githubFetch(fixture, { mainShas: [SHA, "b".repeat(40)] }),
+    fetchImpl: githubFetch(fixture, { mainShas: [SHA, SHA, "b".repeat(40)] }),
   });
-  assert.equal(response.status, 503);
-  assert.equal((await response.json() as { error: string }).error, "CODEX_WIP_INVENTORY_UNVERIFIABLE");
+  assert.equal(response.status, 409);
+  assert.equal((await response.json() as { error: string }).error, "CODEX_WIP_MAIN_MISMATCH");
   assert.equal((await readActiveWip(coordinator)).claims.length, 0);
 });
 

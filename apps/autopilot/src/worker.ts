@@ -28,8 +28,7 @@ import { verifyGithubCausalProducerEvidence, verifyGithubCodingPublisherIdentity
 import { createCausalAdmissionReceipt } from "./causalRegressionAdmission";
 import { applyCausalRepairPatch, verifyCausalPublishedFiles } from "./causalRepairPatch";
 import { createCausalProposalReceipt, verifyCausalProposalReceipt, CAUSAL_REPAIR_TARGET as SIGNED_CAUSAL_REPAIR_TARGET } from "./causalProposalReceipt";
-import { codexBacklogTaskSnapshotDigest, selectCodexBacklogTask } from "./evolveGithubIssueBacklog";
-import { fetchOpenGithubBacklog } from "./githubIssueBacklogClient";
+import { codexWorkOrderTaskSnapshotDigest, fetchVerifiedCodexWorkOrderInventory, type CodexWorkOrderTask } from "./githubWorkOrderInventory";
 
 export { ExecutionCoordinator };
 
@@ -454,22 +453,25 @@ export async function handleCodexWipCoordination(
       const unavailable = code.includes("UNAVAILABLE");
       return json({ accepted: false, error: unavailable ? "CODEX_WIP_MAIN_UNAVAILABLE" : "CODEX_WIP_MAIN_MISMATCH", ...authority }, unavailable ? 503 : 409);
     }
-    let selectedTask: ReturnType<typeof selectCodexBacklogTask>;
+    let selectedTask: CodexWorkOrderTask | null;
     try {
       const headers = { accept: "application/vnd.github+json", authorization: `Bearer ${env.NUSA_GITHUB_TOKEN.trim()}`, "user-agent": "nusa-autopilot-worker", "x-github-api-version": "2022-11-28" };
-      const inventory = await fetchOpenGithubBacklog(allowedRepository, headers, fetchImpl);
+      const inventory = await fetchVerifiedCodexWorkOrderInventory(allowedRepository, identity.sha, headers, fetchImpl);
       if (inventory.consistency.automaticSelectionAllowed !== true
-        || inventory.consistency.pointInTimeSnapshot !== "VERIFIED") {
+        || inventory.consistency.mainSha !== identity.sha) {
         return json({ accepted: false, error: "CODEX_WIP_INVENTORY_UNVERIFIABLE", ...authority }, 503);
       }
-      selectedTask = selectCodexBacklogTask(inventory.issues, inventory.pulls);
-    } catch {
+      selectedTask = inventory.task;
+    } catch (error) {
+      if (error instanceof Error && error.message === "CODEX_WORK_ORDER_MAIN_CHANGED") {
+        return json({ accepted: false, error: "CODEX_WIP_MAIN_MISMATCH", ...authority }, 409);
+      }
       return json({ accepted: false, error: "CODEX_WIP_TASK_UNAVAILABLE", ...authority }, 503);
     }
-    if (!selectedTask || selectedTask.issueNumber !== issueNumber || !selectedTask.canonicalOwner || selectedTask.conflictKeys.length === 0) {
+    if (!selectedTask || selectedTask.task.issueNumber !== issueNumber || !selectedTask.task.canonicalOwner || selectedTask.task.conflictKeys.length === 0) {
       return json({ accepted: false, error: "CODEX_WIP_TASK_NOT_CURRENT_OR_UNCLAIMABLE", ...authority }, 409);
     }
-    const selectedTaskDigest = await codexBacklogTaskSnapshotDigest(selectedTask);
+    const selectedTaskDigest = await codexWorkOrderTaskSnapshotDigest(selectedTask);
     if (!constantTimeEqual(selectedTaskDigest, taskDigest)) {
       return json({ accepted: false, error: "CODEX_WIP_TASK_SNAPSHOT_MISMATCH", ...authority }, 409);
     }
@@ -484,12 +486,12 @@ export async function handleCodexWipCoordination(
       const result = await admitActiveWip(env.NUSA_EXECUTION_COORDINATOR, {
         dedupeKey,
         executionId,
-        taskId: `issue-${selectedTask.issueNumber}`,
+        taskId: `issue-${selectedTask.task.issueNumber}`,
         protectedMainSha: identity.sha,
         taskSnapshotDigest: selectedTaskDigest,
         leaseOwnerIdentity: `${identity.repository}:${identity.runId}:${identity.runAttempt}`,
-        canonicalOwner: selectedTask.canonicalOwner,
-        conflictKeys: selectedTask.conflictKeys,
+        canonicalOwner: selectedTask.task.canonicalOwner,
+        conflictKeys: selectedTask.task.conflictKeys,
         claimedAt: now(),
         maxConcurrent: CODEX_WIP_LIMIT,
       });
@@ -512,13 +514,13 @@ export async function handleCodexWipCoordination(
       }
       await verifyGithubCodexWipCurrentMainSha(identity, env.NUSA_GITHUB_TOKEN.trim(), fetchImpl as never);
       const headers = { accept: "application/vnd.github+json", authorization: `Bearer ${env.NUSA_GITHUB_TOKEN.trim()}`, "user-agent": "nusa-autopilot-worker", "x-github-api-version": "2022-11-28" };
-      const inventory = await fetchOpenGithubBacklog(allowedRepository, headers, fetchImpl);
-      if (inventory.consistency.automaticSelectionAllowed !== true || inventory.consistency.pointInTimeSnapshot !== "VERIFIED") {
+      const inventory = await fetchVerifiedCodexWorkOrderInventory(allowedRepository, identity.sha, headers, fetchImpl);
+      if (inventory.consistency.automaticSelectionAllowed !== true || inventory.consistency.mainSha !== identity.sha) {
         return json({ accepted: false, error: "CODEX_WIP_INVENTORY_UNVERIFIABLE", ...authority }, 503);
       }
-      const selectedTask = selectCodexBacklogTask(inventory.issues, inventory.pulls);
-      if (!selectedTask || selectedTask.issueNumber !== issueNumber) return json({ accepted: false, error: "CODEX_WIP_TASK_NOT_CURRENT_OR_UNCLAIMABLE", ...authority }, 409);
-      const currentDigest = await codexBacklogTaskSnapshotDigest(selectedTask);
+      const selectedTask = inventory.task;
+      if (!selectedTask || selectedTask.task.issueNumber !== issueNumber) return json({ accepted: false, error: "CODEX_WIP_TASK_NOT_CURRENT_OR_UNCLAIMABLE", ...authority }, 409);
+      const currentDigest = await codexWorkOrderTaskSnapshotDigest(selectedTask);
       if (!constantTimeEqual(currentDigest, taskDigest)) return json({ accepted: false, error: "CODEX_WIP_TASK_SNAPSHOT_MISMATCH", ...authority }, 409);
       // This final main read is intentionally adjacent to the runner step. GitHub and the DO
       // admission are not one transaction, so a later repository update remains a bounded race.
@@ -535,7 +537,10 @@ export async function handleCodexWipCoordination(
         ...authority }, 200);
     } catch (error) {
       const code = error instanceof Error ? error.message : "CODEX_WIP_VERIFY_UNAVAILABLE";
-      const unavailable = code.includes("UNAVAILABLE");
+      if (code === "CODEX_WORK_ORDER_MAIN_CHANGED") {
+        return json({ accepted: false, error: "CODEX_WIP_MAIN_MISMATCH", ...authority }, 409);
+      }
+      const unavailable = code.includes("UNAVAILABLE") || code.startsWith("CODEX_WORK_ORDER_");
       return json({ accepted: false, error: unavailable ? "CODEX_WIP_VERIFY_UNAVAILABLE" : "CODEX_WIP_VERIFY_REJECTED", ...authority }, unavailable ? 503 : 409);
     }
   }

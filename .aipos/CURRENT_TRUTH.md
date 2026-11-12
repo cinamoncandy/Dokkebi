@@ -7,9 +7,9 @@ Everything below is what the repository's records *claim*. Re-verify on GitHub b
 
 ## Newest handoff
 
-[`.aipos/handoffs/2026-11-11-pr2039-recovery-alignment.md`](handoffs/2026-11-11-pr2039-recovery-alignment.md) — Issue #903 / PR #2039 recovery alignment
+[`.aipos/handoffs/2026-11-12-pr2039-workorder-inventory.md`](handoffs/2026-11-12-pr2039-workorder-inventory.md) — Issue #903 / PR #2039 — Work Order inventory repair
 
-> Protected main `5d9304c9780428342ddaf525f3d488c476318f51` was non-force merged into Draft PR #2039 at published predecessor `78314b55c51e78f8ebd32380ef47f1a184757b95`; its six exact-head workflows succeeded, including CI 43130001409. The Cloudflare preflight 43129995989 failed on missing exact-main deployment evidence. Recheck the live PR head and main: a successor to this recorded predecessor requires its own exact-head CI and independent review before Formal Validator, Audit or Release. No Codex dispatch or production mutation is authorized.
+> At the start of this checkpoint, protected `main` was `5d9304c9780428342ddaf525f3d488c476318f51` and Draft PR #2039 was `f07d1e1cd59b47d5cbb385bb8e89649658c8a11b`, based on that main. Main is protected. Six predecessor workflows passed on `f07d1e1c`; no in-progress Actions run was found for that SHA. Current non-author dispositions for the P1/P2 threads are still absent. The branch-protection detail endpoint itself returned 403, while the public main branch record reports `protected=true` and required `nusa/release-authorized`.
 
 ## Work orders
 

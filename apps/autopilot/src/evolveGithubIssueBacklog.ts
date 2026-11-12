@@ -294,12 +294,6 @@ export function codexBacklogTaskSnapshot(task: CodexBacklogTask): string {
   });
 }
 
-export async function codexBacklogTaskSnapshotDigest(task: CodexBacklogTask): Promise<string> {
-  const bytes = new TextEncoder().encode(codexBacklogTaskSnapshot(task));
-  const digest = await crypto.subtle.digest("SHA-256", bytes);
-  return [...new Uint8Array(digest)].map((byte) => byte.toString(16).padStart(2, "0")).join("");
-}
-
 /**
  * Next owner backlog issue for the ChatGPT Codex coding engine (autopilot-codex-coding.yml).
  *

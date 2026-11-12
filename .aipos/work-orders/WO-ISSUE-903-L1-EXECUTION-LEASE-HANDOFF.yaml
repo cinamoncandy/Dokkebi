@@ -29,7 +29,8 @@ scope:
   - keep the Codex WIP claim lifecycle distinct from successful CodingRunner completion evidence
   - attempt idempotent claim release after every executed claim step, including ambiguous/lost responses
   - require the Codex job timeout to remain shorter than the existing active-WIP claim TTL and remove OIDC mint credentials from the Codex process environment
-  - fetch a bounded, complete open-issue and open-PR inventory for both Codex selection and server-side claim revalidation; pagination/API ambiguity must fail closed
+  - keep the legacy global issue/PR scan diagnostic-only because GitHub provides no cross-page point-in-time token; select and revalidate Codex work only from a complete AIPOS Work Order tree pinned to the exact protected-main SHA, with every listed blob verified and any truncated, duplicate, missing, oversized, or ambiguous read rejected
+  - require an explicit READY Work Order opt-in, matching OWNER issue snapshot, explicit owner/conflict metadata, and explicit empty dependency/link fields; stable issue and cross-reference reads must reject linked or changing work
   - keep generic workflow failures fail-closed and unable to acquire a lease or dispatch without verified causal evidence
   - prove competing producer and duplicate consumer suppression using the existing coordinator
 prohibited:
@@ -56,8 +57,9 @@ acceptance:
   - Codex claim accepts only the signed, allowlisted GitHub OIDC identity and GitHub API run record for the exact selected main SHA, workflow, run, and attempt, and rechecks current protected main before admission
   - missing/malformed/expired/forged/wrong-issuer/wrong-audience/wrong-workflow/wrong-ref/wrong-repository/wrong-SHA/stale-run claims fail closed
   - task selection is repeated server-side and requires explicit canonicalOwner and conflictKeys; linked/stale/unclaimable work is rejected
-  - the local Codex selector and Worker claim revalidation use the same stable, bounded pagination; valid work beyond page one cannot be silently omitted and incomplete/duplicate/over-limit results cannot authorize a claim
-  - the claim carries a digest of the exact selected issue prompt/owner/conflict snapshot; any changed snapshot is rejected before admission
+  - the local Codex selector and Worker claim revalidation use the same exact protected-main Work Order inventory; every candidate Work Order blob is read at the pinned main SHA and verified against the complete recursive tree
+  - the claim carries a digest of the exact selected issue prompt/owner/conflict snapshot plus main SHA, tree SHA, Work Order identity/blob SHA, and stable issue cross-reference digest; any changed component is rejected before admission
+  - stale or moved main/task snapshots reject admission; incomplete GitHub reads return 503; a complete inventory with no explicit READY item does not create or admit a task
   - protected main is rechecked after the selected-task snapshot is revalidated and immediately before atomic admission
   - the release client is invoked after every executed claim step, not only after its success output exists, so an ambiguous claim response gets an idempotent release attempt
   - concurrent/shared admission remains atomic and the combined coordinator never admits more than two active WIP claims
@@ -415,3 +417,26 @@ current_main_alignment_20261112:
   independent_review: PENDING
   formal_validator_audit_release: NOT_STARTED
   next: "Recheck current PR head and exact-head CI, then obtain independent review. Predecessor publication is complete; no operational claim or dispatch."
+
+codex_inventory_reconciliation_20261112:
+  canonical_issue: 903
+  canonical_pr: 2039
+  protected_main_sha_at_start: 5d9304c9780428342ddaf525f3d488c476318f51
+  pr_head_before_candidate: f07d1e1cd59b47d5cbb385bb8e89649658c8a11b
+  candidate_14be6dcf: ABSENT_LOCAL_AND_GITHUB
+  root_cause: "githubIssueBacklogClient.fetchOpenGithubBacklog performs two matching global issue/PR scans but always returns pointInTimeSnapshot=UNVERIFIED and automaticSelectionAllowed=false because GitHub has no cross-page point-in-time snapshot token. The previous Worker claim/verify path consumed this result and failed closed; identical paginated scans cannot establish an atomic issue snapshot."
+  repair: "scripts/autopilot-codex-select.js and Worker claim/verify now share githubWorkOrderInventory.ts: read exact protected-main commit/tree, reject truncated or over-limit trees, fetch every Work Order blob at that immutable SHA and verify blob OID/size, require explicit READY metadata with no declared dependencies/links or conflicting owner/conflict metadata, require stable current Issue/cross-reference reads, and reject GraphQL PullRequest objects used as Work Order issues. The task digest binds the prompt snapshot, main/tree SHA, Work Order/blob identity and issue-reference digest."
+  repository_inventory_observation: "Protected-main tree at the start SHA has 4326 tracked entries and 556 direct WO-*.yaml files (1,893,186 total bytes; largest 63,324 bytes); all 556 parse and none contains codex_selection, so there is no candidate eligible for automatic selection. This is local source inspection, not a live Worker inventory execution."
+  claim_binding: "Selector and Worker recompute the same task digest. Worker rechecks protected main after task validation immediately before atomic existing ExecutionCoordinator admission (max two); verify repeats the task/main/claim checks before the runner. GitHub issue/main reads and Durable Object admission are not one transaction, so a bounded post-check race remains; no Claim was attempted."
+  local_validation: "TypeScript build and typecheck PASS; focused Codex/ExecutionCoordinator/OIDC/backlog regression set 116/116 PASS; control-plane wiring 3/3 PASS; full isolated suite 1,343/1,343 test files PASS; direct preflight, architecture, AIPOS/provenance/conformance/safety/authority validators and git diff --check PASS. The old codexBacklogTaskSnapshotDigest export was removed; the diagnostic-only global backlog reader is recorded in the unwired ledger with its no-point-in-time-token reason. pnpm run preflight did not complete: after removing the temporary apps/mobile/node_modules link, pnpm attempted install and aborted with ERR_PNPM_ABORTED_REMOVE_MODULES_DIR_NO_TTY before changing dependencies. security:gate PASS with no checker changes: a temporary local metadata mirror copied package.json/license entries for the 896 required lock packages from exact matching installed versions in the shared physical pnpm store; lock integrity PASS, 0 unmitigated high/critical advisories, backports PASS, secret scan 0."
+  live_inventory_execution: NOT_PERFORMED
+  operational_wip_claims: UNKNOWN
+  writer_lease: UNKNOWN
+  claim_or_dispatch: NOT_ATTEMPTED
+  exact_head_ci: PENDING_FOR_SUCCESSOR
+  independent_review: PENDING_ON_SUCCESSOR
+  formal_validator: PENDING
+  audit: PENDING
+  release_authorization: NOT_AUTHORIZED
+  safety: "PAPER_ONLY; liveAuthority=NONE; productionMutationAllowed=false; realOrderAuthority=false; realTransferAuthority=false; aiAuthority=ZERO_AUTHORITY; FAIL_CLOSED"
+  next: "Resolve current protected main and PR #2039 HEAD, then await six exact-head checks for the published successor and obtain a fresh non-author disposition. Keep selection empty until an explicitly READY Work Order exists; do not Claim or Dispatch while WIP/Lease is UNKNOWN."

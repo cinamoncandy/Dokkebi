@@ -5,8 +5,7 @@
  * step outputs (autopilot-codex-coding.yml). Read-only: it only lists issues and pull requests.
  */
 const fs = require("node:fs");
-const { codexBacklogTaskSnapshotDigest, selectCodexBacklogTask } = require("../dist/apps/autopilot/src/evolveGithubIssueBacklog.js");
-const { fetchOpenGithubBacklog } = require("../dist/apps/autopilot/src/githubIssueBacklogClient.js");
+const { codexWorkOrderTaskSnapshotDigest, fetchProtectedMainSha, fetchVerifiedCodexWorkOrderInventory } = require("../dist/apps/autopilot/src/githubWorkOrderInventory.js");
 
 const CONTRACT = [
   "NUSA AUTOPILOT CODEX CONTRACT:",
@@ -21,10 +20,16 @@ const CONTRACT = [
 
 function selectFromGithubInventory(inventory) {
   if (inventory?.consistency?.automaticSelectionAllowed !== true
-    || inventory?.consistency?.pointInTimeSnapshot !== "VERIFIED") {
-    throw new Error("GitHub inventory has no verified point-in-time snapshot; automatic Codex selection is blocked");
+    || inventory?.consistency?.source !== "PROTECTED_MAIN_AIPOS_WORK_ORDERS"
+    || !/^[a-f0-9]{40}$/.test(inventory.consistency.mainSha || "")
+    || !/^[a-f0-9]{40}$/.test(inventory.consistency.treeSha || "")) {
+    throw new Error("Protected-main AIPOS work-order inventory is not verified; automatic Codex selection is blocked");
   }
-  return selectCodexBacklogTask(inventory.issues, inventory.pulls);
+  const task = inventory.task ?? null;
+  if (task && (task.source?.mainSha !== inventory.consistency.mainSha || task.source?.treeSha !== inventory.consistency.treeSha)) {
+    throw new Error("Codex task digest source does not match the protected-main Work Order tree");
+  }
+  return task;
 }
 
 function buildPrompt(task) {
@@ -35,21 +40,28 @@ async function main(env = process.env) {
   const token = env.GITHUB_TOKEN;
   const repository = env.GITHUB_REPOSITORY;
   if (!token || !repository) throw new Error("GITHUB_TOKEN and GITHUB_REPOSITORY are required");
-  const inventory = await fetchOpenGithubBacklog(repository, {
+  const headers = {
     authorization: `Bearer ${token}`,
     accept: "application/vnd.github+json",
     "user-agent": "nusa-autopilot-codex",
-  });
+    "x-github-api-version": "2022-11-28",
+  };
+  const mainSha = await fetchProtectedMainSha(repository, headers);
+  if (!/^[a-f0-9]{40}$/.test(env.NUSA_CODEX_CHECKED_OUT_SHA || "")
+    || mainSha !== env.NUSA_CODEX_CHECKED_OUT_SHA.toLowerCase()) {
+    throw new Error("Protected main moved after the selector checkout; Codex task selection is blocked");
+  }
+  const inventory = await fetchVerifiedCodexWorkOrderInventory(repository, mainSha, headers);
   const task = selectFromGithubInventory(inventory);
   const lines = task == null ? ["has_task=false"] : [
     "has_task=true",
-    `issue=${task.issueNumber}`,
-    `task=issue-${task.issueNumber}`,
-    `task_digest=${await codexBacklogTaskSnapshotDigest(task)}`,
+    `issue=${task.task.issueNumber}`,
+    `task=issue-${task.task.issueNumber}`,
+    `task_digest=${await codexWorkOrderTaskSnapshotDigest(task)}`,
   ];
-  if (task != null) fs.writeFileSync(env.NUSA_CODEX_PROMPT_FILE || "codex-prompt.txt", buildPrompt(task));
+  if (task != null) fs.writeFileSync(env.NUSA_CODEX_PROMPT_FILE || "codex-prompt.txt", buildPrompt(task.task));
   if (env.GITHUB_OUTPUT) fs.appendFileSync(env.GITHUB_OUTPUT, `${lines.join("\n")}\n`);
-  console.log(task == null ? "no eligible owner backlog issue for Codex" : `selected issue #${task.issueNumber}: ${task.title}`);
+  console.log(task == null ? "no explicitly READY protected-main AIPOS work order is eligible for Codex" : `selected issue #${task.task.issueNumber}: ${task.task.title}`);
 }
 
 if (require.main === module) main().catch((error) => { console.error(error instanceof Error ? error.message : error); process.exit(1); });
