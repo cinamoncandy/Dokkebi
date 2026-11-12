@@ -10,25 +10,29 @@ import type { ResearchLedgerEntry } from "../../../packages/contracts/src/resear
  * Fail closed: anything malformed, unknown or without a dataset fingerprint is ignored.
  */
 export const ORDERBOOK_STUDY_RESULT_FILE = "orderbook-study-result.json";
+/** The registered order-book studies whose result file this reader accepts. A result is always attributed to the id written in the file. */
+export const ORDERBOOK_STUDY_IDS = Object.freeze(["ML_ORDERBOOK_60M_20261029", "ML_ORDERBOOK_60M_20261111"] as const);
+export type OrderBookStudyId = (typeof ORDERBOOK_STUDY_IDS)[number];
+const isOrderBookStudyId = (value: unknown): value is OrderBookStudyId => (ORDERBOOK_STUDY_IDS as readonly unknown[]).includes(value);
 const nonNegativeInteger = (value: unknown): value is number => Number.isSafeInteger(value) && (value as number) >= 0;
 
-type ValidStudyResult = { readonly status: "HOLDOUT_PASS" | "HOLDOUT_FAIL"; readonly eligible: number; readonly discoveryPass: boolean };
+type ValidStudyResult = { readonly studyId: OrderBookStudyId; readonly status: "HOLDOUT_PASS" | "HOLDOUT_FAIL"; readonly eligible: number; readonly discoveryPass: boolean };
 
 function validateStudyResult(raw: unknown): ValidStudyResult | undefined {
   if (raw == null || typeof raw !== "object" || Array.isArray(raw)) return undefined;
   const r = raw as Record<string, unknown>;
-  if (r.schemaVersion !== 1 || r.studyId !== "ML_ORDERBOOK_60M_20261029") return undefined;
+  if (r.schemaVersion !== 1 || !isOrderBookStudyId(r.studyId)) return undefined;
   if (r.status !== "HOLDOUT_PASS" && r.status !== "HOLDOUT_FAIL") return undefined;
   if (typeof r.datasetFingerprint !== "string" || !/^[a-f0-9]{64}$/.test(r.datasetFingerprint)) return undefined;
   if (!nonNegativeInteger(r.eligible) || r.eligible < 4 || typeof r.discoveryPass !== "boolean") return undefined;
-  return { status: r.status, eligible: r.eligible, discoveryPass: r.discoveryPass };
+  return { studyId: r.studyId, status: r.status, eligible: r.eligible, discoveryPass: r.discoveryPass };
 }
 
 export function parseOrderBookStudyResult(raw: unknown): ResearchLedgerEntry | undefined {
   const r = validateStudyResult(raw);
   if (r === undefined) return undefined;
   return Object.freeze({
-    id: "ML_ORDERBOOK_60M_20261029", source: "BACKTEST" as const, dataType: "ORDERBOOK" as const, timeframe: "60m", universe: r.eligible,
+    id: r.studyId, source: "BACKTEST" as const, dataType: "ORDERBOOK" as const, timeframe: "60m", universe: r.eligible,
     methodClass: "ML" as const, configs: 3, discoveryPass: r.discoveryPass ? 1 : 0, holdoutPass: r.status === "HOLDOUT_PASS" ? 1 : 0,
   });
 }
@@ -48,6 +52,6 @@ export function readOrderBookStudyDisplay(stateDbPath: string): PersonalPaperOrd
     if (r === undefined) return null;
     let mtime: number | undefined;
     try { const m = statSync(file).mtimeMs; if (Number.isFinite(m) && m >= 0) mtime = Math.floor(m); } catch { mtime = undefined; }
-    return Object.freeze({ schemaVersion: 1 as const, studyId: "ML_ORDERBOOK_60M_20261029" as const, status: r.status, eligible: r.eligible, discoveryPass: r.discoveryPass, ...(mtime === undefined ? {} : { resultFileMtimeMs: mtime }) });
+    return Object.freeze({ schemaVersion: 1 as const, studyId: r.studyId, status: r.status, eligible: r.eligible, discoveryPass: r.discoveryPass, ...(mtime === undefined ? {} : { resultFileMtimeMs: mtime }) });
   } catch { return null; }
 }

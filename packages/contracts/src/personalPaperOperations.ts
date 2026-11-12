@@ -58,7 +58,7 @@ export interface PersonalPaperTodayRealized {
  */
 export interface PersonalPaperOrderBookStudy {
   readonly schemaVersion: 1;
-  readonly studyId: "ML_ORDERBOOK_60M_20261029";
+  readonly studyId: "ML_ORDERBOOK_60M_20261029" | "ML_ORDERBOOK_60M_20261111";
   readonly status: "HOLDOUT_PASS" | "HOLDOUT_FAIL";
   readonly eligible: number;
   readonly discoveryPass: boolean;
@@ -508,7 +508,7 @@ function isValidOrderBookStudy(value: unknown): boolean {
   if (value == null || typeof value !== "object" || Array.isArray(value)) return false;
   const v = value as Record<string, unknown>;
   if (Object.keys(v).some((k) => !["schemaVersion", "studyId", "status", "eligible", "discoveryPass", "resultFileMtimeMs"].includes(k))) return false;
-  return v.schemaVersion === 1 && v.studyId === "ML_ORDERBOOK_60M_20261029" && (v.status === "HOLDOUT_PASS" || v.status === "HOLDOUT_FAIL")
+  return v.schemaVersion === 1 && (v.studyId === "ML_ORDERBOOK_60M_20261029" || v.studyId === "ML_ORDERBOOK_60M_20261111") && (v.status === "HOLDOUT_PASS" || v.status === "HOLDOUT_FAIL")
     && typeof v.eligible === "number" && Number.isSafeInteger(v.eligible) && v.eligible >= 0 && v.eligible <= 1_000_000
     && typeof v.discoveryPass === "boolean" && (v.resultFileMtimeMs === undefined || isTimeMs(v.resultFileMtimeMs));
 }

@@ -85,7 +85,7 @@ export interface TickReport {
   readonly started: number;
   readonly resumed: number;
   readonly stopped: number;
-  readonly experiments: readonly { readonly variantId: string; readonly market: string; readonly outcome: ExperimentOutcome | { readonly status: "NOT_DUE" } }[];
+  readonly experiments: readonly { readonly variantId: string; readonly market: string; readonly outcome: ExperimentOutcome | { readonly status: "NOT_DUE" | "NO_CANDLES" } }[];
 }
 
 const empty = (status: TickReport["status"]): TickReport => Object.freeze({ status, started: 0, resumed: 0, stopped: 0, experiments: Object.freeze([]) });
@@ -432,7 +432,7 @@ export class ResearchExperimentOrchestrator {
 
         for (const market of this.options.markets) {
           const endCloseMs = this.options.candles.latestCloseTime(market, this.options.intervalMs);
-          if (endCloseMs == null) { experiments.push({ variantId: variant.variantId, market, outcome: { status: "NOT_DUE" } }); yield; continue; }
+          if (endCloseMs == null) { experiments.push({ variantId: variant.variantId, market, outcome: { status: "NO_CANDLES" } }); yield; continue; }
           const validationEnd = endCloseMs - this.options.windows.holdoutMs;
           const last = session.lastEvidenceAt;
           if (last != null && validationEnd < last + this.options.windows.validationMs) { experiments.push({ variantId: variant.variantId, market, outcome: { status: "NOT_DUE" } }); yield; continue; }

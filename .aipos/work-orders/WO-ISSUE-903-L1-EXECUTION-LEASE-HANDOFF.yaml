@@ -7,7 +7,7 @@ repository: cinamoncandy/NUSA
 issue: 903
 pull_request: 2039
 base_branch: main
-base_commit: be8d58f16e60de9f3d37b8bdd9c9648214501536
+base_commit: 5d9304c9780428342ddaf525f3d488c476318f51
 implementation_branch: agent/903-canonical-portfolio-autopilot
 objective: "Preserve one durable execution lease across asynchronous producer-to-consumer handoff so a competing producer cannot reacquire while a consumer is running."
 architecture_impact:
@@ -398,3 +398,18 @@ current_main_alignment_20261111:
   release_authorization: NOT_AUTHORIZED
   operational_codex_dispatch: DISABLED
   safety: "PAPER_ONLY; liveAuthority=NONE; productionMutationAllowed=false; aiAuthority=ZERO_AUTHORITY"
+
+current_main_alignment_20261112:
+  canonical_pr: 2039
+  verified_main: 5d9304c9780428342ddaf525f3d488c476318f51
+  predecessor_head: 076f8fd758677ba83868cdfaa7706b7e63f1ad85
+  reconciliation: "Merge protected main without rewriting history; regenerate the sole textual conflict CURRENT_TRUTH and retain main's stricter GitHub OIDC owner-ID check."
+  inventory_completeness: UNVERIFIED
+  automatic_selector_and_claim: FAIL_CLOSED
+  operational_wip_claims: UNKNOWN
+  writer_lease: UNKNOWN
+  validation: "Merged tree: 69 focused and 1343 full test files passed; build, typecheck, validate:full and security passed; lint passed with 48 warnings. Exact-head CI remains pending."
+  exact_head_ci: PENDING
+  independent_review: PENDING
+  formal_validator_audit_release: NOT_STARTED
+  next: "Validate the merged candidate, then recheck main and PR head before any normal fast-forward publication. No operational claim or dispatch."

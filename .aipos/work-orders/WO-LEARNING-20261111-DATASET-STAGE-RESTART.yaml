@@ -1,0 +1,21 @@
+id: WO-LEARNING-20261111-DATASET-STAGE-RESTART
+title: "The learning pipeline no longer reads DATASET_NO_SESSION after a restart while experiments are running"
+status: READY_FOR_REVIEW
+created: 2026-11-11
+implementation_branch: claude/learning-dataset-no-session
+authority_impact: none
+finding: "2026-11-11 12:44 KST /health: learningLoopVerdict FAILED at DATASET_NO_SESSION while researchExperimentTicks showed 168 FAIL_EXCESSIVE_DRAWDOWN and 52 FAIL_NO_EDGE results in the same process. sessionsStarted counts only sessions this process created; stored sessions are resumed after a restart, so it stays 0 while experiments run. The first broken stage was therefore a false alarm and hid the real blocker (no candidate passes holdout: 0 of 18)."
+change:
+  - "apps/cloud/src/learningPipelineStage.ts datasetStage: sessionsStarted > 0 still passes. A MANIFEST_NOT_FOUND count always reads DATASET_MANIFEST_MISSING, whatever else is counted next to it. Otherwise only process-local proof of a loaded RUNNING session passes: NOT_DUE (emitted only for a RUNNING session) or a VALIDATION_* / HOLDOUT_* outcome. FAIL_* and REPEAT_* are recomputed from the all-time ledger, so they prove nothing about this process and are not used."
+  - "Independent review of the first version (REJECT, P1) found that results counted next to a missing manifest were read as PASS, and that arbitrary positive keys counted as results. Both are fixed; regression tests cover each."
+  - "Second independent review (ACCEPT WITH P2): NOT_DUE was also emitted for a market with no candles, so it did not prove the dataset loaded. researchExperimentOrchestrator.ts now emits NO_CANDLES for that one path (a new count key and outcome status; NOT_DUE keeps its waiting meaning). NO_CANDLES is not proof; NOT_DUE next to it still is."
+not_changed:
+  - "The experiment schedule, windows, evidence and promotion rules: only the label of the no-candles skip changes. Display only. No experiment, study rule, threshold, holdout, risk, execution, capital or authority change. Nothing is fed back into the runtime."
+safety:
+  paper_only: true
+  liveAuthority: NONE
+  productionMutationAllowed: false
+  aiAuthority: ZERO_AUTHORITY
+validation:
+  - "learning-pipeline-stage, learning-pipeline-alarm and learningLoopVerdict suites pass (20), 23 pass, with restart, ledger-only, manifest-wins and skipped/unknown negatives."
+next_action: "Review, merge, release; /health should then show the real first broken stage (learning not evaluated because no candidate passes holdout)."

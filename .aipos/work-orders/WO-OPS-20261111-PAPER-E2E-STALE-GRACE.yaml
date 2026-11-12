@@ -1,0 +1,19 @@
+id: WO-OPS-20261111-PAPER-E2E-STALE-GRACE
+title: "The paper runtime check also gives a briefly stale public ticker the reconnect grace"
+status: READY_FOR_REVIEW
+created: 2026-11-11
+implementation_branch: claude/paper-e2e-stale-grace
+authority_impact: none
+finding: "CI run 43014397780 (#3087, a documents-only PR) failed actual-paper-runtime with PAPER_RUNTIME_NOT_RUNNING, HALTED, KILL_SWITCH_ACTIVE only, last_error_code PUBLIC_MARKET_STALE, transient_reconnect_episodes 0, on market KRW-MPLX after 37 s with 3 decision cycles. The grace from the two earlier work orders knew RECONNECTING and RECOVERED but not STALE, so a public ticker that went quiet for a moment failed the run."
+change:
+  - "scripts/actual-paper-runtime-e2e.js isTransientMarketReconnect: PUBLIC_MARKET_STALE joins the transient last errors, under the same conditions (RUNNING, or HALTED with KILL_SWITCH_ACTIVE as the only halt reason) and the same 45 s per-episode grace inside the overall budget."
+not_changed:
+  - "A ticker that stays stale still fails closed when the grace ends (new test). Any other halt reason or error still fails at once. PUBLIC_MARKET_FAILED and PUBLIC_MARKET_DISCONNECTED are not added: there is no evidence for them. No threshold, minimum duration, decision-cycle requirement, market selection, risk, execution, capital or authority."
+safety:
+  paper_only: true
+  liveAuthority: NONE
+  productionMutationAllowed: false
+  aiAuthority: ZERO_AUTHORITY
+validation:
+  - "actual-paper-runtime-observation 38/38, with a resumes-inside-grace case and a stays-stale case."
+next_action: "Review, merge. Then re-run actual-paper-runtime on #3087, #3088 and the other open PRs if it failed on this."

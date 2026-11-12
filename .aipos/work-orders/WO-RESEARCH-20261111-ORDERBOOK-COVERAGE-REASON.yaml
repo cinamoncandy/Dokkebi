@@ -1,0 +1,20 @@
+id: WO-RESEARCH-20261111-ORDERBOOK-COVERAGE-REASON
+title: "Say why /health orderBookCoverage is unavailable instead of omitting it"
+status: READY_FOR_REVIEW
+created: 2026-11-11
+implementation_branch: claude/orderbook-coverage-reason
+authority_impact: none
+finding: "2026-11-11 12:30 KST: the host collects order books normally (301 markets, 427,718 rows in 24 h, 0 failures) but /health has no orderBookCoverage, so the hour-coverage bar (>= 90%) for a new pre-registered study cannot be read. The read failure was swallowed, so the cause is invisible. The same code passes on a local database."
+change:
+  - "readOrderBookCoverageDetailed returns the coverage or { status: UNAVAILABLE, reason } with a fixed code (INVALID_INPUT, OPEN_FAILED[_SQLITE_n], QUERY_FAILED[_SQLITE_n], SUMMARY_REJECTED). Raw error text, paths and markets are never published."
+  - "OrderBookCoverageWatch publishes that object, so /health orderBookCoverage is present in both cases. readOrderBookCoverage keeps its old contract."
+not_changed:
+  - "Study rule, 90% bar, 192 h window, collector, storage, risk, execution and authority. Read-only, no writes, no gap is filled."
+safety:
+  paper_only: true
+  liveAuthority: NONE
+  productionMutationAllowed: false
+  aiAuthority: ZERO_AUTHORITY
+validation:
+  - "orderBookCoverage 6/6 (new: fixed reason codes for a missing database, a missing table, invalid input); cloud-runtime-liveness-health and oracle-host-diagnose-workflow pass."
+next_action: "Review, merge, release; read orderBookCoverage.reason on /health, fix that cause, then pre-register the new order-book study."
