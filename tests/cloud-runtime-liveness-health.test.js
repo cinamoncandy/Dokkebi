@@ -667,7 +667,7 @@ test("/health publishes the gap-fill timings only as six non-negative integers",
 test("/health publishes why Research was not deployable as fixed codes only, and drops anything else", async () => {
   const now = Date.parse("2026-11-12T01:00:00Z");
   const tracker = new ClosedLearningLoopStatusTracker();
-  tracker.observeBootstrap({ status: "RESEARCH_NOT_DEPLOYABLE", reasons: ["ALLOCATED_CANDIDATE_NOT_QUALIFIED", "NO_ALLOCATION_ADVISORY", "NO_ALLOCATION_ADVISORY", "free text with spaces", "/home/user/path", "lowercase_code", "AB", 7] });
+  tracker.observeBootstrap({ status: "RESEARCH_NOT_DEPLOYABLE", reasons: ["ALLOCATED_CANDIDATE_NOT_QUALIFIED", "NO_ALLOCATION_ADVISORY", "NO_ALLOCATION_ADVISORY", "free text with spaces", "some/relative/path.txt", "lowercase_code", "AB", 7] });
   tracker.observeRollover({ status: "WAITING_FOR_EVALUATION_WINDOW" }, now);
   const snapshot = tracker.snapshot();
   assert.deepEqual(snapshot.bootstrapReasons, ["ALLOCATED_CANDIDATE_NOT_QUALIFIED", "NO_ALLOCATION_ADVISORY"], "only fixed codes, unique and sorted");
