@@ -1,0 +1,20 @@
+id: WO-RESEARCH-20261112-TRADE-TICK-COVERAGE
+title: "Show how many of the last 192 hours have trade ticks (display only, no bar)"
+status: READY_FOR_REVIEW
+created: 2026-11-12
+implementation_branch: claude/trade-coverage-display
+authority_impact: none
+finding: "The trade-flow study design is a draft (docs/DRAFT_TRADEFLOW_STUDY_DESIGN_20261112.md) and its first listed step is a read-only trade-tick coverage display like orderBookCoverage. /health already shows 2,000,731 stored trade ticks in total but not whether they cover the hours a study would need. No trade tick value was examined."
+change:
+  - "apps/cloud/src/tradeTickCoverage.ts: for the first research market, counts the last 192 full hours that hold at least one stored tick in (t-1h, t], the longest run of empty hours and the ratio; read-only, hourly cache, fixed UNAVAILABLE reason codes. It publishes no study bar and no verdict because the data bar is not fixed before pre-registration."
+  - "runtime.ts wires a TradeTickCoverageWatch next to the order-book one; server.ts publicRuntimeLiveness has an independent allow-list (safe integers, bounded, ratio must equal covered/window to 3 decimals, fixed upper-case reason, market name and unknown fields dropped)."
+not_changed:
+  - "Study rules, thresholds, qualification gates, data collection, retention, risk, capital, authority. Nothing is written or filled. The draft design stays a draft."
+safety:
+  paper_only: true
+  liveAuthority: NONE
+  productionMutationAllowed: false
+  aiAuthority: ZERO_AUTHORITY
+validation:
+  - "tradeTickCoverage.test (boundaries (t-1h, t], other market and future ticks ignored, fixed reason codes, invalid input, cache) and cloud-runtime-liveness-health with the new allow-list test: 50/50 together; the ratio-agreement check was mutated and the test failed, then restored."
+next_action: "Independent review, merge, release; then read tradeTickCoverage and fix the study span in the pre-registration draft."

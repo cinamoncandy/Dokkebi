@@ -112,6 +112,9 @@ export interface CloudRuntimeLivenessSnapshot {
   /** Order-book hour coverage for the first research market (market name never published), or UNAVAILABLE with a fixed reason code. */
   readonly orderBookCoverage?: { readonly schemaVersion: 1; readonly windowHours: number; readonly coveredHours: number; readonly ratio: number; readonly longestGapHours: number; readonly meetsStudyBar: boolean; readonly asOfMs: number }
     | { readonly schemaVersion: 1; readonly status: "UNAVAILABLE"; readonly reason: string; readonly asOfMs: number };
+  /** Trade-tick hour coverage for the first research market (market name never published; no study bar), or UNAVAILABLE with a fixed reason code. */
+  readonly tradeTickCoverage?: { readonly schemaVersion: 1; readonly windowHours: number; readonly coveredHours: number; readonly ratio: number; readonly longestGapHours: number; readonly asOfMs: number }
+    | { readonly schemaVersion: 1; readonly status: "UNAVAILABLE"; readonly reason: string; readonly asOfMs: number };
   readonly orderBookCollector?: { readonly rounds: number; readonly markets: number; readonly samplesStored: number; readonly failures: number; readonly rejected?: number; readonly lastRoundAt?: number };
   readonly futuresCollector?: { readonly rounds: number; readonly marksStored: number; readonly fundingStored: number; readonly klinesStored: number; readonly failures: number; readonly rejected: number; readonly lastRoundAt?: number; readonly lastFailureClass?: string };
   readonly microstructureRecorder?: { readonly orderBookSamples: number; readonly tradeTicks: number; readonly writeFailures: number; readonly rejectedRows?: number; readonly lastRecordedAt?: number };
@@ -618,6 +621,19 @@ function publicRuntimeLiveness(value: CloudRuntimeLivenessSnapshot): CloudRuntim
       orderBookCoverage = { orderBookCoverage: { schemaVersion: 1, windowHours: Number(rawCoverage.windowHours), coveredHours: Number(rawCoverage.coveredHours), ratio: rawCoverage.ratio, longestGapHours: Number(rawCoverage.longestGapHours), meetsStudyBar: rawCoverage.meetsStudyBar, asOfMs: Number(rawCoverage.asOfMs) } };
     }
   }
+  // Trade-tick hour coverage (display only): fixed numbers, or UNAVAILABLE with a fixed upper-case reason. No bar is published; the numbers must agree with each other.
+  const rawTradeCoverage = source.tradeTickCoverage as Record<string, unknown> | null | undefined;
+  let tradeTickCoverage: { tradeTickCoverage?: NonNullable<CloudRuntimeLivenessSnapshot["tradeTickCoverage"]> } = {};
+  if (rawTradeCoverage != null && typeof rawTradeCoverage === "object" && !Array.isArray(rawTradeCoverage) && rawTradeCoverage.schemaVersion === 1 && Number.isSafeInteger(rawTradeCoverage.asOfMs) && Number(rawTradeCoverage.asOfMs) > 0) {
+    if (rawTradeCoverage.status === "UNAVAILABLE" && typeof rawTradeCoverage.reason === "string" && /^[A-Z][A-Z0-9_]{2,63}$/.test(rawTradeCoverage.reason)) {
+      tradeTickCoverage = { tradeTickCoverage: { schemaVersion: 1, status: "UNAVAILABLE", reason: rawTradeCoverage.reason, asOfMs: Number(rawTradeCoverage.asOfMs) } };
+    } else if (rawTradeCoverage.status === undefined && Number.isSafeInteger(rawTradeCoverage.windowHours) && Number(rawTradeCoverage.windowHours) > 0 && Number(rawTradeCoverage.windowHours) <= 1440
+      && Number.isSafeInteger(rawTradeCoverage.coveredHours) && Number(rawTradeCoverage.coveredHours) >= 0 && Number(rawTradeCoverage.coveredHours) <= Number(rawTradeCoverage.windowHours)
+      && Number.isSafeInteger(rawTradeCoverage.longestGapHours) && Number(rawTradeCoverage.longestGapHours) >= 0 && Number(rawTradeCoverage.longestGapHours) <= Number(rawTradeCoverage.windowHours)
+      && typeof rawTradeCoverage.ratio === "number" && rawTradeCoverage.ratio === Math.round((Number(rawTradeCoverage.coveredHours) / Number(rawTradeCoverage.windowHours)) * 1000) / 1000) {
+      tradeTickCoverage = { tradeTickCoverage: { schemaVersion: 1, windowHours: Number(rawTradeCoverage.windowHours), coveredHours: Number(rawTradeCoverage.coveredHours), ratio: rawTradeCoverage.ratio, longestGapHours: Number(rawTradeCoverage.longestGapHours), asOfMs: Number(rawTradeCoverage.asOfMs) } };
+    }
+  }
   const rawResearch = source.researchCollectionStatus;
   const research = typeof rawResearch === "string" && ["COLLECTING", "DISABLED", "INVALID", "UNAVAILABLE"].includes(rawResearch)
     ? {
@@ -635,7 +651,7 @@ function publicRuntimeLiveness(value: CloudRuntimeLivenessSnapshot): CloudRuntim
     : {};
   // Build identity: only a full lowercase 40-hex commit is published, never other text.
   const sourceCommitSha = typeof source.sourceCommitSha === "string" && /^[0-9a-f]{40}$/.test(source.sourceCommitSha) ? { sourceCommitSha: source.sourceCommitSha } : {};
-  return Object.freeze({ ...sourceCommitSha, ...paperLedger, ...timestamps, ...counters, ...(lastPaperDecisionOutcome === undefined ? {} : { lastPaperDecisionOutcome }), lastError, ...(previousStop === undefined ? {} : { previousStop }), ...stall, ...research, ...funnel, ...lossSession, ...lossAttribution, ...experimentTicks, ...experimentTicksByInterval, ...researchGapFill, ...rollingHoldout, ...closedLearningLoop, ...microstructure, ...orderBookCollector, ...orderBookCoverage, ...futuresCollector, ...dataIntegrity }) as unknown as CloudRuntimeLivenessSnapshot;
+  return Object.freeze({ ...sourceCommitSha, ...paperLedger, ...timestamps, ...counters, ...(lastPaperDecisionOutcome === undefined ? {} : { lastPaperDecisionOutcome }), lastError, ...(previousStop === undefined ? {} : { previousStop }), ...stall, ...research, ...funnel, ...lossSession, ...lossAttribution, ...experimentTicks, ...experimentTicksByInterval, ...researchGapFill, ...rollingHoldout, ...closedLearningLoop, ...microstructure, ...orderBookCollector, ...orderBookCoverage, ...tradeTickCoverage, ...futuresCollector, ...dataIntegrity }) as unknown as CloudRuntimeLivenessSnapshot;
 }
 
 const PUBLIC_HEALTH_REASONS = new Set(["EVIDENCE_HEALTHY", "EVIDENCE_DEGRADED", "EVIDENCE_FAILED", "EVIDENCE_STALE", "EVIDENCE_MISSING", "EVIDENCE_INVALID_TIME", "RECOVERY_NOT_VERIFIED"]);

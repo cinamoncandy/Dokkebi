@@ -103,6 +103,7 @@ import { readOrderBookStudyDisplay } from "./researchStudyResult";
 import { learningLoopVerdict } from "./learningLoopVerdict";
 import { learningPipelineProjection } from "./learningPipelineStage";
 import { OrderBookCoverageWatch } from "./orderBookCoverage";
+import { TradeTickCoverageWatch } from "./tradeTickCoverage";
 
 export interface CloudRuntimeDashboardHydratorLike { hydrate(provider: CloudDashboardStateProvider, observations?: readonly IntelligenceObservation[]): void; }
 export interface CloudRuntimeMarketDataClientLike { subscribe(markets: readonly string[]): void; start(): void; stop(): void; }
@@ -807,6 +808,9 @@ export function startCloudRuntime(
   // Display only: order-book hour coverage over the last 192 hours (the study's own definition), so a gap shows while it can still be repaired.
   const orderBookCoverageWatch = env.NUSA_CLOUD_STATE_DB_PATH === undefined ? undefined : new OrderBookCoverageWatch(config.cloudStateDbPath, (env.NUSA_RESEARCH_MARKETS ?? "KRW-BTC").split(",").map((m) => m.trim()).find((m) => m !== "") ?? "KRW-BTC");
   const orderBookCoverageLiveness = () => { try { const value = orderBookCoverageWatch?.snapshot(); return value == null ? {} : { orderBookCoverage: value }; } catch { return {}; } };
+  // Display only: trade-tick hour coverage over the last 192 hours for the same first research market (no study bar: the trade-flow data bar is not fixed yet).
+  const tradeTickCoverageWatch = env.NUSA_CLOUD_STATE_DB_PATH === undefined ? undefined : new TradeTickCoverageWatch(config.cloudStateDbPath, (env.NUSA_RESEARCH_MARKETS ?? "KRW-BTC").split(",").map((m) => m.trim()).find((m) => m !== "") ?? "KRW-BTC");
+  const tradeTickCoverageLiveness = () => { try { const value = tradeTickCoverageWatch?.snapshot(); return value == null ? {} : { tradeTickCoverage: value }; } catch { return {}; } };
   const futuresCollectorLiveness = () => { try { return futuresCollector == null ? {} : { futuresCollector: futuresCollector.status() }; } catch { return {}; } };
   const orderBookCollectorLiveness = () => { try { return orderBookCollector == null ? {} : { orderBookCollector: orderBookCollector.status() }; } catch { return {}; } };
   const closedLearningLiveness = () => { let status = null; try { status = closedLearningStatus?.() ?? null; } catch { status = null; } return status == null ? {} : { closedLearningLoop: status }; };
@@ -901,6 +905,7 @@ export function startCloudRuntime(
       ...microstructureLiveness(),
       ...orderBookCollectorLiveness(),
       ...orderBookCoverageLiveness(),
+      ...tradeTickCoverageLiveness(),
       ...futuresCollectorLiveness(),
       ...dataIntegrityLiveness(),
       ...paperLedgerLiveness(),
