@@ -113,7 +113,7 @@ export interface CloudRuntimeLivenessSnapshot {
   readonly orderBookCoverage?: { readonly schemaVersion: 1; readonly windowHours: number; readonly coveredHours: number; readonly ratio: number; readonly longestGapHours: number; readonly meetsStudyBar: boolean; readonly asOfMs: number }
     | { readonly schemaVersion: 1; readonly status: "UNAVAILABLE"; readonly reason: string; readonly asOfMs: number };
   readonly orderBookCollector?: { readonly rounds: number; readonly markets: number; readonly samplesStored: number; readonly failures: number; readonly rejected?: number; readonly lastRoundAt?: number };
-  readonly futuresCollector?: { readonly rounds: number; readonly marksStored: number; readonly fundingStored: number; readonly klinesStored: number; readonly failures: number; readonly rejected: number; readonly lastRoundAt?: number };
+  readonly futuresCollector?: { readonly rounds: number; readonly marksStored: number; readonly fundingStored: number; readonly klinesStored: number; readonly failures: number; readonly rejected: number; readonly lastRoundAt?: number; readonly lastFailureClass?: string };
   readonly microstructureRecorder?: { readonly orderBookSamples: number; readonly tradeTicks: number; readonly writeFailures: number; readonly rejectedRows?: number; readonly lastRecordedAt?: number };
   readonly researchExperimentTicks?: { readonly lastTickAt: number; readonly lastStatus: string; readonly ticks: number; readonly sessionsStarted: number; readonly counts: Readonly<Record<string, number>> };
   /** Display-only outcome of the hourly REST gap fill (the candle series head writer): fixed codes and integers. */
@@ -582,10 +582,10 @@ function publicRuntimeLiveness(value: CloudRuntimeLivenessSnapshot): CloudRuntim
   }
   // Public futures collector: non-negative integer counters and one timestamp only.
   const rawFutures = source.futuresCollector as Record<string, unknown> | null | undefined;
-  let futuresCollector: { futuresCollector?: Record<string, number> } = {};
+  let futuresCollector: { futuresCollector?: Record<string, number | string> } = {};
   const futuresKeys = ["rounds", "marksStored", "fundingStored", "klinesStored", "failures", "rejected"];
   if (rawFutures != null && typeof rawFutures === "object" && futuresKeys.every((key) => Number.isSafeInteger(rawFutures[key]) && Number(rawFutures[key]) >= 0)) {
-    futuresCollector = { futuresCollector: { ...Object.fromEntries(futuresKeys.map((key) => [key, Number(rawFutures[key])])), ...(Number.isSafeInteger(rawFutures.lastRoundAt) && Number(rawFutures.lastRoundAt) > 0 ? { lastRoundAt: Number(rawFutures.lastRoundAt) } : {}) } };
+    futuresCollector = { futuresCollector: { ...Object.fromEntries(futuresKeys.map((key) => [key, Number(rawFutures[key])])), ...(Number.isSafeInteger(rawFutures.lastRoundAt) && Number(rawFutures.lastRoundAt) > 0 ? { lastRoundAt: Number(rawFutures.lastRoundAt) } : {}), ...(typeof rawFutures.lastFailureClass === "string" && /^[A-Z][A-Z0-9_]{2,31}$/.test(rawFutures.lastFailureClass) ? { lastFailureClass: rawFutures.lastFailureClass } : {}) } };
   }
   // Stored-data integrity probe: a fixed status plus non-negative integers only.
   const rawIntegrity = source.dataIntegrity as Record<string, unknown> | null | undefined;

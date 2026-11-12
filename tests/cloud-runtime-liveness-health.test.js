@@ -621,6 +621,14 @@ test("/health publishes the public futures collector counters as non-negative in
   await withServer({ runtimeLiveness: () => ({ ...LIVENESS, futuresCollector: { ...good, rounds: -1 } }) }, async (handle) => {
     assert.equal(JSON.parse((await request(handle.port, "/health")).body).runtime.futuresCollector, undefined);
   }, 42391);
+  await withServer({ runtimeLiveness: () => ({ ...LIVENESS, futuresCollector: { ...good, lastFailureClass: "HTTP_451" } }) }, async (handle) => {
+    assert.deepEqual(JSON.parse((await request(handle.port, "/health")).body).runtime.futuresCollector, { ...good, lastFailureClass: "HTTP_451" });
+  }, 42595);
+  for (const [index, bad] of ["http_451", "HTTP 451", "connect ECONNREFUSED 1.2.3.4", "AB", `A${"B".repeat(32)}`, 451, null, ["HTTP_451"]].entries()) {
+    await withServer({ runtimeLiveness: () => ({ ...LIVENESS, futuresCollector: { ...good, lastFailureClass: bad } }) }, async (handle) => {
+      assert.deepEqual(JSON.parse((await request(handle.port, "/health")).body).runtime.futuresCollector, good, "an unusable failure class is dropped; the counters stay");
+    }, 42596 + index);
+  }
 });
 
 test("/health publishes the SHADOW rolling-holdout summary only as the declared shape: a mode, integers and code-keyed counts", async () => {
