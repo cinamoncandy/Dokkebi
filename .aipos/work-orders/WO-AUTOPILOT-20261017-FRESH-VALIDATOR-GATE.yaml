@@ -705,3 +705,14 @@ latest_main_sync_20261111:
   audit_release_merge: NOT_STARTED
   next: "Finish local validation on the latest-main merge tree, then re-fetch protected main and PR head. Publish only as a normal fast-forward successor to existing branch fix/validator-evidence-gate-2760 if both refs still match; keep Draft and all threads unresolved. Require exact-head workflows and a fresh non-author Validator before independent Audit or Release."
   safety: PAPER_ONLY_LIVE_NONE_PRODUCTION_MUTATION_FALSE_REAL_ORDER_FALSE_REAL_TRANSFER_FALSE_AI_ZERO_AUTHORITY_FAIL_CLOSED_WIP_MAX_2
+
+latest_main_sync_20261112:
+  issue: 2760
+  pull_request: 2772
+  predecessor_head: 00c88557795988e07a28daae1ad68295f82c0da8
+  protected_main_at_sync: 5d9304c9780428342ddaf525f3d488c476318f51
+  reconciliation: "Existing PR was not mergeable. Merged current protected main without history rewrite; regenerated CURRENT_TRUTH for the sole textual conflict."
+  validation: "Merged tree: focused Validator/Audit tests 144 passed; full suite 1345 files passed; build, typecheck, validate:full and security gate passed; lint passed with 48 warnings. Predecessor CI does not apply to a successor head."
+  validator: "PENDING: fresh independent VALIDATOR required. No Audit, Release or merge authority is implied."
+  next: "Validate merged candidate and compare exact remote refs before any fast-forward publication to the existing PR; retain Draft and unresolved review threads."
+  safety: PAPER_ONLY_LIVE_NONE_PRODUCTION_MUTATION_FALSE_REAL_ORDER_FALSE_REAL_TRANSFER_FALSE_AI_ZERO_AUTHORITY_FAIL_CLOSED

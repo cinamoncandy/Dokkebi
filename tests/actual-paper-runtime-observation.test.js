@@ -683,6 +683,28 @@ test("a runtime that stays halted after PUBLIC_MARKET_RECOVERED still fails clos
   assert.equal(result.evidence.failure_diagnostic.last_error_code, "PUBLIC_MARKET_RECOVERED");
 });
 
+const staleOverrides = (from, to) => (readCount) => (readCount >= from && readCount <= to
+  ? { operations: { runtimeState: "HALTED", schedulerRunning: true, runtimeHaltReasons: ["KILL_SWITCH_ACTIVE"], heartbeat: { startedAt: BASE_TIME - 1_000, lastHeartbeatAt: BASE_TIME, lastError: "PUBLIC_MARKET_STALE" } } }
+  : {});
+
+test("a public ticker that goes quiet and resumes inside the grace window does not fail the observation (CI run 43014397780)", async () => {
+  const fixed = [1, 2, 3].map((cycle) => cycleEvents(cycle, BASE_TIME + cycle * 1_000));
+  const result = await runObservation({
+    maximumDurationMs: 60_000,
+    snapshotOverrides: staleOverrides(2, 5),
+    currentEvents: (readCount) => (readCount < 6 ? [] : fixed),
+  });
+  assert.equal(result.status, "PASS", JSON.stringify({ code: result.evidence.failure_code, stop: result.evidence.stop_reason, diag: result.evidence.failure_diagnostic }));
+  assert.equal(result.evidence.transient_reconnect_episodes, 1);
+});
+
+test("a ticker that stays stale still fails closed after the bounded grace", async () => {
+  const result = await runObservation({ maximumDurationMs: 120_000, snapshotOverrides: staleOverrides(2, 10_000) });
+  assert.equal(result.status, "FAIL");
+  assert.equal(result.evidence.failure_code, "PAPER_RUNTIME_NOT_RUNNING");
+  assert.equal(result.evidence.failure_diagnostic.last_error_code, "PUBLIC_MARKET_STALE");
+});
+
 test("any other halt reason or error fails immediately without grace", async () => {
   for (const operations of [
     { runtimeState: "HALTED", schedulerRunning: true, runtimeHaltReasons: ["KILL_SWITCH_ACTIVE", "AI_P0_OPEN"], heartbeat: { startedAt: BASE_TIME - 1_000, lastHeartbeatAt: BASE_TIME, lastError: "PUBLIC_MARKET_RECONNECTING" } },
