@@ -22,6 +22,8 @@ export interface ResearchFuturesCollectorStatus {
   readonly failures: number;
   readonly rejected: number;
   readonly lastRoundAt?: number;
+  /** Fixed code of the most recent failed fetch (for example HTTP_451 for a region block). Never the message. */
+  readonly lastFailureClass?: string;
 }
 
 export const FUTURES_COLLECTOR_INTERVAL_MS = 60_000;
@@ -36,11 +38,22 @@ export function researchFuturesCollectorEnabled(env: NodeJS.ProcessEnv): boolean
   return !["DISABLED", "0", "FALSE", "OFF", "NO"].includes(String(env.NUSA_RESEARCH_FUTURES_COLLECTOR ?? "").trim().toUpperCase());
 }
 
+/** Maps a fetch failure to a fixed code. Only the HTTP status, a timeout or a coarse class leaves this function, never the message. */
+export function futuresFailureClass(error: unknown): string {
+  const message = error instanceof Error ? error.message : "";
+  if (/^HTTP_[1-5][0-9]{2}$/.test(message)) return message;
+  const name = error instanceof Error ? error.name : "";
+  if (name === "TimeoutError" || name === "AbortError") return "TIMEOUT";
+  if (message === "FUNDING_INVALID" || message === "KLINES_INVALID") return "INVALID_RESPONSE";
+  return "FETCH_FAILED";
+}
+
 const num = (v: unknown): number => (typeof v === "string" || typeof v === "number") && String(v).trim() !== "" ? Number(v) : Number.NaN;
 
 export class ResearchFuturesCollector {
   private rounds = 0; private marksStored = 0; private fundingStored = 0; private klinesStored = 0; private failures = 0; private rejected = 0;
   private lastRoundAt: number | undefined;
+  private lastFailureClass: string | undefined;
   private lastSlowAt = 0;
   private lastPruneAt = 0;
   private running = false;
@@ -65,7 +78,7 @@ export class ResearchFuturesCollector {
         // stamped with the local observation time.
         if (d == null || d.symbol !== symbol || !Number.isSafeInteger(d.time) || Number(d.time) <= 0 || Number(d.time) > roundNow + FUTURES_MAX_FUTURE_MS) { this.rejected += 1; continue; }
         rows.push({ symbol, capturedAtMs: roundNow, markPrice: num(d.markPrice), indexPrice: num(d.indexPrice), lastFundingRate: num(d.lastFundingRate), nextFundingTimeMs: Number(d.nextFundingTime) });
-      } catch { this.failures += 1; }
+      } catch (error) { this.failures += 1; this.lastFailureClass = futuresFailureClass(error); }
     }
     const result = this.sink.appendMarks(rows);
     this.marksStored += result.stored; this.rejected += result.rejected;
@@ -86,7 +99,7 @@ export class ResearchFuturesCollector {
         const fr = this.sink.appendFunding(funding);
         ok = true;
         this.fundingStored += fr.stored; this.rejected += fr.rejected;
-      } catch { this.failures += 1; }
+      } catch (error) { this.failures += 1; this.lastFailureClass = futuresFailureClass(error); }
       try {
         const k = await this.getJson(`/fapi/v1/klines?symbol=${symbol}&interval=4h&limit=100`);
         if (!Array.isArray(k)) throw new Error("KLINES_INVALID");
@@ -100,7 +113,7 @@ export class ResearchFuturesCollector {
         const kr = this.sink.appendKlines(klines);
         ok = true;
         this.klinesStored += kr.stored; this.rejected += kr.rejected;
-      } catch { this.failures += 1; }
+      } catch (error) { this.failures += 1; this.lastFailureClass = futuresFailureClass(error); }
     }
     return ok;
   }
@@ -129,6 +142,6 @@ export class ResearchFuturesCollector {
   public stop(): void { if (this.timer != null) clearInterval(this.timer); this.timer = undefined; }
 
   public status(): ResearchFuturesCollectorStatus {
-    return Object.freeze({ rounds: this.rounds, marksStored: this.marksStored, fundingStored: this.fundingStored, klinesStored: this.klinesStored, failures: this.failures, rejected: this.rejected, ...(this.lastRoundAt === undefined ? {} : { lastRoundAt: this.lastRoundAt }) });
+    return Object.freeze({ rounds: this.rounds, marksStored: this.marksStored, fundingStored: this.fundingStored, klinesStored: this.klinesStored, failures: this.failures, rejected: this.rejected, ...(this.lastRoundAt === undefined ? {} : { lastRoundAt: this.lastRoundAt }), ...(this.lastFailureClass === undefined ? {} : { lastFailureClass: this.lastFailureClass }) });
   }
 }
