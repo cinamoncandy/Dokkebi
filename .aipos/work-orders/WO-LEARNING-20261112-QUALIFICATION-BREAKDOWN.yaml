@@ -18,4 +18,5 @@ safety:
   aiAuthority: ZERO_AUTHORITY
 validation:
   - "closed-learning-qualification-summary 3/3 (once per candidate and code, ties ordered by code, qualified candidates not counted, free text and path-like strings and non-strings ignored, at most eight codes); cloud-runtime-liveness-health 43/43 total with the new /health test (negative, fractional and string counts, nine codes, array instead of map, bad code, DEPLOYED, stale after an error); 13 closed-learning dist test files plus learning-pipeline-stage 142/142; portability and platform-independent checks pass."
+review_20261112: "Independent review ACCEPT WITH P2. P2 fixed: the tracker skipped bad code entries one by one and published the rest, while the /health allow-list drops the whole map; the tracker now drops the whole map too (one bad code or count, more than eight codes, an array, or an empty map), keeping the integer counts. The test now pins a mixed map, a clean map and six unusable maps at the tracker."
 next_action: "Independent review, merge, release; read bootstrapRejectionReasons to see which gate stops the candidates, then decide where Research should improve (no gate is relaxed)."

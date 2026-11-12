@@ -320,9 +320,13 @@ export class ClosedLearningLoopStatusTracker {
     const [candidates, qualified, insufficient, rejected] = [count(summary?.candidateCount), count(summary?.qualifiedCount), count(summary?.insufficientCount), count(summary?.rejectedCount)];
     this.bootstrapQualification = candidates === undefined || qualified === undefined || insufficient === undefined || rejected === undefined ? undefined : Object.freeze({ candidates, qualified, insufficient, rejected });
     const rawCounts = summary?.reasonCounts;
-    const reasonCounts: Record<string, number> = {};
+    // All or nothing, like the /health allow-list: one bad code or count, or more than eight codes, drops the whole map.
+    let reasonCounts: Record<string, number> = {};
     if (this.bootstrapQualification !== undefined && rawCounts != null && typeof rawCounts === "object" && !Array.isArray(rawCounts)) {
-      for (const [reason, value] of Object.entries(rawCounts as Record<string, unknown>).slice(0, 8)) if (REASON_CODE.test(reason) && count(value) !== undefined) reasonCounts[reason] = Number(value);
+      const entries = Object.entries(rawCounts as Record<string, unknown>);
+      if (entries.length >= 1 && entries.length <= 8 && entries.every(([reason, value]) => REASON_CODE.test(reason) && count(value) !== undefined)) {
+        reasonCounts = Object.fromEntries(entries.map(([reason, value]) => [reason, Number(value)]));
+      }
     }
     this.bootstrapRejectionReasons = Object.freeze(reasonCounts);
     // Reasons are published only for a non-deployable Research result, and only strings that already are fixed codes (no
