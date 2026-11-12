@@ -42,7 +42,11 @@ export interface ClosedLearningQualificationSummary {
   readonly rejectedCount: number;
   /** Fixed upper-case reason code -> number of candidates carrying it (at most eight codes, highest count first). */
   readonly reasonCounts: Readonly<Record<string, number>>;
+  /** Strategy family (the known candidate id prefix, or "other") -> number of judged candidates: how diverse the candidate set is. */
+  readonly familyCounts: Readonly<Record<string, number>>;
 }
+
+const KNOWN_FAMILY_PREFIXES: readonly string[] = Object.freeze(["sma", "rsi", "donchian"]);
 
 const REASON_CODE = /^[A-Z][A-Z0-9_]{2,63}$/;
 
@@ -52,6 +56,12 @@ export function summarizeQualification(qualification: ClosedLearningResearchRepl
     if (candidate.outcome === "QUALIFIED_FOR_LEAGUE") continue;
     for (const reason of new Set(candidate.reasons)) if (typeof reason === "string" && REASON_CODE.test(reason)) counts.set(reason, (counts.get(reason) ?? 0) + 1);
   }
+  const families = new Map<string, number>();
+  for (const candidate of qualification.candidates) {
+    const prefix = typeof candidate.candidateId === "string" ? candidate.candidateId.split("-")[0]! : "";
+    const family = KNOWN_FAMILY_PREFIXES.includes(prefix) ? prefix : "other";
+    families.set(family, (families.get(family) ?? 0) + 1);
+  }
   const top = [...counts.entries()].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0])).slice(0, 8);
   return Object.freeze({
     candidateCount: qualification.coverage.candidateCount,
@@ -59,6 +69,7 @@ export function summarizeQualification(qualification: ClosedLearningResearchRepl
     insufficientCount: qualification.coverage.insufficientCount,
     rejectedCount: qualification.coverage.rejectedCount,
     reasonCounts: Object.freeze(Object.fromEntries(top)),
+    familyCounts: Object.freeze(Object.fromEntries([...families.entries()].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0])))),
   });
 }
 

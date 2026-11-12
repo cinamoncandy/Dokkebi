@@ -785,3 +785,25 @@ test("/health publishes how many candidates were judged and the fixed qualificat
   assert.equal(tracker.snapshot().bootstrapQualification, undefined, "no stale qualification after the bootstrap changed");
   assert.equal(tracker.snapshot().bootstrapRejectionReasons, undefined);
 });
+
+test("/health publishes the judged candidates per strategy family, and drops a malformed family map as a whole", async () => {
+  const now = Date.parse("2026-11-12T01:00:00Z");
+  const summary = (familyCounts) => ({ candidateCount: 9, qualifiedCount: 0, insufficientCount: 0, rejectedCount: 9, reasonCounts: { PBO_TOO_HIGH: 9 }, familyCounts });
+  const make = (familyCounts) => { const t = new ClosedLearningLoopStatusTracker(); t.observeBootstrap({ status: "RESEARCH_NOT_DEPLOYABLE", qualificationSummary: summary(familyCounts) }); t.observeRollover({ status: "WAITING_FOR_EVALUATION_WINDOW" }, now); return t.snapshot(); };
+  assert.deepEqual({ ...make({ sma: 9 }).bootstrapCandidateFamilies }, { sma: 9 });
+  for (const bad of [{ sma: 5, "Bad Key": 4 }, { sma: -1 }, { sma: 1.5 }, { sma: "9" }, { a: 1, b: 1, c: 1, d: 1, e: 1 }, {}, ["sma"], { SMA: 9 }, { [`s${"m".repeat(16)}`]: 1 }]) {
+    assert.equal(make(bad).bootstrapCandidateFamilies, undefined, "an unusable family map is dropped as a whole in the tracker");
+  }
+  const good = make({ sma: 9 });
+  let loop = good;
+  await withServer({ runtimeLiveness: () => ({ ...LIVENESS, closedLearningLoop: loop }) }, async (handle) => {
+    const read = async () => JSON.parse((await request(handle.port, "/health")).body).runtime.closedLearningLoop;
+    assert.deepEqual((await read()).bootstrapCandidateFamilies, { sma: 9 });
+    for (const bad of [{ sma: 5, "Bad Key": 4 }, { sma: -1 }, { sma: 1.5 }, { sma: "9" }, { a: 1, b: 1, c: 1, d: 1, e: 1 }, ["sma"], { SMA: 9 }]) {
+      loop = { ...good, bootstrapCandidateFamilies: bad };
+      assert.equal((await read()).bootstrapCandidateFamilies, undefined, "the server drops a malformed family map as a whole");
+    }
+    loop = { ...good, bootstrap: "DEPLOYED" };
+    assert.equal((await read()).bootstrapCandidateFamilies, undefined, "only while RESEARCH_NOT_DEPLOYABLE");
+  }, 42594);
+});
