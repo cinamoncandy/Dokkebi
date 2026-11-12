@@ -9,18 +9,18 @@ Everything below is what the repository's records *claim*. Re-verify on GitHub b
 
 [`.aipos/handoffs/2026-11-12-pr2039-workorder-inventory.md`](handoffs/2026-11-12-pr2039-workorder-inventory.md) — Issue #903 / PR #2039 — Work Order inventory repair
 
-> At the start of this checkpoint, protected `main` was `5d9304c9780428342ddaf525f3d488c476318f51` and Draft PR #2039 was `f07d1e1cd59b47d5cbb385bb8e89649658c8a11b`, based on that main. Main is protected. Six predecessor workflows passed on `f07d1e1c`; no in-progress Actions run was found for that SHA. Current non-author dispositions for the P1/P2 threads are still absent. The branch-protection detail endpoint itself returned 403, while the public main branch record reports `protected=true` and required `nusa/release-authorized`.
+> Initial read-only capture: protected main was 5d9304c9780428342ddaf525f3d488c476318f51 and Draft PR #2039 was at f07d1e1cd59b47d5cbb385bb8e89649658c8a11b. The six predecessor workflows passed. A fresh read then found protected main at f5aba595f406a367258fccd85801aae3e6125d6d after #3092; the PR remote was still at f07d1e1, based on 5d9304c. The public main branch reports protected=true with required context nusa/release-authorized; the detailed protection endpoint returned 403. The local candidate contains the Inventory repair and a normal merge of latest main. The SHA and checks in the existing PR branch are always resolved from GitHub; predecessor checks do not apply to the candidate. This checkpoint stops before any Claim/Dispatch or independent approval.
 
 ## Work orders
 
-585 total: 556 in `.aipos/work-orders/`, 29 closed and merged in `.aipos/work-orders/archive/`.
-Of the 556 active files, 376 carry a closed status that has not been archived (merge not proven, or the path is still referenced) and 180 are open or unclassified.
+586 total: 557 in `.aipos/work-orders/`, 29 closed and merged in `.aipos/work-orders/archive/`.
+Of the 557 active files, 376 carry a closed status that has not been archived (merge not proven, or the path is still referenced) and 181 are open or unclassified.
 
 Most common statuses among the open files (new orders use only `READY_FOR_REVIEW`, `IN_PROGRESS`, `BLOCKED`, `COMPLETED`, `SUPERSEDED`, `ABANDONED`):
 
 | Status | Files |
 |---|---|
-| READY_FOR_REVIEW | 53 |
+| READY_FOR_REVIEW | 54 |
 | LOCAL_VALIDATED_PENDING_CI | 17 |
 | IN_PROGRESS | 14 |
 | VERIFYING | 14 |

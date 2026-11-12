@@ -1,0 +1,18 @@
+current_codex_workorder_inventory_successor_20261112:
+  canonical_issue: 903
+  canonical_pr: 2039
+  protected_main_sha: f5aba595f406a367258fccd85801aae3e6125d6d
+  predecessor_remote_pr_head: f07d1e1cd59b47d5cbb385bb8e89649658c8a11b
+  source_code_commit: f1344ae9
+  branch_alignment: "Normal merge of latest protected main into the existing PR branch; no force push or new PR."
+  inventory: "Pinned recursive Work Order tree with complete blob verification, explicit READY and no dependency/link opt-in, stable issue/cross-reference reads, and a snapshot digest binding prompt/main/tree/work-order/issue identity. No explicit READY candidate exists, so no task is admitted."
+  exact_head_ci: RESOLVE_FOR_LIVE_HEAD
+  independent_review: PENDING_ON_SUCCESSOR
+  current_review_threads: 3
+  operational_wip_claims: UNKNOWN
+  writer_lease: UNKNOWN
+  claim_or_dispatch: NOT_ATTEMPTED
+  audit_release_merge: NOT_AUTHORIZED
+  validation: "PASS after latest-main merge: 1,344 isolated test files; TypeScript build and root/mobile typecheck; AIPOS YAML/provenance/conformance/current-truth, repository truth, safety invariants and AI zero-authority; security gate with 896-package exact metadata mirror, 0 raw or unmitigated high/critical advisories, 0 secrets, lock integrity and backports PASS; git diff --check."
+  next: "Resolve the live PR SHA and six checks. If the branch still points to f07d1e1, publish this candidate by fast-forward; if already published, do not republish. After exact-head checks pass, obtain fresh non-author disposition. Do not Claim or Dispatch while WIP/Lease is UNKNOWN."
+  safety: "PAPER_ONLY; liveAuthority=NONE; productionMutationAllowed=false; realOrderAuthority=false; aiAuthority=ZERO_AUTHORITY; FAIL_CLOSED"
