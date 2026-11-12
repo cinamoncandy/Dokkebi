@@ -13,14 +13,14 @@ Everything below is what the repository's records *claim*. Re-verify on GitHub b
 
 ## Work orders
 
-569 total: 540 in `.aipos/work-orders/`, 29 closed and merged in `.aipos/work-orders/archive/`.
-Of the 540 active files, 376 carry a closed status that has not been archived (merge not proven, or the path is still referenced) and 164 are open or unclassified.
+585 total: 556 in `.aipos/work-orders/`, 29 closed and merged in `.aipos/work-orders/archive/`.
+Of the 556 active files, 376 carry a closed status that has not been archived (merge not proven, or the path is still referenced) and 180 are open or unclassified.
 
 Most common statuses among the open files (new orders use only `READY_FOR_REVIEW`, `IN_PROGRESS`, `BLOCKED`, `COMPLETED`, `SUPERSEDED`, `ABANDONED`):
 
 | Status | Files |
 |---|---|
-| READY_FOR_REVIEW | 37 |
+| READY_FOR_REVIEW | 53 |
 | LOCAL_VALIDATED_PENDING_CI | 17 |
 | IN_PROGRESS | 14 |
 | VERIFYING | 14 |

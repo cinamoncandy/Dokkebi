@@ -64,7 +64,46 @@ test("only a final result is handed off, atomically, beside the state database",
   assert.equal(fs.existsSync(path.join(dir, RESULT_FILE)), false);
   assert.equal(writeResult(dbPath, { status: "HOLDOUT_FAIL", eligible: 9, discoveryPass: false, datasetFingerprint: "b".repeat(64) }), true);
   const saved = JSON.parse(fs.readFileSync(path.join(dir, RESULT_FILE), "utf8"));
-  assert.equal(saved.studyId, "ML_ORDERBOOK_60M_20261029");
+  const { STUDY_ID } = require("./run-orderbook-study.js");
+  assert.equal(saved.studyId, STUDY_ID, "a result is attributed to the study that produced it (independent review P1 on #3084)");
+  assert.equal(saved.studyId, "ML_ORDERBOOK_60M_20261111");
   assert.equal(saved.schemaVersion, 1);
   assert.equal(fs.existsSync(path.join(dir, `${RESULT_FILE}.tmp`)), false);
+  // a caller-supplied studyId or schemaVersion can never override the selected study (review P2 on #3084)
+  assert.equal(writeResult(dbPath, { status: "HOLDOUT_FAIL", eligible: 9, discoveryPass: false, datasetFingerprint: "b".repeat(64), studyId: "ML_ORDERBOOK_60M_20261029" }), true);
+  assert.equal(JSON.parse(fs.readFileSync(path.join(dir, RESULT_FILE), "utf8")).studyId, STUDY_ID);
+});
+
+test("the default span is the second pre-registered run and the first run's span is still selectable", () => {
+  const { SPANS, STUDY_ID } = require("./run-orderbook-study.js");
+  assert.equal(STUDY_ID, "ML_ORDERBOOK_60M_20261111");
+  const iso = (ms) => new Date(ms).toISOString();
+  const second = SPANS.ML_ORDERBOOK_60M_20261111;
+  assert.deepEqual([iso(second.START), iso(second.VAL), iso(second.HOLD), iso(second.END)], ["2026-11-04T00:00:00.000Z", "2026-11-12T00:00:00.000Z", "2026-11-14T00:00:00.000Z", "2026-11-18T00:00:00.000Z"]);
+  const first = SPANS.ML_ORDERBOOK_60M_20261029;
+  assert.deepEqual([iso(first.START), iso(first.VAL), iso(first.HOLD), iso(first.END)], ["2026-10-15T00:00:00.000Z", "2026-10-23T00:00:00.000Z", "2026-10-25T00:00:00.000Z", "2026-10-29T00:00:00.000Z"]);
+  assert.ok(Object.isFrozen(SPANS) && Object.isFrozen(second));
+});
+
+test("an unknown study id is refused, never mapped to another span", () => {
+  const { spawnSync } = require("node:child_process");
+  const run = spawnSync(process.execPath, ["-e", "require('./scripts/run-orderbook-study.js')"], { cwd: require("node:path").resolve(__dirname, ".."), env: { ...process.env, NUSA_ORDERBOOK_STUDY_ID: "ML_ORDERBOOK_60M_19990101" }, encoding: "utf8" });
+  assert.notEqual(run.status, 0);
+  assert.match(run.stderr, /ORDERBOOK_STUDY_ID_UNKNOWN/);
+});
+
+test("before END + 2h the study answers WAITING_DATA and touches no order-book value (pre-registration invariant)", () => {
+  const { runStudy, END } = require("./run-orderbook-study.js");
+  const db = { prepare() { throw new Error("DB_TOUCHED_BEFORE_THE_HOLDOUT_ENDED"); } };
+  for (const now of [END - 86_400_000, END, END + 2 * 3_600_000 - 1]) {
+    const result = runStudy({ db, now });
+    assert.equal(result.status, "WAITING_DATA", String(now));
+  }
+});
+
+test("the result of a run started with the first study's id is attributed to the first study", () => {
+  const { spawnSync } = require("node:child_process");
+  const code = "const m=require('./scripts/run-orderbook-study.js');const fs=require('fs'),os=require('os'),p=require('path');const d=fs.mkdtempSync(p.join(os.tmpdir(),'ob1-'));m.writeResult(p.join(d,'s.db'),{status:'HOLDOUT_PASS',eligible:9,discoveryPass:true,datasetFingerprint:'c'.repeat(64)});console.log(JSON.parse(fs.readFileSync(p.join(d,m.RESULT_FILE),'utf8')).studyId);";
+  const run = spawnSync(process.execPath, ["-e", code], { cwd: require("node:path").resolve(__dirname, ".."), env: { ...process.env, NUSA_ORDERBOOK_STUDY_ID: "ML_ORDERBOOK_60M_20261029" }, encoding: "utf8" });
+  assert.equal(run.stdout.trim(), "ML_ORDERBOOK_60M_20261029");
 });

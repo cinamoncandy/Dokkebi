@@ -13,9 +13,9 @@ finding:
   failure: "runtime_observation.failure_code=PAPER_RUNTIME_NOT_RUNNING; failure_diagnostic runtime_state=HALTED, runtime_halt_reasons=[KILL_SWITCH_ACTIVE], last_error_code=PUBLIC_MARKET_RECONNECTING. Each passed on a single re-run; none touched the PAPER runtime."
   root_cause: "apps/cloud/src/cloudRuntimeDashboardHydrator.ts sets killSwitchActive=!hasExecutableMarketData. While the public Upbit feed reconnects there are no executable decisions, so the derived (non-latched) kill switch is active and runtime.ts projects runtimeState=HALTED with KILL_SWITCH_ACTIVE. It clears when market data returns. observeAutomaticRuntime failed on the first such snapshot, so a short runner-side reconnect ended the observation."
 scope:
-  - "scripts/actual-paper-runtime-e2e.js only: a bounded cumulative reconnect grace (default 30s, valid 1-60s, at most 3 episodes) inside the existing 60-180s observation budget."
-  - "Waitable only when schedulerRunning=true, heartbeat.lastError is exactly PUBLIC_MARKET_DISCONNECTED/RECONNECTING/RECOVERED, runtime halt reasons are exactly [KILL_SWITCH_ACTIVE] (or DEGRADED/RUNNING), authority invariants hold and evidence collection has no failure."
-  - "Record market_reconnect evidence (status, episodes, durations, codes) in the artifact."
+  - "Preserve main's existing bounded 45s per reconnect episode inside the overall observation budget."
+  - "Require schedulerRunning=true for existing main's recognized transient reconnect cases; preserve the original failure code and sanitized onset diagnostic on grace exhaustion."
+  - "Preserve existing transient_reconnect_episodes evidence; do not replace the accepted timing policy with the earlier 30s cumulative proposal."
 acceptance:
   - "A reconnect at observation time that recovers within the grace continues observation and is evaluated normally."
   - "A reconnect that never recovers fails with the original PAPER_RUNTIME_NOT_RUNNING code and diagnostic after the bounded grace."
@@ -35,7 +35,17 @@ independent_review: PENDING_FRESH_VALIDATOR_SESSION
 
 main_reconciliation_20261111:
   aligned_protected_main: be8d58f16e60de9f3d37b8bdd9c9648214501536
-  overlapping_predecessor: "Merged #3073's per-episode 45s proposal is replaced in this Draft PR by the original bounded 30s cumulative/3-episode Work Order acceptance, pending independent validation and owner disposition."
-  preserved_main_compatibility: "Accept MARKET_DATA_RECONNECTING as already allowed on main and retain transient_reconnect_episodes for legacy evidence consumers; require schedulerRunning=true and keep kill-switch behavior unchanged."
+  overlapping_predecessor: "Superseded by 2026-11-12 owner direction: retain merged #3073's 45s per-episode contract."
+  preserved_main_compatibility: "Retain main's reconnect cases and transient_reconnect_episodes evidence; require schedulerRunning=true and keep kill-switch behavior unchanged."
   exact_head_ci: PENDING_FRESH
   independent_review: PENDING
+
+main_reconciliation_20261112:
+  protected_main: 5d9304c9780428342ddaf525f3d488c476318f51
+  predecessor_head: 2b37540282aff49e3663446ae5dd4c728e9d81ae
+  change: "Retain main's existing 45s per-episode contract, add scheduler-running guard and preserve first failure code and onset diagnostic; keep existing evidence schema."
+  red_evidence: "Two targeted tests failed before the fix: stopped scheduler read 47 snapshots instead of 2, and exhausted reconnect returned the later failure code. Per-episode timing test passed on the main baseline."
+  focused_validation: "64 focused observation, chaos, replay, readiness and certification tests and 1339 full test files passed on the local merged tree; build, typecheck, validate:full and security passed; lint passed with 48 warnings."
+  exact_head_ci: PENDING
+  independent_review: PENDING
+  audit_release_merge: NOT_STARTED

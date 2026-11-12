@@ -320,7 +320,12 @@ export function isolatedConsumerSubjectRefusal(sub: unknown): "FORMAT" | "REPOSI
   // 42850690523) showed this repository's subject uses the ID-pinned form; both ids are pinned exactly here.
   const boundByName = repoSegment.toLowerCase() === "cinamoncandy/nusa"
     || /^cinamoncandy[^A-Za-z0-9:/]213270074\/nusa[^A-Za-z0-9:/]1296492411$/i.test(repoSegment);
-  const boundById = /(?:^|:)repository_id:1296492411(?::|$)/.test(sub);
+  // An id-form subject must carry both pinned ids; repository_owner_id absent or different is refused (independent
+  // review of FORGE L1 attempt 9, P2).
+  const boundById = /(?:^|:)repository_id:1296492411(?::|$)/.test(sub)
+    && /(?:^|:)repository_owner_id:213270074(?::|$)/.test(sub)
+    && parts.filter((part) => part === "repository_owner_id").length === 1
+    && parts.filter((part) => part === "repository_id").length === 1;
   if (!boundByName && !boundById) return "REPOSITORY";
   // Every occurrence counts, not only the first: a duplicated, dangling or non-main ref is refused.
   const refValues = parts.flatMap((part, index) => (part === "ref" ? [parts[index + 1]] : []));

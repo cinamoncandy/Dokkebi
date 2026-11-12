@@ -175,18 +175,19 @@ describe("NUSA autopilot GitHub webhook", () => {
       };
     };
     assert.equal(payload.accepted, true);
-    assert.equal(payload.status, "EXECUTION_REQUEST_PLANNED");
+    // A main push names no evidence of anything to fix, so it no longer plans a coding request (see executionPlanner.ts).
+    assert.equal(payload.status, "NO_ACTION");
     assert.equal(payload.dispatch.kind, "MAIN_PUSH");
     assert.equal(payload.dispatch.headSha, "a".repeat(40));
     assert.equal(payload.dispatch.mutationAllowed, false);
     assert.deepEqual(payload.execution, {
-      kind: "REPOSITORY_AUTOPILOT",
+      kind: "NOOP",
       repository: "cinamoncandy/NUSA",
       headSha: "a".repeat(40),
       prNumber: null,
       workflowRunId: null,
       workflowRunAttempt: null,
-      reason: "continue-from:main_push",
+      reason: "evidence-free-continue-disabled",
       mutationAllowed: false,
     });
   });
