@@ -35,3 +35,17 @@ test('an all-qualified or empty set has no reason counts', () => {
   assert.deepEqual({ ...summarizeQualification(qualification([candidate('a', 'QUALIFIED_FOR_LEAGUE', [])], { qualifiedCount: 1 })).reasonCounts }, {});
   assert.deepEqual({ ...summarizeQualification(qualification([])).reasonCounts }, {});
 });
+
+test('familyCounts groups judged candidates by the known id prefix and calls everything else "other"', () => {
+  const summary = summarizeQualification(qualification([
+    candidate('sma-5-20', 'REJECTED', ['PBO_TOO_HIGH']),
+    candidate('sma-3-10', 'REJECTED', []),
+    candidate('rsi-14-30-70', 'INSUFFICIENT', []),
+    candidate('donchian-20', 'QUALIFIED_FOR_LEAGUE', []),
+    candidate('mystery-1', 'REJECTED', []),
+    candidate('/some/odd id', 'REJECTED', []),
+  ]));
+  assert.deepEqual({ ...summary.familyCounts }, { sma: 2, other: 2, rsi: 1, donchian: 1 });
+  assert.deepEqual(Object.keys(summary.familyCounts), ['other', 'sma', 'donchian', 'rsi'], 'highest count first, ties by name');
+  assert.equal(Object.keys(summarizeQualification(qualification([])).familyCounts).length, 0);
+});

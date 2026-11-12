@@ -487,6 +487,13 @@ function publicRuntimeLiveness(value: CloudRuntimeLivenessSnapshot): CloudRuntim
             loop.bootstrapRejectionReasons = Object.freeze(Object.fromEntries(entries.map(([code, value]) => [code, Number(value)])));
           }
         }
+        const rawFamilies = rawLoop.bootstrapCandidateFamilies;
+        if (rawFamilies != null && typeof rawFamilies === "object" && !Array.isArray(rawFamilies)) {
+          const familyEntries = Object.entries(rawFamilies as Record<string, unknown>);
+          if (familyEntries.length >= 1 && familyEntries.length <= 4 && familyEntries.every(([family, value]) => /^[a-z][a-z0-9]{1,15}$/.test(family) && Number.isSafeInteger(value) && Number(value) >= 0 && Number(value) <= 1_000_000)) {
+            loop.bootstrapCandidateFamilies = Object.freeze(Object.fromEntries(familyEntries.map(([family, value]) => [family, Number(value)])));
+          }
+        }
       }
     }
     const periodStart = (rawLoop.evidence as Record<string, unknown> | null)?.openPeriodStartAt;
