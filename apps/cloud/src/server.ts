@@ -473,6 +473,22 @@ function publicRuntimeLiveness(value: CloudRuntimeLivenessSnapshot): CloudRuntim
       const dense: unknown[] = Array.from(rawLoop.bootstrapReasons as unknown[]);
       if (dense.every((reason) => typeof reason === "string" && /^[A-Z][A-Z0-9_]{2,63}$/.test(reason))) loop.bootstrapReasons = Object.freeze([...(dense as string[])]);
     }
+    // How many candidates were judged and which fixed qualification codes stopped them: integers and fixed codes only. A malformed
+    // count withdraws both fields; a malformed code or value drops the whole code map (never a partial map).
+    if (loop.bootstrap === "RESEARCH_NOT_DEPLOYABLE" && rawLoop.bootstrapQualification != null && typeof rawLoop.bootstrapQualification === "object" && !Array.isArray(rawLoop.bootstrapQualification)) {
+      const q = rawLoop.bootstrapQualification as Record<string, unknown>;
+      const keys = ["candidates", "qualified", "insufficient", "rejected"] as const;
+      if (keys.every((key) => Number.isSafeInteger(q[key]) && Number(q[key]) >= 0 && Number(q[key]) <= 1_000_000)) {
+        loop.bootstrapQualification = Object.freeze({ candidates: Number(q.candidates), qualified: Number(q.qualified), insufficient: Number(q.insufficient), rejected: Number(q.rejected) });
+        const rawCounts = rawLoop.bootstrapRejectionReasons;
+        if (rawCounts != null && typeof rawCounts === "object" && !Array.isArray(rawCounts)) {
+          const entries = Object.entries(rawCounts as Record<string, unknown>);
+          if (entries.length >= 1 && entries.length <= 8 && entries.every(([code, value]) => /^[A-Z][A-Z0-9_]{2,63}$/.test(code) && Number.isSafeInteger(value) && Number(value) >= 0 && Number(value) <= 1_000_000)) {
+            loop.bootstrapRejectionReasons = Object.freeze(Object.fromEntries(entries.map(([code, value]) => [code, Number(value)])));
+          }
+        }
+      }
+    }
     const periodStart = (rawLoop.evidence as Record<string, unknown> | null)?.openPeriodStartAt;
     const isHourlyBoundary = cadence === 3_600_000 && Number.isSafeInteger(periodStart) && Number(periodStart) >= 0 && Number(periodStart) <= Number(loop.lastTickAt) && Number(eligibleAt) === Number(periodStart) + cadence;
     if (["WAITING_FOR_KST_DAY_ROLLOVER", "WAITING_FOR_EVALUATION_WINDOW"].includes(String(loop.rollover)) && Number.isSafeInteger(eligibleAt) && Number(eligibleAt) > Number(loop.lastTickAt)

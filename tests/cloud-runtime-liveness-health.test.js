@@ -732,3 +732,56 @@ test("the tracker never carries bootstrap reasons into a later status: DEPLOYED 
   tracker.observeRollover({ status: "WAITING_FOR_EVALUATION_WINDOW" }, now + 3);
   assert.deepEqual(tracker.snapshot().bootstrapReasons, [long], "64 characters pass, 65 and 2 do not");
 });
+
+test("/health publishes how many candidates were judged and the fixed qualification codes, as integers and codes only", async () => {
+  const now = Date.parse("2026-11-12T01:00:00Z");
+  const tracker = new ClosedLearningLoopStatusTracker();
+  tracker.observeBootstrap({ status: "RESEARCH_NOT_DEPLOYABLE", reasons: ["NO_ALLOCATION_ADVISORY"], qualificationSummary: { candidateCount: 19, qualifiedCount: 0, insufficientCount: 4, rejectedCount: 15, reasonCounts: { PBO_TOO_HIGH: 15, "free text": 3, lowercase: 2, COST_STRESS_FAILED: 7 } } });
+  tracker.observeRollover({ status: "WAITING_FOR_EVALUATION_WINDOW" }, now);
+  const snapshot = tracker.snapshot();
+  assert.deepEqual(snapshot.bootstrapQualification, { candidates: 19, qualified: 0, insufficient: 4, rejected: 15 });
+  assert.equal(snapshot.bootstrapRejectionReasons, undefined, "the tracker drops the WHOLE code map when one code is bad (independent review of #3096)");
+  assert.deepEqual(snapshot.bootstrapQualification, { candidates: 19, qualified: 0, insufficient: 4, rejected: 15 }, "the counts stay");
+  const clean = new ClosedLearningLoopStatusTracker();
+  clean.observeBootstrap({ status: "RESEARCH_NOT_DEPLOYABLE", qualificationSummary: { candidateCount: 19, qualifiedCount: 0, insufficientCount: 4, rejectedCount: 15, reasonCounts: { PBO_TOO_HIGH: 15, COST_STRESS_FAILED: 7 } } });
+  clean.observeRollover({ status: "WAITING_FOR_EVALUATION_WINDOW" }, now);
+  assert.deepEqual({ ...clean.snapshot().bootstrapRejectionReasons }, { PBO_TOO_HIGH: 15, COST_STRESS_FAILED: 7 }, "a clean map is kept as it is");
+  for (const bad of [{ PBO_TOO_HIGH: -1 }, { PBO_TOO_HIGH: 1.5 }, { PBO_TOO_HIGH: "3" }, Object.fromEntries(Array.from({ length: 9 }, (_, i) => [`CODE_${i}`, 1])), {}, ["PBO_TOO_HIGH"]]) {
+    const t = new ClosedLearningLoopStatusTracker();
+    t.observeBootstrap({ status: "RESEARCH_NOT_DEPLOYABLE", qualificationSummary: { candidateCount: 2, qualifiedCount: 0, insufficientCount: 0, rejectedCount: 2, reasonCounts: bad } });
+    t.observeRollover({ status: "WAITING_FOR_EVALUATION_WINDOW" }, now);
+    assert.equal(t.snapshot().bootstrapRejectionReasons, undefined, "an unusable code map is dropped as a whole");
+    assert.deepEqual(t.snapshot().bootstrapQualification, { candidates: 2, qualified: 0, insufficient: 0, rejected: 2 });
+  }
+  const cleanSnapshot = clean.snapshot();
+  let loop = cleanSnapshot;
+  await withServer({ runtimeLiveness: () => ({ ...LIVENESS, closedLearningLoop: loop }) }, async (handle) => {
+    const read = async () => JSON.parse((await request(handle.port, "/health")).body).runtime.closedLearningLoop;
+    const published = await read();
+    assert.deepEqual(published.bootstrapQualification, { candidates: 19, qualified: 0, insufficient: 4, rejected: 15 });
+    assert.deepEqual(published.bootstrapRejectionReasons, { PBO_TOO_HIGH: 15, COST_STRESS_FAILED: 7 });
+    loop = { ...cleanSnapshot, bootstrapRejectionReasons: { PBO_TOO_HIGH: 15, "bad code": 1 } };
+    assert.equal((await read()).bootstrapRejectionReasons, undefined, "one bad code drops the whole map");
+    assert.deepEqual((await read()).bootstrapQualification, { candidates: 19, qualified: 0, insufficient: 4, rejected: 15 }, "the counts stay");
+    loop = { ...cleanSnapshot, bootstrapRejectionReasons: { PBO_TOO_HIGH: -1 } };
+    assert.equal((await read()).bootstrapRejectionReasons, undefined, "a negative count drops the map");
+    loop = { ...cleanSnapshot, bootstrapRejectionReasons: { PBO_TOO_HIGH: 1.5 } };
+    assert.equal((await read()).bootstrapRejectionReasons, undefined, "a fractional count drops the map");
+    loop = { ...cleanSnapshot, bootstrapRejectionReasons: Object.fromEntries(Array.from({ length: 9 }, (_, i) => [`CODE_${i}`, 1])) };
+    assert.equal((await read()).bootstrapRejectionReasons, undefined, "more than eight codes drops the map");
+    loop = { ...cleanSnapshot, bootstrapRejectionReasons: ["PBO_TOO_HIGH"] };
+    assert.equal((await read()).bootstrapRejectionReasons, undefined, "an array is not a map");
+    loop = { ...cleanSnapshot, bootstrapQualification: { candidates: 19, qualified: "0", insufficient: 4, rejected: 15 } };
+    const withBadCounts = await read();
+    assert.equal(withBadCounts.bootstrapQualification, undefined, "a non-integer count withdraws the counts");
+    assert.equal(withBadCounts.bootstrapRejectionReasons, undefined, "and with them the code map");
+    loop = { ...cleanSnapshot, bootstrap: "DEPLOYED" };
+    const deployed = await read();
+    assert.equal(deployed.bootstrapQualification, undefined);
+    assert.equal(deployed.bootstrapRejectionReasons, undefined);
+  }, 42593);
+  tracker.observeBootstrap({ status: "DEPLOYED", qualificationSummary: { candidateCount: 1, qualifiedCount: 1, insufficientCount: 0, rejectedCount: 0, reasonCounts: {} } });
+  tracker.observeError(now + 1, "SOME_ERROR");
+  assert.equal(tracker.snapshot().bootstrapQualification, undefined, "no stale qualification after the bootstrap changed");
+  assert.equal(tracker.snapshot().bootstrapRejectionReasons, undefined);
+});
