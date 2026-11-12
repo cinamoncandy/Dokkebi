@@ -1,0 +1,24 @@
+current_codex_selector_pagination_20261108:
+  work_order: WO-ISSUE-903-L1-EXECUTION-LEASE-HANDOFF
+  issue: 903
+  pull_request: 2039
+  status: PUBLISHED_EXACT_HEAD_CI_PASS_REVIEW_P1_FOUND
+  verified_published_head: 450ec1645e1c975da5603727fa7f1f9122c3ac85
+  protected_main: 54c095daff15bc4ef067e12ed26c666e5fd3d4c0
+  observed_at: "2026-11-08T04:46:49Z"
+  finding: "Codex selection and server-side WIP claim revalidation queried only the first 100 open issues and pulls. Full inventory returned 127 real open issues and 65 open PRs."
+  classification: "#2118 and #2121 were the only eligible records exposed after pagination before reconciliation; both now carry HOLD with evidence comments, remain open, and require canonical-owner refresh before selection. Current exact selector returns null; no synthetic task was created."
+  code: "Shared bounded pagination (10 pages/resource, stable created order, identity validation, fail-closed API/malformed/duplicate/overflow) is used by both Codex selector and Worker claim revalidation."
+  validation: "Exact-head 450ec1645e1c975da5603727fa7f1f9122c3ac85: CI 42447271578 and companion runs 42447271576, 42447271626, 42447271603, 42447271584, 42447271602 all SUCCESS. Conditional causal-regression and attestation jobs were SKIPPED and are not positive causal evidence. Earlier local 1339/1339 and focused 97/97 results belong to predecessor validation and are not claimed as fresh exact-head results."
+  independent_review: "COMMENTED on exact head 450ec1645e1c975da5603727fa7f1f9122c3ac85; P1 recovery-state finding PRRT_kwDOTUbne86095za remains unresolved. The review also requires independent disposition of current applicable threads."
+  formal_validator: "REQUESTED_NOT_VERDICT in handoff comment 6717340711 for exact head 450ec1645e1c975da5603727fa7f1f9122c3ac85."
+  audit: PENDING
+  release: PENDING
+  manual_run_ready: BLOCKED
+  runner_status: UNKNOWN_ACTIONS_API_403
+  codex_login: UNKNOWN_RUNNER_READ_ACCESS_UNAVAILABLE
+  active_wip_claims: UNKNOWN_NO_READ_ONLY_ROUTE
+  workflow: ACTIVE_OWNER_REPORTED_ENABLED
+  current_main_safe_to_run: false
+  next: "This entry records the verified 450ec164 checkpoint and its P1 review result. Resolve the current PR #2039 head from GitHub; if it differs from this checkpoint, run fresh exact-head checks and independent review because prior SHA evidence does not transfer. Do not repeat the pagination-code repair unless a current finding requires it. After terminal review and applicable thread disposition, continue the exact-head Formal Validator gate. Do not dispatch until the claim guard is in protected main and task, WIP, runner, and login preconditions are verified."
+  safety: PAPER_ONLY_ZERO_AUTHORITY_FAIL_CLOSED

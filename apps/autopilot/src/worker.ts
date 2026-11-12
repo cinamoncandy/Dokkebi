@@ -1,5 +1,5 @@
 import baseWorker, { globalReleaseFreezeActive, handleCodingExecute, type Env as BaseEnv } from "./index";
-import { acquirePersistentExecution, claimIsolatedCausalAttempt, ExecutionCoordinator, handoffOrAcquirePersistentExecution, markPersistentExecutionDispatched, readPersistentControlPlaneHold, readProviderCapacityWait, recordCodingExecutionEvidence, recordProviderCapacityWait, releaseActiveWip, releasePersistentExecution } from "./executionCoordinator";
+import { acquirePersistentExecution, claimIsolatedCausalAttempt, completeActiveWip, ExecutionCoordinator, handoffOrAcquirePersistentExecution, markPersistentExecutionDispatched, readActiveWip, readActiveWipCompletions, readPersistentControlPlaneHold, readProviderCapacityWait, recordCodingExecutionEvidence, recordProviderCapacityWait, releaseActiveWip, releasePersistentExecution } from "./executionCoordinator";
 import { createCodingExecutionEvidence } from "./codingExecutionEvidence";
 import { reconcileCodingExecutionEvidence } from "./productionExecutionSpine";
 import {
@@ -16,7 +16,7 @@ import {
   type CodingRunnerRequest,
 } from "./codingRunner";
 import { GithubValidatedPatchPublisher } from "./githubValidatedPatchPublisher";
-import { verifyGithubActionsOidcToken, verifyGithubIsolatedConsumerIdentity, verifyGithubIsolatedConsumerRun, verifyGithubIsolatedSourceRun, verifyGithubReleaseControlOidcToken } from "./githubActionsOidc";
+import { verifyGithubActionsOidcToken, verifyGithubCodexWipCurrentMainSha, verifyGithubCodexWipIdentity, verifyGithubCodexWipRun, verifyGithubIsolatedConsumerIdentity, verifyGithubIsolatedConsumerRun, verifyGithubIsolatedSourceRun, verifyGithubReleaseControlOidcToken } from "./githubActionsOidc";
 import { AUDIT_PROVIDER, executeIndependentAudit, executeProviderGatedAudit, validateAuditRunnerRequest } from "./auditRunner";
 import { classifyAiBudgetState } from "./aiBudgetState";
 import { decideCodingRunnerNoAction } from "./codingRunnerRemediation";
@@ -28,6 +28,7 @@ import { verifyGithubCausalProducerEvidence, verifyGithubCodingPublisherIdentity
 import { createCausalAdmissionReceipt } from "./causalRegressionAdmission";
 import { applyCausalRepairPatch, verifyCausalPublishedFiles } from "./causalRepairPatch";
 import { createCausalProposalReceipt, verifyCausalProposalReceipt, CAUSAL_REPAIR_TARGET as SIGNED_CAUSAL_REPAIR_TARGET } from "./causalProposalReceipt";
+import { codexWorkOrderTaskSnapshotDigest, fetchVerifiedCodexWorkOrderInventory, type CodexWorkOrderTask } from "./githubWorkOrderInventory";
 
 export { ExecutionCoordinator };
 
@@ -197,6 +198,7 @@ async function trustedCausalRepairContext(
 }
 
 const WIP_RELEASE_IDENTITY = /^[A-Za-z0-9_.:|-]{1,512}$/;
+type CodexWipFetch = (input: string, init?: RequestInit) => Promise<Response>;
 
 async function readBoundedCausalClaimBody(request: Request): Promise<string> {
   if (!request.body) throw new Error("CAUSAL_DISPATCH_REQUEST_INVALID");
@@ -380,6 +382,177 @@ export async function handleCodingWipRelease(request: Request, env: WorkerEnv): 
     return json({ ...result, ...authority }, 200);
   } catch {
     return json({ released: false, error: "ACTIVE_WIP_RELEASE_FAILED", ...authority }, 503);
+  }
+}
+
+/**
+ * Claims/releases one slot in the existing two-slot WIP coordinator for the exact
+ * protected-main Codex workflow run. This endpoint conveys no coding or repository-write authority.
+ */
+export async function handleCodexWipCoordination(
+  request: Request,
+  env: WorkerEnv,
+  dependencies: { readonly now?: () => number; readonly fetchImpl?: CodexWipFetch } = {},
+): Promise<Response> {
+  const authority = { liveAuthority: "NONE", productionMutationAllowed: false, aiAuthority: "ZERO_AUTHORITY" } as const;
+  const allowedRepository = env.NUSA_GITHUB_REPOSITORY?.trim() || "cinamoncandy/NUSA";
+  const provided = request.headers.get("authorization")?.replace(/^Bearer\s+/i, "").trim();
+  if (!provided) return json({ accepted: false, error: "CODEX_WIP_OIDC_REQUIRED", ...authority }, 401);
+  if (allowedRepository !== "cinamoncandy/NUSA" || !env.NUSA_GITHUB_TOKEN?.trim() || !env.NUSA_EXECUTION_COORDINATOR) {
+    return json({ accepted: false, error: "CODEX_WIP_COORDINATOR_UNAVAILABLE", ...authority }, 503);
+  }
+  const fetchImpl = dependencies.fetchImpl ?? (fetch as unknown as CodexWipFetch);
+  const now = dependencies.now ?? Date.now;
+  let identity: Awaited<ReturnType<typeof verifyGithubCodexWipIdentity>>;
+  try {
+    identity = await verifyGithubCodexWipIdentity(provided, allowedRepository, fetchImpl as never, Math.floor(now() / 1000));
+    await verifyGithubCodexWipRun(identity, env.NUSA_GITHUB_TOKEN.trim(), fetchImpl as never);
+  } catch (error) {
+    const code = error instanceof Error ? error.message : "CODEX_WIP_IDENTITY_INVALID";
+    const unavailable = /UNAVAILABLE|JWKS_HTTP/.test(code);
+    return json({ accepted: false, error: unavailable ? "CODEX_WIP_IDENTITY_UNAVAILABLE" : "CODEX_WIP_IDENTITY_REJECTED", ...authority }, unavailable ? 503 : 401);
+  }
+
+  const contentLength = request.headers.get("content-length");
+  if (contentLength !== null && (!/^\d+$/.test(contentLength) || Number(contentLength) > 1024)) {
+    return json({ accepted: false, error: "CODEX_WIP_REQUEST_INVALID", ...authority }, 400);
+  }
+  let body: { action?: unknown; issueNumber?: unknown; headSha?: unknown; taskDigest?: unknown };
+  try {
+    body = await request.json() as { action?: unknown; issueNumber?: unknown; headSha?: unknown; taskDigest?: unknown };
+  } catch {
+    return json({ accepted: false, error: "CODEX_WIP_REQUEST_INVALID", ...authority }, 400);
+  }
+  if ((body.action !== "claim" && body.action !== "verify" && body.action !== "release")
+    || typeof body.issueNumber !== "number" || !Number.isSafeInteger(body.issueNumber) || body.issueNumber < 1 || body.issueNumber > 1_000_000) {
+    return json({ accepted: false, error: "CODEX_WIP_REQUEST_INVALID", ...authority }, 400);
+  }
+  if (typeof body.headSha !== "string" || !/^[a-f0-9]{40}$/i.test(body.headSha)) {
+    return json({ accepted: false, error: "CODEX_WIP_REQUEST_INVALID", ...authority }, 400);
+  }
+  if (body.headSha.toLowerCase() !== identity.sha) {
+    return json({ accepted: false, error: "CODEX_WIP_HEAD_SHA_MISMATCH", ...authority }, 409);
+  }
+  const issueNumber = Number(body.issueNumber);
+  if (typeof body.taskDigest !== "string" || !/^[a-f0-9]{64}$/i.test(body.taskDigest)) {
+    return json({ accepted: false, error: "CODEX_WIP_TASK_DIGEST_INVALID", ...authority }, 400);
+  }
+  const taskDigest = body.taskDigest.toLowerCase();
+  const dedupeKey = `codex-wip:${identity.runId}:${identity.runAttempt}:issue:${issueNumber}:sha:${identity.sha}`;
+  const executionId = `codex-execution:${identity.runId}:${identity.runAttempt}:issue:${issueNumber}:sha:${identity.sha}`;
+  if (!WIP_RELEASE_IDENTITY.test(dedupeKey) || !WIP_RELEASE_IDENTITY.test(executionId)) {
+    return json({ accepted: false, error: "CODEX_WIP_IDENTITY_INVALID", ...authority }, 400);
+  }
+
+  if (body.action === "claim") {
+    try {
+      await verifyGithubCodexWipCurrentMainSha(identity, env.NUSA_GITHUB_TOKEN.trim(), fetchImpl as never);
+    } catch (error) {
+      const code = error instanceof Error ? error.message : "CODEX_WIP_MAIN_UNAVAILABLE";
+      const unavailable = code.includes("UNAVAILABLE");
+      return json({ accepted: false, error: unavailable ? "CODEX_WIP_MAIN_UNAVAILABLE" : "CODEX_WIP_MAIN_MISMATCH", ...authority }, unavailable ? 503 : 409);
+    }
+    let selectedTask: CodexWorkOrderTask | null;
+    try {
+      const headers = { accept: "application/vnd.github+json", authorization: `Bearer ${env.NUSA_GITHUB_TOKEN.trim()}`, "user-agent": "nusa-autopilot-worker", "x-github-api-version": "2022-11-28" };
+      const inventory = await fetchVerifiedCodexWorkOrderInventory(allowedRepository, identity.sha, headers, fetchImpl);
+      if (inventory.consistency.automaticSelectionAllowed !== true
+        || inventory.consistency.mainSha !== identity.sha) {
+        return json({ accepted: false, error: "CODEX_WIP_INVENTORY_UNVERIFIABLE", ...authority }, 503);
+      }
+      selectedTask = inventory.task;
+    } catch (error) {
+      if (error instanceof Error && error.message === "CODEX_WORK_ORDER_MAIN_CHANGED") {
+        return json({ accepted: false, error: "CODEX_WIP_MAIN_MISMATCH", ...authority }, 409);
+      }
+      return json({ accepted: false, error: "CODEX_WIP_TASK_UNAVAILABLE", ...authority }, 503);
+    }
+    if (!selectedTask || selectedTask.task.issueNumber !== issueNumber || !selectedTask.task.canonicalOwner || selectedTask.task.conflictKeys.length === 0) {
+      return json({ accepted: false, error: "CODEX_WIP_TASK_NOT_CURRENT_OR_UNCLAIMABLE", ...authority }, 409);
+    }
+    const selectedTaskDigest = await codexWorkOrderTaskSnapshotDigest(selectedTask);
+    if (!constantTimeEqual(selectedTaskDigest, taskDigest)) {
+      return json({ accepted: false, error: "CODEX_WIP_TASK_SNAPSHOT_MISMATCH", ...authority }, 409);
+    }
+    try {
+      await verifyGithubCodexWipCurrentMainSha(identity, env.NUSA_GITHUB_TOKEN.trim(), fetchImpl as never);
+    } catch (error) {
+      const code = error instanceof Error ? error.message : "CODEX_WIP_MAIN_UNAVAILABLE";
+      const unavailable = code.includes("UNAVAILABLE");
+      return json({ accepted: false, error: unavailable ? "CODEX_WIP_MAIN_UNAVAILABLE" : "CODEX_WIP_MAIN_MISMATCH", ...authority }, unavailable ? 503 : 409);
+    }
+    // GitHub's main ref and the Coordinator cannot currently be committed in
+    // one transaction. Never create a claim using a potentially stale read.
+    return json({ accepted: false, error: "CODEX_WIP_ATOMIC_MAIN_BINDING_UNVERIFIED", ...authority }, 503);
+  }
+
+  if (body.action === "verify") {
+    try {
+      const active = await readActiveWip(env.NUSA_EXECUTION_COORDINATOR);
+      const claim = active.claims.find((candidate) => candidate.dedupeKey === dedupeKey);
+      if (!claim || claim.executionId !== executionId || claim.taskId !== `issue-${issueNumber}`
+        || claim.protectedMainSha !== identity.sha || claim.taskSnapshotDigest !== taskDigest
+        || claim.leaseOwnerIdentity !== `${identity.repository}:${identity.runId}:${identity.runAttempt}`
+        || !Number.isSafeInteger(claim.leaseExpiresAt) || Number(claim.leaseExpiresAt) <= now()) {
+        return json({ accepted: false, error: "CODEX_WIP_CLAIM_RECEIPT_MISMATCH", ...authority }, 409);
+      }
+      await verifyGithubCodexWipCurrentMainSha(identity, env.NUSA_GITHUB_TOKEN.trim(), fetchImpl as never);
+      const headers = { accept: "application/vnd.github+json", authorization: `Bearer ${env.NUSA_GITHUB_TOKEN.trim()}`, "user-agent": "nusa-autopilot-worker", "x-github-api-version": "2022-11-28" };
+      const inventory = await fetchVerifiedCodexWorkOrderInventory(allowedRepository, identity.sha, headers, fetchImpl);
+      if (inventory.consistency.automaticSelectionAllowed !== true || inventory.consistency.mainSha !== identity.sha) {
+        return json({ accepted: false, error: "CODEX_WIP_INVENTORY_UNVERIFIABLE", ...authority }, 503);
+      }
+      const selectedTask = inventory.task;
+      if (!selectedTask || selectedTask.task.issueNumber !== issueNumber) return json({ accepted: false, error: "CODEX_WIP_TASK_NOT_CURRENT_OR_UNCLAIMABLE", ...authority }, 409);
+      const currentDigest = await codexWorkOrderTaskSnapshotDigest(selectedTask);
+      if (!constantTimeEqual(currentDigest, taskDigest)) return json({ accepted: false, error: "CODEX_WIP_TASK_SNAPSHOT_MISMATCH", ...authority }, 409);
+      // This final main read is intentionally adjacent to the runner step. GitHub and the DO
+      // admission are not one transaction, so a later repository update remains a bounded race.
+      await verifyGithubCodexWipCurrentMainSha(identity, env.NUSA_GITHUB_TOKEN.trim(), fetchImpl as never);
+      const stillActive = await readActiveWip(env.NUSA_EXECUTION_COORDINATOR);
+      const latestClaim = stillActive.claims.find((candidate) => candidate.dedupeKey === dedupeKey);
+      if (!latestClaim || latestClaim.executionId !== executionId || latestClaim.taskSnapshotDigest !== taskDigest
+        || latestClaim.protectedMainSha !== identity.sha || latestClaim.leaseOwnerIdentity !== claim.leaseOwnerIdentity
+        || !Number.isSafeInteger(latestClaim.leaseExpiresAt) || Number(latestClaim.leaseExpiresAt) <= now()) {
+        return json({ accepted: false, error: "CODEX_WIP_CLAIM_RECEIPT_MISMATCH", ...authority }, 409);
+      }
+      // Existing claim reads have the same cross-system race; do not authorize
+      // the runner while an atomic binding is unavailable. Release stays usable.
+      return json({ accepted: false, error: "CODEX_WIP_ATOMIC_MAIN_BINDING_UNVERIFIED", ...authority }, 503);
+    } catch (error) {
+      const code = error instanceof Error ? error.message : "CODEX_WIP_VERIFY_UNAVAILABLE";
+      if (code === "CODEX_WORK_ORDER_MAIN_CHANGED") {
+        return json({ accepted: false, error: "CODEX_WIP_MAIN_MISMATCH", ...authority }, 409);
+      }
+      const unavailable = code.includes("UNAVAILABLE") || code.startsWith("CODEX_WORK_ORDER_");
+      return json({ accepted: false, error: unavailable ? "CODEX_WIP_VERIFY_UNAVAILABLE" : "CODEX_WIP_VERIFY_REJECTED", ...authority }, unavailable ? 503 : 409);
+    }
+  }
+
+  try {
+    const active = await readActiveWip(env.NUSA_EXECUTION_COORDINATOR);
+    const claim = active.claims.find((candidate) => candidate.dedupeKey === dedupeKey);
+    if (!claim) {
+      const completions = await readActiveWipCompletions(env.NUSA_EXECUTION_COORDINATOR);
+      const completed = completions.some((entry) => entry.dedupeKey === dedupeKey && entry.executionId === executionId);
+      return json({ accepted: completed, released: false, reason: completed ? "ALREADY_COMPLETED" : "CLAIM_NOT_ACTIVE", ...authority }, completed ? 200 : 409);
+    }
+    if (claim.executionId !== executionId) return json({ accepted: false, error: "CODEX_WIP_OWNER_MISMATCH", ...authority }, 409);
+    if (claim.taskId !== `issue-${issueNumber}` || claim.protectedMainSha !== identity.sha || claim.taskSnapshotDigest !== taskDigest
+      || claim.leaseOwnerIdentity !== `${identity.repository}:${identity.runId}:${identity.runAttempt}`) {
+      return json({ accepted: false, error: "CODEX_WIP_OWNER_MISMATCH", ...authority }, 409);
+    }
+    await completeActiveWip(env.NUSA_EXECUTION_COORDINATOR, {
+      dedupeKey,
+      executionId,
+      workerId: `github-actions-codex:${identity.runId}`,
+      startedAt: claim.claimedAt,
+      completedAt: now(),
+      kind: "CLAIM_RELEASED",
+    });
+    return json({ accepted: true, action: "release", issueNumber, released: true, ...authority }, 200);
+  } catch {
+    return json({ accepted: false, error: "CODEX_WIP_RELEASE_UNAVAILABLE", ...authority }, 503);
   }
 }
 
@@ -784,6 +957,10 @@ const worker = {
 
     if (request.method === "POST" && url.pathname === "/coding/wip-release") {
       return handleCodingWipRelease(request, env);
+    }
+
+    if (request.method === "POST" && url.pathname === "/coding/codex-wip") {
+      return handleCodexWipCoordination(request, env);
     }
 
     if (request.method === "POST" && url.pathname === "/coding/publish") {

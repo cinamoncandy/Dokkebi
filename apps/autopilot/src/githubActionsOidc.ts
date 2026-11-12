@@ -3,6 +3,8 @@ const GITHUB_OIDC_JWKS = `${GITHUB_OIDC_ISSUER}/.well-known/jwks`;
 const DEFAULT_AUDIENCE = "nusa-autopilot";
 const CLOCK_SKEW_SECONDS = 60;
 const CODING_RUNNER_WORKFLOW = ".github/workflows/autopilot-execution-consumer.yml";
+const CODEX_WIP_WORKFLOW = ".github/workflows/autopilot-codex-coding.yml";
+export const CODEX_WIP_AUDIENCE = "nusa-codex-wip-v1";
 const EVENT_BRIDGE_WORKFLOW = ".github/workflows/autopilot-github-event-bridge.yml";
 const RELEASE_CONTROL_WORKFLOW = ".github/workflows/autopilot-deterministic-audit-release.yml";
 const EVENT_BRIDGE_EVENTS = new Set(["push", "pull_request_target", "workflow_run"]);
@@ -80,7 +82,7 @@ interface JsonWebKeySet {
 }
 
 interface OidcPolicy {
-  readonly errorPrefix: "CODING_RUNNER_OIDC" | "EVENT_BRIDGE_OIDC" | "RELEASE_CONTROL_OIDC" | "ISOLATED_CONSUMER_OIDC";
+  readonly errorPrefix: "CODING_RUNNER_OIDC" | "CODEX_WIP_OIDC" | "EVENT_BRIDGE_OIDC" | "RELEASE_CONTROL_OIDC" | "ISOLATED_CONSUMER_OIDC";
   readonly workflowPath: string;
   readonly requireMainRef: boolean;
   readonly allowedEvents: ReadonlySet<string>;
@@ -92,6 +94,23 @@ const CODING_RUNNER_POLICY: OidcPolicy = Object.freeze({
   requireMainRef: true,
   allowedEvents: new Set(["repository_dispatch"]),
 });
+
+const CODEX_WIP_POLICY: OidcPolicy = Object.freeze({
+  errorPrefix: "CODEX_WIP_OIDC",
+  workflowPath: CODEX_WIP_WORKFLOW,
+  requireMainRef: true,
+  allowedEvents: new Set(["schedule", "workflow_dispatch", "pull_request_target"]),
+});
+
+export interface VerifiedCodexWipIdentity {
+  readonly repository: string;
+  readonly workflowRef: string;
+  readonly ref: "refs/heads/main";
+  readonly sha: string;
+  readonly runId: string;
+  readonly runAttempt: string;
+  readonly event: "schedule" | "workflow_dispatch" | "pull_request_target";
+}
 
 const EVENT_BRIDGE_POLICY: OidcPolicy = Object.freeze({
   errorPrefix: "EVENT_BRIDGE_OIDC",
@@ -252,6 +271,83 @@ export async function verifyGithubActionsOidcToken(
   audience = DEFAULT_AUDIENCE,
 ): Promise<void> {
   await verifyWithPolicy(token, allowedRepository, CODING_RUNNER_POLICY, fetchImpl, nowSeconds, audience);
+}
+
+/** Narrow identity for the existing Codex workflow's WIP coordinator calls only. */
+export async function verifyGithubCodexWipIdentity(
+  token: string,
+  allowedRepository: string,
+  fetchImpl: FetchImpl = fetch as unknown as FetchImpl,
+  nowSeconds = Math.floor(Date.now() / 1000),
+): Promise<VerifiedCodexWipIdentity> {
+  if (allowedRepository !== "cinamoncandy/NUSA") fail(CODEX_WIP_POLICY, "REPOSITORY_POLICY_INVALID");
+  const claims = await verifyWithPolicy(token, allowedRepository, CODEX_WIP_POLICY, fetchImpl, nowSeconds, CODEX_WIP_AUDIENCE);
+  if (typeof claims.sha !== "string" || !/^[a-f0-9]{40}$/i.test(claims.sha)) fail(CODEX_WIP_POLICY, "SHA_INVALID");
+  if (typeof claims.run_id !== "string" || !/^[1-9][0-9]{0,19}$/.test(claims.run_id)) fail(CODEX_WIP_POLICY, "RUN_ID_INVALID");
+  if (typeof claims.run_attempt !== "string" || !/^[1-9][0-9]{0,9}$/.test(claims.run_attempt)) fail(CODEX_WIP_POLICY, "RUN_ATTEMPT_INVALID");
+  return Object.freeze({
+    repository: allowedRepository,
+    workflowRef: claims.workflow_ref as string,
+    ref: "refs/heads/main",
+    sha: claims.sha.toLowerCase(),
+    runId: claims.run_id,
+    runAttempt: claims.run_attempt,
+    event: claims.event_name as VerifiedCodexWipIdentity["event"],
+  });
+}
+
+/** A signed token is accepted only for the exact current in-progress GitHub run and attempt. */
+export async function verifyGithubCodexWipRun(
+  identity: VerifiedCodexWipIdentity,
+  token: string,
+  fetchImpl: FetchImpl = fetch as unknown as FetchImpl,
+): Promise<void> {
+  if (!token.trim() || identity.repository !== "cinamoncandy/NUSA"
+    || identity.workflowRef !== `${identity.repository}/${CODEX_WIP_WORKFLOW}@refs/heads/main`
+    || !/^[a-f0-9]{40}$/.test(identity.sha)
+    || !/^[1-9][0-9]{0,19}$/.test(identity.runId)
+    || !/^[1-9][0-9]{0,9}$/.test(identity.runAttempt)) throw new Error("CODEX_WIP_RUN_IDENTITY_INVALID");
+  let response: JsonResponse;
+  try {
+    response = await fetchImpl(`https://api.github.com/repos/${identity.repository}/actions/runs/${identity.runId}/attempts/${identity.runAttempt}`, {
+      headers: { accept: "application/vnd.github+json", authorization: `Bearer ${token}`, "user-agent": "nusa-autopilot-worker", "x-github-api-version": "2022-11-28" },
+    });
+  } catch {
+    throw new Error("CODEX_WIP_RUN_UNAVAILABLE");
+  }
+  if (!response.ok) throw new Error("CODEX_WIP_RUN_UNAVAILABLE");
+  let run: Record<string, unknown> | null;
+  try { run = object(await response.json()); } catch { throw new Error("CODEX_WIP_RUN_UNAVAILABLE"); }
+  const repository = object(run?.repository);
+  if (!run || String(run.id) !== identity.runId || String(run.run_attempt) !== identity.runAttempt
+    || repository?.full_name !== identity.repository || run.path !== CODEX_WIP_WORKFLOW
+    || run.head_sha !== identity.sha || run.head_branch !== "main" || run.event !== identity.event
+    || run.status !== "in_progress") throw new Error("CODEX_WIP_RUN_MISMATCH");
+}
+
+/** Reject a claim if protected main moved after this workflow selected its checkout SHA. */
+export async function verifyGithubCodexWipCurrentMainSha(
+  identity: VerifiedCodexWipIdentity,
+  token: string,
+  fetchImpl: FetchImpl = fetch as unknown as FetchImpl,
+): Promise<void> {
+  if (!token.trim() || identity.repository !== "cinamoncandy/NUSA" || !/^[a-f0-9]{40}$/.test(identity.sha)) {
+    throw new Error("CODEX_WIP_MAIN_IDENTITY_INVALID");
+  }
+  let response: JsonResponse;
+  try {
+    response = await fetchImpl(`https://api.github.com/repos/${identity.repository}/git/ref/heads/main`, {
+      headers: { accept: "application/vnd.github+json", authorization: `Bearer ${token}`, "user-agent": "nusa-autopilot-worker", "x-github-api-version": "2022-11-28" },
+    });
+  } catch {
+    throw new Error("CODEX_WIP_MAIN_UNAVAILABLE");
+  }
+  if (!response.ok) throw new Error("CODEX_WIP_MAIN_UNAVAILABLE");
+  let reference: Record<string, unknown> | null;
+  try { reference = object(await response.json()); } catch { throw new Error("CODEX_WIP_MAIN_UNAVAILABLE"); }
+  const currentSha = object(reference?.object)?.sha;
+  if (typeof currentSha !== "string" || !/^[a-f0-9]{40}$/i.test(currentSha)) throw new Error("CODEX_WIP_MAIN_UNAVAILABLE");
+  if (currentSha.toLowerCase() !== identity.sha) throw new Error("CODEX_WIP_MAIN_MISMATCH");
 }
 
 /** This identity authenticates the publisher, not the cause or source of a failure. */

@@ -1,0 +1,48 @@
+current_codex_pr2039_main_alignment_20261109:
+  observed_at_utc: "2026-11-09T22:41:13Z"
+  canonical_issue: 903
+  canonical_pr: 2039
+  pr_head_before_alignment: 9b325c3befd68ecaeb130466a551585df42ca340
+  pr_base_ref_sha_at_alignment: 6433a7c44db4b2e953f343b971096988b3c2699d
+  protected_main: 2b3f05e8a3c62a7821306461eb3b28bbc4a6785a
+  merge_base: 6433a7c44db4b2e953f343b971096988b3c2699d
+  ahead_behind_before_alignment: "PR 56 ahead / 5 behind protected main"
+  merge_conflict: ".aipos/CURRENT_TRUTH.md only; resolved by node scripts/generate-aipos-current-truth.js"
+  main_delta: "Five main-only commits; adds paperFillReplay and tests, changes paperTodayRealized, and adds its work order. No overlap with Autopilot selector/OIDC/pagination implementation files."
+  local_integration: "SUCCESS in isolated worktree /workspace/nusa-2039-main-align-2b3f05e8; existing candidate worktrees preserved"
+  focused_tests: "100/100 PASS: paper-fill-replay, pagination, snapshot, WIP coordination, Coordinator and OIDC tests"
+  full_tests: "pnpm test PASS; preflight, build and 1,343 isolated test files"
+  validation: "validate:full PASS; security:gate PASS; AIPOS YAML/provenance/drift/conformance PASS; lint 0 errors/48 warnings; git diff --check PASS"
+  pagination_inventory: "UNVERIFIED; task selector and WIP claim admission fail closed"
+  actual_paper: "INCOMPLETE; previous exact runtime evidence is not readiness PASS and no new runtime was dispatched"
+  wip_claims: UNKNOWN
+  writer_lease: UNKNOWN
+  prior_head_ci: "42637434782 PASS on 9b325c3befd68ecaeb130466a551585df42ca340; not evidence for the main-aligned successor"
+  independent_review: PENDING_NEW_EXACT_HEAD_REVIEW
+  thread_disposition: "11 threads unresolved; 8 currently outdated; no author-side resolution"
+  formal_validator: PENDING
+  audit: PENDING
+  release_authorization: PENDING
+  safety: "PAPER_ONLY; liveAuthority=NONE; productionMutationAllowed=false; realOrderAuthority=false; realTransferAuthority=false; aiAuthority=ZERO_AUTHORITY; fail-closed"
+  exact_head_ci: PENDING_FOR_MAIN_ALIGNED_SUCCESSOR
+  next: "Commit the aligned candidate, fast-forward the existing Draft PR only if its remote head still equals 9b325c3 and protected main still equals 2b3f05e8, then verify exact-head CI and request fresh non-author disposition."
+  successor_20261110:
+    canonical_issue: 903
+    canonical_pr: 2039
+    status_on_published_commit: PUBLISHED_FRESH_GATE_DISCOVERY_REQUIRED
+    prior_published_pr_head: efa145dae9c7ed5f910bd522b147ad7fdd3fd0a0
+    confirmed_prior_head_exact_ci: "6/6 workflow runs SUCCESS; conditional main-only causal jobs SKIPPED"
+    historical_main_parent: 7714c22a3439c332e93841ea79535082cc27be2e
+    latest_aligned_main_parent_at_record: 91959182a10abcf6176cc5b40304838724a01fa5
+    alignment: "Protected main 7714c22a was merged, then 91959182 merged without conflicts (current main at this checkpoint); existing #2039 branch stays non-force and Draft. Resolve live main/PR exact head for each next gate."
+    new_change: "Isolated Codex coding smoke-test added client fail-closed regression for HTTP 200 accepted=false and coordinator fetch error; no operational claim."
+    recovery_supersession: "Older 2026-11-09 entries and their 2b3f05e8 publication instructions are historical only; do not repeat. Determine next gate from actual remote HEAD and exact-head CI."
+    inventory_source: "AIPOS-only local candidate 449f275dcdb4278fc9686d1c1d0cb692a168e813 unavailable; not integrated. GitHub scan remains diagnostic and selector/admission fail closed."
+    thread_disposition: "Existing applicable P1/P2 threads remain unresolved; a separate Codex technical review is not Formal Validator ACCEPTED."
+    operational_wip_lease: UNKNOWN
+    actual_coding_e2e: "NOT_RUN; isolated code-edit smoke-test is not authorized operational Select->Claim->CodingRunner E2E."
+    formal_validator: PENDING
+    audit: PENDING
+    release_authorization: PENDING
+    safety: "PAPER_ONLY; liveAuthority=NONE; productionMutationAllowed=false; realOrderAuthority=false; realTransferAuthority=false; aiAuthority=ZERO_AUTHORITY; FAIL_CLOSED"
+    next: "Do not repeat publication of this checkpoint. Read live #2039 HEAD and protected main, check that exact HEAD CI and five companion statuses; if PASS seek non-author thread disposition then separate Formal Validator/Audit/Release. If CI fails, repair the concrete failing test and rerun exact-head gates. No operational Claim or Dispatch."

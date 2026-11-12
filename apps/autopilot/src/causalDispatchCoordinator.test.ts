@@ -173,7 +173,21 @@ test("causal admission is consumed atomically by exactly one lease handoff", asy
 
   const consumed = await post("/handoff-or-acquire", handoff);
   assert.equal(consumed.status, 201);
-  assert.equal((await consumed.json() as { causalAdmissionConsumed?: boolean }).causalAdmissionConsumed, true);
+  const consumedBody = await consumed.json() as {
+    causalAdmissionConsumed?: boolean;
+    record?: { state?: string; leaseExpiresAt?: number };
+  };
+  assert.equal(consumedBody.causalAdmissionConsumed, true);
+  assert.equal(consumedBody.record?.state, "HANDED_OFF");
+  assert.equal(consumedBody.record?.leaseExpiresAt, handoff.leaseExpiresAt, "causal handoff retains the consumer execution window");
+  const competingAcquire = await post("/acquire", {
+    ...execution,
+    executionId: "exec:competing",
+    now: 131,
+    leaseExpiresAt: 300,
+  });
+  assert.equal(competingAcquire.status, 409);
+  assert.equal((await competingAcquire.json() as { reason?: string }).reason, "LEASE_ACTIVE");
   assert.equal((await post("/handoff-or-acquire", { ...handoff, now: 131 })).status, 409);
 
   const history = await storage.get<{ entries: Array<{ binding: { causalAdmissionConsumedAt?: number | null } }> }>("causal-dispatch-bindings");

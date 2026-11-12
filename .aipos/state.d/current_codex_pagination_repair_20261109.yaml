@@ -1,0 +1,44 @@
+current_codex_pagination_repair_20261109:
+  work_order: WO-ISSUE-903-L1-EXECUTION-LEASE-HANDOFF
+  issue: 903
+  pull_request: 2039
+  status: MAIN_6433_INTEGRATED_LOCAL_VALIDATION_PASS_PENDING_MERGE_COMMIT
+  observed_at_utc: "2026-11-09T13:39:44Z"
+  source_pr_head: ecdee7bb568db35daf832a92d84b0a141ab40666
+  source_pr_base: 54c095daff15bc4ef067e12ed26c666e5fd3d4c0
+  protected_main_at_start: 6433a7c44db4b2e953f343b971096988b3c2699d
+  protected_main_at_end: 6433a7c44db4b2e953f343b971096988b3c2699d
+  current_main_delta: "Protected main 6433a7c44db4b2e953f343b971096988b3c2699d is integrated in the new isolated reconciliation worktree. It adds five paths since PR candidate f2551960cf29495e619b2f449cc462b88d68fc77, including PAPER display replay code/tests. Merge-base is 9daeb72cedb6fc8d1a90b004e08d3a4c8d28b595; only generated CURRENT_TRUTH conflicted and was regenerated."
+  isolated_implementation_branch: isolated-pagination-reconciliation
+  local_commit: "f2551960cf29495e619b2f449cc462b88d68fc77 published; latest main 6433a7c4 integrated in isolated worktree; local merge commit pending final gates"
+  code_change: "Replace REST offset scans with bounded GitHub GraphQL cursor traversal, validating edge IDs/cursors, totalCount consistency, ordering, labels, and complete page traversal; compare two full scans. Because no point-in-time snapshot contract is exposed, inventory is explicitly UNVERIFIED and both selector and Worker admission fail closed."
+  safety: "WIP capacity remains 2; no production admission, claim, lease, dispatch, or runtime mutation occurred."
+  validation:
+    focused: "175/175 PASS after main 6433a7c4 integration"
+    build: "root TypeScript PASS"
+    full_suite: "1,342/1,342 PASS after main 6433a7c4 integration"
+    typecheck: "root and mobile PASS (existing node_modules links reused; no install)"
+    validate_full: PASS_ON_6433
+    security_gate: PASS_ON_6433
+    aipos: "YAML, provenance, drift, conformance PASS"
+    lint: "PASS; 0 errors / 47 existing warnings; mobile lint 254 files PASS"
+    diff_check: PASS
+  exact_head_ci: "f2551960cf29495e619b2f449cc462b88d68fc77 CI PASS; new 6433-integrated successor not yet published/CI-tested"
+  independent_review: PENDING
+  current_main_alignment: 6433A7C4_INTEGRATED_IN_ISOLATED_WORKTREE
+  published_candidate_ci:
+    sha: a8ea65089dc39f41698d16e7195afe882f715ed8
+    ci_run: 42621794229
+    result: FAILED_ON_WINDOWS_EOL_SENSITIVE_WORKFLOW_TEST
+    failing_test: tests/autopilot-codex-coding.test.js
+    cause: "Windows checkout produced CRLF in workflow YAML, while the assertion expected LF-only separators; production workflow permission configuration matched the intended contract."
+    conditional_jobs: "causal-regression-contract and attest-causal-regression SKIPPED; not positive evidence"
+  local_successor_repair:
+    change: "Normalize CRLF/CR to LF in the workflow text read by the portability assertion; production workflow unchanged."
+    focused: "11/11 PASS"
+    full_suite: "1,341/1,341 PASS"
+    typecheck: "root and mobile PASS"
+    security_aipos_lint: "PASS (security, AIPOS YAML/provenance/drift/conformance, 0 lint errors / 47 warnings)"
+  wip_claim_and_writer_lease: UNKNOWN
+  latest_main_delta: "Integrated protected main 6433a7c44db4b2e953f343b971096988b3c2699d, whose delta from PR base f2551960cf29495e619b2f449cc462b88d68fc77 has five changed paths: CURRENT_TRUTH, display replay AIPOS work order, paperLossAttribution.ts, paperTodayRealized.ts, and their regression test. Merge-base was 9daeb72cedb6fc8d1a90b004e08d3a4c8d28b595; only CURRENT_TRUTH conflicted and was regenerated with the repository generator."
+  next: "Fresh-check main and PR remote head; commit the locally validated merge resolution and fast-forward the existing PR branch only if its remote head still equals f2551960cf29495e619b2f449cc462b88d68fc77 and main remains 6433a7c44db4b2e953f343b971096988b3c2699d. No force push. Automatic selection/admission remains blocked without point-in-time inventory proof."

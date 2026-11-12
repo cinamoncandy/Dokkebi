@@ -1,0 +1,17 @@
+current_codex_claim_repair_20261108:
+  work_order: WO-ISSUE-903-L1-EXECUTION-LEASE-HANDOFF
+  issue: 903
+  pull_request: 2039
+  status: PUBLISHED_CI_PASS_REVIEW_PENDING
+  published_head_before_this_metadata_update: 281e39d4d3a03e5e0c1e78fb5bf731bfbf12e878
+  protected_main: 54c095daff15bc4ef067e12ed26c666e5fd3d4c0
+  review_findings_source: "Codex COMMENTED review of predecessor 747460c24b804f68ba23940d0f9cd03243da1511: P1 ambiguous claim-release leak; P1 selected task snapshot mismatch; P2 main-ref recheck ordering. These findings do not constitute terminal independent approval for the current successor."
+  repair: "Added claim snapshot SHA-256 binding from selector to server-side fresh re-selection; rechecked main immediately before WIP admission; attempted idempotent release after every executed claim step."
+  validation: "PASS: focused Codex claim/release, workflow, and Worker coordination regression set 100/100; direct targeted rerun 22/22; pnpm test 1339/1339 isolated test files; typecheck, build (through pnpm test), validate:full, security:gate, AIPOS provenance, lint (0 errors/47 existing warnings), and git diff --check PASS."
+  manual_run_ready: BLOCKED
+  blockers: "Protected main does not contain claim guard and snapshot binding; current selector returns null; active WIP claims UNKNOWN; runner labels and Codex login unverified. No workflow dispatch."
+  independent_review: REQUIRED_FOR_NEW_EXACT_HEAD
+  formal_validator: REQUIRED_FOR_NEW_EXACT_HEAD
+  audit_release: NOT_AUTHORIZED
+  safety: PAPER_ONLY_ZERO_AUTHORITY_FAIL_CLOSED
+  next: "This repair was published at 281e39d4 and its CI/5 companion workflows completed SUCCESS. A metadata correction changes HEAD: require fresh exact-head CI, non-author disposition of current P1 backlog pagination and recovery-state findings, then independent Formal Validator/Audit/Release gates. Do not dispatch, mark Ready, merge, or mutate production."

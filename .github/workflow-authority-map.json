@@ -82,6 +82,13 @@
       "secrets": false,
       "environment": null
     },
+    "autopilot-codex-coding.yml:codex": {
+      "write": [
+        "id-token"
+      ],
+      "secrets": false,
+      "environment": null
+    },
     "autopilot-cloudflare-runtime-proof.yml:runtime-proof": {
       "write": [],
       "secrets": false,

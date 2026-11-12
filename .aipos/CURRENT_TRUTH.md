@@ -7,14 +7,14 @@ Everything below is what the repository's records *claim*. Re-verify on GitHub b
 
 ## Newest handoff
 
-[`.aipos/handoffs/2026-11-08-core-speed-p0-p1-2770.md`](handoffs/2026-11-08-core-speed-p0-p1-2770.md) — CORE P0/P1 handoff — Issue #2770 late PAPER lease acquisition
+[`.aipos/handoffs/2026-11-12-pr2039-workorder-inventory.md`](handoffs/2026-11-12-pr2039-workorder-inventory.md) — Issue #903 / PR #2039 — Work Order inventory repair
 
-> Observed: `2026-11-08` (Asia/Seoul)
+> Initial read-only capture: protected main was 5d9304c9780428342ddaf525f3d488c476318f51 and Draft PR #2039 was at f07d1e1cd59b47d5cbb385bb8e89649658c8a11b. The six predecessor workflows passed. A fresh read then found protected main at f5aba595f406a367258fccd85801aae3e6125d6d after #3092; the PR remote was still at f07d1e1, based on 5d9304c. The public main branch reports protected=true with required context nusa/release-authorized; the detailed protection endpoint returned 403. The local candidate contains the Inventory repair and a normal merge of latest main. The SHA and checks in the existing PR branch are always resolved from GitHub; predecessor checks do not apply to the candidate. This checkpoint stops before any Claim/Dispatch or independent approval.
 
 ## Work orders
 
-585 total: 556 in `.aipos/work-orders/`, 29 closed and merged in `.aipos/work-orders/archive/`.
-Of the 556 active files, 376 carry a closed status that has not been archived (merge not proven, or the path is still referenced) and 180 are open or unclassified.
+586 total: 557 in `.aipos/work-orders/`, 29 closed and merged in `.aipos/work-orders/archive/`.
+Of the 557 active files, 376 carry a closed status that has not been archived (merge not proven, or the path is still referenced) and 181 are open or unclassified.
 
 Most common statuses among the open files (new orders use only `READY_FOR_REVIEW`, `IN_PROGRESS`, `BLOCKED`, `COMPLETED`, `SUPERSEDED`, `ABANDONED`):
 
@@ -22,14 +22,14 @@ Most common statuses among the open files (new orders use only `READY_FOR_REVIEW
 |---|---|
 | READY_FOR_REVIEW | 54 |
 | LOCAL_VALIDATED_PENDING_CI | 17 |
+| IN_PROGRESS | 14 |
 | VERIFYING | 14 |
-| IN_PROGRESS | 13 |
 | completed | 7 |
 | COMPLETED_NO_SURVIVOR | 6 |
 | LOCAL_VALIDATED_PENDING_REVIEW_CI | 5 |
 | BLOCKED | 3 |
 
-### In progress or blocked (18)
+### In progress or blocked (19)
 
 | Work order | Status | Title |
 |---|---|---|
@@ -44,6 +44,7 @@ Most common statuses among the open files (new orders use only `READY_FOR_REVIEW
 | `WO-FUTURES-20261015-BINANCE-PUBLIC-COLLECTOR` | IN_PROGRESS | Research-only public Binance USD-M futures collector (BTCUSDT, ETHUSDT) |
 | `WO-ISSUE-2589-TICK-ERROR-CLASS` | IN_PROGRESS | Make a failed closed-learning tick root-causable: publish a bounded error class |
 | `WO-ISSUE-659-LIVE-READINESS-PRODUCTION-WIRING` | IN_PROGRESS | Issue #659 LIVE-readiness production reader wiring |
+| `WO-ISSUE-903-L1-EXECUTION-LEASE-HANDOFF` | IN_PROGRESS | Issue #903 close the scheduled producer to consumer lease handoff race |
 | `WO-OPS-20261015-DISK-CONSUMERS` | IN_PROGRESS | Read-only host diagnosis: where the 90% full root disk goes |
 | `WO-OPS-20261015-RELEASE-RETENTION` | IN_PROGRESS | Keep fewer old releases on the PAPER host (RELEASE_RETENTION 4 to 2) |
 | `WO-RESEARCH-20261015-RAIM-VENUESPEC` | IN_PROGRESS | RAIM regime-adaptive market-making research: VenueSpec gate (step 2 of the validation ord… |

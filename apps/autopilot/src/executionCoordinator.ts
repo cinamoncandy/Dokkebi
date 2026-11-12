@@ -188,16 +188,28 @@ export interface ActiveWipClaim {
   readonly canonicalOwner: string;
   readonly conflictKeys: readonly string[];
   readonly claimedAt: number;
+  /** Missing only on legacy receipts written before exact task snapshots were bound. */
+  readonly taskId?: string;
+  readonly protectedMainSha?: string;
+  readonly taskSnapshotDigest?: string;
+  readonly leaseOwnerIdentity?: string;
+  readonly leaseExpiresAt?: number;
 }
 interface ActiveWipState { readonly schemaVersion: 1; readonly claims: readonly ActiveWipClaim[]; }
 export interface ActiveWipAdmissionRequest extends ActiveWipClaim { readonly maxConcurrent: number; }
+export type ActiveWipCompletionKind = "CODING_EXECUTION_COMPLETED" | "CLAIM_RELEASED";
 export interface ActiveWipCompletionRequest {
   readonly dedupeKey: string; readonly executionId: string; readonly workerId: string;
   readonly startedAt: number; readonly completedAt: number;
+  /** Distinguishes successful coding evidence from a claim-only release/tombstone. */
+  readonly kind?: ActiveWipCompletionKind;
 }
 export interface ActiveWipCompletionEvidence {
   readonly dedupeKey: string; readonly executionId: string; readonly canonicalOwner: string;
   readonly conflictKeys: readonly string[]; readonly workerId: string;
+  readonly taskId?: string; readonly protectedMainSha?: string; readonly taskSnapshotDigest?: string;
+  readonly leaseOwnerIdentity?: string; readonly leaseExpiresAt?: number;
+  readonly kind: ActiveWipCompletionKind;
   readonly queuedAt: number; readonly claimedAt: number; readonly startedAt: number; readonly completedAt: number;
   readonly queueWaitMs: number; readonly claimToStartMs: number; readonly claimToCompleteMs: number; readonly totalMs: number;
 }
@@ -282,7 +294,11 @@ const CONTROL_PLANE_HOLD_STORAGE_KEY = "control-plane-hold-v1";
 const ACTIVE_WIP_COORDINATOR_KEY = "evolve-active-wip-v1";
 const ACTIVE_WIP_STORAGE_KEY = "evolve-active-wip-v1";
 const ACTIVE_WIP_COMPLETION_HISTORY_KEY = "evolve-active-wip-completions-v1";
-const MAX_ACTIVE_WIP = 8;
+// FORGE L1 has one canonical two-slot WIP budget; callers may request fewer, never more.
+const MAX_ACTIVE_WIP = 2;
+// Existing Durable Object state may contain up to the former admission cap (8). Read and
+// expire those claims safely after the policy contraction instead of treating them as corruption.
+const MAX_STORED_ACTIVE_WIP = 8;
 const MAX_ACTIVE_WIP_COMPLETIONS = 120;
 /**
  * A claim is released only by a successful coding completion. A dispatch that fails closed, is
@@ -587,7 +603,9 @@ export class ExecutionCoordinator {
           if (current.executionId !== request.executionId) return json({ acquired: false, reason: "EXECUTION_ID_CONFLICT", record: current }, 409);
           if (request.now < current.stop.nextRetryAt) return json({ acquired: false, reason: "WAITING_RATE_LIMIT", nextRetryAt: current.stop.nextRetryAt, record: current }, 409);
         }
-        if (current.state === "LEASED" && current.leaseExpiresAt > request.now) return json({ acquired: false, reason: "LEASE_ACTIVE", record: current }, 409);
+        if ((current.state === "LEASED" || current.state === "HANDED_OFF") && current.leaseExpiresAt > request.now) {
+          return json({ acquired: false, reason: "LEASE_ACTIVE", record: current }, 409);
+        }
         // A rate-limit resume is not a new attempt. A record written before counting existed was acquired once.
         if (request.maxAcquisitions !== undefined && current.state !== "WAITING_RATE_LIMIT" && (current.acquisitionCount ?? 1) >= request.maxAcquisitions) {
           return json({ acquired: false, reason: "ATTEMPT_LIMIT_REACHED", record: current }, 409);
@@ -757,7 +775,12 @@ export class ExecutionCoordinator {
         }
         const consumed = consumeClaimedCausalDispatchAdmissionBinding(binding, proof.publisher, proof.source, proof.capabilityDigest, request.now);
         if (!consumed) return json({ acquired: false, reason: "CAUSAL_ADMISSION_REJECTED" }, 409);
-        const record: ExecutionRecord = Object.freeze({ ...current, state: "HANDED_OFF", updatedAt: request.now });
+        const record: ExecutionRecord = Object.freeze({
+          ...current,
+          state: "HANDED_OFF",
+          leaseExpiresAt: request.leaseExpiresAt,
+          updatedAt: request.now,
+        });
         await storage.put("causal-dispatch-bindings", { schemaVersion: 1, entries: history!.entries.map((entry) => entry.generation === generation ? { generation, binding: consumed } : entry) });
         await storage.put("execution", record);
         return json({ acquired: true, handoff: true, record, causalAdmissionConsumed: true }, 201);
@@ -772,7 +795,12 @@ export class ExecutionCoordinator {
           if (request.now < current.stop.nextRetryAt) return json({ acquired: false, reason: "WAITING_RATE_LIMIT", nextRetryAt: current.stop.nextRetryAt, record: current }, 409);
         }
         if (current.executionId === request.executionId && current.state === "LEASED" && current.leaseExpiresAt > request.now) {
-          const record: ExecutionRecord = Object.freeze({ ...current, state: "HANDED_OFF", updatedAt: request.now });
+          const record: ExecutionRecord = Object.freeze({
+            ...current,
+            state: "HANDED_OFF",
+            leaseExpiresAt: request.leaseExpiresAt,
+            updatedAt: request.now,
+          });
           await storage.put("execution", record);
           return json({ acquired: true, handoff: true, record }, 201);
         }
@@ -895,14 +923,28 @@ export class ExecutionCoordinator {
     if (!value || typeof value !== "object") return json({ error: "ACTIVE_WIP_REQUEST_INVALID" }, 400);
     const request = value as Partial<ActiveWipAdmissionRequest>;
     const ownerOk = typeof request.canonicalOwner === "string" && /^[A-Za-z0-9_.:/-]{1,120}$/.test(request.canonicalOwner);
+    const taskIdentityOk = typeof request.taskId === "string" && /^[A-Za-z0-9_.:/#-]{1,160}$/.test(request.taskId)
+      && typeof request.protectedMainSha === "string" && SHA40.test(request.protectedMainSha)
+      && typeof request.taskSnapshotDigest === "string" && /^[a-f0-9]{64}$/i.test(request.taskSnapshotDigest)
+      && typeof request.leaseOwnerIdentity === "string" && /^[A-Za-z0-9_.:/#-]{1,200}$/.test(request.leaseOwnerIdentity);
     const keysOk = Array.isArray(request.conflictKeys) && request.conflictKeys.length > 0 && request.conflictKeys.length <= 32
       && request.conflictKeys.every((key) => typeof key === "string" && /^[A-Za-z0-9_.:/-]{1,200}$/.test(key))
       && new Set(request.conflictKeys).size === request.conflictKeys.length;
-    if (!validText(request.dedupeKey) || !validText(request.executionId) || !ownerOk || !keysOk || !validSafeTimestamp(request.claimedAt)
+    if (!validText(request.dedupeKey) || !validText(request.executionId) || !ownerOk || !keysOk || !taskIdentityOk || !validSafeTimestamp(request.claimedAt)
       || !Number.isSafeInteger(request.maxConcurrent) || Number(request.maxConcurrent) < 1 || Number(request.maxConcurrent) > MAX_ACTIVE_WIP) return json({ error: "ACTIVE_WIP_REQUEST_INVALID" }, 400);
     return this.mutateExecutionAtomically(async (storage) => {
       const stored = await storage.get<ActiveWipState>(ACTIVE_WIP_STORAGE_KEY) ?? { schemaVersion: 1 as const, claims: [] };
-      if (stored.schemaVersion !== 1 || !Array.isArray(stored.claims) || stored.claims.length > MAX_ACTIVE_WIP) return json({ error: "ACTIVE_WIP_STATE_CORRUPT" }, 500);
+      if (stored.schemaVersion !== 1 || !Array.isArray(stored.claims) || stored.claims.length > MAX_STORED_ACTIVE_WIP) return json({ error: "ACTIVE_WIP_STATE_CORRUPT" }, 500);
+      const completionHistory = await storage.get<ActiveWipCompletionHistory>(ACTIVE_WIP_COMPLETION_HISTORY_KEY)
+        ?? { schemaVersion: 1 as const, completions: [] };
+      if (completionHistory.schemaVersion !== 1 || !Array.isArray(completionHistory.completions)
+        || completionHistory.completions.length > MAX_ACTIVE_WIP_COMPLETIONS
+        || completionHistory.completions.some((completion) => !completion || typeof completion.dedupeKey !== "string" || typeof completion.executionId !== "string")) {
+        return json({ error: "ACTIVE_WIP_COMPLETION_STATE_CORRUPT" }, 500);
+      }
+      if (completionHistory.completions.some((completion) => completion.dedupeKey === request.dedupeKey || completion.executionId === request.executionId)) {
+        return json({ admitted: false, reason: "ACTIVE_WIP_REPLAYED", claims: stored.claims }, 409);
+      }
       const expiredClaims = stored.claims.filter((claim) => claim.claimedAt + ACTIVE_WIP_CLAIM_MAX_AGE_MS <= Number(request.claimedAt));
       const state: ActiveWipState = expiredClaims.length === 0
         ? stored
@@ -912,10 +954,24 @@ export class ExecutionCoordinator {
       if (same) return json({ admitted: false, reason: same.executionId === request.executionId ? "ALREADY_ACTIVE" : "DEDUPE_CONFLICT", claims: state.claims }, 409);
       const sameExecution = state.claims.find((claim) => claim.executionId === request.executionId);
       if (sameExecution) return json({ admitted: false, reason: "EXECUTION_ID_CONFLICT", claims: state.claims }, 409);
+      const sameTask = state.claims.find((claim) => claim.taskId === request.taskId);
+      if (sameTask) return json({ admitted: false, reason: "TASK_ALREADY_ACTIVE", claims: state.claims }, 409);
       if (state.claims.length >= Number(request.maxConcurrent)) return json({ admitted: false, reason: "WIP_LIMIT_REACHED", claims: state.claims }, 409);
+      // Claims written before snapshot binding cannot prove which selected task they represent.
+      // Keep them readable and let their existing bounded expiry clear them, but do not admit a
+      // potentially duplicate task alongside an unbound legacy claim.
+      if (state.claims.some((claim) => !claim.taskId || !claim.protectedMainSha || !claim.taskSnapshotDigest)) {
+        return json({ admitted: false, reason: "LEGACY_CLAIM_UNBOUND", claims: state.claims }, 409);
+      }
       const occupied = new Set(state.claims.flatMap((claim) => [...claim.conflictKeys]));
       if (request.conflictKeys!.some((key) => occupied.has(key))) return json({ admitted: false, reason: "CONFLICT_KEY_ACTIVE", claims: state.claims }, 409);
-      const claim: ActiveWipClaim = Object.freeze({ dedupeKey: request.dedupeKey!, executionId: request.executionId!, canonicalOwner: request.canonicalOwner!, conflictKeys: Object.freeze([...request.conflictKeys!]), claimedAt: Number(request.claimedAt) });
+      const claim: ActiveWipClaim = Object.freeze({
+        dedupeKey: request.dedupeKey!, executionId: request.executionId!, canonicalOwner: request.canonicalOwner!,
+        conflictKeys: Object.freeze([...request.conflictKeys!]), claimedAt: Number(request.claimedAt),
+        taskId: request.taskId!, protectedMainSha: request.protectedMainSha!.toLowerCase(),
+        taskSnapshotDigest: request.taskSnapshotDigest!.toLowerCase(), leaseOwnerIdentity: request.leaseOwnerIdentity!,
+        leaseExpiresAt: Number(request.claimedAt) + ACTIVE_WIP_CLAIM_MAX_AGE_MS,
+      });
       const next: ActiveWipState = Object.freeze({ schemaVersion: 1, claims: Object.freeze([...state.claims, claim]) });
       await storage.put(ACTIVE_WIP_STORAGE_KEY, next);
       return json({ admitted: true, claim, claims: next.claims, expiredClaims }, 201);
@@ -927,16 +983,23 @@ export class ExecutionCoordinator {
     const request = value as Partial<ActiveWipCompletionRequest>;
     if (!validText(request.dedupeKey) || !validText(request.executionId) || !validText(request.workerId)
       || !validSafeTimestamp(request.startedAt) || !validSafeTimestamp(request.completedAt)
+      || (request.kind !== undefined && request.kind !== "CODING_EXECUTION_COMPLETED" && request.kind !== "CLAIM_RELEASED")
       || Number(request.completedAt) < Number(request.startedAt)) return json({ error: "ACTIVE_WIP_REQUEST_INVALID" }, 400);
     return this.mutateExecutionAtomically(async (storage) => {
       const state = await storage.get<ActiveWipState>(ACTIVE_WIP_STORAGE_KEY) ?? { schemaVersion: 1 as const, claims: [] };
-      if (state.schemaVersion !== 1 || !Array.isArray(state.claims) || state.claims.length > MAX_ACTIVE_WIP) return json({ error: "ACTIVE_WIP_STATE_CORRUPT" }, 500);
+      if (state.schemaVersion !== 1 || !Array.isArray(state.claims) || state.claims.length > MAX_STORED_ACTIVE_WIP) return json({ error: "ACTIVE_WIP_STATE_CORRUPT" }, 500);
       const claim = state.claims.find((candidate) => candidate.dedupeKey === request.dedupeKey);
       if (!claim || claim.executionId !== request.executionId) return json({ error: "ACTIVE_WIP_IDENTITY_MISMATCH" }, 409);
       if (Number(request.startedAt) < claim.claimedAt) return json({ error: "ACTIVE_WIP_TIMING_INVALID" }, 409);
       const evidence: ActiveWipCompletionEvidence = Object.freeze({
         dedupeKey: claim.dedupeKey, executionId: claim.executionId, canonicalOwner: claim.canonicalOwner,
         conflictKeys: Object.freeze([...claim.conflictKeys]), workerId: request.workerId!.trim(),
+        ...(claim.taskId ? { taskId: claim.taskId } : {}),
+        ...(claim.protectedMainSha ? { protectedMainSha: claim.protectedMainSha } : {}),
+        ...(claim.taskSnapshotDigest ? { taskSnapshotDigest: claim.taskSnapshotDigest } : {}),
+        ...(claim.leaseOwnerIdentity ? { leaseOwnerIdentity: claim.leaseOwnerIdentity } : {}),
+        ...(claim.leaseExpiresAt !== undefined ? { leaseExpiresAt: claim.leaseExpiresAt } : {}),
+        kind: request.kind ?? "CODING_EXECUTION_COMPLETED",
         queuedAt: claim.claimedAt, claimedAt: claim.claimedAt, startedAt: Number(request.startedAt), completedAt: Number(request.completedAt),
         queueWaitMs: 0, claimToStartMs: Number(request.startedAt) - claim.claimedAt,
         claimToCompleteMs: Number(request.completedAt) - claim.claimedAt, totalMs: Number(request.completedAt) - claim.claimedAt,
@@ -964,7 +1027,7 @@ export class ExecutionCoordinator {
     if (!validText(request.dedupeKey) || !validText(request.executionId)) return json({ error: "ACTIVE_WIP_REQUEST_INVALID" }, 400);
     return this.mutateExecutionAtomically(async (storage) => {
       const state = await storage.get<ActiveWipState>(ACTIVE_WIP_STORAGE_KEY) ?? { schemaVersion: 1 as const, claims: [] };
-      if (state.schemaVersion !== 1 || !Array.isArray(state.claims) || state.claims.length > MAX_ACTIVE_WIP) return json({ error: "ACTIVE_WIP_STATE_CORRUPT" }, 500);
+      if (state.schemaVersion !== 1 || !Array.isArray(state.claims) || state.claims.length > MAX_STORED_ACTIVE_WIP) return json({ error: "ACTIVE_WIP_STATE_CORRUPT" }, 500);
       const claim = state.claims.find((candidate) => candidate.dedupeKey === request.dedupeKey);
       if (!claim) return json({ released: false, reason: "CLAIM_NOT_FOUND", claims: state.claims });
       if (claim.executionId !== request.executionId) return json({ released: false, reason: "ACTIVE_WIP_IDENTITY_MISMATCH", claims: state.claims }, 409);
@@ -982,7 +1045,7 @@ export class ExecutionCoordinator {
 
   private async readActiveWip(): Promise<Response> {
     const state = await this.ctx.storage.get<ActiveWipState>(ACTIVE_WIP_STORAGE_KEY) ?? { schemaVersion: 1 as const, claims: [] };
-    if (state.schemaVersion !== 1 || !Array.isArray(state.claims) || state.claims.length > MAX_ACTIVE_WIP) return json({ error: "ACTIVE_WIP_STATE_CORRUPT" }, 500);
+    if (state.schemaVersion !== 1 || !Array.isArray(state.claims) || state.claims.length > MAX_STORED_ACTIVE_WIP) return json({ error: "ACTIVE_WIP_STATE_CORRUPT" }, 500);
     return json({ claims: state.claims, activeExecutions: state.claims.length, liveAuthority: "NONE", productionMutationAllowed: false, aiAuthority: "ZERO_AUTHORITY" });
   }
 
@@ -1554,13 +1617,21 @@ export async function completePersistentExecution(namespace: ExecutionCoordinato
   if (!response.ok) throw new Error("PERSISTENT_EXECUTION_COMPLETION_FAILED");
 }
 
-export async function admitActiveWip(namespace: ExecutionCoordinatorNamespace, input: ActiveWipAdmissionRequest): Promise<{ admitted: boolean; reason?: string }> {
+export async function admitActiveWip(namespace: ExecutionCoordinatorNamespace, input: ActiveWipAdmissionRequest): Promise<{ admitted: boolean; reason?: string; claim?: ActiveWipClaim }> {
   const stub = namespace.get(namespace.idFromName(ACTIVE_WIP_COORDINATOR_KEY));
   const response = await stub.fetch("https://execution-coordinator/active-wip/admit", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(input) });
-  const body = await response.json() as { admitted?: unknown; reason?: unknown };
+  const body = await response.json() as { admitted?: unknown; reason?: unknown; claim?: unknown };
   if (response.status === 409 && body.admitted === false) return Object.freeze({ admitted: false, reason: typeof body.reason === "string" ? body.reason : "ACTIVE_WIP_REJECTED" });
-  if (!response.ok || body.admitted !== true) throw new Error("ACTIVE_WIP_ADMISSION_FAILED");
-  return Object.freeze({ admitted: true });
+  const claim = body.claim && typeof body.claim === "object" ? body.claim as ActiveWipClaim : null;
+  if (!response.ok || body.admitted !== true || !claim
+    || claim.dedupeKey !== input.dedupeKey || claim.executionId !== input.executionId
+    || claim.taskId !== input.taskId || claim.protectedMainSha?.toLowerCase() !== input.protectedMainSha?.toLowerCase()
+    || claim.taskSnapshotDigest?.toLowerCase() !== input.taskSnapshotDigest?.toLowerCase()
+    || claim.leaseOwnerIdentity !== input.leaseOwnerIdentity || claim.canonicalOwner !== input.canonicalOwner
+    || claim.claimedAt !== input.claimedAt
+    || JSON.stringify(claim.conflictKeys) !== JSON.stringify(input.conflictKeys)) throw new Error("ACTIVE_WIP_ADMISSION_FAILED");
+  if (claim.leaseExpiresAt !== input.claimedAt + ACTIVE_WIP_CLAIM_MAX_AGE_MS) throw new Error("ACTIVE_WIP_ADMISSION_FAILED");
+  return Object.freeze({ admitted: true, claim: Object.freeze(claim) });
 }
 
 export async function completeActiveWip(namespace: ExecutionCoordinatorNamespace, input: ActiveWipCompletionRequest): Promise<ActiveWipCompletionEvidence> {

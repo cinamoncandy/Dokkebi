@@ -1,0 +1,29 @@
+current_nusa_forge_v15_claim_binding_20261110:
+  work_order: WO-ISSUE-903-L1-EXECUTION-LEASE-HANDOFF
+  canonical_issue: 903
+  pull_request: 2039
+  protected_main_sha_at_initial_verification: 91959182a10abcf6176cc5b40304838724a01fa5
+  latest_protected_main_sha_integrated: be8d58f16e60de9f3d37b8bdd9c9648214501536
+  pr_head_before_local_successor: ad669b83bff7ef3297561a1984770df45a853539
+  status: ALIGNED_MAIN_PREDECESSOR_CI_PASS_FRESH_REVIEW_PENDING
+  implementation: "Bound new atomic WIP receipts to task ID, protected main SHA, task snapshot digest, lease owner identity, and expiry; strengthened scheduled claim revalidation and Codex pre-run verification; added exact-identity cleanup when persistent admission fails or returns ambiguously."
+  focused_tests: PASS
+  build: PASS
+  full_suite: PASS_1343_ISOLATED_TEST_FILES_ON_MAIN_9848E6F7_SUCCESSOR
+  latest_main_integration: "After PR #3051, main advanced via owner-approved PR #3052 to 9848e6f728bb671b6ff3c3eb35c4e62ff4466aac, reopening the isolated causal verification window for attempt 4. Merged locally without conflict; focused rejection projection 5/5, full suite 1,343/1,343, typecheck, validate:full, security, AIPOS, lint and diff-check PASS; exact-head CI pending. No workflow dispatch or deployment occurred."
+  aipos_base_anchor_repair: "Updated only the top-level current base_commit from non-ancestor historical anchor f875980e4ff9111ab576f1e93294fae510d07167 to the initially verified protected main; advanced it at each verified integration through 91959182, 3377b6ce, 77f9ab88, a2f69042, c02eec0a and current main 9848e6f7. Historical WO-0057 merge evidence remains unchanged."
+  inventory_completeness: UNVERIFIED
+  selector_and_claim: FAIL_CLOSED
+  operational_wip_claims: UNKNOWN
+  writer_lease: UNKNOWN
+  actual_runner_e2e: NOT_RUN
+  exact_head_ci: PREDECESSOR_3CFAA_PASS_METADATA_SUCCESSOR_PENDING
+  independent_review: PENDING
+  formal_validator: PENDING
+  audit: PENDING
+  release_authorization: NOT_AUTHORIZED
+  next: "Verify next metadata successor exact-head CI and six companions; seek independent non-author dispositions of P1/P2 review threads then Formal Validator/Audit/Release. No dispatch, deploy, or self-approval."
+  published_predecessor_20261111: "PR #2039 head a283a73aa9fa177d4320496328e858017e3ac0a0 was observed published with 16 successful and 3 skipped checks; that evidence is for the predecessor only."
+  successor_gate_20261111: "Integration of main ad0085fd passed 82 focused tests and 1343 isolated test files; build, typecheck, validate:full, security, lint and AIPOS checks pass. Resolve the actual current PR head and CI separately; no reviewer disposition, Audit or Release is claimed."
+  safety: "PAPER_ONLY; liveAuthority=NONE; productionMutationAllowed=false; realOrderAuthority=false; realTransferAuthority=false; aiAuthority=ZERO_AUTHORITY; FAIL-CLOSED"
+  current_main_alignment_20261111: "Protected main be8d58f16e60de9f3d37b8bdd9c9648214501536 was non-force aligned to existing Draft PR head 3cfaa7335ada5125c7a8f7016373f9125b76fb70; six predecessor PR workflows PASS including CI 42949466137 and Actual PAPER 42949466177. Metadata successor checks not yet complete; independent review and audit remain pending."

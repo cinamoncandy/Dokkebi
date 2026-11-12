@@ -513,6 +513,7 @@ export async function handleCodingExecute(
               workerId: "cloud-coding-runner",
               startedAt,
               completedAt,
+              kind: "CODING_EXECUTION_COMPLETED",
             });
           }
         }
@@ -542,7 +543,8 @@ export default {
           const evidence = [...coding.history].reverse().find((candidate) => candidate.outcome.pullRequestNumber === prNumber) ?? null;
           if (evidence?.outcome.commitSha) {
             const completions = await readActiveWipCompletions(env.NUSA_EXECUTION_COORDINATOR);
-            const completion = [...completions].reverse().find((candidate) => candidate.executionId === evidence.request.executionId) ?? null;
+            const completion = [...completions].reverse().find((candidate) => candidate.executionId === evidence.request.executionId
+              && candidate.kind !== "CLAIM_RELEASED") ?? null;
             const telemetry = await readAutopilotExecutionTelemetry(env.NUSA_EXECUTION_COORDINATOR);
             const attempt = completion ? [...telemetry.history].reverse().find((candidate) =>
               candidate.executionId === evidence.request.executionId

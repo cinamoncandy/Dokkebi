@@ -1,0 +1,18 @@
+current_codex_workorder_inventory_20261112:
+  canonical_issue: 903
+  canonical_pr: 2039
+  protected_main_sha: 5d9304c9780428342ddaf525f3d488c476318f51
+  previous_pr_head: f07d1e1cd59b47d5cbb385bb8e89649658c8a11b
+  cause: "The legacy global issue/PR reader performs two matching scans but correctly returns UNVERIFIED because GitHub provides no point-in-time token across pages; its result was consumed by Codex selection and claim revalidation."
+  implementation: "A shared selector/Worker reader now pins the recursive AIPOS Work Order tree to protected main, verifies all blob identities and sizes, requires explicit READY and empty dependency/link metadata, rejects undeclared dependency/link fields and conflicting owner/conflict metadata, rejects GraphQL PullRequest objects used as Work Order issues, double-reads stable issue/cross-reference data, and binds the resulting prompt digest to main/tree/Work Order/issue identity."
+  current_source_inventory: "4326 tracked tree entries; 556 Work Order YAML files parse; zero explicit codex_selection candidates. No task is admitted from an empty inventory."
+  candidate_14be6dcf: ABSENT_LOCAL_AND_GITHUB
+  validation: "TypeScript build and typecheck PASS; focused Codex/Coordinator/OIDC/backlog tests 116/116 PASS; control-plane wiring regression 3/3 PASS; full isolated suite PASS (1,343 test files); direct preflight, architecture, AIPOS/provenance/conformance, safety, authority and diff validators PASS. pnpm run preflight did not complete: after removing the temporary mobile dependency link, pnpm attempted install and aborted with ERR_PNPM_ABORTED_REMOVE_MODULES_DIR_NO_TTY before changing repository dependencies. security:gate PASS without checker changes after mirroring package.json/license metadata for the 896 required lock entries from the exact matching installed versions in the shared physical pnpm store; lock integrity PASS, vulnerability scan 0 unmitigated high/critical, backports PASS, secret scan 0."
+  exact_head_ci: PENDING_FOR_SUCCESSOR
+  independent_review: PENDING_ON_SUCCESSOR
+  operational_wip_claims: UNKNOWN
+  writer_lease: UNKNOWN
+  live_inventory_execution: NOT_PERFORMED
+  claim_or_dispatch: NOT_ATTEMPTED
+  authority_boundary: "PAPER_ONLY; liveAuthority=NONE; productionMutationAllowed=false; realOrderAuthority=false; realTransferAuthority=false; aiAuthority=ZERO_AUTHORITY; FAIL_CLOSED"
+  next: "Re-read protected main and PR #2039 HEAD, wait for six exact-head checks on the published successor, then seek non-author disposition. No Claim or Dispatch while WIP/Lease remains UNKNOWN or no explicit READY Work Order exists."

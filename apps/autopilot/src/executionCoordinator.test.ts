@@ -119,8 +119,13 @@ describe("persistent execution coordination", () => {
     const ns = memoryNamespace();
     const input = { dedupeKey: "coding:handoff", executionId: "exec:handoff", now: 100, leaseExpiresAt: 200 };
     assert.deepEqual(await acquirePersistentExecution(ns, input), { acquired: true });
-    assert.deepEqual(await handoffOrAcquirePersistentExecution(ns, { ...input, now: 110, leaseExpiresAt: 210 }), { acquired: true });
+    const consumerLeaseExpiry = 1_200;
+    assert.deepEqual(await handoffOrAcquirePersistentExecution(ns, { ...input, now: 110, leaseExpiresAt: consumerLeaseExpiry }), { acquired: true });
+    const handedOff = await readPersistentExecution(ns, input.dedupeKey);
+    assert.equal(handedOff?.state, "HANDED_OFF");
+    assert.equal(handedOff?.leaseExpiresAt, consumerLeaseExpiry, "handoff extends ownership through the consumer execution window");
     assert.deepEqual(await handoffOrAcquirePersistentExecution(ns, { ...input, now: 120, leaseExpiresAt: 220 }), { acquired: false, reason: "LEASE_ACTIVE" });
+    assert.deepEqual(await acquirePersistentExecution(ns, { ...input, executionId: "exec:competing-producer", now: 130, leaseExpiresAt: 230 }), { acquired: false, reason: "LEASE_ACTIVE" });
     await markPersistentExecutionDispatched(ns, { dedupeKey: input.dedupeKey, executionId: input.executionId, now: 130 });
     assert.deepEqual(await handoffOrAcquirePersistentExecution(ns, { ...input, now: 140, leaseExpiresAt: 240 }), { acquired: false, reason: "ALREADY_DISPATCHED" });
   });
@@ -475,7 +480,7 @@ describe("persistent control-plane HOLD", () => {
       const response = await coordinator.fetch(new Request("https://execution-coordinator/active-wip/admit", {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ dedupeKey, executionId: `exec:${dedupeKey}`, canonicalOwner: "apps/autopilot", conflictKeys: [`key:${dedupeKey}`], claimedAt, maxConcurrent: 1 }),
+        body: JSON.stringify({ dedupeKey, executionId: `exec:${dedupeKey}`, taskId: `task-${dedupeKey}`, protectedMainSha: "a".repeat(40), taskSnapshotDigest: "b".repeat(64), leaseOwnerIdentity: "test-runner:1:1", canonicalOwner: "apps/autopilot", conflictKeys: [`key:${dedupeKey}`], claimedAt, maxConcurrent: 1 }),
       }));
       return { status: response.status, body: await response.json() as { admitted: boolean; reason?: string; expiredClaims?: { dedupeKey: string }[] } };
     };
@@ -496,27 +501,60 @@ describe("persistent control-plane HOLD", () => {
     const storage = new TransactionalRacyStorage();
     const coordinator = new ExecutionCoordinator({ storage });
     const post = (body: object) => coordinator.fetch(new Request("https://execution-coordinator/active-wip/admit", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body) }));
-    const base = { canonicalOwner: "evolve", claimedAt: 100, maxConcurrent: 2 };
+    const base = { canonicalOwner: "evolve", protectedMainSha: "a".repeat(40), taskSnapshotDigest: "b".repeat(64), leaseOwnerIdentity: "test-runner:1:1", claimedAt: 100, maxConcurrent: 2 };
     const [a, b] = await Promise.all([
-      post({ ...base, dedupeKey: "work:a", executionId: "exec:a", conflictKeys: ["module:a"] }),
-      post({ ...base, dedupeKey: "work:b", executionId: "exec:b", conflictKeys: ["module:b"] }),
+      post({ ...base, dedupeKey: "work:a", executionId: "exec:a", taskId: "task-a", conflictKeys: ["module:a"] }),
+      post({ ...base, dedupeKey: "work:b", executionId: "exec:b", taskId: "task-b", conflictKeys: ["module:b"] }),
     ]);
     assert.deepEqual([a.status, b.status].sort(), [201, 201]);
-    const full = await post({ ...base, dedupeKey: "work:c", executionId: "exec:c", conflictKeys: ["module:c"] });
+    const full = await post({ ...base, dedupeKey: "work:c", executionId: "exec:c", taskId: "task-c", conflictKeys: ["module:c"] });
     assert.equal(full.status, 409);
     assert.equal((await full.json() as { reason: string }).reason, "WIP_LIMIT_REACHED");
+  });
+
+  it("keeps legacy three-claim WIP state readable while enforcing the new two-claim admission cap", async () => {
+    const storage = new MemoryStorage();
+    const coordinator = new ExecutionCoordinator({ storage });
+    const now = 2_000_000;
+    await storage.put("evolve-active-wip-v1", {
+      schemaVersion: 1,
+      claims: ["one", "two", "three"].map((key) => ({
+        dedupeKey: `work:${key}`,
+        executionId: `exec:${key}`,
+        canonicalOwner: "evolve",
+        conflictKeys: [`module:${key}`],
+        claimedAt: now,
+      })),
+    });
+    const admit = (claimedAt: number, dedupeKey: string) => coordinator.fetch(new Request("https://execution-coordinator/active-wip/admit", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ dedupeKey, executionId: `exec:${dedupeKey}`, taskId: `task-${dedupeKey}`, protectedMainSha: "a".repeat(40), taskSnapshotDigest: "b".repeat(64), leaseOwnerIdentity: "test-runner:1:1", canonicalOwner: "evolve", conflictKeys: [`module:${dedupeKey}`], claimedAt, maxConcurrent: 2 }),
+    }));
+
+    const blocked = await admit(now + 1, "work:four");
+    assert.equal(blocked.status, 409);
+    assert.equal((await blocked.json() as { reason?: string }).reason, "WIP_LIMIT_REACHED");
+    const active = await coordinator.fetch(new Request("https://execution-coordinator/active-wip"));
+    assert.equal(active.status, 200);
+    assert.equal((await active.json() as { activeExecutions?: number }).activeExecutions, 3);
+
+    const afterExpiry = now + ACTIVE_WIP_CLAIM_MAX_AGE_MS + 1;
+    const resumed = await admit(afterExpiry, "work:four");
+    assert.equal(resumed.status, 201, "stale legacy claims expire before the new capacity check");
+    assert.equal((await resumed.json() as { claims?: unknown[] }).claims?.length, 1);
   });
 
   it("rejects overlapping conflict keys and releases capacity only for exact identity", async () => {
     const storage = new MemoryStorage();
     const coordinator = new ExecutionCoordinator({ storage });
     const post = (path: string, body: object) => coordinator.fetch(new Request(`https://execution-coordinator${path}`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body) }));
-    const first = { dedupeKey: "work:a", executionId: "exec:a", canonicalOwner: "evolve", conflictKeys: ["module:shared"], claimedAt: 100, maxConcurrent: 2 };
+    const first = { dedupeKey: "work:a", executionId: "exec:a", taskId: "task-a", protectedMainSha: "a".repeat(40), taskSnapshotDigest: "b".repeat(64), leaseOwnerIdentity: "test-runner:1:1", canonicalOwner: "evolve", conflictKeys: ["module:shared"], claimedAt: 100, maxConcurrent: 2 };
     assert.equal((await post("/active-wip/admit", first)).status, 201);
     const duplicateExecution = await post("/active-wip/admit", { ...first, dedupeKey: "work:duplicate-exec", conflictKeys: ["module:other"] });
     assert.equal(duplicateExecution.status, 409);
     assert.equal((await duplicateExecution.json() as { reason: string }).reason, "EXECUTION_ID_CONFLICT");
-    const conflict = await post("/active-wip/admit", { ...first, dedupeKey: "work:b", executionId: "exec:b" });
+    const conflict = await post("/active-wip/admit", { ...first, dedupeKey: "work:b", executionId: "exec:b", taskId: "task-b" });
     assert.equal(conflict.status, 409);
     assert.equal((await conflict.json() as { reason: string }).reason, "CONFLICT_KEY_ACTIVE");
     assert.equal((await post("/active-wip/complete", { dedupeKey: first.dedupeKey, executionId: "stale", workerId: "cloud-coding-runner", startedAt: 110, completedAt: 120 })).status, 409);
@@ -528,15 +566,17 @@ describe("persistent control-plane HOLD", () => {
     const storage = new MemoryStorage();
     const coordinator = new ExecutionCoordinator({ storage });
     const post = (path: string, body: object) => coordinator.fetch(new Request(`https://execution-coordinator${path}`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body) }));
-    const claim = { dedupeKey: "work:measured", executionId: "exec:measured", canonicalOwner: "evolve", conflictKeys: ["module:measured"], claimedAt: 100, maxConcurrent: 1 };
+    const claim = { dedupeKey: "work:measured", executionId: "exec:measured", taskId: "task-measured", protectedMainSha: "a".repeat(40), taskSnapshotDigest: "b".repeat(64), leaseOwnerIdentity: "test-runner:1:1", canonicalOwner: "evolve", conflictKeys: ["module:measured"], claimedAt: 100, maxConcurrent: 1 };
     assert.equal((await post("/active-wip/admit", claim)).status, 201);
     assert.equal((await post("/active-wip/complete", { dedupeKey: claim.dedupeKey, executionId: claim.executionId, workerId: "cloud-coding-runner", startedAt: 125, completedAt: 175 })).status, 200);
     const replay = await coordinator.fetch(new Request("https://execution-coordinator/active-wip/completions"));
     assert.equal(replay.status, 200);
-    const body = await replay.json() as { completions: readonly { executionId: string; claimedAt: number; startedAt: number; completedAt: number; claimToStartMs: number; claimToCompleteMs: number; totalMs: number }[] };
+    const body = await replay.json() as { completions: readonly { executionId: string; kind: string; claimedAt: number; startedAt: number; completedAt: number; claimToStartMs: number; claimToCompleteMs: number; totalMs: number }[] };
     assert.deepEqual(body.completions, [{
       dedupeKey: claim.dedupeKey, executionId: claim.executionId, canonicalOwner: claim.canonicalOwner, conflictKeys: claim.conflictKeys,
-      workerId: "cloud-coding-runner", queuedAt: 100, claimedAt: 100, startedAt: 125, completedAt: 175,
+      taskId: claim.taskId, protectedMainSha: claim.protectedMainSha, taskSnapshotDigest: claim.taskSnapshotDigest,
+      leaseOwnerIdentity: claim.leaseOwnerIdentity, leaseExpiresAt: claim.claimedAt + ACTIVE_WIP_CLAIM_MAX_AGE_MS,
+      workerId: "cloud-coding-runner", kind: "CODING_EXECUTION_COMPLETED", queuedAt: 100, claimedAt: 100, startedAt: 125, completedAt: 175,
       queueWaitMs: 0, claimToStartMs: 25, claimToCompleteMs: 75, totalMs: 75,
     }]);
     assert.equal((await coordinator.fetch(new Request("https://execution-coordinator/active-wip"))).status, 200);
@@ -545,20 +585,44 @@ describe("persistent control-plane HOLD", () => {
   it("fails closed on stale identity or impossible active-WIP completion timing", async () => {
     const coordinator = new ExecutionCoordinator({ storage: new MemoryStorage() });
     const post = (path: string, body: object) => coordinator.fetch(new Request(`https://execution-coordinator${path}`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body) }));
-    const claim = { dedupeKey: "work:timing", executionId: "exec:timing", canonicalOwner: "evolve", conflictKeys: ["module:timing"], claimedAt: 100, maxConcurrent: 1 };
+    const claim = { dedupeKey: "work:timing", executionId: "exec:timing", taskId: "task-timing", protectedMainSha: "a".repeat(40), taskSnapshotDigest: "b".repeat(64), leaseOwnerIdentity: "test-runner:1:1", canonicalOwner: "evolve", conflictKeys: ["module:timing"], claimedAt: 100, maxConcurrent: 1 };
     assert.equal((await post("/active-wip/admit", claim)).status, 201);
     assert.equal((await post("/active-wip/complete", { dedupeKey: claim.dedupeKey, executionId: "stale", workerId: "cloud-coding-runner", startedAt: 125, completedAt: 175 })).status, 409);
     assert.equal((await post("/active-wip/complete", { dedupeKey: claim.dedupeKey, executionId: claim.executionId, workerId: "cloud-coding-runner", startedAt: 99, completedAt: 175 })).status, 409);
+    assert.equal((await post("/active-wip/complete", { dedupeKey: claim.dedupeKey, executionId: claim.executionId, workerId: "cloud-coding-runner", startedAt: 125, completedAt: 175, kind: "SUCCESS_WITHOUT_CODING_EVIDENCE" })).status, 400);
   });
 
   it("fails closed on malformed WIP ownership and conflict metadata", async () => {
     const coordinator = new ExecutionCoordinator({ storage: new MemoryStorage() });
     const post = (body: object) => coordinator.fetch(new Request("https://execution-coordinator/active-wip/admit", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body) }));
-    const base = { dedupeKey: "work:a", executionId: "exec:a", canonicalOwner: "evolve", conflictKeys: ["module:a"], claimedAt: 100, maxConcurrent: 2 };
+    const base = { dedupeKey: "work:a", executionId: "exec:a", taskId: "task-a", protectedMainSha: "a".repeat(40), taskSnapshotDigest: "b".repeat(64), leaseOwnerIdentity: "test-runner:1:1", canonicalOwner: "evolve", conflictKeys: ["module:a"], claimedAt: 100, maxConcurrent: 2 };
     assert.equal((await post({ ...base, canonicalOwner: "bad owner" })).status, 400);
     assert.equal((await post({ ...base, conflictKeys: [] })).status, 400);
     assert.equal((await post({ ...base, conflictKeys: ["module:a", "module:a"] })).status, 400);
+    assert.equal((await post({ ...base, maxConcurrent: 3 })).status, 400, "FORGE L1 rejects a caller requesting more than two WIP slots");
     assert.equal((await post({ ...base, maxConcurrent: 9 })).status, 400);
+  });
+
+  it("persists the authenticated task snapshot and lease expiry in the atomic claim receipt", async () => {
+    const storage = new MemoryStorage();
+    const coordinator = new ExecutionCoordinator({ storage });
+    const base = { dedupeKey: "work:snapshot", executionId: "exec:snapshot", taskId: "issue-903", protectedMainSha: "a".repeat(40), taskSnapshotDigest: "b".repeat(64), leaseOwnerIdentity: "cinamoncandy/NUSA:42:1", canonicalOwner: "apps/autopilot", conflictKeys: ["issue:903"], claimedAt: 100, maxConcurrent: 2 };
+    const admitted = await coordinator.fetch(new Request("https://execution-coordinator/active-wip/admit", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(base) }));
+    assert.equal(admitted.status, 201);
+    const response = await admitted.json() as { claim: { taskId: string; protectedMainSha: string; taskSnapshotDigest: string; leaseOwnerIdentity: string; leaseExpiresAt: number } };
+    assert.deepEqual(response.claim, {
+      dedupeKey: base.dedupeKey, executionId: base.executionId, taskId: base.taskId,
+      protectedMainSha: base.protectedMainSha, taskSnapshotDigest: base.taskSnapshotDigest,
+      leaseOwnerIdentity: base.leaseOwnerIdentity, canonicalOwner: base.canonicalOwner,
+      conflictKeys: base.conflictKeys, claimedAt: base.claimedAt,
+      leaseExpiresAt: 100 + ACTIVE_WIP_CLAIM_MAX_AGE_MS,
+    });
+    const read = await coordinator.fetch(new Request("https://execution-coordinator/active-wip"));
+    const stored = await read.json() as { claims: unknown[] };
+    assert.deepEqual(stored.claims, [response.claim]);
+    assert.equal((await coordinator.fetch(new Request("https://execution-coordinator/active-wip/admit", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ ...base, dedupeKey: "work:snapshot-replay", executionId: "exec:snapshot-replay" }) }))).status, 409, "same task cannot be admitted twice under different execution IDs");
+    assert.equal((await coordinator.fetch(new Request("https://execution-coordinator/active-wip/admit", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ ...base, dedupeKey: "work:bad-main", executionId: "exec:bad-main", taskId: "issue-904", protectedMainSha: "not-a-sha" }) }))).status, 400);
+    assert.equal((await coordinator.fetch(new Request("https://execution-coordinator/active-wip/admit", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ ...base, dedupeKey: "work:bad-digest", executionId: "exec:bad-digest", taskId: "issue-904", taskSnapshotDigest: "bad" }) }))).status, 400);
   });
 
 });

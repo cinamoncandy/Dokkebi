@@ -4,7 +4,7 @@ import { deriveWorkflowFailureOpportunities, type WorkflowFailureEvidence } from
 import { deriveGithubIssueBacklogSignals } from "./evolveGithubIssueBacklog";
 import type { EvolutionDiscoverySignal } from "./evolveOpportunityDiscovery";
 import { isRepairableMainWorkflowFailure } from "./repairableWorkflowRun";
-import { acquirePersistentExecution, admitActiveWip, createEvolutionLearningMemoryStorage, readPersistentExecution, readProviderCapacityWait, type ExecutionCoordinatorNamespace } from "./executionCoordinator";
+import { acquirePersistentExecution, admitActiveWip, createEvolutionLearningMemoryStorage, readPersistentExecution, readProviderCapacityWait, releaseActiveWip, releasePersistentExecution, type ExecutionCoordinatorNamespace } from "./executionCoordinator";
 import { DurableEvolutionLearningMemory } from "./evolveDurableLearningMemory";
 
 const CODING_PROVIDER = "workers-ai";
@@ -40,6 +40,45 @@ type JsonObject = Record<string, unknown>;
 const object = (value: unknown): JsonObject | null => value !== null && typeof value === "object" && !Array.isArray(value) ? value as JsonObject : null;
 const text = (value: unknown): string | null => typeof value === "string" && value.trim() ? value.trim() : null;
 const positiveInteger = (value: unknown): number | null => Number.isSafeInteger(value) && Number(value) > 0 ? Number(value) : null;
+
+async function signalSnapshotDigest(signal: EvolutionDiscoverySignal, mainSha: string, sourceIssue?: unknown): Promise<string> {
+  const issue = object(sourceIssue);
+  const labels = Array.isArray(issue?.labels)
+    ? issue.labels.flatMap((label) => {
+      if (typeof label === "string") return [label.toLowerCase()];
+      const item = object(label);
+      const name = text(item?.name);
+      return name ? [name.toLowerCase()] : [];
+    }).sort()
+    : [];
+  const snapshot = JSON.stringify({
+    schemaVersion: 1,
+    protectedMainSha: mainSha.toLowerCase(),
+    id: signal.id,
+    source: signal.source,
+    reference: signal.reference,
+    problem: signal.problem,
+    observedAt: signal.observedAt,
+    evidenceQuality: signal.evidenceQuality,
+    impact: signal.impact,
+    confidence: signal.confidence,
+    risk: signal.risk,
+    reversibility: signal.reversibility,
+    canonicalOwner: signal.canonicalOwner ?? null,
+    conflictKeys: [...(signal.conflictKeys ?? [])],
+    sourceIssue: issue ? {
+      number: Number(issue.number),
+      title: text(issue.title),
+      body: text(issue.body) ?? "",
+      state: text(issue.state)?.toLowerCase() ?? null,
+      authorAssociation: text(issue.author_association)?.toUpperCase() ?? null,
+      updatedAt: text(issue.updated_at),
+      labels,
+    } : null,
+  });
+  const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(snapshot));
+  return [...new Uint8Array(digest)].map((byte) => byte.toString(16).padStart(2, "0")).join("");
+}
 
 function result(status: ScheduledEvolutionCodingResult["status"], reason: string, selectedSignalIds: readonly string[] = []): ScheduledEvolutionCodingResult {
   return Object.freeze({ status, reason, selectedSignalIds: Object.freeze([...selectedSignalIds]), ...AUTHORITY });
@@ -118,7 +157,9 @@ async function revalidateBacklogSignal(
   input: { readonly repository: string; readonly openPulls?: readonly unknown[]; readonly now: number },
   token: string,
   fetchImpl: typeof fetch,
-): Promise<"ACTIONABLE" | "STALE" | "UNAVAILABLE"> {
+  expectedSnapshotDigest?: string,
+  mainSha?: string,
+): Promise<"ACTIONABLE" | "STALE" | "SNAPSHOT_MISMATCH" | "UNAVAILABLE"> {
   const issueNumber = backlogIssueNumber(signal);
   if (issueNumber === null) return signal?.source === "github-issue-backlog" ? "STALE" : "ACTIONABLE";
   // Issue state and open-PR evidence are independent reads. Fetch them in
@@ -184,7 +225,14 @@ async function revalidateBacklogSignal(
     return text(pull?.state)?.toLowerCase() === "open";
   });
   const current = deriveGithubIssueBacklogSignals([issue], openPulls, new Date(input.now));
-  return current.some((candidate) => candidate.id === signal?.id) ? "ACTIONABLE" : "STALE";
+  const selected = current.find((candidate) => candidate.id === signal?.id);
+  if (!selected) return "STALE";
+  if (expectedSnapshotDigest) {
+    if (!mainSha) return "UNAVAILABLE";
+    const freshDigest = await signalSnapshotDigest(selected, mainSha, issueRecord);
+    if (freshDigest !== expectedSnapshotDigest) return "SNAPSHOT_MISMATCH";
+  }
+  return "ACTIONABLE";
 }
 
 /**
@@ -221,10 +269,24 @@ export async function runScheduledEvolutionCoding(
   const signals = failureSignals.length > 0 ? failureSignals : backlogSignals;
   const freshFailureCount = failureSignals.length;
   const workIdentity = logicalWorkIdentity(signals);
-  if (signals[0]?.source === "github-issue-backlog") {
-    const freshness = await revalidateBacklogSignal(signals[0], input, token, fetchImpl);
+  const selectedSignal = signals[0];
+  let boundTaskSnapshotDigest: string | null = null;
+  if (selectedSignal?.source === "github-issue-backlog") {
+    const issueNumber = backlogIssueNumber(selectedSignal);
+    const sourceIssue = input.backlogIssues?.find((value) => Number(object(value)?.number) === issueNumber);
+    if (!sourceIssue || !selectedSignal.canonicalOwner || !selectedSignal.conflictKeys?.length) {
+      return result("ABSTAINED", "github-issue-snapshot-source-unavailable", signals.map((signal) => signal.id));
+    }
+    try {
+      boundTaskSnapshotDigest = await signalSnapshotDigest(selectedSignal, input.mainSha, sourceIssue);
+    } catch {
+      return result("ABSTAINED", "github-issue-snapshot-digest-unavailable", signals.map((signal) => signal.id));
+    }
+    const freshness = await revalidateBacklogSignal(selectedSignal, input, token, fetchImpl, boundTaskSnapshotDigest, input.mainSha);
     if (freshness === "UNAVAILABLE") return result("ABSTAINED", "github-issue-actionability-revalidation-unavailable", signals.map((signal) => signal.id));
-    if (freshness !== "ACTIONABLE") return result("ABSTAINED", "github-issue-no-longer-actionable", signals.map((signal) => signal.id));
+    if (freshness === "STALE") return result("ABSTAINED", "github-issue-no-longer-actionable", signals.map((signal) => signal.id));
+    if (freshness === "SNAPSHOT_MISMATCH") return result("ABSTAINED", "github-issue-snapshot-changed", signals.map((signal) => signal.id));
+    if (freshness !== "ACTIONABLE") return result("ABSTAINED", "github-issue-actionability-revalidation-unavailable", signals.map((signal) => signal.id));
   }
   const executionId = `evolve-coding:${input.mainSha.slice(0, 16)}:${workIdentity.slice(0, 100)}`;
   const dedupeKey = `evolve-coding:${input.mainSha}:${workIdentity}`;
@@ -291,16 +353,22 @@ export async function runScheduledEvolutionCoding(
     return result("ABSTAINED", "workflow-failure-causal-evidence-unverified", signals.map((signal) => signal.id));
   }
 
-  const selectedSignal = signals[0];
   if (selectedSignal?.source === "github-issue-backlog") {
     if (!selectedSignal.canonicalOwner || !selectedSignal.conflictKeys?.length) {
       return result("ABSTAINED", "github-issue-work-metadata-required", signals.map((signal) => signal.id));
     }
+    if (!boundTaskSnapshotDigest) return result("ABSTAINED", "github-issue-snapshot-digest-unavailable", signals.map((signal) => signal.id));
     let activeWip;
     try {
       activeWip = await admitActiveWip(coordinator, {
         dedupeKey: bridge.request.dedupeKey,
         executionId: bridge.request.executionId,
+        taskId: /^github-issue-[1-9][0-9]*$/.test(selectedSignal.id)
+          ? `issue-${selectedSignal.id.slice("github-issue-".length)}`
+          : selectedSignal.id,
+        protectedMainSha: input.mainSha.toLowerCase(),
+        taskSnapshotDigest: boundTaskSnapshotDigest,
+        leaseOwnerIdentity: `evolve-scheduled:${input.workflowRunId}`,
         canonicalOwner: selectedSignal.canonicalOwner,
         conflictKeys: selectedSignal.conflictKeys,
         claimedAt: input.now,
@@ -314,17 +382,66 @@ export async function runScheduledEvolutionCoding(
     }
   }
 
-  const persistent = await acquirePersistentExecution(coordinator, {
-    dedupeKey: bridge.request.dedupeKey,
-    executionId: bridge.request.executionId,
-    headSha: input.mainSha.toLowerCase(),
-    now: input.now,
-    leaseExpiresAt: input.now + CODING_LEASE_MS,
-    maxAcquisitions: MAX_SCHEDULED_CODING_ATTEMPTS,
-  });
+  let persistent;
+  try {
+    persistent = await acquirePersistentExecution(coordinator, {
+      dedupeKey: bridge.request.dedupeKey,
+      executionId: bridge.request.executionId,
+      headSha: input.mainSha.toLowerCase(),
+      now: input.now,
+      leaseExpiresAt: input.now + CODING_LEASE_MS,
+      maxAcquisitions: MAX_SCHEDULED_CODING_ATTEMPTS,
+    });
+  } catch {
+    if (selectedSignal?.source === "github-issue-backlog") {
+      let cleanupFailed = false;
+      try {
+        // The coordinator may have committed before its response was lost. Release both exact
+        // identities idempotently so the active-WIP slot cannot outlive failed admission.
+        await releasePersistentExecution(coordinator, { dedupeKey: bridge.request.dedupeKey, executionId: bridge.request.executionId, now: input.now });
+      } catch {
+        cleanupFailed = true;
+      }
+      try {
+        await releaseActiveWip(coordinator, { dedupeKey: bridge.request.dedupeKey, executionId: bridge.request.executionId });
+      } catch {
+        cleanupFailed = true;
+      }
+      if (cleanupFailed) {
+        return result("ABSTAINED", "persistent-execution-admission-cleanup-unavailable", signals.map((signal) => signal.id));
+      }
+    }
+    return result("ABSTAINED", "persistent-execution-admission-unavailable", signals.map((signal) => signal.id));
+  }
   if (!persistent.acquired) {
+    if (selectedSignal?.source === "github-issue-backlog") {
+      try {
+        await releaseActiveWip(coordinator, { dedupeKey: bridge.request.dedupeKey, executionId: bridge.request.executionId });
+      } catch {
+        return result("ABSTAINED", "active-wip-admission-cleanup-unavailable", signals.map((signal) => signal.id));
+      }
+    }
     if (persistent.reason === "WAITING_RATE_LIMIT") return result("WAITING_RATE_LIMIT", "waiting-rate-limit", signals.map((signal) => signal.id));
     return result("DUPLICATE_SUPPRESSED", persistent.reason ?? "DUPLICATE_EXECUTION", signals.map((signal) => signal.id));
+  }
+
+  if (selectedSignal?.source === "github-issue-backlog") {
+    if (!boundTaskSnapshotDigest) return result("ABSTAINED", "github-issue-snapshot-digest-unavailable", signals.map((signal) => signal.id));
+    const freshness = await revalidateBacklogSignal(selectedSignal, input, token, fetchImpl, boundTaskSnapshotDigest, input.mainSha);
+    if (freshness !== "ACTIONABLE") {
+      try {
+        await releasePersistentExecution(coordinator, { dedupeKey: bridge.request.dedupeKey, executionId: bridge.request.executionId, now: input.now });
+        await releaseActiveWip(coordinator, { dedupeKey: bridge.request.dedupeKey, executionId: bridge.request.executionId });
+      } catch {
+        return result("ABSTAINED", "github-issue-stale-cleanup-unavailable", signals.map((signal) => signal.id));
+      }
+      const reason = freshness === "UNAVAILABLE"
+        ? "github-issue-pre-dispatch-revalidation-unavailable"
+        : freshness === "SNAPSHOT_MISMATCH"
+          ? "github-issue-pre-dispatch-snapshot-stale"
+          : "github-issue-pre-dispatch-not-actionable";
+      return result("ABSTAINED", reason, signals.map((signal) => signal.id));
+    }
   }
 
   const dispatched = await executeGithubDispatch(bridge.request, { token, allowedRepository: input.repository }, fetchImpl);

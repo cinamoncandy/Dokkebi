@@ -1,0 +1,29 @@
+current_codex_pagination_main_alignment_20261109:
+  work_order: WO-ISSUE-903-L1-EXECUTION-LEASE-HANDOFF
+  issue: 903
+  pull_request: 2039
+  status: LOCAL_VALIDATED_PENDING_EXACT_HEAD_CI
+  observed_at_utc: "2026-11-09T06:35:00Z"
+  original_candidate_path: /workspace/nusa-2039-pagination-p1-repair
+  original_candidate_head: ecdee7bb568db35daf832a92d84b0a141ab40666
+  original_candidate_preserved: true
+  copy_integrity: "PASS; all 16 changed/tracked and untracked source files matched SHA-256 manifest"
+  protected_main_sha: 066a66a94edf65c79f8ec85088c2a658d0d368e7
+  pr_base_sha: 54c095daff15bc4ef067e12ed26c666e5fd3d4c0
+  merge_base: 54c095daff15bc4ef067e12ed26c666e5fd3d4c0
+  main_vs_base: "68 ahead / 0 behind"
+  pr_vs_base: "47 ahead / 0 behind"
+  alignment_method: "local-only merges of protected main 422de99d and 066a66a9 into isolated candidate copy; each CURRENT_TRUTH conflict regenerated with repository generator"
+  merge_conflicts:
+    - .aipos/CURRENT_TRUTH.md
+  main_impact: "Only shared modified path was generated AIPOS CURRENT_TRUTH; no direct Autopilot coordinator, selector, OIDC, pagination or WIP admission file overlap. Main PAPER writer lease lifecycle changes are separate from ExecutionCoordinator WIP claims. The 066a66a9 delta adds only a read-only Oracle diagnosis output step, its test, one ops work order and generated AIPOS truth; no Autopilot API or selector change."
+  pagination_safety: "GraphQL cursor inventory is diagnostic only; pointInTimeSnapshot=UNVERIFIED and automaticSelectionAllowed=false; selector and Worker claim deny; WIP cap=2"
+  validation_evidence: /workspace/evidence/wo-forge-pr2039-isolated-main-reconciliation-20261109/FINAL-REPORT.md
+  local_validation: "Final integrated snapshot validation recorded in referenced evidence report; exact-head CI not run"
+  exact_head_ci: NOT_RUN_LOCAL_ONLY
+  independent_review: PENDING
+  wip_claims: UNKNOWN
+  writer_lease: UNKNOWN
+  remote_change: NONE
+  safety: "PAPER_ONLY; liveAuthority=NONE; productionMutationAllowed=false; realOrderAuthority=false; realTransferAuthority=false; aiAuthority=ZERO_AUTHORITY; fail-closed"
+  next: "Keep candidate isolated. Obtain authenticated read-only WIP/lease receipt and explicit publication authorization before updating existing PR #2039; do not dispatch or publish automatically."

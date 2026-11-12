@@ -1,7 +1,10 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import {
+  CODEX_WIP_AUDIENCE,
   verifyGithubActionsOidcToken,
+  verifyGithubCodexWipIdentity,
+  verifyGithubCodexWipRun,
   verifyGithubCodingPublisherIdentity,
   verifyGithubCodingPublisherRun,
   verifyGithubCausalProducerEvidence,
@@ -155,6 +158,93 @@ describe("GitHub Actions OIDC", () => {
   it("accepts the trusted execution consumer workflow", async () => {
     const valid = await fixture();
     await verifyGithubActionsOidcToken(valid.token, repository, valid.fetch, now);
+  });
+
+  it("binds Codex WIP coordination to its exact signed workflow and live run attempt", async () => {
+    const workflowPath = ".github/workflows/autopilot-codex-coding.yml";
+    const workflowRef = `${repository}/${workflowPath}@refs/heads/main`;
+    const signed = await fixture({
+      aud: CODEX_WIP_AUDIENCE,
+      workflow_ref: workflowRef,
+      event_name: "workflow_dispatch",
+      sha: "A".repeat(40),
+      run_id: "12345",
+      run_attempt: "2",
+    });
+    const identity = await verifyGithubCodexWipIdentity(signed.token, repository, signed.fetch, now);
+    assert.deepEqual(identity, {
+      repository,
+      workflowRef,
+      ref: "refs/heads/main",
+      sha: "a".repeat(40),
+      runId: "12345",
+      runAttempt: "2",
+      event: "workflow_dispatch",
+    });
+    const run = {
+      id: 12345,
+      run_attempt: 2,
+      repository: { full_name: repository },
+      path: workflowPath,
+      head_sha: "a".repeat(40),
+      head_branch: "main",
+      event: "workflow_dispatch",
+      status: "in_progress",
+    };
+    const response = (data: unknown) => async () => ({ ok: true, status: 200, json: async () => data });
+    await verifyGithubCodexWipRun(identity, "fixture-token", response(run));
+    for (const changed of [
+      { id: 12346 }, { run_attempt: 1 }, { repository: { full_name: "other/NUSA" } },
+      { path: ".github/workflows/ci.yml" }, { head_sha: "b".repeat(40) },
+      { head_branch: "feature" }, { event: "schedule" }, { status: "completed" },
+    ]) {
+      await assert.rejects(() => verifyGithubCodexWipRun(identity, "fixture-token", response({ ...run, ...changed })), /CODEX_WIP_RUN_MISMATCH/);
+    }
+    await assert.rejects(() => verifyGithubCodexWipRun(identity, "fixture-token", async () => { throw new Error("offline"); }), /CODEX_WIP_RUN_UNAVAILABLE/);
+  });
+
+  it("rejects Codex WIP OIDC claims outside the allowlisted identity", async () => {
+    for (const [overrides, expected] of [
+      [{ workflow_ref: `${repository}/.github/workflows/ci.yml@refs/heads/main`, aud: CODEX_WIP_AUDIENCE, run_id: "1", run_attempt: "1" }, /CODEX_WIP_OIDC_WORKFLOW_INVALID/],
+      [{ aud: "nusa-autopilot", run_id: "1", run_attempt: "1" }, /CODEX_WIP_OIDC_AUDIENCE_INVALID/],
+      [{ aud: CODEX_WIP_AUDIENCE, ref: "refs/heads/feature", run_id: "1", run_attempt: "1" }, /CODEX_WIP_OIDC_REF_INVALID/],
+      [{ aud: CODEX_WIP_AUDIENCE, event_name: "push", run_id: "1", run_attempt: "1" }, /CODEX_WIP_OIDC_EVENT_INVALID/],
+      [{ aud: CODEX_WIP_AUDIENCE, repository: "other/NUSA", run_id: "1", run_attempt: "1" }, /CODEX_WIP_OIDC_REPOSITORY_INVALID/],
+      [{ aud: CODEX_WIP_AUDIENCE, sha: "bad", run_id: "1", run_attempt: "1" }, /CODEX_WIP_OIDC_SHA_INVALID/],
+      [{ aud: CODEX_WIP_AUDIENCE, sha: "a".repeat(40), run_attempt: "1" }, /CODEX_WIP_OIDC_RUN_ID_INVALID/],
+      [{ aud: CODEX_WIP_AUDIENCE, sha: "a".repeat(40), run_id: "1" }, /CODEX_WIP_OIDC_RUN_ATTEMPT_INVALID/],
+    ] as const) {
+      const invalid = await fixture(Object.assign({
+        aud: CODEX_WIP_AUDIENCE,
+        workflow_ref: `${repository}/.github/workflows/autopilot-codex-coding.yml@refs/heads/main`,
+        event_name: "workflow_dispatch",
+      }, overrides));
+      await assert.rejects(() => verifyGithubCodexWipIdentity(invalid.token, repository, invalid.fetch, now), expected);
+    }
+    const wrongRepositoryPolicy = await fixture({ aud: CODEX_WIP_AUDIENCE });
+    await assert.rejects(() => verifyGithubCodexWipIdentity(wrongRepositoryPolicy.token, "other/NUSA", wrongRepositoryPolicy.fetch, now), /CODEX_WIP_OIDC_REPOSITORY_POLICY_INVALID/);
+
+    const expired = await fixture({
+      aud: CODEX_WIP_AUDIENCE,
+      workflow_ref: `${repository}/.github/workflows/autopilot-codex-coding.yml@refs/heads/main`,
+      event_name: "workflow_dispatch",
+      sha: "a".repeat(40),
+      run_id: "12345",
+      run_attempt: "2",
+      exp: now - 120,
+    });
+    await assert.rejects(() => verifyGithubCodexWipIdentity(expired.token, repository, expired.fetch, now), /CODEX_WIP_OIDC_EXPIRED/);
+
+    const wrongIssuer = await fixture({
+      aud: CODEX_WIP_AUDIENCE,
+      workflow_ref: `${repository}/.github/workflows/autopilot-codex-coding.yml@refs/heads/main`,
+      event_name: "workflow_dispatch",
+      sha: "a".repeat(40),
+      run_id: "12345",
+      run_attempt: "2",
+      iss: "https://issuer.invalid",
+    });
+    await assert.rejects(() => verifyGithubCodexWipIdentity(wrongIssuer.token, repository, wrongIssuer.fetch, now), /CODEX_WIP_OIDC_ISSUER_INVALID/);
   });
 
   it("rejects a token from another coding workflow or branch", async () => {

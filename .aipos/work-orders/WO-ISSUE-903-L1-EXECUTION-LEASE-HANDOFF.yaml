@@ -1,0 +1,473 @@
+id: WO-ISSUE-903-L1-EXECUTION-LEASE-HANDOFF
+title: "Issue #903 close the scheduled producer to consumer lease handoff race"
+status: IN_PROGRESS
+priority: P0
+owner: codex
+repository: cinamoncandy/NUSA
+issue: 903
+pull_request: 2039
+base_branch: main
+base_commit: f5aba595f406a367258fccd85801aae3e6125d6d
+implementation_branch: agent/903-canonical-portfolio-autopilot
+objective: "Preserve one durable execution lease across asynchronous producer-to-consumer handoff so a competing producer cannot reacquire while a consumer is running."
+architecture_impact:
+  acknowledged: true
+  analysis: "Repairs the existing ExecutionCoordinator state machine; owner-approved scope now permits a narrowly scoped OIDC-authenticated Codex Claim/Release coordination path. No queue, scheduler, general coding worker, broad execution authority or production mutation is authorized."
+  references:
+    - apps/autopilot/src/executionCoordinator.ts
+    - apps/autopilot/src/executionCoordinator.test.ts
+    - apps/autopilot/src/causalDispatchCoordinator.test.ts
+    - apps/autopilot/src/scheduledEvolutionCoding.attemptCap.test.ts
+scope:
+  - reject acquire while an unexpired HANDED_OFF execution lease is active
+  - renew the same execution lease to the authenticated consumer's requested bounded expiry during LEASED to HANDED_OFF transition
+  - enforce the logical active-WIP cap at two while safely reading and expiring persisted legacy state within the prior eight-claim storage bound
+  - add a narrow GitHub Actions OIDC-only Codex claim/release route that reuses atomic active-WIP admission, validates the live run and exact selected main SHA, and requires explicit owner/conflict metadata
+  - bind claims and releases to exact repository, workflow, protected ref, run, attempt, SHA, issue, execution identity, and current canonical task selection
+  - bind claim admission to the exact selected issue snapshot that produced the Codex prompt, using a digest verified against a fresh server-side selection
+  - recheck protected main after full task revalidation and immediately before atomic WIP admission
+  - keep the Codex WIP claim lifecycle distinct from successful CodingRunner completion evidence
+  - attempt idempotent claim release after every executed claim step, including ambiguous/lost responses
+  - require the Codex job timeout to remain shorter than the existing active-WIP claim TTL and remove OIDC mint credentials from the Codex process environment
+  - keep the legacy global issue/PR scan diagnostic-only because GitHub provides no cross-page point-in-time token; select and revalidate Codex work only from a complete AIPOS Work Order tree pinned to the exact protected-main SHA, with every listed blob verified and any truncated, duplicate, missing, oversized, or ambiguous read rejected
+  - require an explicit READY Work Order opt-in, matching OWNER issue snapshot, explicit owner/conflict metadata, and explicit empty dependency/link fields; stable issue and cross-reference reads must reject linked or changing work
+  - keep generic workflow failures fail-closed and unable to acquire a lease or dispatch without verified causal evidence
+  - prove competing producer and duplicate consumer suppression using the existing coordinator
+prohibited:
+  - new_execution_state_or_queue
+  - new_scheduler_or_consumer
+  - lease_ttl_or_heartbeat_safety_weakening
+  - broad_authority_expansion_or_unverified_oidc_claim_release
+  - reactivating_or_dispatching_the_Codex_workflow_without_current_explicit_owner_approval
+  - changing_repository_coding_variables_or_runner_configuration
+  - deploying_the_Worker_or_mutating_production
+  - production_or_broker_mutation
+safety:
+  liveAuthority: NONE
+  productionMutationAllowed: false
+  realOrderAuthority: false
+  realTransferAuthority: false
+  aiAuthority: ZERO_AUTHORITY
+  paper_only: true
+acceptance:
+  - an unexpired HANDED_OFF record blocks another acquire for the same dedupe identity
+  - consumer handoff persists the requested consumer execution expiry, not the shorter producer expiry
+  - generic and causal-admission handoff paths both preserve the authenticated consumer lease expiry
+  - callers cannot request more than two active WIP slots; pre-existing three-to-eight claim state remains readable, blocks new admission, and expires under the existing TTL
+  - Codex claim accepts only the signed, allowlisted GitHub OIDC identity and GitHub API run record for the exact selected main SHA, workflow, run, and attempt, and rechecks current protected main before admission
+  - missing/malformed/expired/forged/wrong-issuer/wrong-audience/wrong-workflow/wrong-ref/wrong-repository/wrong-SHA/stale-run claims fail closed
+  - task selection is repeated server-side and requires explicit canonicalOwner and conflictKeys; linked/stale/unclaimable work is rejected
+  - the local Codex selector and Worker claim revalidation use the same exact protected-main Work Order inventory; every candidate Work Order blob is read at the pinned main SHA and verified against the complete recursive tree
+  - the claim carries a digest of the exact selected issue prompt/owner/conflict snapshot plus main SHA, tree SHA, Work Order identity/blob SHA, and stable issue cross-reference digest; any changed component is rejected before admission
+  - stale or moved main/task snapshots reject admission; incomplete GitHub reads return 503; a complete inventory with no explicit READY item does not create or admit a task
+  - protected main is rechecked after the selected-task snapshot is revalidated and immediately before atomic admission
+  - the release client is invoked after every executed claim step, not only after its success output exists, so an ambiguous claim response gets an idempotent release attempt
+  - concurrent/shared admission remains atomic and the combined coordinator never admits more than two active WIP claims
+  - duplicate/replayed claim and wrong-run release are rejected; only the exact workflow run can release its slot
+  - claim release is recorded as CLAIM_RELEASED, not successful coding completion, and cannot satisfy CodingRunner release-status evidence
+  - the Codex process cannot mint OIDC tokens, and the full job timeout remains below the existing WIP lease expiry
+  - generic workflow failures remain ABSTAINED without lease acquisition or dispatch
+  - duplicate delivery remains fail-closed and does not replace the owner execution identity
+  - expired leases retain existing bounded acquisition semantics
+  - canonical transition remains LEASED -> HANDED_OFF -> RELEASED or DISPATCHED -> COMPLETED
+  - focused coordinator and scheduled attempt-cap tests pass without weakening assertions
+validation:
+  - pnpm run preflight
+  - node --test dist/apps/autopilot/src/codexWipCoordination.test.js dist/apps/autopilot/src/githubActionsOidc.test.js dist/apps/autopilot/src/activeWipRelease.test.js dist/apps/autopilot/src/executionCoordinator.test.js dist/apps/autopilot/src/causalDispatchCoordinator.test.js dist/apps/autopilot/src/scheduledEvolutionCoding.attemptCap.test.js dist/apps/autopilot/src/scheduledEvolutionCoding.test.js
+  - node --test tests/autopilot-codex-coding.test.js tests/autopilot-codex-wip.test.js
+  - node --test dist/apps/autopilot/src/githubIssueBacklogClient.test.js
+  - pnpm run build
+  - pnpm run validate:full
+  - pnpm run security:gate
+  - pnpm run lint
+  - git diff --check
+evidence:
+  historical_local_validation:
+    target_head: f68344e08d493a6db1ec1b397ae1feafcfba2c55
+    node: "v24.19.0"
+    preflight: PASS
+    focused_tests: "38/38 PASS via compiled dist tests"
+    build_typecheck: PASS
+    full_test_suite: "PASS_1285_ISOLATED_FILES"
+    validate_full: PASS
+    security_gate: PASS
+    lint: "PASS_0_ERRORS_45_EXISTING_WARNINGS"
+    git_diff_check: PASS
+  prior_local_validation_before_2026_11_08_main_advance: "PASS on the pre-alignment base: preflight, focused coordinator/scheduled regression 60/60, build, typecheck, full isolated suite 1335 test files, validate:full, security:gate, lint 0 errors/47 baseline warnings, and diff-check. The full-suite rerun used TMPDIR=/workspace/nusa-2039-tmp after an initial ENOSPC attempt. Historical for current main."
+  exact_head_ci: PENDING
+  required_companions: PENDING
+  fresh_non_author_review: PENDING
+  formal_validator: PENDING
+owner_approval_20261108:
+  canonical_issue: 903
+  approval_comment: https://github.com/cinamoncandy/NUSA/issues/903#issuecomment-6714835582
+  status: SCOPE_APPROVED_IMPLEMENTATION_PENDING
+  approved:
+    - reuse_existing_execution_coordinator_atomic_wip_admission_max_two
+    - codex_claim_and_release_only_through_allowlisted_github_actions_oidc
+    - bind_exact_repository_workflow_ref_run_sha_task_execution_id_and_lease_owner
+    - reject_spoofed_replay_duplicate_over_limit_stale_and_wrong_owner_claims
+    - fail_closed_on_invalid_or_missing_oidc_and_coordinator_outage
+    - preserve_lease_ttl_heartbeat_takeover_and_legacy_wip_readback_safeguards
+    - adversarial_focused_full_security_and_exact_head_validation
+  not_approved:
+    - reactivate_disabled_codex_workflow
+    - modify_repository_coding_enabled_variable_or_actions_runner
+    - deploy_cloudflare_worker_or_oracle_or_production
+    - change_live_risk_broker_or_payment_authorities
+    - direct_main_merge_release_or_self_validator_approval
+  evidence_status: "OWNER_SCOPE_APPROVED; V15 local successor binds active-WIP receipts to task/main/digest/owner/expiry, revalidates scheduled task snapshots before dispatch, verifies the Codex claim/main/task snapshot immediately before runner start, and attempts exact-identity cleanup on ambiguous persistent admission. Focused/build/full suite (1,343 isolated files), typecheck, validate:full, security, AIPOS and lint pass locally. Exact-head CI, independent Validator, Audit/Release, runtime integration, and actual Codex E2E remain unverified."
+  next: "Refresh main and existing PR #2039 HEAD; if the remote remains the verified parent and local candidate is a non-force fast-forward, publish only to that Draft PR and confirm exact-head CI. Keep Codex manual execution gated: inventory snapshot is UNVERIFIED, operational WIP/lease is UNKNOWN, and do not dispatch."
+recovery_20261107:
+  protected_main_sha: 01d698b325626e4a2e62b29e8e0b2f99f579ad4a
+  predecessor_pr_head: 90726879b4c5dead48327579c59fdfdecda82154
+  method: NON_FORCE_MERGE_CURRENT_MAIN_INTO_EXISTING_PR_BRANCH
+  conflict_files:
+    - apps/autopilot/src/scheduledEvolutionCoding.attemptCap.test.ts
+    - apps/autopilot/src/scheduledEvolutionCoding.test.ts
+  conflict_disposition: "Kept current-main fail-closed generic-workflow-failure assertions and removed stale expectations that generic failures dispatch without causal evidence."
+  verified_additional_gap: "The current-main causalAdmissionHandoff branch did not persist the authenticated consumer leaseExpiresAt even though the generic handoff branch did."
+  repair: "Both handoff paths now persist request.leaseExpiresAt; causal regression asserts active lease blocks a competing producer and duplicate handoff remains rejected."
+  wip_contraction_safety: "Admission cap is 2; legacy stored claims retain the former bound of 8 so existing state is not treated as corrupt, new work is blocked until expired claims age out, and read-back remains truthful."
+  local_validation: "PASS: preflight, focused coordinator/scheduled regression 60/60, build, typecheck, full isolated suite 1335/1335 test files, validate:full, security:gate, lint 0 errors/47 baseline warnings, and diff-check. Initial suite attempt hit ENOSPC on /tmp; rerun with TMPDIR=/workspace/nusa-2039-tmp passed."
+  autonomous_dogfood: BLOCKED
+  autonomous_dogfood_reason: "Autopilot Codex Coding remains disabled_manually by owner decision. Read-only repository Actions variable lookup for NUSA_AUTOPILOT_CODING_ENABLED returned 403; Workers AI dispatch capability/configuration is therefore unverified. No workflow was enabled or dispatched."
+  next: "Publish only this locally validated successor to the existing branch, verify fresh exact-head CI and companions, then request one fresh non-author Validator review. Keep Draft and do not self-approve or merge."
+codex_wip_coordination_20261108:
+  initial_implementation_base: a482c2648ae8da0c80c4c27ae0e28c240b04495d
+  current_protected_main: 54c095daff15bc4ef067e12ed26c666e5fd3d4c0
+  aligned_local_head: 2f96efe18dfd9246952349f8ebfbcca6173027a4
+  verified_worktree_base: 2f96efe18dfd9246952349f8ebfbcca6173027a4
+  canonical_branch: agent/903-canonical-portfolio-autopilot
+  implementation_head_before_commit: b4fd4a40a22bce66215cee6ec537b5717ffc8c66
+  change: "The Codex selector now requires explicit canonical owner/conflict metadata; its existing workflow has a narrowly scoped OIDC claim/release lifecycle backed by the same atomic two-slot ExecutionCoordinator. The Worker verifies GitHub OIDC signature/policy and live run, rechecks protected main still equals the selected run SHA, and reselects the exact issue before admission. Release tombstones are explicitly CLAIM_RELEASED and are not CodingRunner success evidence. The workflow timeout remains below the existing 60-minute claim TTL and removes OIDC mint credentials from the Codex child process."
+  workflow_state_at_previous_observation: "At the prior checkpoint GitHub API reported the Codex workflow active while the then-current owner decision required it disabled. The current owner report below supersedes that historical decision; this prior record is retained as history."
+  safe_manual_execution_at_previous_observation: BLOCKED
+  safe_manual_execution_reason_at_previous_observation: "At the prior checkpoint the then-current owner decision kept Codex disabled; the deployed Worker did not yet contain this local endpoint; Actions variable and runner status APIs returned 403. No dispatch or production mutation was performed."
+  local_validation: "PASS on the worktree based on 2f96efe18dfd9246952349f8ebfbcca6173027a4: pnpm test ran preflight, TypeScript build, and 1338 isolated test files; focused Codex/Coordinator/OIDC tests 58/58 and workflow/client/authority tests 26/26; typecheck, validate:full, security:gate, and git diff --check PASS; lint 0 errors / 47 existing warnings."
+  exact_head_ci: PENDING
+  independent_validator: PENDING
+  validation_scope: "Owner-approved implementation only. Codex task admission now shares the existing atomic ExecutionCoordinator cap of two, rechecks signed run/task/current-main identity, rejects replay/conflicts, and fails closed if GitHub or Coordinator is unavailable. The signed claim does not grant repo-write/production authority."
+  next_at_previous_observation: "Publish the locally validated successor only to existing Draft PR #2039; exact-head CI and independent Validator remain pending. No workflow dispatch."
+codex_selector_pagination_20261108:
+  observed_at: "2026-11-08T02:52:47Z"
+  issue: 903
+  pull_request: 2039
+  prior_head: 747460c24b804f68ba23940d0f9cd03243da1511
+  protected_main: 54c095daff15bc4ef067e12ed26c666e5fd3d4c0
+  finding: "Both scripts/autopilot-codex-select.js and Worker claim revalidation queried only the first 100 issues and first 100 pulls. The complete API inventory contained 127 open non-PR issues and 65 open PRs; the prior one-page selector returned null, while the complete pre-reconciliation list surfaced only #2118 and #2121."
+  classification: "#2118 is HOLD: its Oct 10 canonical owner record says the bounded implementation increment is complete and residual adaptive-concurrency acceptance belongs to #903; work order WO-ISSUE-2118-CI-SATURATION-WIP is MERGED_INCREMENT_POST_MERGE_VERIFIED. #2121 is HOLD: its parent #2052 is CLOSED with canonical acceptance via #2120 and physical acceptance #2150. Both issues remain OPEN and retain history; neither is treated as completed in this work order."
+  resulting_selection: "After current HOLD labels, the exact source selector over all current GitHub pages returns null. No synthetic issue or task was created."
+  implementation: "Added shared GitHub issue/PR pagination with stable created-time ordering, maximum 10 pages per resource, identity validation/deduplication, malformed-response rejection, and fail-closed API/limit behavior. Wired the Codex selector and authenticated Worker claim revalidation to that helper."
+  workflow_current: "Owner reports explicit approval and that Autopilot Codex Coding was enabled; GitHub workflow API currently reports state=active (workflow id 369887156). The earlier disabled_manually record is historical. This does not authorize dispatch: protected main still lacks the PR's shared-WIP claim guard and helper, so the current-main workflow is unsafe for manual execution."
+  runner_and_login: "Owner reports nusa-codex-dev-2 is Idle. Current Actions runner API returns 403, so runner status/labels and Codex login state are not independently verified. Required workflow labels are self-hosted, Linux, nusa-codex-autopilot."
+  active_wip_claims: "UNKNOWN. Current API permissions return 403 and the Worker exposes no read-only public claim-status route; no mutating claim probe was made."
+  manual_run_ready: BLOCKED
+  manual_run_blockers: "Current protected main does not contain the PR's shared-WIP guard; current selected task is null; active WIP claims are UNKNOWN; runner labels and Codex login are unverified. No workflow was dispatched."
+  validation: "PASS on the local successor: pnpm test PASS (1,339 isolated test files); focused Codex/claim/coordinator/OIDC/backlog-pagination set 97/97; pnpm run typecheck PASS; pnpm run validate:full PASS; pnpm run security:gate PASS; pnpm run aipos:provenance PASS; pnpm run lint PASS (0 errors / 47 existing warnings); git diff --check PASS. Exact-head CI, independent Validator, Formal Validator, Audit, Release, and runtime integration remain pending."
+  current_owner_report: "Owner explicitly confirms reactivation approval and GitHub enablement; Actions workflow API confirms active (369887156). No workflow was manually dispatched."
+  next: "Publish this locally validated successor only to existing Draft PR #2039; exact-head CI and fresh independent Validator remain pending. Do not run until protected main contains the claim guard, a genuine eligible task is selected, active WIP claims are read safely, and runner/Codex login are verified."
+codex_claim_review_findings_20261108:
+  predecessor_head: 747460c24b804f68ba23940d0f9cd03243da1511
+  review: "Fresh predecessor Codex review identified P1 release-after-ambiguous-claim, P1 selected-task snapshot mismatch, and P2 protected-main recheck ordering. This predecessor review is not a verdict for any successor SHA."
+  repairs: "The workflow attempts identity-bound release after any executed claim step; selector passes a SHA-256 digest of issue number/title/body/capability/owner/conflict keys and Worker recomputes it from fresh issue data; Worker rechecks protected main after snapshot validation immediately before atomic admission."
+  tests: "Regression tests cover changed issue snapshot and main movement during task lookup; workflow/client tests assert digest propagation and release after failed/ambiguous claim execution."
+  local_validation: "PASS based on local successor worktree over af4cde2f: focused Codex claim/release, workflow, and Worker coordination regression set 100/100; direct targeted rerun 22/22; pnpm test 1,339/1,339 isolated files; typecheck, build (through pnpm test), validate:full, security:gate, AIPOS provenance, lint (0 errors / 47 existing warnings), and git diff --check PASS."
+  exact_head_ci: PENDING
+  independent_disposition: PENDING_SUCCESSOR_REVIEW
+  formal_validator: PENDING_SUCCESSOR_RECEIPT
+  audit_and_release: NOT_AUTHORIZED
+  current_manual_run_gate: "BLOCKED: deployed protected main does not contain the claim guard/digest binding; complete selector returns null; WIP claims UNKNOWN; runner labels and Codex login UNKNOWN/unverified. No dispatch."
+  next: "Commit/push the validated repair only to existing Draft PR #2039, then require exact-head CI/companions and fresh independent review. Existing Formal Validator request targets predecessor 747460c and must not be reused as a successor verdict."
+next: "The preserved original worktree remains unchanged. The separate isolated-pagination-reconciliation branch is integrating current protected main 355d682f6cffac12a4dc319203a964a98fa33f43 and is under local validation only. Do not push, dispatch, claim/release WIP, mutate leases, deploy, merge, or infer inventory snapshot completeness."
+
+historical_first_main_alignment_20261028:
+  previous_validated_head: cbb638d5d4d50ca6e290dbb4dcb597a1da44e7f3
+  aligned_main: 2a1f91773d89b7c9959a9add0fae406b39293705
+  method: merge_without_history_rewrite
+  conflicts: none
+  lease_semantic_change: none
+  old_validator_and_audit: HISTORICAL_ONLY_FOR_SUCCESSOR
+  successor_validation: PENDING
+  next: Resolve live PR head; require successor local gates, exact-head CI/companions and fresh independent gates before Release. No L2 or Oracle mutation.
+
+pre_repair_alignment_20261028:
+  previous_head: cde48630cd727de53b6173296dd91386d8496aaf
+  aligned_main: a60acc7926fd790b9e230a097c04afe7131a6a96
+  pre_repair_head: f2067cce4338f66a74ed77f078d32323613e5928
+  alignment: ALIGNMENT_ONLY_NO_SEMANTIC_CHANGE
+  history_rewritten: false
+  conflicts: none
+  local_validation: preflight_build_typecheck_validate_full_security_lint_diff_PASS_focused_49_regression_13
+  exact_head_ci: PASS_40653497992_PRE_REPAIR_HEAD_ONLY
+  companions: PASS_5_OF_5_PRE_REPAIR_HEAD_ONLY
+  review: COMPLETED_WITH_P1_METADATA_FINDING_THREAD_PRRT_kwDOTUbne86xClwW
+  predecessor_formal_6461472488_and_audit_6461585760: CDE48630_HISTORICAL_ONLY
+  successor_gates: Fetch live head; require new exact-head CI, companions and fresh non-author review before independent Formal Validator and Audit.
+local_pagination_repair_20261109:
+  observed_at_utc: "2026-11-09T04:41:47Z"
+  tested_source_head: ecdee7bb568db35daf832a92d84b0a141ab40666
+  protected_main_at_start: b2186edc2e4422efb0d95d07c1c8c12a61be218d
+  protected_main_at_end: 422de99d2444860bc8fbc1e2e141e78d74daa93b
+  isolated_branch: codex/pr2039-pagination-p1-repair-20261109
+  implementation: "REST offset issue/PR scans were replaced in the local candidate by bounded GraphQL cursor traversal with edge/cursor/identity/count/order/label validation and matching full-scan comparison. GitHub exposes no point-in-time snapshot token here, so the result remains UNVERIFIED; both selection and Worker claim admission reject it. WIP cap remains 2."
+  local_validation: "Focused Codex/pagination/coordinator/workflow tests 31/31 PASS; pnpm run build PASS; pnpm test PASS (1,340 isolated test files); pnpm run typecheck PASS; pnpm run validate:full PASS; pnpm run security:gate PASS; pnpm run lint PASS (0 errors / 47 warnings); git diff --check PASS."
+  local_commit: NOT_CREATED
+  remote_change: NONE
+  exact_head_ci: NOT_RUN_FOR_LOCAL_PATCH
+  protected_main_delta: "At final recheck main=422de99d2444860bc8fbc1e2e141e78d74daa93b while PR base remains 54c095daff15bc4ef067e12ed26c666e5fd3d4c0; GitHub compare reports 64 main-only commits. Candidate is not current-main aligned."
+  unresolved: "No GitHub inventory snapshot proof exists; automatic task selection/admission is deliberately blocked. Active WIP/writer-lease receipt remains UNKNOWN. Independent review, exact-successor CI, Formal Validator, Audit, Release, and runtime proof remain pending."
+  next: "Preserve the test-only baseline package and this local candidate separately. Before publication, obtain current canonical claim/WIP status and inspect/reconcile the 64-commit main delta under the existing #903 owner path. No workflow dispatch, claim, lease mutation, push, merge, or deployment."
+
+
+pagination_candidate_main_reconciliation_20261109:
+  observed_at_utc: "2026-11-09T11:53:56Z"
+  canonical_issue: 903
+  canonical_pr: 2039
+  source_pr_head: ecdee7bb568db35daf832a92d84b0a141ab40666
+  source_pr_base: 54c095daff15bc4ef067e12ed26c666e5fd3d4c0
+  protected_main: 355d682f6cffac12a4dc319203a964a98fa33f43
+  pr_base_to_main: "80 commits ahead; compare at observation"
+  original_candidate_path: /workspace/nusa-2039-pagination-p1-repair
+  original_candidate_head: ecdee7bb568db35daf832a92d84b0a141ab40666
+  original_candidate_mutated: false
+  home_pc_fefa8208_recovered: false
+  isolated_branch: isolated-pagination-reconciliation
+  pre_integration_candidate: 85386ae289dc05272fc86e99014696563de081d1
+  merge_base_with_latest_main: 066a66a94edf65c79f8ec85088c2a658d0d368e7
+  main_integration: 9DAE_INTEGRATED_LOCAL_ONLY_VALIDATION_PASS
+  merge_conflicts: ".aipos/CURRENT_TRUTH.md only; resolved by the repository generator"
+  pagination_contract: "Bounded GitHub GraphQL cursor traversal validates edge identity/cursor, totalCount, ordering, labels and limits. GitHub supplies no point-in-time token here; matching scans remain UNVERIFIED and selector/claim admission reject the result."
+  snapshot_contract: "Digest binds issue prompt fields, owner, conflict keys and eligibility evidence (state, author association, priority, updated timestamp, normalized labels and no linked open PR); changed digest fails before atomic claim. Inventory remains UNVERIFIED and blocks production admission earlier."
+  main_recheck_contract: "Protected main is rechecked after task revalidation immediately before atomic admission; a non-atomic race remains explicit because the GitHub ref read and Durable Object admission cannot be one transaction."
+  recovery_contract: "This entry records the currently observed main and local-only integration; old publication steps are historical. Resolve the exact local candidate from the final report/HEAD, then require fresh CI/review for any future published SHA."
+  validation: PASS_ON_9DAE_115_FOCUSED_1341_FULL_BUILD_TYPECHECK_VALIDATE_SECURITY_AIPOS_LINT
+  wip_runtime_state: UNKNOWN
+  writer_lease_state: UNKNOWN
+  remote_change: NONE
+  next: "Complete local tests and gates, commit only on the isolated branch if they pass, and keep the existing Draft PR and remote branch untouched."
+
+pagination_candidate_publication_20261109:
+  canonical_pr: 2039
+  published_predecessor: a8ea65089dc39f41698d16e7195afe882f715ed8
+  publication_method: FAST_FORWARD
+  remote_head_after_publication: a8ea65089dc39f41698d16e7195afe882f715ed8
+  exact_head_ci_run: 42621794229
+  ci_result: FAILED
+  finding: "Windows checkout CRLF caused a LF-only workflow permissions assertion in tests/autopilot-codex-coding.test.js to fail; the workflow itself retained the expected read-only selector permissions."
+  repair: "Normalize CRLF/CR to LF in the test's loaded workflow text; no production workflow change."
+  local_successor_validation: "Focused test 11/11; isolated suite 1341/1341; root/mobile TypeScript compile PASS; validate:full components PASS; security gate PASS; AIPOS YAML/provenance/drift/conformance PASS; lint 0 errors/47 warnings; mobile lint and diff check PASS."
+  current_remote_review: "No fresh successor review requested or submitted yet; current four threads remain unresolved. Pagination thread is outdated and requires independent SUPERSEDED disposition rather than author resolution."
+  safety: "No workflow dispatch, production mutation, claim/lease operation, merge, deploy or live authority change."
+  next: "Commit the locally validated test-only successor, fast-forward only if remote head still equals the expected predecessor, then inspect new exact-head CI and request independent disposition for all applicable threads."
+
+pagination_candidate_main_6433_reconciliation_20261109:
+  observed_at_utc: "2026-11-09T13:38:00Z"
+  canonical_issue: 903
+  canonical_pr: 2039
+  pr_head_before_integration: f2551960cf29495e619b2f449cc462b88d68fc77
+  pr_base_before_integration: 9daeb72cedb6fc8d1a90b004e08d3a4c8d28b595
+  protected_main: 6433a7c44db4b2e953f343b971096988b3c2699d
+  merge_base: 9daeb72cedb6fc8d1a90b004e08d3a4c8d28b595
+  changed_paths: ".aipos/CURRENT_TRUTH.md; .aipos/work-orders/WO-CLOUD-20261106-DISPLAY-REPLAY-LEDGER-PRECISION.yaml; apps/cloud/src/paperLossAttribution.ts; apps/cloud/src/paperTodayRealized.ts; tests/paper-display-replay-ledger-precision.test.js"
+  merge_conflict: ".aipos/CURRENT_TRUTH.md only; regenerated through scripts/generate-aipos-current-truth.js"
+  integration: "Local non-force merge in isolated worktree; pagination, snapshot digest, recovery metadata, main recheck and WIP cap=2 preserved."
+  focused_validation: "175/175 PASS, including display replay, fail-closed oversell, pagination, snapshot, WIP/coordinator/OIDC/lease and workflow tests."
+  full_suite: "1,342/1,342 isolated test files PASS."
+  build_typecheck: "Root and mobile TypeScript compile PASS; existing dependency links reused without installation."
+  final_gates: PASS_VALIDATE_FULL_SECURITY_AIPOS_LINT_DIFF
+  actual_paper: "Prior exact-head f255 artifact remains FAIL: KILL_SWITCH_ACTIVE/PUBLIC_MARKET_STALE, no order/fill/account change, observation under minimum. Not altered or promoted."
+  wip_claim_and_writer_lease: UNKNOWN
+  safety: "No WIP claim/lease operation, dispatch, deployment, protected-main merge or approval claim."
+  next: "Final gates pass locally (175 focused, 1342 full, root/mobile compile, validate:full components, security, AIPOS, lint, diff). Recheck main and PR remote head, commit the local merge, and fast-forward only if PR head still equals f2551960cf29495e619b2f449cc462b88d68fc77 and main remains 6433a7c44db4b2e953f343b971096988b3c2699d."
+
+pr2039_recovery_closeout_20261109:
+  canonical_issue: 903
+  canonical_pr: 2039
+  status: METADATA_SUCCESSOR_LOCAL_VALIDATED_PENDING_EXACT_HEAD_CI
+  recorded_at_utc: "2026-11-09T14:37:59Z"
+  pr_head_before_metadata_successor: 2d2adcd106650d2f3cd541e85695aebf0a3cee4a
+  pr_base_ref: main
+  pr_base_sha_at_parent: 6433a7c44db4b2e953f343b971096988b3c2699d
+  protected_main_at_record: 2b3f05e8a3c62a7821306461eb3b28bbc4a6785a
+  parent_exact_head_ci_and_companions:
+    ci: "42627675153 SUCCESS"
+    companions: "42627675083, 42627675206, 42627675185, 42627675401, 42627675106 SUCCESS"
+    conditional_jobs: "causal-regression-contract and attest-causal-regression were SKIPPED; not positive evidence"
+  branch_relation_at_record: "PR was 55 commits ahead and 5 commits behind protected main; GitHub reported mergeable=false. A read-only merge-tree probe found only generated .aipos/CURRENT_TRUTH.md conflicted. No main merge was performed in this metadata-only change."
+  main_delta_at_record: "Main-only delta includes apps/cloud/src/paperFillReplay.ts, apps/cloud/src/paperTodayRealized.ts, tests/paper-fill-replay.test.js, its work order, and generated truth. Reconcile this delta before Formal Validator/Audit/Release; do not claim current-main alignment."
+  recovery_corrections: "This section supersedes the older 2d2adcd pre-publication/pending-CI instructions in this work order, the 066a-aligned local-only status in current_codex_pagination_main_alignment_20261109.yaml, and the 450ec checkpoint in current_codex_selector_pagination_20261108.yaml. Historical entries remain unchanged."
+  latest_exact_head_workflow_state: "Parent 2d2adcd exact-head CI and five companions are PASS; the new metadata successor must receive its own exact-head CI/companions."
+  independent_review: "PENDING for the metadata successor. Request disposition of all 11 unresolved threads from an eligible non-author reviewer; do not reuse implementer-side triage."
+  formal_validator: PENDING
+  audit: PENDING
+  release_authorization: PENDING
+  actual_paper: "INCOMPLETE; parent artifact has 60.272s/9 decision cycles and INSUFFICIENT_SMA_OBSERVATIONS:1/20, with no order/fill/account/PnL change. Not readiness PASS."
+  pagination_snapshot: "UNVERIFIED; selector and claim admission remain fail-closed."
+  wip_claims: UNKNOWN
+  writer_lease: UNKNOWN
+  safety: "PAPER_ONLY; liveAuthority=NONE; productionMutationAllowed=false; realOrderAuthority=false; realTransferAuthority=false; aiAuthority=ZERO_AUTHORITY; fail-closed"
+  next: "Resolve this metadata successor's exact SHA and fresh CI/companions. Then obtain non-author disposition of all 11 threads. Reconcile the five main-only commits and regenerate CURRENT_TRUTH before Formal Validator/Audit/Release; no merge/deploy/dispatch or claim/lease mutation."
+
+pr2039_main_alignment_20261109:
+  canonical_issue: 903
+  canonical_pr: 2039
+  source_pr_head: 9b325c3befd68ecaeb130466a551585df42ca340
+  protected_main: 2b3f05e8a3c62a7821306461eb3b28bbc4a6785a
+  merge_base: 6433a7c44db4b2e953f343b971096988b3c2699d
+  prior_head_ci: "42637434782 SUCCESS; this does not validate the main-aligned successor"
+  local_merge: "Main delta merged in isolated worktree; only generated CURRENT_TRUTH conflicted and was regenerated. The five main-only commits add PAPER fill replay/read-model coverage and its work order; no overlap with the PR Autopilot/pagination code."
+  focused_validation: "100/100 PASS: paper fill replay, pagination, snapshot, WIP coordination, Coordinator and OIDC tests."
+  local_validation: "pnpm test PASS (preflight, build, 1,343 isolated test files); validate:full PASS; security:gate PASS; AIPOS YAML/provenance/drift/conformance PASS; lint 0 errors/48 warnings; git diff --check PASS."
+  exact_head_ci: PENDING
+  independent_review: PENDING_NON_AUTHOR_REVIEW
+  unresolved_threads: "11 total, 8 outdated at observation; all require reviewer disposition"
+  pagination_inventory: UNVERIFIED
+  automatic_selector_and_claim: FAIL_CLOSED
+  actual_paper: INCOMPLETE
+  wip_claims: UNKNOWN
+  writer_lease: UNKNOWN
+  formal_validator: PENDING
+  audit: PENDING
+  release_authorization: PENDING
+  safety: "PAPER_ONLY; liveAuthority=NONE; productionMutationAllowed=false; realOrderAuthority=false; realTransferAuthority=false; aiAuthority=ZERO_AUTHORITY; fail-closed"
+  next: "Commit the aligned successor and fast-forward the existing Draft PR only if remote HEAD remains 9b325c3 and protected main remains 2b3f05e8. Verify successor exact-head CI and obtain fresh non-author disposition of all 11 threads; do not merge or change production authority."
+
+pr2039_main_alignment_20261110_successor:
+  canonical_issue: 903
+  canonical_pr: 2039
+  status_on_published_commit: PUBLISHED_FRESH_GATE_DISCOVERY_REQUIRED
+  prior_published_pr_head: efa145dae9c7ed5f910bd522b147ad7fdd3fd0a0
+  confirmed_prior_head_exact_ci: "6/6 workflow runs SUCCESS; conditional main-only causal jobs SKIPPED"
+  historical_main_parent: 7714c22a3439c332e93841ea79535082cc27be2e
+  latest_aligned_main_parent_at_record: 91959182a10abcf6176cc5b40304838724a01fa5
+  alignment: "Protected main 7714c22a was merged, then 91959182 merged without conflicts (current main at this checkpoint); existing #2039 branch stays non-force and Draft. Resolve live main/PR exact head for each next gate."
+  new_change: "Isolated Codex coding smoke-test added client fail-closed regression for HTTP 200 accepted=false and coordinator fetch error; no operational claim."
+  recovery_supersession: "Older 2026-11-09 entries and their 2b3f05e8 publication instructions are historical only; do not repeat. Determine next gate from actual remote HEAD and exact-head CI."
+  inventory_source: "AIPOS-only local candidate 449f275dcdb4278fc9686d1c1d0cb692a168e813 unavailable; not integrated. GitHub scan remains diagnostic and selector/admission fail closed."
+  thread_disposition: "Existing applicable P1/P2 threads remain unresolved; a separate Codex technical review is not Formal Validator ACCEPTED."
+  operational_wip_lease: UNKNOWN
+  actual_coding_e2e: "NOT_RUN; isolated code-edit smoke-test is not authorized operational Select->Claim->CodingRunner E2E."
+  formal_validator: PENDING
+  audit: PENDING
+  release_authorization: PENDING
+  safety: "PAPER_ONLY; liveAuthority=NONE; productionMutationAllowed=false; realOrderAuthority=false; realTransferAuthority=false; aiAuthority=ZERO_AUTHORITY; FAIL_CLOSED"
+  next: "Do not repeat publication of this checkpoint. Read live #2039 HEAD and protected main, check that exact HEAD CI and five companion statuses; if PASS seek non-author thread disposition then separate Formal Validator/Audit/Release. If CI fails, repair the concrete failing test and rerun exact-head gates. No operational Claim or Dispatch."
+
+v15_claim_binding_20261110:
+  canonical_issue: 903
+  canonical_pr: 2039
+  base_main_sha_at_start: 91959182a10abcf6176cc5b40304838724a01fa5
+  pr_head_before_local_successor: ad669b83bff7ef3297561a1984770df45a853539
+  candidate_status: LOCAL_VALIDATION_PASS_PENDING_COMMIT_AND_EXACT_HEAD_CI
+  implementation: "Atomic Coordinator claim receipts now persist and validate taskId, protectedMainSha, taskSnapshotDigest, leaseOwnerIdentity, and bounded expiry; scheduled selection hashes source issue/signal state and releases exact leases if pre-dispatch revalidation fails; Codex workflow verifies the exact current main and task digest immediately after claim and before the runner step. Persistent admission failures attempt identity-bound cleanup of both leases."
+  focused_tests: "PASS after latest-main patch: Coordinator/Codex claim/worker/scheduled lease and workflow suites, including denied admission, ambiguous response cleanup, snapshot mutation, WIP cap, duplicate/replay, and fail-closed inventory cases."
+  build: PASS
+  full_suite_prior_failure: "The first suite attempt exposed a stale top-level AIPOS base_commit f875980e4ff9111ab576f1e93294fae510d07167 that is not an ancestor of current protected main. The historical merge remains recorded under WO-0057; only the current global base anchor was aligned to the verified protected main 91959182a10abcf6176cc5b40304838724a01fa5, leaving historical evidence untouched."
+  full_suite: "PASS_1343_ISOLATED_TEST_FILES after integrating protected main a2f69042d6c8b16ea6c461f1ad8aa330ec9aeb9b."
+  latest_main_integration: "Protected main advanced to a2f69042d6c8b16ea6c461f1ad8aa330ec9aeb9b (PR #3050 closes the approved isolated verification attempt-3 config window). Merged into local successor; validation pending on this exact integration."
+  inventory_completeness: UNVERIFIED
+  selector_and_claim_admission: FAIL_CLOSED
+  operational_wip_claims: UNKNOWN
+  writer_lease: UNKNOWN
+  exact_head_ci: PENDING_FOR_LOCAL_SUCCESSOR
+  independent_review: PENDING
+  formal_validator: PENDING
+  audit: PENDING
+  release_authorization: NOT_AUTHORIZED
+  actual_ai_coding_e2e: NOT_RUN
+  safety: "PAPER_ONLY; liveAuthority=NONE; productionMutationAllowed=false; realOrderAuthority=false; realTransferAuthority=false; aiAuthority=ZERO_AUTHORITY; FAIL-CLOSED"
+  next: "Rerun focused and full validation on the successor merged with main 77f9ab88833f3bd11742aaf4e6c98082a4f63135. Then recheck protected main and PR head; publish only if PR HEAD remains ad669b83bff7ef3297561a1984770df45a853539 and the update is fast-forward. Do not dispatch or self-approve."
+
+  latest_main_reconciliation_20261110: "After PR #3050, protected main advanced to c02eec0a3650139eb8df6e8dc33631fe35925472 via PR #3051 (bounded isolated-verification rejection stage projection). This changes apps/autopilot/src/worker.ts, adds isolated-stage tests and bounded receipt parsing. The merge into the PR #2039 candidate was conflict-free; exact candidate validation and CI are pending. Prior SHA evidence is historical."
+
+  latest_main_reconciliation_validation_20261110: "Candidate merged with protected main c02eec0a3650139eb8df6e8dc33631fe35925472 passed bounded rejection-projection focused tests 5/5; pnpm test passed 1,343 isolated test files; typecheck, validate:full, security gate, AIPOS YAML/provenance/current-truth/drift/conformance and diff-check passed; lint 0 errors, 48 existing warnings. This is local evidence for the integrated candidate, not exact-head CI or independent approval."
+
+  latest_main_reconciliation_20261110_attempt4: "Protected main advanced to 9848e6f728bb671b6ff3c3eb35c4e62ff4466aac via owner-approved PR #3052, which reopens the existing isolated causal verification config window for attempt 4. The config-only delta merged locally into the PR #2039 candidate. No workflow dispatch or deployment was performed. Current integrated candidate passed pnpm test (1,343 isolated files), typecheck, validate:full, security gate, AIPOS validators, lint (0 errors/48 baseline warnings), and diff-check. Exact-head CI remains pending."
+
+  recovery_supersession_20261111: "Published #2039 head a283a73aa9fa177d4320496328e858017e3ac0a0 was observed with 16 successful and 3 skipped checks; older commit/push instructions describe predecessor checkpoints only. Main ad0085fd994f68dd827ed52a022a50ad84057a13 is integrated; derive the actual current PR HEAD and its CI from GitHub. No successor non-author review is claimed."
+
+current_main_alignment_20261111:
+  canonical_pr: 2039
+  verified_main: be8d58f16e60de9f3d37b8bdd9c9648214501536
+  aligned_predecessor_head: 3cfaa7335ada5125c7a8f7016373f9125b76fb70
+  method: NON_FORCE_TWO_PARENT_MERGE_EXISTING_DRAFT_PR
+  predecessor_exact_head_ci: "CI 42949466137 and five companion workflows SUCCESS at predecessor head only"
+  next_metadata_successor_exact_head_ci: PENDING
+  independent_non_author_review: PENDING_3_CURRENT_THREADS
+  formal_validator: PENDING
+  audit: PENDING
+  release_authorization: NOT_AUTHORIZED
+  operational_codex_dispatch: DISABLED
+  safety: "PAPER_ONLY; liveAuthority=NONE; productionMutationAllowed=false; aiAuthority=ZERO_AUTHORITY"
+
+current_main_alignment_20261112:
+  canonical_pr: 2039
+  verified_main: 5d9304c9780428342ddaf525f3d488c476318f51
+  predecessor_head: 076f8fd758677ba83868cdfaa7706b7e63f1ad85
+  reconciliation: "Merge protected main without rewriting history; regenerate the sole textual conflict CURRENT_TRUTH and retain main's stricter GitHub OIDC owner-ID check."
+  inventory_completeness: UNVERIFIED
+  automatic_selector_and_claim: FAIL_CLOSED
+  operational_wip_claims: UNKNOWN
+  writer_lease: UNKNOWN
+  published_predecessor: 78314b55c51e78f8ebd32380ef47f1a184757b95
+  validation: "Predecessor merged tree: 69 focused and 1343 full test files passed; build, typecheck, validate:full and security passed; lint passed with 48 warnings."
+  predecessor_exact_head_ci: "Six workflows PASS including CI 43130001409; Cloudflare preflight 43129995989 failed on missing exact-main deployment evidence."
+  exact_head_ci: PENDING_FOR_SUCCESSOR
+  independent_review: PENDING
+  formal_validator_audit_release: NOT_STARTED
+  next: "Recheck current PR head and exact-head CI, then obtain independent review. Predecessor publication is complete; no operational claim or dispatch."
+
+codex_inventory_reconciliation_20261112:
+  canonical_issue: 903
+  canonical_pr: 2039
+  protected_main_sha_at_start: 5d9304c9780428342ddaf525f3d488c476318f51
+  pr_head_before_candidate: f07d1e1cd59b47d5cbb385bb8e89649658c8a11b
+  candidate_14be6dcf: ABSENT_LOCAL_AND_GITHUB
+  root_cause: "githubIssueBacklogClient.fetchOpenGithubBacklog performs two matching global issue/PR scans but always returns pointInTimeSnapshot=UNVERIFIED and automaticSelectionAllowed=false because GitHub has no cross-page point-in-time snapshot token. The previous Worker claim/verify path consumed this result and failed closed; identical paginated scans cannot establish an atomic issue snapshot."
+  repair: "scripts/autopilot-codex-select.js and Worker claim/verify now share githubWorkOrderInventory.ts: read exact protected-main commit/tree, reject truncated or over-limit trees, fetch every Work Order blob at that immutable SHA and verify blob OID/size, require explicit READY metadata with no declared dependencies/links or conflicting owner/conflict metadata, require stable current Issue/cross-reference reads, and reject GraphQL PullRequest objects used as Work Order issues. The task digest binds the prompt snapshot, main/tree SHA, Work Order/blob identity and issue-reference digest."
+  repository_inventory_observation: "Protected-main tree at the start SHA has 4326 tracked entries and 556 direct WO-*.yaml files (1,893,186 total bytes; largest 63,324 bytes); all 556 parse and none contains codex_selection, so there is no candidate eligible for automatic selection. This is local source inspection, not a live Worker inventory execution."
+  claim_binding: "Selector and Worker recompute the same task digest. Worker rechecks protected main after task validation immediately before atomic existing ExecutionCoordinator admission (max two); verify repeats the task/main/claim checks before the runner. GitHub issue/main reads and Durable Object admission are not one transaction, so a bounded post-check race remains; no Claim was attempted."
+  local_validation: "TypeScript build and typecheck PASS; focused Codex/ExecutionCoordinator/OIDC/backlog regression set 116/116 PASS; control-plane wiring 3/3 PASS; full isolated suite 1,343/1,343 test files PASS; direct preflight, architecture, AIPOS/provenance/conformance/safety/authority validators and git diff --check PASS. The old codexBacklogTaskSnapshotDigest export was removed; the diagnostic-only global backlog reader is recorded in the unwired ledger with its no-point-in-time-token reason. pnpm run preflight did not complete: after removing the temporary apps/mobile/node_modules link, pnpm attempted install and aborted with ERR_PNPM_ABORTED_REMOVE_MODULES_DIR_NO_TTY before changing dependencies. security:gate PASS with no checker changes: a temporary local metadata mirror copied package.json/license entries for the 896 required lock packages from exact matching installed versions in the shared physical pnpm store; lock integrity PASS, 0 unmitigated high/critical advisories, backports PASS, secret scan 0."
+  live_inventory_execution: NOT_PERFORMED
+  operational_wip_claims: UNKNOWN
+  writer_lease: UNKNOWN
+  claim_or_dispatch: NOT_ATTEMPTED
+  exact_head_ci: PENDING_FOR_SUCCESSOR
+  independent_review: PENDING_ON_SUCCESSOR
+  formal_validator: PENDING
+  audit: PENDING
+  release_authorization: NOT_AUTHORIZED
+  safety: "PAPER_ONLY; liveAuthority=NONE; productionMutationAllowed=false; realOrderAuthority=false; realTransferAuthority=false; aiAuthority=ZERO_AUTHORITY; FAIL_CLOSED"
+  next: "Resolve current protected main and PR #2039 HEAD, then await six exact-head checks for the published successor and obtain a fresh non-author disposition. Keep selection empty until an explicitly READY Work Order exists; do not Claim or Dispatch while WIP/Lease is UNKNOWN."
+
+
+inventory_successor_20261112:
+  protected_main: f5aba595f406a367258fccd85801aae3e6125d6d
+  predecessor_remote_pr_head: f07d1e1cd59b47d5cbb385bb8e89649658c8a11b
+  local_inventory_code_commit: f1344ae9
+  branch_alignment: "Latest protected main was merged normally into the existing PR branch; no force push or new PR."
+  current_pr_head: RESOLVE_FROM_GITHUB
+  local_validation: "PASS after latest-main merge: full isolated suite 1344/1344; root/mobile typecheck; AIPOS/provenance/conformance/repository-truth/safety/zero-authority; security gate, lock integrity, backports and secret scan PASS."
+  exact_head_ci: RESOLVE_FOR_LIVE_HEAD
+  independent_non_author_review: PENDING_ON_SUCCESSOR
+  applicable_open_review_threads: 3
+  operational_wip_claims: UNKNOWN
+  writer_lease: UNKNOWN
+  claim_or_dispatch: NOT_ATTEMPTED
+  audit_release_merge: NOT_AUTHORIZED
+  next: "Resolve the live PR SHA and six checks. If remote still equals f07d1e1, publish this candidate by fast-forward; if it is already published, do not republish. After passing exact-head checks, seek fresh non-author disposition. No Claim/Dispatch while WIP/Lease is UNKNOWN."
+  safety: "PAPER_ONLY; liveAuthority=NONE; productionMutationAllowed=false; realOrderAuthority=false; aiAuthority=ZERO_AUTHORITY; FAIL_CLOSED"
+
+atomic_main_race_hold_20261112:
+  reviewed_pr_head: d70ab5ac69fde6d36faf4266c80061771860feb0
+  protected_main: f5aba595f406a367258fccd85801aae3e6125d6d
+  red: "In an isolated fixture, changing main inside Coordinator admission after the final GitHub read returned 201 and persisted one stale claim. This is not evidence of an operational incident."
+  repair: "Fail closed with CODEX_WIP_ATOMIC_MAIN_BINDING_UNVERIFIED for validated new claims and pre-run verification; keep identity-bound release usable."
+  positive_admission: UNVERIFIED_NOT_IMPLEMENTED
+  focused_validation: "86 tests passed and one skipped with Git Bash on PATH, including a final-read main movement fixture. An initial Windows invocation lacked Git Bash and failed one host-guard test; it passed on the corrected invocation."
+  full_validation: "1344 isolated test files passed before the later test-only final-read race addition; typecheck, validate:full and security passed, lint passed with 48 warnings."
+  independent_review: "Separate technical reviewer found no P0/P1 in the 503 hold and independently ran 72 focused tests against existing dist; formal Validator remains pending."
+  operational_wip_and_lease: UNKNOWN
+  claim_or_dispatch: NOT_ATTEMPTED
+  next: "Validate and independently review this local hold; establish an enforceable cross-system atomic admission contract before enabling normal claims."
