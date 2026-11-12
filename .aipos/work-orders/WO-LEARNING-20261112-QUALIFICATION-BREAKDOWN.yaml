@@ -1,0 +1,21 @@
+id: WO-LEARNING-20261112-QUALIFICATION-BREAKDOWN
+title: "/health shows how many candidates were judged and which qualification codes stopped them"
+status: READY_FOR_REVIEW
+created: 2026-11-12
+implementation_branch: claude/qualification-breakdown
+authority_impact: none
+finding: "2026-11-12 17:15 KST after release 9ebbcbb6e: bootstrapReasons=[ALLOCATION_NO_ALLOCATABLE_CANDIDATES, NO_ALLOCATION_ADVISORY]. No candidate passes the allocation conditions (eligible, QUALIFIED_FOR_LEAGUE, evidence breadth >= 0.5), so candidate supply, not the single-entry rule, is what blocks LL1. Which qualification gate stops the candidates (PBO, cost stress, parameter, economic edge, missing hypothesis, evidence breadth, OOS provenance) is persisted in the replay result but not published. This is the first step of LL2 (failure-cause classification) in docs/LEARNING_LOOP_LEVELS_20261112.md."
+change:
+  - "closedLearningInitialPaperBootstrap.ts: summarizeQualification builds counts from qualification.coverage and, for candidates that are not QUALIFIED_FOR_LEAGUE, the number of candidates carrying each fixed upper-case reason code (each code once per candidate, at most eight codes, highest count first). It is attached to the RESEARCH_NOT_DEPLOYABLE result only."
+  - "closedLearningLoopStatus.ts: the tracker keeps bootstrapQualification (four integers) and bootstrapRejectionReasons (code -> count) only while bootstrap is RESEARCH_NOT_DEPLOYABLE, rebuilt in publish() from the current bootstrap (no stale carry-over)."
+  - "server.ts publicRuntimeLiveness: independent allow-list. Counts must be safe integers 0..1000000; a bad count withdraws both fields; a code map passes only with 1..8 entries, every key matching ^[A-Z][A-Z0-9_]{2,63}$ and every value a safe integer; one bad entry drops the whole map. Types widened for the nested objects."
+not_changed:
+  - "Qualification, PBO, cost, parameter and economic-edge gates, thresholds, allocation policy, deployability, risk, capital, authority. Display only; nothing reads the new fields back."
+safety:
+  paper_only: true
+  liveAuthority: NONE
+  productionMutationAllowed: false
+  aiAuthority: ZERO_AUTHORITY
+validation:
+  - "closed-learning-qualification-summary 3/3 (once per candidate and code, ties ordered by code, qualified candidates not counted, free text and path-like strings and non-strings ignored, at most eight codes); cloud-runtime-liveness-health 43/43 total with the new /health test (negative, fractional and string counts, nine codes, array instead of map, bad code, DEPLOYED, stale after an error); 13 closed-learning dist test files plus learning-pipeline-stage 142/142; portability and platform-independent checks pass."
+next_action: "Independent review, merge, release; read bootstrapRejectionReasons to see which gate stops the candidates, then decide where Research should improve (no gate is relaxed)."

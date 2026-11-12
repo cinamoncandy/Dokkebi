@@ -21,6 +21,9 @@ export type ClosedLearningLoopStatus = {
   readonly bootstrap: string;
   /** Why Research was not deployable (RESEARCH_NOT_DEPLOYABLE only): up to five fixed upper-case codes, never free text. */
   readonly bootstrapReasons?: readonly string[];
+  /** RESEARCH_NOT_DEPLOYABLE only: how many candidates were judged and the qualification reason codes with their candidate counts. Integers and fixed codes. */
+  readonly bootstrapQualification?: { readonly candidates: number; readonly qualified: number; readonly insufficient: number; readonly rejected: number };
+  readonly bootstrapRejectionReasons?: Readonly<Record<string, number>>;
   readonly rollover: string;
   readonly rolloverReason?: string;
   readonly currentBlockedReason?: string;
@@ -114,6 +117,8 @@ export class ClosedLearningLoopStatusTracker {
   private status: ClosedLearningLoopStatus | null = null;
   private bootstrap = "NOT_RUN";
   private bootstrapReasons: readonly string[] = [];
+  private bootstrapQualification: ClosedLearningLoopStatus["bootstrapQualification"];
+  private bootstrapRejectionReasons: Readonly<Record<string, number>> = Object.freeze({});
   private periods: ClosedLearningEvidenceCorrelation = {};
   private cycle: ClosedLearningEvidenceCorrelation = {};
   private durable: { cyclesRecorded: number; lastCycleRecordedAt?: number } | null = null;
@@ -281,7 +286,7 @@ export class ClosedLearningLoopStatusTracker {
     });
     // lastCycleOutcome and evidence are always rebuilt here from their sources (this process first, then the durable copy), never carried
     // over from the previous status, so withdrawing the durable copy really withdraws what was published from it.
-    const { evidence: _previousEvidence, metaLearning: _previousMeta, lastCycleOutcome: _previousOutcome, bootstrapReasons: _previousBootstrapReasons, lastBlockedReason: _previousReason, lastBlockedAt: _previousAt, lastErrorClass: _previousErrorClass, currentBlockedReason: _previousCurrent, nextEvaluationEligibleAt: _previousEligibility, ...rest } = this.status;
+    const { evidence: _previousEvidence, metaLearning: _previousMeta, lastCycleOutcome: _previousOutcome, bootstrapReasons: _previousBootstrapReasons, bootstrapQualification: _previousBootstrapQualification, bootstrapRejectionReasons: _previousBootstrapRejectionReasons, lastBlockedReason: _previousReason, lastBlockedAt: _previousAt, lastErrorClass: _previousErrorClass, currentBlockedReason: _previousCurrent, nextEvaluationEligibleAt: _previousEligibility, ...rest } = this.status;
     let eligibleAt: number | undefined;
     const start = this.periods.openPeriodStartAt;
     if (["WAITING_FOR_KST_DAY_ROLLOVER", "WAITING_FOR_EVALUATION_WINDOW"].includes(rest.rollover) && start !== undefined && Number.isSafeInteger(start) && start >= 0 && start <= rest.lastTickAt && start <= 8_640_000_000_000_000) {
@@ -298,6 +303,8 @@ export class ClosedLearningLoopStatusTracker {
       ...(eligibleAt === undefined ? {} : { nextEvaluationEligibleAt: eligibleAt }),
       // Always rebuilt from the CURRENT bootstrap, never carried over from the previous status (observeError spreads the old one).
       ...(this.bootstrap === "RESEARCH_NOT_DEPLOYABLE" && this.bootstrapReasons.length > 0 ? { bootstrapReasons: this.bootstrapReasons } : {}),
+      ...(this.bootstrap === "RESEARCH_NOT_DEPLOYABLE" && this.bootstrapQualification !== undefined ? { bootstrapQualification: this.bootstrapQualification } : {}),
+      ...(this.bootstrap === "RESEARCH_NOT_DEPLOYABLE" && this.bootstrapQualification !== undefined && Object.keys(this.bootstrapRejectionReasons).length > 0 ? { bootstrapRejectionReasons: this.bootstrapRejectionReasons } : {}),
       ...(outcome === undefined ? {} : { lastCycleOutcome: outcome }),
       ...(this.lastBlocked === undefined ? {} : { lastBlockedReason: this.lastBlocked.reason, lastBlockedAt: this.lastBlocked.at }),
       ...(this.lastErrorClass === undefined ? {} : { lastErrorClass: this.lastErrorClass }),
@@ -306,8 +313,18 @@ export class ClosedLearningLoopStatusTracker {
     }) as ClosedLearningLoopStatus;
   }
 
-  public observeBootstrap(result: Pick<ClosedLearningInitialPaperBootstrapResult, "status" | "reasons">): void {
+  public observeBootstrap(result: Pick<ClosedLearningInitialPaperBootstrapResult, "status" | "reasons"> & { readonly qualificationSummary?: unknown }): void {
     this.bootstrap = code(result.status) ?? "UNKNOWN";
+    const summary = result.status === "RESEARCH_NOT_DEPLOYABLE" ? result.qualificationSummary as Record<string, unknown> | undefined : undefined;
+    const count = (value: unknown): number | undefined => (Number.isSafeInteger(value) && Number(value) >= 0 && Number(value) <= 1_000_000 ? Number(value) : undefined);
+    const [candidates, qualified, insufficient, rejected] = [count(summary?.candidateCount), count(summary?.qualifiedCount), count(summary?.insufficientCount), count(summary?.rejectedCount)];
+    this.bootstrapQualification = candidates === undefined || qualified === undefined || insufficient === undefined || rejected === undefined ? undefined : Object.freeze({ candidates, qualified, insufficient, rejected });
+    const rawCounts = summary?.reasonCounts;
+    const reasonCounts: Record<string, number> = {};
+    if (this.bootstrapQualification !== undefined && rawCounts != null && typeof rawCounts === "object" && !Array.isArray(rawCounts)) {
+      for (const [reason, value] of Object.entries(rawCounts as Record<string, unknown>).slice(0, 8)) if (REASON_CODE.test(reason) && count(value) !== undefined) reasonCounts[reason] = Number(value);
+    }
+    this.bootstrapRejectionReasons = Object.freeze(reasonCounts);
     // Reasons are published only for a non-deployable Research result, and only strings that already are fixed codes (no
     // normalising of free text into a code), at most five, sorted and unique. Anything else is dropped; display only.
     this.bootstrapReasons = result.status === "RESEARCH_NOT_DEPLOYABLE" && Array.isArray(result.reasons)
@@ -329,6 +346,8 @@ export class ClosedLearningLoopStatusTracker {
       ticks: (previous?.ticks ?? 0) + 1,
       bootstrap: this.bootstrap,
       ...(this.bootstrapReasons.length === 0 ? {} : { bootstrapReasons: this.bootstrapReasons }),
+      ...(this.bootstrapQualification === undefined ? {} : { bootstrapQualification: this.bootstrapQualification }),
+      ...(Object.keys(this.bootstrapRejectionReasons).length === 0 ? {} : { bootstrapRejectionReasons: this.bootstrapRejectionReasons }),
       rollover: code(result.status) ?? "UNKNOWN",
       ...(reason === undefined ? {} : { rolloverReason: reason }),
       cyclesEvaluated: (previous?.cyclesEvaluated ?? 0) + (evaluated ? 1 : 0),
