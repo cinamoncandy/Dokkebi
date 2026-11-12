@@ -124,7 +124,7 @@ export interface CloudRuntimeLivenessSnapshot {
   /** Canonical PAPER ledger identity: a 64-hex fingerprint of ledger truth and integer counts/times only. */
   readonly paperLedger?: { readonly ledgerFingerprintSha256: string; readonly fillCount: number; readonly openPositionCount: number; readonly lastFillAt?: number; readonly ledgerUpdatedAt: number };
   /** Production closed-learning loop status: fixed codes and integers only. */
-  readonly closedLearningLoop?: Readonly<Record<string, string | number | undefined | Readonly<Record<string, string | number | undefined>>>>;
+  readonly closedLearningLoop?: Readonly<Record<string, string | number | undefined | readonly string[] | Readonly<Record<string, string | number | undefined>>>>;
   /** Full lowercase 40-hex build commit of the running process; omitted when absent or malformed. */
   readonly sourceCommitSha?: string;
   readonly paperLossSession?: { readonly evaluatedAt: number; readonly consecutiveLossCount: number; readonly maxConsecutiveLosses: number; readonly consecutiveLossLimitEnabled?: boolean; readonly todayCompletedSells: number; readonly todayLosingSells: number; readonly periodIdentity?: string; readonly periodStartedAt?: number; readonly lastIncrementAt?: number | null };
@@ -455,18 +455,21 @@ function publicRuntimeLiveness(value: CloudRuntimeLivenessSnapshot): CloudRuntim
   }
   // Closed-learning loop: integers for the counters and the tick time, fixed codes for the steps; nothing else.
   const rawLoop = source.closedLearningLoop as Record<string, unknown> | null | undefined;
-  let closedLearningLoop: { closedLearningLoop?: Record<string, string | number | Record<string, string | number>> } = {};
+  let closedLearningLoop: { closedLearningLoop?: Record<string, string | number | readonly string[] | Record<string, string | number>> } = {};
   const LOOP_INTS = ["lastTickAt", "ticks", "cyclesEvaluated", "deployments"] as const;
   const LOOP_CODES = ["bootstrap", "rollover", "rolloverReason", "lastCycleStatus", "lastCycleOutcome", "lastBlockedReason", "lastErrorClass"] as const;
   if (rawLoop != null && typeof rawLoop === "object" && LOOP_INTS.every((key) => Number.isSafeInteger(rawLoop[key]) && Number(rawLoop[key]) >= 0)
     && typeof rawLoop.bootstrap === "string" && typeof rawLoop.rollover === "string") {
-    const loop: Record<string, string | number | Record<string, string | number>> = {};
+    const loop: Record<string, string | number | readonly string[] | Record<string, string | number>> = {};
     for (const key of LOOP_INTS) loop[key] = Number(rawLoop[key]);
     for (const key of LOOP_CODES) { const value = rawLoop[key]; if (typeof value === "string" && /^[A-Z][A-Z0-9_]{1,63}$/.test(value)) loop[key] = value; }
     if ((loop.rollover === "BLOCKED" || loop.rollover === "ERROR") && typeof rawLoop.currentBlockedReason === "string" && /^[A-Z][A-Z0-9_]{1,63}$/.test(rawLoop.currentBlockedReason)) loop.currentBlockedReason = rawLoop.currentBlockedReason;
     const eligibleAt = rawLoop.nextEvaluationEligibleAt;
     const cadence = rawLoop.evaluationPeriodMs;
     if (cadence === 3_600_000 || cadence === 86_400_000) loop.evaluationPeriodMs = cadence;
+    // Why Research was not deployable: at most five codes that already are fixed upper-case codes; one bad entry drops the whole list.
+    if (loop.bootstrap === "RESEARCH_NOT_DEPLOYABLE" && Array.isArray(rawLoop.bootstrapReasons) && rawLoop.bootstrapReasons.length >= 1 && rawLoop.bootstrapReasons.length <= 5
+      && rawLoop.bootstrapReasons.every((reason) => typeof reason === "string" && /^[A-Z][A-Z0-9_]{2,63}$/.test(reason))) loop.bootstrapReasons = Object.freeze([...(rawLoop.bootstrapReasons as string[])]);
     const periodStart = (rawLoop.evidence as Record<string, unknown> | null)?.openPeriodStartAt;
     const isHourlyBoundary = cadence === 3_600_000 && Number.isSafeInteger(periodStart) && Number(periodStart) >= 0 && Number(periodStart) <= Number(loop.lastTickAt) && Number(eligibleAt) === Number(periodStart) + cadence;
     if (["WAITING_FOR_KST_DAY_ROLLOVER", "WAITING_FOR_EVALUATION_WINDOW"].includes(String(loop.rollover)) && Number.isSafeInteger(eligibleAt) && Number(eligibleAt) > Number(loop.lastTickAt)

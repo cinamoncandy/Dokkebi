@@ -257,7 +257,7 @@ export function startCloudRuntime(
   realReadOnlyObservabilityProvider?: CloudRuntimeRealReadOnlyObservabilityProvider,
   engineeringOperatingSource?: NusaEngineeringOperatingSource,
   /** Display-only status of the production closed-learning loop (see closedLearningLoopStatus.ts). */
-  closedLearningStatus?: () => Readonly<Record<string, string | number | undefined | Readonly<Record<string, string | number | undefined>>>> | null,
+  closedLearningStatus?: () => Readonly<Record<string, string | number | undefined | readonly string[] | Readonly<Record<string, string | number | undefined>>>> | null,
   /** Display-only research experiment tick summaries keyed by bar length ("1m", "15m", ...). */
   researchIntervalTicks?: () => Readonly<Record<string, { readonly lastTickAt: number; readonly lastStatus: string; readonly ticks: number; readonly sessionsStarted: number; readonly counts: Readonly<Record<string, number>> } | null>> | null,
   /** Research-only recorder of the public order book and trades this runtime already receives (see marketMicrostructureRecorder.ts). */

@@ -663,3 +663,26 @@ test("/health publishes the gap-fill timings only as six non-negative integers",
     }, 41866 + index);
   }
 });
+
+test("/health publishes why Research was not deployable as fixed codes only, and drops anything else", async () => {
+  const now = Date.parse("2026-11-12T01:00:00Z");
+  const tracker = new ClosedLearningLoopStatusTracker();
+  tracker.observeBootstrap({ status: "RESEARCH_NOT_DEPLOYABLE", reasons: ["ALLOCATED_CANDIDATE_NOT_QUALIFIED", "NO_ALLOCATION_ADVISORY", "NO_ALLOCATION_ADVISORY", "free text with spaces", "/home/user/path", "lowercase_code", "AB", 7] });
+  tracker.observeRollover({ status: "WAITING_FOR_EVALUATION_WINDOW" }, now);
+  const snapshot = tracker.snapshot();
+  assert.deepEqual(snapshot.bootstrapReasons, ["ALLOCATED_CANDIDATE_NOT_QUALIFIED", "NO_ALLOCATION_ADVISORY"], "only fixed codes, unique and sorted");
+  let loop = snapshot;
+  await withServer({ runtimeLiveness: () => ({ ...LIVENESS, closedLearningLoop: loop }) }, async (handle) => {
+    const read = async () => JSON.parse((await request(handle.port, "/health")).body).runtime.closedLearningLoop;
+    assert.deepEqual((await read()).bootstrapReasons, ["ALLOCATED_CANDIDATE_NOT_QUALIFIED", "NO_ALLOCATION_ADVISORY"]);
+    loop = { ...snapshot, bootstrapReasons: ["OK_CODE", "bad value"] };
+    assert.equal((await read()).bootstrapReasons, undefined, "one bad entry withdraws the whole list");
+    loop = { ...snapshot, bootstrapReasons: ["A1B", "A2B", "A3B", "A4B", "A5B", "A6B"] };
+    assert.equal((await read()).bootstrapReasons, undefined, "more than five entries are withdrawn");
+    loop = { ...snapshot, bootstrap: "DEPLOYED" };
+    assert.equal((await read()).bootstrapReasons, undefined, "reasons are only published for RESEARCH_NOT_DEPLOYABLE");
+  }, 42591);
+  tracker.observeBootstrap({ status: "DEPLOYED", reasons: ["NO_ALLOCATION_ADVISORY"] });
+  tracker.observeRollover({ status: "WAITING_FOR_EVALUATION_WINDOW" }, now + 1);
+  assert.equal(tracker.snapshot().bootstrapReasons, undefined, "a deployable bootstrap carries no reasons");
+});

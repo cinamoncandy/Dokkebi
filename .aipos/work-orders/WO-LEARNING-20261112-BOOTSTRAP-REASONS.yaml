@@ -1,0 +1,21 @@
+id: WO-LEARNING-20261112-BOOTSTRAP-REASONS
+title: "/health says why Research was not deployable (fixed codes only)"
+status: READY_FOR_REVIEW
+created: 2026-11-12
+implementation_branch: claude/loop-bootstrap-reasons
+authority_impact: none
+finding: "2026-11-12 /health runtime.closedLearningLoop: 218 owner-baseline periods realized, cyclesEvaluated 0, deployments 0, bootstrap RESEARCH_NOT_DEPLOYABLE, while research has one HOLDOUT_CHALLENGER_BETTER. The reason codes of the non-deployable verdict (deployment.reasons from scripts/closed-learning-research-worker.js: NO_ALLOCATION_ADVISORY, ALLOCATION_NOT_SINGLE_CANDIDATE, ALLOCATED_CANDIDATE_NOT_QUALIFIED, PAPER_MARKET_UNSUPPORTED) were persisted but never published, so the first step that stops candidate supply could not be read. This is the first LL1 premise in docs/LEARNING_LOOP_LEVELS_20261112.md."
+change:
+  - "ClosedLearningLoopStatusTracker.observeBootstrap keeps up to five reasons, only for RESEARCH_NOT_DEPLOYABLE, only strings that already match ^[A-Z][A-Z0-9_]{2,63}$ (no normalising of free text), unique and sorted; published as bootstrapReasons."
+  - "server.ts publicRuntimeLiveness: bootstrapReasons passes only for bootstrap RESEARCH_NOT_DEPLOYABLE, 1..5 entries, every entry matching the pattern; one bad entry or too many entries withdraws the whole list."
+  - "Types widened to allow a readonly string[] in the loop snapshot (runtime.ts, server.ts)."
+not_changed:
+  - "Deployability rules, qualification, allocation, thresholds, study rules, risk, execution, authority. Display only; nothing reads bootstrapReasons back."
+safety:
+  paper_only: true
+  liveAuthority: NONE
+  productionMutationAllowed: false
+  aiAuthority: ZERO_AUTHORITY
+validation:
+  - "cloud-runtime-liveness-health 40/40 (new: only fixed codes, unique, sorted; bad entry, more than five, other bootstrap status withdrawn; a deployable bootstrap carries none); closedLearningLoop and learningLoopVerdict dist tests and learning-pipeline-stage 28/28."
+next_action: "Open the draft PR after the pending Oracle release has run (a merge during a release supersedes it), independent review, then release."
