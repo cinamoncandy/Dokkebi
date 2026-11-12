@@ -19,6 +19,21 @@ describe("AI call telemetry", () => {
     assert.deepEqual(event, { event: "NUSA_AI_CALL", caller: "C2_AUDIT", model: "@cf/model", attempt: 2, promptChars: 5000, promptTokens: 1500, completionTokens: 40, estimatedNeurons: null, liveAuthority: "NONE", productionMutationAllowed: false, aiAuthority: "ZERO_AUTHORITY" });
   });
 
+  it("records bounded diff-segment counts without logging repository text", () => {
+    const lines: string[] = [];
+    logAiCall({
+      caller: "C2_AUDIT", model: "@cf/model", attempt: 1, promptChars: 9000,
+      response: { response: "MODEL-OUTPUT" },
+      reviewSegment: { index: 2, count: 3, changedFiles: 17, diffChars: 123_456 },
+    }, (line) => lines.push(line));
+    const event = JSON.parse(lines[0]!);
+    assert.equal(event.reviewSegment, 2);
+    assert.equal(event.reviewSegmentCount, 3);
+    assert.equal(event.reviewSegmentFileCount, 17);
+    assert.equal(event.reviewSegmentDiffChars, 123_456);
+    assert.doesNotMatch(lines[0]!, /MODEL-OUTPUT|repository|filename|path/);
+  });
+
   it("estimates neurons only for models with a known rate and complete usage", () => {
     assert.equal(estimateWorkersAiNeurons("@cf/meta/llama-3.3-70b-instruct-fp8-fast", { promptTokens: 1_000_000, completionTokens: 100_000 }), 26_668 + 20_480.5);
     assert.equal(estimateWorkersAiNeurons("@cf/meta/llama-3.1-8b-instruct-fast", { promptTokens: 2_000, completionTokens: 500 }), 25.67);

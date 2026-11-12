@@ -49,9 +49,11 @@ function fetchSequence() {
   const queue = [
     response(200, pull),
     response(200, run),
+    response(200, [{ filename: "a.ts", status: "modified" }]),
     response(200, {}, "diff --git a/a.ts b/a.ts\n+const safe = true;\n"),
     response(200, pull),
     response(200, run),
+    response(200, [{ filename: "a.ts", status: "modified" }]),
   ];
   return async () => {
     const next = queue.shift();

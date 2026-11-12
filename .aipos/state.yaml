@@ -375,6 +375,78 @@ current_issue_2118_coverage_shard_rebalance:
   remaining: "Coverage-shard rebalance subincrement complete. Broader CI p50/p95 and owner-latency plus worker WIP/throughput telemetry remain separate #2118/#2117/#903 work; do not infer WIP expansion."
   safety: PAPER_ONLY_LIVE_NONE_PRODUCTION_MUTATION_FALSE_AI_ZERO_AUTHORITY
 
+current_autopilot_validator_removed_import_and_git_quoted_path_20261027:
+  work_order: WO-AUTOPILOT-20261017-FRESH-VALIDATOR-GATE
+  issue: 2760
+  pull_request: 2772
+  branch: fix/validator-evidence-gate-2760
+  status: TWO_REVIEW_P1_REPAIRS_IMPLEMENTED_LOCAL_VALIDATION_PASS_AWAITING_PUBLICATION
+  protected_main: e7f8a426a57a08339eae3778ca50de6512d6acd9
+  predecessor_head: e533309376cc563649ef5d2c8faf09a699ed8ab2
+  review_findings:
+    - comment: 4386945148
+      severity: P1
+      repair: "Modified source files now inspect exact-base importer imports associated with deleted lines and include bounded exact-base dependency blobs."
+    - comment: 4386945168
+      severity: P1
+      repair: "Git C-quoted path decoder handles strict UTF-8 octal bytes and named escapes; malformed/unsafe paths fail closed and evidence refs use decoded paths."
+  tests:
+    validator_runner: PASS_21_OF_21
+    full_suite: PASS_1290_ISOLATED_TEST_FILES
+  local_validation:
+    node: 24.19.0
+    preflight: PASS
+    build: PASS
+    typecheck: PASS
+    validate_full: PASS
+    security_gate: PASS
+    lint: PASS_0_ERRORS_45_EXISTING_WARNINGS
+    aipos_drift: PASS
+    aipos_conformance: PASS
+    diff_check: PASS
+  successor_head: PENDING_COMMIT
+  exact_head_workflows: PENDING
+  fresh_non_author_review: PENDING
+  formal_validator: PENDING
+  audit_release_merge: NOT_STARTED
+  next: "Run final focused tests, build, AIPOS and diff checks; re-fetch PR #2772 and protected main. Publish one substantive non-force successor only if remote head remains e533309376cc563649ef5d2c8faf09a699ed8ab2; then require exact-head workflows and fresh non-author review. Keep Draft; no Formal Validator before a clean fresh review, and no Audit, Release, merge or Oracle mutation."
+  safety: PAPER_ONLY_LIVE_NONE_PRODUCTION_MUTATION_FALSE_AI_ZERO_AUTHORITY
+
+current_autopilot_validator_unquoted_diff_paths_20261027:
+  work_order: WO-AUTOPILOT-20261017-FRESH-VALIDATOR-GATE
+  handoff: .aipos/handoffs/2026-10-27-validator-unquoted-diff-path-p1.md
+  issue: 2760
+  pull_request: 2772
+  branch: fix/validator-evidence-gate-2760
+  status: LOCAL_IMPLEMENTATION_AND_FOCUSED_TESTS_PASS_PENDING_FULL_VALIDATION
+  protected_main: e7f8a426a57a08339eae3778ca50de6512d6acd9
+  predecessor_head: ef58af74c03ff504ac82f89def26e3c2e279280a
+  review_finding:
+    review_receipt: 5665534229
+    comment: 4387534372
+    severity: P1
+    summary: "Git diff unquoted paths containing ' b/' could be split at a filename substring rather than the old/new path boundary."
+  repair: "Match enumerated path-pair candidates against exact GitHub pull-files filename/previous_filename records; resolve block order independently; fail closed on ambiguity, unsafe path or mismatch."
+  local_validation:
+    node: 24.19.0
+    build: PASS
+    validator_runner: PASS_25_OF_25
+    audit_runner: PASS_34_OF_34
+    preflight: PENDING
+    typecheck: PENDING
+    validate_full: PENDING
+    security_gate: PENDING
+    lint: PENDING
+    full_test_suite: PENDING
+    diff_check: PENDING
+  exact_head: PENDING_COMMIT
+  exact_head_workflows: PENDING
+  fresh_non_author_review: PENDING
+  formal_validator: PENDING
+  audit_release_merge: NOT_STARTED
+  next: "Complete local validation, then verify GitHub authentication and remote expected head before any non-force push to the existing PR. Keep Draft and do not resolve author-side review threads."
+  safety: PAPER_ONLY_LIVE_NONE_PRODUCTION_MUTATION_FALSE_AI_ZERO_AUTHORITY
+
 current_autopilot_wip_release_on_finish:
   work_order: WO-AUTOPILOT-20261013-WIP-RELEASE-ON-FINISH
   status: COMPLETED
@@ -4384,6 +4456,196 @@ current_docs_claude_handoff:
   next: "Re-verify main, PRs 2637/2638/2639/2633/2586 and runtime health, then continue existing PRs only; see the handoff file for the ordered next permitted actions."
   safety: PAPER_ONLY_LIVE_NONE_PRODUCTION_MUTATION_FALSE_AI_ZERO_AUTHORITY
 
+current_autopilot_fresh_validator_audit_context_20261026:
+  work_order: WO-AUTOPILOT-20261017-FRESH-VALIDATOR-GATE
+  issue: 2760
+  pull_request: 2772
+  branch: fix/validator-evidence-gate-2760
+  status: P1_REPAIRS_LOCAL_VALIDATION_PASS_AWAITING_SUCCESSOR_PUBLICATION
+  protected_main_observed: 54cfb2199cee1fdbaf5ea328c8a0940f4101e723
+  predecessor_head: 6bbe976f1ee544505caf80516cf15d9ee95ec35d
+  fresh_review_receipt: 5659781964
+  findings:
+    - comment: 4383069772
+      severity: P1
+      summary: "Deterministic Audit accepted the validator artifact while the same consumer workflow might not have completed its independent Audit; require the same consumer run/attempt trusted-audit-authority artifact and validate its exact identity, PASS verdict, safety, and zero P0/P1."
+    - comment: 4383069780
+      severity: P1
+      summary: "Deleted changed source files returned 404 at head and blocked review; read the deleted source at exact PR base for bounded dependency analysis, mark that base provenance, and fail closed if absent."
+  repair:
+    files:
+      - .github/workflows/autopilot-deterministic-audit-release.yml
+      - apps/autopilot/src/auditReleaseAuthority.test.ts
+      - apps/autopilot/src/auditRunner.ts
+      - apps/autopilot/src/validatorRunner.test.ts
+      - scripts/validate-trusted-audit-authority.js
+      - tests/trusted-audit-authority.test.js
+    safety: "No audit/release or production authority is granted by this validator. Missing, stale, cross-run, unsafe, P0/P1 validator, or failed-audit evidence rejects before deterministic Audit authority. Deleted source context is fetched only from exact PR base; its relative dependencies remain bound to exact head."
+  local_validation:
+    node: 24.19.0
+    focused: PASS_22_OF_22
+    preflight: PASS
+    typecheck: PASS
+    build: PASS
+    validate_full: PASS
+    security_gate: PASS
+    lint: PASS_0_ERRORS_45_WARNINGS
+    full_tests: PASS_1290_ISOLATED_TEST_FILES
+    git_diff_check: PASS
+  remote:
+    exact_head: PENDING_COMMIT
+    ci: PENDING
+    companions: PENDING
+    fresh_review: PENDING
+    formal_validator: PENDING
+    audit_release_merge: NOT_STARTED
+  safety:
+    liveAuthority: NONE
+    productionMutationAllowed: false
+    aiAuthority: ZERO_AUTHORITY
+    paper_only: true
+
+current_autopilot_fresh_validator_gate_20261020:
+  work_order: WO-AUTOPILOT-20261017-FRESH-VALIDATOR-GATE
+  issue: 2760
+  pull_request: 2772
+  branch: fix/validator-evidence-gate-2760
+  status: CURRENT_MAIN_SYNCED_AIPOS_RECONCILIATION_PENDING_SUCCESSOR_CI_AND_FRESH_VALIDATOR
+  base_sha: 9b6c99cee1750f02ae4dcb9cfe0dba429649dce5
+  prior_pr_head: e0d1465ba6d50e740c766f1daca02459858b0c48
+  local_sync_checkpoint: fa83cb282fcee259f568bc7dd95d515d4f0046b8
+  remote_update_plan: "The exact verified tree was published by a non-force expected-head update from e0d1465... to db7fc759.... The pending AIPOS reconciliation successor must be published only after the GitHub Git Database API tree SHA exactly matches its local HEAD^{tree}; create it as a child of db7fc759..., then update the existing PR branch with expected_sha=db7fc759de47c620a3220c0f12baea7121e3a2d4 and force=false. On any mismatch or lease rejection, stop without changing the ref."
+  synchronization: "Fresh GitHub PR metadata confirmed #2772 was OPEN/Draft at e0d1465ba6d50e740c766f1daca02459858b0c48 while protected main was 9b6c99cee1750f02ae4dcb9cfe0dba429649dce5. GitHub compare showed 8 PR-only and 12 main-only commits from common base 7e560405ad15b4eec8a5e46b0ad32873286df525. Current-main paths did not overlap the PR's changed paths; merge applied cleanly in the isolated worktree. The validated tree was reconstructed through the GitHub Git Database API and its SHA exactly matched the local tree; the existing PR ref was conditionally fast-forwarded from expected e0d1465... to db7fc759de47c620a3220c0f12baea7121e3a2d4 with force=false. The PR is OPEN/Draft, based on current protected main 9b6c99..., and all six exact-head workflows on db7fc759... passed; these receipts become historical for the AIPOS reconciliation successor."
+  validation_after_sync: "PASS: preflight, build, typecheck, validate:full, security:gate, and full suite PASS (1263 isolated test files). Initial full-suite attempt had only a Windows bash PATH ENOENT; rerun with installed Git Bash added to this process PATH passed. Exact-head GitHub checks and fresh non-author Validator remain pending for the successor head."
+  previous_head: fdc81d4d1694a41f0152aa5ab8908a5cccd194b9
+  previous_head_ci:
+    ci_run: 39014447418
+    actual_paper_run: 39014447395
+    capability_guard_run: 39014447400
+    activation_rehearsal_run: 39014447413
+    transport_readiness_run: 39014447392
+    readonly_broker_run: 39014447396
+    result: HISTORICAL_PASS_SUCCESSOR_REQUIRES_FRESH_EVIDENCE
+  previous_validator:
+    verdict: FAIL
+    p0: 0
+    p1: 2
+    findings:
+      - protected_main_not_reconciled
+      - work_order_missing_from_canonical_state
+    result: HISTORICAL_REVIEW_SUCCESSOR_REQUIRES_FRESH_REVIEW
+  repair:
+    - merged_current_protected_main_without_rewriting_history
+    - registered_work_order_and_phase_in_canonical_state
+  validated_successor_head: 4cbfdc93d6fb01e50cc985a8f19af5641c439136
+  exact_head_ci:
+    ci_run: 39378962568
+    actual_paper_run: 39378962602
+    capability_guard_run: 39378962558
+    activation_rehearsal_run: 39378962564
+    transport_readiness_run: 39378962551
+    readonly_broker_run: 39378962553
+    result: PASS_ALL_SIX_ON_VALIDATED_SUCCESSOR
+    status_after_evidence_commit: HISTORICAL_REQUIRES_FRESH_SUCCESSOR_CHECKS
+  aipos_evidence_successor_head: de440808fb30c5b0291d4e6dff9cf2090fc3fafe
+  latest_successor_ci:
+    ci_run: 39379663687
+    actual_paper_run: 39379663605
+    capability_guard_run: 39379663731
+    activation_rehearsal_run: 39379663688
+    transport_readiness_run: 39379663628
+    readonly_broker_run: 39379663625
+    result: PASS_ALL_SIX_ON_EXACT_HEAD
+    status_after_this_record_commit: HISTORICAL_REQUIRES_FRESH_SUCCESSOR_CHECKS
+  fresh_non_author_validator: PENDING_ON_FINAL_EXACT_HEAD
+  next: "Publish the AIPOS reconciliation successor only after exact tree SHA comparison and expected-head fast-forward from db7fc759de47c620a3220c0f12baea7121e3a2d4. Then obtain fresh workflows on that new exact head and a separate fresh non-author Validator. Keep Draft; do not self-review, mark Ready, Audit, Release, or merge. Avoid self-referential current-head claims."
+  safety:
+    liveAuthority: NONE
+    productionMutationAllowed: false
+    aiAuthority: ZERO_AUTHORITY
+    paper_only: true
+
+current_autopilot_fresh_validator_gate_20261026:
+  work_order: WO-AUTOPILOT-20261017-FRESH-VALIDATOR-GATE
+  issue: 2760
+  pull_request: 2772
+  branch: fix/validator-evidence-gate-2760
+  status: BASE_MANIFEST_AND_EXACT_BUILTIN_COMPLETION_LOCALLY_VALIDATED
+  protected_main: 2a80488981d13f96552fae8d7c9161a6b3fcb1e9
+  predecessor_pr_head: 3349af9d56a3fe3a536a742514241a8e88d2ca98
+  predecessor_pr_base: 54cfb2199cee1fdbaf5ea328c8a0940f4101e723
+  exact_head_review:
+    review_receipt: 5654741705
+    reviewed_head: 3349af9d56a3fe3a536a742514241a8e88d2ca98
+    finding: "P1 #4379233529: validator model received only PR diff/protocol and could miss defects requiring unchanged dependency definitions; /grill-me requires relevant dependency inspection."
+  prior_findings_repaired:
+    - "P1 #4377972408: deletion-only blockers need removed-line evidence references."
+    - "P1 #4378178003: whole-file deletion must use old path and reset parser state at diff boundaries."
+  current_repair:
+    files:
+      - apps/autopilot/src/auditRunner.ts
+      - apps/autopilot/src/validatorRunner.test.ts
+    behavior: "Before model review, list exact PR changed paths and inspect changed TypeScript/JavaScript source at the requested head. For direct relative imports referenced by changed lines, fetch dependency source at the same exact head and include bounded content plus evidence refs. Repository paths, changed-file count, source scan bytes, dependency count, per-file bytes, and total context bytes are bounded; path escape, missing/unresolved source, HTTP errors, or exceeded limits fail before AI verdict generation."
+    excluded: "No arbitrary caller-selected paths, broad repository blob upload, write access, or repository mutation. Transitive/alias/unavailable dependencies are disclosed as limitations and fail closed when material."
+    fail_closed: true
+  validation:
+    node: 24.19.0
+    typecheck: PASS
+    build: PASS
+    validator_runner_tests: PASS_8_OF_8
+    focused_audit_runner: PASS_34_OF_34
+    independent_audit_contract: PASS_16_OF_16
+    preflight: PASS
+    validate_full: PASS
+    security_gate: PASS
+    full_tests: PASS_1288_ISOLATED_TEST_FILES
+    git_diff_check: PASS
+    exact_head_ci: PENDING
+    fresh_review: PENDING
+  safety: PAPER_ONLY_LIVE_NONE_PRODUCTION_MUTATION_FALSE_AI_ZERO_AUTHORITY
+  latest_successor_20261027:
+    predecessor_pr_head: 1dc5e2e224946cb8dd950b776b13194ac98d4c9e
+    predecessor_pr_base: 54cfb2199cee1fdbaf5ea328c8a0940f4101e723
+    local_branch: codex/pr2772-workspace-dependency-resolution
+    published_code_checkpoint: 2ca0dcbed342268b560b741d4e0025409d967ec3
+    final_successor_checkpoint: "Resolve exact SHA from the remote feature branch after this state receipt commit; final-tip workflows and fresh review are pending."
+    main_sync: "Clean ordinary merge of main 81e8fe4d, then e16dbb05, then current protected main 2a80488981d13f96552fae8d7c9161a6b3fcb1e9; latest merge has no conflicts and mobile-only changed paths do not overlap the Autopilot PR."
+    findings: "P1 #4383248962 and #4383248970 repaired with exact-head workspace manifest ancestry and blob-only Git-tree module resolution; truncated/oversized tree fails closed."
+    validation: "Node 24.19.0: build/typecheck/preflight/validate:full/security:gate PASS; lint 0 errors/45 existing warnings; full suite 1,289 isolated test files PASS after rerunning with Git Bash in PATH; validatorRunner 12/12; diff-check PASS."
+    remote_gates: "Successor 48501bb1 was non-force published to the existing branch with base equal to protected main. Exact-head CI 40445411142 and five companions passed. Fresh review 5661999625 found four P1 comments 4384900108, 4384900112, 4384900113 and 4384900114; local repairs/tests now exist and all 48501bb1 receipts become historical on successor publication. Formal Validator, Audit and Release have not started. PR remains Draft."
+    current_main_reconvergence:
+      protected_main: 2a80488981d13f96552fae8d7c9161a6b3fcb1e9
+      predecessor_pr_head: cc2516a2c3307ebde8a44c9e8486380e021ea410
+      predecessor_pr_base: e16dbb052942bc498f8b0093c775569cbbfb1550
+      merge_method: ORDINARY_NON_FORCE_MERGE
+      conflicts: 0
+      changed_main_paths: "apps/mobile/src/waveCore.tsx; apps/mobile/src/waveCoreModel.ts"
+      path_overlap: NONE
+      predecessor_ci_and_review: "cc2516a2 exact-head CI PASS and fresh review 5661915785; historical after successor publication"
+      review_p1s: "4384830160, 4384830164, 4384830171 repaired in successor 48501bb1; focused regression 19/19 PASS"
+  next: "Four P1s from fresh review 5661999625 on 48501bb1 are repaired locally with regression coverage. Publish one successor only if remote head remains 48501bb1a76fa7baa5881cc619a84b932088a0f2; require fresh exact-head workflows and review. Formal Validator, Audit, Release and merge remain gated."
+  latest_review_48501bb1:
+    review_receipt: 5661999625
+    reviewed_head: 48501bb1a76fa7baa5881cc619a84b932088a0f2
+    base: 2a80488981d13f96552fae8d7c9161a6b3fcb1e9
+    p1_comments: "4384900108, 4384900112, 4384900113, 4384900114"
+    repairs: "Static CommonJS require inclusion; full changed JSON dependency context; Node builtin root/subpath recognition; protected-base Git tree resolution for deleted importers."
+    focused_tests: PASS_22_OF_22
+    local_gates: "Node 24.19 build/typecheck/preflight/validate:full/security:gate/lint PASS; lint 0 errors and 45 existing warnings."
+    remote_gates: "Exact-head CI 40445411142 and companion workflows 5/5 passed; review found P1s; successor publication and fresh review required."
+    next: "Publish one substantive successor with expected-head 48501bb1a76fa7baa5881cc619a84b932088a0f2 and force=false."
+
+  latest_base_manifest_completion_20261027:
+    predecessor_remote_head: 6834c074dbb81de797531661f2fd79695b68cc6c
+    root_cause: "Deleted dependency graph repair still classified external packages using head manifests; prefix-only Node module matching accepted nonexistent subpaths."
+    repair: "Bind manifest tree/content/cache/evidence to sourceRef; classify exact supported Node modules and distinguish prefix-only modules; label base dependency context correctly."
+    focused: PASS_37_OF_37
+    canonical_predecessor_falsification: "31/32 tests passed on6834c074; deleted-source base manifest classification rejected valid base package. Local completion passes37/37 including ref-cache separation and fail-closed negative cases."
+    full_local_gates: "Node24.18.0: preflight/build/typecheck/validate:full/security:gate PASS; lint0errors/45existingwarnings; full suite1290 isolated test files PASS."
+    remote_ci_review: PENDING_SUCCESSOR_PUBLICATION
+    next: "Finish local gates, check remote expected head6834c074 and current protected main, publish only a non-force successor of the current canonical branch. No independent verdict; Draft stays."
+    safety: PAPER_ONLY_LIVE_NONE_PRODUCTION_MUTATION_FALSE_AI_ZERO_AUTHORITY
+
 current_autopilot_light_task_gate:
   work_order: WO-AUTOPILOT-20261012-LIGHT-TASK-GATE
   status: COMPLETED
@@ -4533,4 +4795,66 @@ current_research_breakout_walkforward:
   authority_impact: none
   finding: "Over six consecutive 42-day windows, long-only breakouts (N=20/50/100) failed the pre-registered pass rule: 2-3 positive windows, negative average in DOWN windows, and 2x-cost survival in only 2 windows. The earlier all-positive last third came almost entirely from one +17% rally window. Re-applying the unchanged rule to 383 days of never-seen prior data reproduced the failure (2-3 positive windows, DOWN-window averages -8% to -19%, UP-window averages +7% to +9%): regime-dependent, not an edge. Not promotion evidence; no candidate is proposed for deployment."
   next: "Pre-register a regime-signal variant (no entry on a down signal) and evaluate it only on new forward data (for example the next 60 days) before any Research experiment."
+  safety: PAPER_ONLY_LIVE_NONE_PRODUCTION_MUTATION_FALSE_AI_ZERO_AUTHORITY
+
+current_autopilot_validator_dependency_context_successor:
+  work_order: WO-AUTOPILOT-20261017-FRESH-VALIDATOR-GATE
+  status: SIX_FRESH_REVIEW_P1_REPAIRS_LOCALLY_VALIDATED_AWAITING_PUBLICATION
+  branch: fix/validator-evidence-gate-2760
+  pull_request: 2772
+  protected_main: 2a80488981d13f96552fae8d7c9161a6b3fcb1e9
+  predecessor_head: 6834c074dbb81de797531661f2fd79695b68cc6c
+  exact_head_review: 5662107852
+  findings:
+    - comment: 4384990162
+      severity: P1
+      summary: "Generated dist/ CommonJS imports could not resolve to tracked source context."
+      repair: "Exact tracked-tree resolution maps bounded dist/ module paths to tracked source candidates; no generated artifact is accepted as dependency evidence."
+    - comment: 4384990165
+      severity: P1
+      summary: "Deleted workspace importer dependency classification used only head package manifests."
+      repair: "Workspace manifest tree selection, fetch, cache key, and evidence identity are bound to the exact source ref; deleted importers use protected base."
+  local_validation:
+    node: 24.19.0
+    build: PASS
+    typecheck: PASS
+    preflight: PASS
+    validate_full: PASS
+    security_gate: PASS
+    lint: PASS_0_ERRORS_45_WARNINGS
+    focused_tests: PASS_24_OF_24
+    full_tests: PASS_1290_ISOLATED_TEST_FILES
+    diff_check: PASS
+  next: "Finish full tests and AIPOS checks; then re-fetch current main and PR. Publish one substantive non-force successor only if remote #2772 still points at 6834c074...; exact-head workflows and a new fresh non-author review must follow."
+  formal_validator: PENDING
+  audit_release_merge: NOT_STARTED
+  safety: PAPER_ONLY_LIVE_NONE_PRODUCTION_MUTATION_FALSE_AI_ZERO_AUTHORITY
+
+current_autopilot_validator_dist_source_successor:
+  work_order: WO-AUTOPILOT-20261017-FRESH-VALIDATOR-GATE
+  status: LOCAL_VALIDATION_PASS_AWAITING_NON_FORCE_PUBLICATION
+  branch: fix/validator-evidence-gate-2760
+  pull_request: 2772
+  protected_main: 2a80488981d13f96552fae8d7c9161a6b3fcb1e9
+  remote_predecessor_head: 4bfa47cbcf026747af9ddab8ca40c5300c016cd0
+  predecessor_review_head: 6834c074dbb81de797531661f2fd79695b68cc6c
+  predecessor_review: 5662107852
+  predecessor_findings: 2_P1_REPAIRED
+  code_change: "Bounded static CommonJS resolution maps dist/ import targets only to exact-head tracked source blobs; missing counterparts fail closed. Deleted importer manifests and evidence remain bound to the exact importer ref."
+  local_validation:
+    node: 24.19.0
+    focused_tests: PASS_24_OF_24
+    build: PASS
+    typecheck: PASS
+    preflight: PASS
+    validate_full: PASS
+    security_gate: PASS
+    lint: PASS_0_ERRORS_45_WARNINGS
+    full_tests: PASS_1290_ISOLATED_TEST_FILES
+    aipos_drift_conformance: PASS
+    diff_check: PASS
+  remote_predecessor_ci: PASS_ALL_17_CHECK_RUNS_ON_4bfa47cb
+  current_successor_review: PENDING
+  formal_validator: PENDING
+  next: "Fresh verify current main and PR head, then publish the validated substantive successor non-force only if expected remote head remains 4bfa47cb...; require exact-head workflows and a fresh independent review."
   safety: PAPER_ONLY_LIVE_NONE_PRODUCTION_MUTATION_FALSE_AI_ZERO_AUTHORITY

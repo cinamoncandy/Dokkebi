@@ -1,0 +1,44 @@
+current_autopilot_validator_diff_partition_20261111:
+  work_order: WO-AUTOPILOT-20261017-FRESH-VALIDATOR-GATE
+  status: LOCAL_VALIDATION_PASS_PENDING_PUBLICATION_AND_INDEPENDENT_GATES
+  issue: 2760
+  pull_request: 2772
+  branch: fix/validator-evidence-gate-2760
+  protected_main_sha: 7f8de2167dcef9d67149d021837ce013ae472a8f
+  predecessor_head: c473d211ee89e72a9c9f43a580b6d3230902d2a7
+  local_merge_parent: c2fad4b7e67dbf511dae5ba4a975a51e8a4a45ef
+  root_cause: "Audit run 43005786185 rejected its immutable base..head input at the 180000-character whole-diff cap before Validator or Audit ran; that failed predecessor comparison was 327142 characters across 46 files. Main-merge ancestry is outside the exact comparison."
+  repair: "Keep 180000 characters per model input; partition only complete diff-file blocks with exact changed-file metadata binding; hard cap 3 chunks / 540000 total; require once-only file identity and exact full character coverage; fail closed on every missing, duplicate, oversized, or failed segment; aggregate only after all segments and exact PR/base/CI read-back."
+  observed_partition:
+    aipos_chars: 133144
+    autopilot_chars: 169562
+    workflow_script_integration_chars: 68139
+    exact_coverage_chars: 370845
+    changed_files: 49
+    base_sha: 7f8de2167dcef9d67149d021837ce013ae472a8f
+    candidate_head: "Read the exact candidate SHA from the branch ref immediately before publication."
+  local_validation:
+    exact_compare_partition: "PASS (370845 characters across 49 changed files; exact coverage in 3 chunks on the current candidate tree)."
+    predecessor_full_suite: "PASS on c473d211ee89e72a9c9f43a580b6d3230902d2a7; historical after latest-main merge."
+    current_merge_suite: "PASS (1345 isolated test files)."
+    preflight: PASS
+    build: PASS
+    typecheck: PASS
+    validate_full_equivalent: "PASS; every constituent architecture, safety, AIPOS drift, conformance, and inputs check passed individually. The composite pnpm wrapper could not bootstrap its automatic package-manager setup in this sandbox."
+    security_gate: "PASS (raw high/critical 0, unmitigated 0, secrets 0)."
+    lint: "PASS (0 errors, 48 repository warnings)."
+    aipos_provenance: PASS
+  remote:
+    pr_state_before_sync: OPEN_DRAFT_MERGEABLE
+    pr_head_before_sync: c473d211ee89e72a9c9f43a580b6d3230902d2a7
+    main_advanced_to: 7f8de2167dcef9d67149d021837ce013ae472a8f
+    predecessor_ci: "43021380543 and five required companions passed on c473d211; historical after latest-main merge."
+    failed_successor_head: 1d2be861a7389e40dcd2aaf91be06c25f43806ed
+    failed_ci: "43026806800 failed during Preflight because AIPOS records contained an environment-specific absolute home path; source tests were skipped after the fail-fast gate."
+    repair: "Removed the environment-specific path from the AIPOS validation note; repository portability and AIPOS YAML/provenance/drift/conformance checks pass again."
+    code_publication: PENDING_NORMAL_FAST_FORWARD
+    exact_head_ci: PENDING_AFTER_PORTABILITY_REPAIR
+    fresh_non_author_validator: PENDING
+    audit_release_merge: NOT_STARTED
+  next: "Finish local validation on the latest-main merge successor, re-fetch main and PR #2772, and publish only with a normal fast-forward if the expected refs still match. Then require fresh exact-head CI/companions and independent non-author validation before Audit or Release."
+  safety: PAPER_ONLY_LIVE_NONE_PRODUCTION_MUTATION_FALSE_REAL_ORDER_FALSE_REAL_TRANSFER_FALSE_AI_ZERO_AUTHORITY_FAIL_CLOSED_WIP_MAX_2

@@ -71,7 +71,7 @@ async function findExistingAuditDispatch(
   const dedupeKey = request.dedupeKey!;
   const logicalPattern = new RegExp(`^audit:${request.prNumber}:${request.workflowRunId}(?::[0-9]+)?:${request.headSha!.toLowerCase()}$`);
   for (let page = 1; page <= 3; page += 1) {
-    const response = await fetchImpl(`${base}/repos/${repository}/actions/workflows/autopilot-deterministic-audit-release.yml/runs?event=repository_dispatch&per_page=100&page=${page}`, { headers: githubHeaders(token) });
+    const response = await fetchImpl(`${base}/repos/${repository}/actions/workflows/autopilot-execution-consumer.yml/runs?event=repository_dispatch&per_page=100&page=${page}`, { headers: githubHeaders(token) });
     if (response.status === 401 || response.status === 403) return result("FAILED", "github-executor-audit-dedupe-auth-rejected", response.status);
     if (response.status === 404) return result("FAILED", "github-executor-audit-dedupe-evidence-unavailable", 404);
     if (!response.ok) return result("FAILED", `github-executor-audit-dedupe-http-${response.status}`, response.status);
@@ -210,7 +210,7 @@ export async function executeGithubDispatch(
       "content-type": "application/json",
     },
     body: JSON.stringify({
-      event_type: request.kind === "AUDIT_REQUEST" ? "nusa_autopilot_audit" : "nusa_autopilot_execution",
+      event_type: "nusa_autopilot_execution",
       client_payload: githubClientPayload(request),
     }),
   });

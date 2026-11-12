@@ -1,0 +1,48 @@
+{
+  "schemaVersion": 1,
+  "issue": 2760,
+  "incidentPr": 2744,
+  "incidentHead": "41eba6fc0ae80fab307abf2fea16c2ae1f865555",
+  "incidentMerge": "8eff53fc362b588817d885eff1598d172848790e",
+  "firstBrokenTransition": "exact-head CI PASS -> fresh non-author VALIDATOR acceptance -> independent Audit -> deterministic Audit/Release",
+  "observed": {
+    "freshReviewCountBeforeReady": 0,
+    "readyAt": "2026-10-17T06:22:56Z",
+    "deterministicAuditRun": 39009704433,
+    "releaseAuthorizedAt": "2026-10-17T06:23:30Z",
+    "mergedAt": "2026-10-17T06:24:22Z",
+    "mergeActor": "nusa-release-authority[bot]"
+  },
+  "codeRootCause": {
+    "file": "apps/autopilot/src/githubExecutor.ts",
+    "before": "AUDIT_REQUEST -> nusa_autopilot_audit -> autopilot-deterministic-audit-release.yml",
+    "required": "AUDIT_REQUEST -> nusa_autopilot_execution -> Autopilot Execution Consumer -> fresh VALIDATOR -> independent Audit -> nusa_autopilot_audit -> deterministic Audit/Release"
+  },
+  "redEvidence": {
+    "test": "tests/autopilot-fresh-validator-gate.test.js",
+    "beforeImplementation": {
+      "pass": 0,
+      "fail": 3
+    },
+    "afterCurrentImplementationStaticContracts": {
+      "pass": 37,
+      "fail": 0
+    }
+  },
+  "authority": {
+    "liveAuthority": "NONE",
+    "productionMutationAllowed": false,
+    "aiAuthority": "ZERO_AUTHORITY"
+  },
+  "verified": false,
+  "reason": "Local implementation is not completion. Build/typecheck, final exact-head CI, a separate fresh non-author review, canonical Audit/Release, merge, and deployed control-plane runtime evidence remain required.",
+  "postMergeRuntime": {
+    "oracleReleaseRun": 39010145930,
+    "oracleReleaseConclusion": "cancelled",
+    "failedMain": "8eff53fc362b588817d885eff1598d172848790e",
+    "rollbackMain": "58a8e4fbb32fcc8dee018bd6563982e4e3ba0a8c",
+    "hostObservedBeforeCancellation": "abandoned writer lease recovery -> bounded startup/readiness convergence",
+    "followupIssue": 2770,
+    "runtimeAccepted": false
+  }
+}

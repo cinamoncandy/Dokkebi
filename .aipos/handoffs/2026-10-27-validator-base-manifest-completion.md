@@ -1,0 +1,7 @@
+# #2772 base-manifest completion
+
+Canonical remote6834c074 was inspected instead of overwriting its implementation. Its compiled source passed31/32 combined tests, but a deleted importer whose external package existed only in the base manifest was rejected using the head manifest. Local completion binds manifest tree/content/cache/evidence to sourceRef and replaces unbounded builtin-root prefix matching with exact supported names/subpaths, including mandatory node: spellings. Base dependency text is explicitly labeled EXACT-BASE.
+
+Focused37/37 tests pass: original four defects, mixed source-ref identities, distinct base/head manifest caches, valid public Node modules and fail-closed invalid names/subpaths/missing data/truncated base trees. Full local validation on Node24.18.0 passed: preflight, build, typecheck, validate:full, security:gate, lint (0 errors,45 existing warnings),37 focused tests and1290 isolated test files. No current-head independent review/Validator/Audit/Release acceptance is claimed. Preserve Draft and all unresolved threads. Before publishing, verify live remote head still equals6834c074 and current main. Stop/reconcile on concurrent owner changes; do not force or revive the parked local alternativesc0743a4e/33a0ec69.
+
+PAPER_ONLY; liveAuthority=NONE; productionMutationAllowed=false; realOrderAuthority=false; realTransferAuthority=false; aiAuthority=ZERO_AUTHORITY. Oracle acceptance, learning and performance remain UNVERIFIED/UNPROVEN.

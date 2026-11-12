@@ -1,0 +1,48 @@
+current_autopilot_fresh_validator_audit_context_20261026:
+  work_order: WO-AUTOPILOT-20261017-FRESH-VALIDATOR-GATE
+  issue: 2760
+  pull_request: 2772
+  branch: fix/validator-evidence-gate-2760
+  status: P1_REPAIR_LOCAL_VALIDATION_IN_PROGRESS
+  protected_main_observed: 54cfb2199cee1fdbaf5ea328c8a0940f4101e723
+  predecessor_head: 6bbe976f1ee544505caf80516cf15d9ee95ec35d
+  fresh_review_receipt: 5659781964
+  findings:
+    - comment: 4383069772
+      severity: P1
+      summary: "Deterministic Audit accepted the validator artifact while the same consumer workflow might not have completed its independent Audit; require the same consumer run/attempt trusted-audit-authority artifact and validate its exact identity, PASS verdict, safety, and zero P0/P1."
+    - comment: 4383069780
+      severity: P1
+      summary: "Deleted changed source files returned 404 at head and blocked review; read the deleted source at exact PR base for bounded dependency analysis, mark that base provenance, and fail closed if absent."
+  repair:
+    files:
+      - .github/workflows/autopilot-deterministic-audit-release.yml
+      - apps/autopilot/src/auditReleaseAuthority.test.ts
+      - apps/autopilot/src/auditRunner.ts
+      - apps/autopilot/src/validatorRunner.test.ts
+      - scripts/validate-trusted-audit-authority.js
+      - tests/trusted-audit-authority.test.js
+    safety: "No audit/release or production authority is granted by this validator. Missing, stale, cross-run, unsafe, P0/P1 validator, or failed-audit evidence rejects before deterministic Audit authority. Deleted source context is fetched only from exact PR base; its relative dependencies remain bound to exact head."
+  local_validation:
+    node: 24.19.0
+    focused: PASS_22_OF_22
+    preflight: PASS
+    typecheck: PASS
+    build: PASS
+    validate_full: PASS
+    security_gate: PASS
+    lint: PASS_0_ERRORS_45_WARNINGS
+    full_tests: PASS_1289_ISOLATED_TEST_FILES
+    git_diff_check: PASS
+  remote:
+    exact_head: PENDING_COMMIT
+    ci: PENDING
+    companions: PENDING
+    fresh_review: PENDING
+    formal_validator: PENDING
+    audit_release_merge: NOT_STARTED
+  safety:
+    liveAuthority: NONE
+    productionMutationAllowed: false
+    aiAuthority: ZERO_AUTHORITY
+    paper_only: true

@@ -1,0 +1,43 @@
+current_autopilot_js_specifier_resolution_p1_20261030:
+  work_order: WO-AUTOPILOT-20261017-FRESH-VALIDATOR-GATE
+  issue: 2760
+  pull_request: 2772
+  branch: fix/validator-evidence-gate-2760
+  status: P1_REPAIRED_LOCAL_VALIDATION_PENDING_FINALIZATION
+  protected_main: f144b940925dc04df7c0849fbaad9e5f14f5befe
+  predecessor_head: 832313e9e1993158e46b1c7915eabab07b70bd85
+  review_request_comment: 6525583442
+  review_finding_comment: 4424899846
+  review_thread: PRRT_kwDOTUbne86yAvTS
+  finding: "Relative TypeScript import specifiers with emitted .js extensions did not resolve to tracked TypeScript source modules, so exact-head dependency collection could fail before independent validation."
+  repair:
+    files:
+      - apps/autopilot/src/auditRunner.ts
+      - apps/autopilot/src/auditRunner.test.ts
+    behavior: "Map emitted JS-family extensions to their TypeScript source extensions before existing runtime candidates. Regression covers executeIndependentValidator against a changed file importing ./nusaEngineeringPortfolioScheduler.js and verifies exact-head .ts content and provenance are included."
+    safety: "Read-only bounded dependency retrieval; unresolved paths still fail closed; no mutation, risk, release, order, transfer, or live authority added."
+  local_validation:
+    focused_audit_runner: PASS_37_OF_37
+    preflight: PASS
+    build: PASS
+    typecheck: PASS
+    validate_full: PASS
+    security_gate: PASS_0_UNMITIGATED_0_SECRETS
+    lint: PASS_0_ERRORS_47_BASELINE_WARNINGS
+    full_test_suite: PASS_1310_ISOLATED_TEST_FILES
+    aipos_yaml: PASS_547_FILES
+    aipos_drift: PASS
+    aipos_conformance: PASS
+    aipos_provenance: PASS
+    diff_check: PASS
+  predecessor_exact_head:
+    ci: 41073548219_SUCCESS
+    companion_workflows: 5_OF_5_SUCCESS
+    freshness: HISTORICAL_AFTER_SOURCE_SUCCESSOR
+  successor_exact_head: PENDING_COMMIT
+  successor_ci_and_companions: PENDING
+  fresh_non_author_review: PENDING
+  formal_validator: PENDING
+  audit_release_merge: NOT_STARTED
+  next: "Publish a non-force successor only if the existing PR ref still equals predecessor_head. Require fresh exact-head CI and companions followed by one fresh non-author review. Keep Draft and leave review threads unresolved."
+  safety: PAPER_ONLY_LIVE_NONE_PRODUCTION_MUTATION_FALSE_AI_ZERO_AUTHORITY

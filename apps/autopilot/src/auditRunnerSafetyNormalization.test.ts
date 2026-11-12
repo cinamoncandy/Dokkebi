@@ -19,6 +19,7 @@ test("normalizes semantic audit safety enum casing without weakening fail-closed
       severity: "BLOCKER",
       message: "safety invariant regressed",
       evidenceRef: "a.ts:+1",
+      evidenceScope: "SOURCE_CONTENT",
     }],
     blockers: ["safety invariant regressed"],
     safetyInvariantResult: " fail ",

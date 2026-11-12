@@ -1,4 +1,5 @@
 name: Autopilot Execution Consumer
+run-name: ${{ github.event.client_payload.dedupe_key || 'invalid-execution-identity' }}
 
 on:
   repository_dispatch:
@@ -213,10 +214,10 @@ jobs:
           path: artifacts/autopilot-execution
 
   audit-request:
-    # Every AUDIT_REQUEST executes the OIDC-authenticated independent Audit. PR comments are observability only.
+    # Every AUDIT_REQUEST first executes a fresh non-author VALIDATOR, then the independent Audit. PR comments are observability only.
     if: ${{ github.event.client_payload.kind == 'AUDIT_REQUEST' }}
     runs-on: ubuntu-latest
-    timeout-minutes: 8
+    timeout-minutes: 12
     permissions:
       contents: read
       actions: read
@@ -350,7 +351,7 @@ jobs:
           - canonical CI run: \`$WORKFLOW_RUN_ID\`
           - Audit execution run: \`$GITHUB_RUN_ID\`
           - CI result: **PASS**
-          - next stage: **independent OIDC read-only Audit execution**
+          - next stage: **fresh non-author VALIDATOR -> independent OIDC read-only Audit**
           - PR comments: **observability only / no authority**
           - stale-head/base rule: any change invalidates this request
           - liveAuthority: \`NONE\`
@@ -387,6 +388,36 @@ jobs:
           fs.writeFileSync('artifacts/autopilot-audit-request/audit-runner-request.json', JSON.stringify(request, null, 2));
           NODE
 
+      - name: Build fresh non-author VALIDATOR runner request
+        if: ${{ steps.freshness.outputs.applicable == 'true' }}
+        env:
+          PR_NUMBER: ${{ github.event.client_payload.pr_number }}
+          REQUESTED_HEAD: ${{ github.event.client_payload.head_sha }}
+          WORKFLOW_RUN_ID: ${{ github.event.client_payload.workflow_run_id }}
+          EXECUTION_ID: ${{ github.event.client_payload.execution_id }}
+          DEDUPE_KEY: ${{ github.event.client_payload.dedupe_key }}
+        run: |
+          node - <<'NODE'
+          const fs = require('fs');
+          const crypto = require('crypto');
+          const bounded = (prefix, value) => `${prefix}:${crypto.createHash('sha256').update(String(value || ''), 'utf8').digest('hex').slice(0, 40)}`;
+          const request = {
+            kind: 'VALIDATOR_REQUEST',
+            repository: process.env.GITHUB_REPOSITORY,
+            prNumber: Number(process.env.PR_NUMBER),
+            headSha: process.env.REQUESTED_HEAD,
+            baseSha: fs.readFileSync('artifacts/autopilot-audit-request/base-sha.txt', 'utf8').trim(),
+            workflowRunId: Number(process.env.WORKFLOW_RUN_ID),
+            executionId: bounded('validator', process.env.EXECUTION_ID),
+            dedupeKey: bounded('validator', process.env.DEDUPE_KEY),
+            mutationAllowed: false,
+            liveAuthority: 'NONE',
+            productionMutationAllowed: false,
+            aiAuthority: 'ZERO_AUTHORITY',
+          };
+          fs.writeFileSync('artifacts/autopilot-audit-request/validator-runner-request.json', JSON.stringify(request, null, 2));
+          NODE
+
       - name: Mint bounded read-only Audit GitHub App token
         if: ${{ steps.freshness.outputs.applicable == 'true' }}
         id: audit-app-token
@@ -399,6 +430,67 @@ jobs:
           permission-actions: read
           permission-contents: read
           permission-pull-requests: read
+
+      - name: Execute fresh non-author VALIDATOR with GitHub OIDC
+        if: ${{ steps.freshness.outputs.applicable == 'true' }}
+        env:
+          NUSA_AUDIT_RUNNER_URL: https://nusa-autopilot.desporin12.workers.dev/audit/execute
+          NUSA_AUDIT_GITHUB_TOKEN: ${{ steps.audit-app-token.outputs.token }}
+        run: |
+          node --input-type=module - <<'NODE'
+          import fs from 'node:fs';
+          const fail = (message) => { console.error(message); process.exit(1); };
+          const request = JSON.parse(fs.readFileSync('artifacts/autopilot-audit-request/validator-runner-request.json', 'utf8'));
+          const auditGithubToken = process.env.NUSA_AUDIT_GITHUB_TOKEN;
+          if (!auditGithubToken) fail('bounded VALIDATOR GitHub App token missing');
+          const oidcUrl = process.env.ACTIONS_ID_TOKEN_REQUEST_URL;
+          const oidcRequestToken = process.env.ACTIONS_ID_TOKEN_REQUEST_TOKEN;
+          if (!oidcUrl || !oidcRequestToken) fail('GitHub OIDC environment is unavailable');
+          const tokenUrl = new URL(oidcUrl);
+          tokenUrl.searchParams.set('audience', 'nusa-autopilot');
+          const oidcResponse = await fetch(tokenUrl, { headers: { authorization: `Bearer ${oidcRequestToken}`, accept: 'application/json' } });
+          if (!oidcResponse.ok) fail(`OIDC request failed: ${oidcResponse.status}`);
+          const oidc = await oidcResponse.json();
+          if (!oidc || typeof oidc.value !== 'string' || !oidc.value) fail('OIDC token missing');
+          const response = await fetch(process.env.NUSA_AUDIT_RUNNER_URL, {
+            method: 'POST',
+            headers: { authorization: `Bearer ${oidc.value}`, 'content-type': 'application/json', 'x-nusa-audit-github-token': auditGithubToken },
+            body: JSON.stringify(request),
+          });
+          const result = await response.json().catch(() => null);
+          fs.writeFileSync('artifacts/autopilot-audit-request/validator-runner-result.json', JSON.stringify(result ?? { status: 'INVALID_RESPONSE' }, null, 2));
+          if (!response.ok) fail(`VALIDATOR runner rejected request: ${response.status} ${result?.error || result?.status || 'unknown'}`);
+          if (!result || result.accepted !== true || result.status !== 'VALIDATOR_COMPLETED' || result.schemaVersion !== 1) fail('VALIDATOR response is not completed');
+          if (!['PASS', 'PASS_WITH_NOTES'].includes(result.verdict) || result.auditAllowed !== true) fail(`VALIDATOR blocks Audit: ${result.verdict || 'unknown'}`);
+          if (result.repository !== request.repository || result.prNumber !== request.prNumber || result.reviewedHeadSha !== request.headSha || result.baseSha !== request.baseSha || result.workflowRunId !== request.workflowRunId) fail('VALIDATOR exact-head/base/CI identity mismatch');
+          if (!Number.isSafeInteger(result.p0) || result.p0 !== 0 || !Number.isSafeInteger(result.p1) || result.p1 !== 0 || !Number.isSafeInteger(result.p2) || result.p2 < 0) fail('VALIDATOR P0/P1/P2 counters invalid');
+          if (!Array.isArray(result.blockers) || result.blockers.length !== 0 || result.safetyInvariantResult !== 'PASS') fail('VALIDATOR has blocking or safety findings');
+          if (result.liveAuthority !== 'NONE' || result.productionMutationAllowed !== false || result.aiAuthority !== 'ZERO_AUTHORITY') fail('VALIDATOR safety invariant response invalid');
+          const trusted = {
+            schemaVersion: 1, kind: 'NUSA_FRESH_VALIDATOR_EVIDENCE', sourceWorkflow: '.github/workflows/autopilot-execution-consumer.yml',
+            validatorExecutionRunId: Number(process.env.GITHUB_RUN_ID), validatorExecutionAttempt: Number(process.env.GITHUB_RUN_ATTEMPT),
+            repository: result.repository, prNumber: result.prNumber, reviewedHeadSha: result.reviewedHeadSha, baseSha: result.baseSha, workflowRunId: result.workflowRunId,
+            status: result.status, verdict: result.verdict, auditAllowed: result.auditAllowed, p0: result.p0, p1: result.p1, p2: result.p2,
+            findings: result.findings, blockers: result.blockers, safetyInvariantResult: result.safetyInvariantResult, evidenceRefs: result.evidenceRefs, reviewedAt: result.reviewedAt,
+            liveAuthority: result.liveAuthority, productionMutationAllowed: result.productionMutationAllowed, aiAuthority: result.aiAuthority,
+          };
+          fs.writeFileSync('artifacts/autopilot-audit-request/trusted-validator-evidence.json', JSON.stringify(trusted, null, 2));
+          console.log(`fresh non-author VALIDATOR PASS: head=${result.reviewedHeadSha} p0=${result.p0} p1=${result.p1} p2=${result.p2}`);
+          NODE
+
+      - name: Verify trusted fresh VALIDATOR evidence before independent Audit
+        if: ${{ steps.freshness.outputs.applicable == 'true' }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR_NUMBER: ${{ github.event.client_payload.pr_number }}
+          REQUESTED_HEAD: ${{ github.event.client_payload.head_sha }}
+          WORKFLOW_RUN_ID: ${{ github.event.client_payload.workflow_run_id }}
+        run: |
+          set -euo pipefail
+          base_sha="$(cat artifacts/autopilot-audit-request/base-sha.txt)"
+          validator_script="$RUNNER_TEMP/validate-fresh-validator-evidence.js"
+          gh api "repos/$GITHUB_REPOSITORY/contents/scripts/validate-fresh-validator-evidence.js?ref=$base_sha" --jq '.content' | base64 --decode > "$validator_script"
+          node "$validator_script" artifacts/autopilot-audit-request/trusted-validator-evidence.json "$GITHUB_REPOSITORY" "$PR_NUMBER" "$REQUESTED_HEAD" "$base_sha" "$WORKFLOW_RUN_ID" "$GITHUB_RUN_ID" "$GITHUB_RUN_ATTEMPT"
 
       - name: Execute independent read-only Audit with GitHub OIDC
         if: ${{ steps.freshness.outputs.applicable == 'true' }}
@@ -446,7 +538,9 @@ jobs:
         run: |
           node - <<'NODE'
           const fs = require('fs');
-          const path = 'artifacts/autopilot-audit-request/audit-runner-result.json';
+          const auditPath = 'artifacts/autopilot-audit-request/audit-runner-result.json';
+          const validatorPath = 'artifacts/autopilot-audit-request/validator-runner-result.json';
+          const path = fs.existsSync(auditPath) ? auditPath : validatorPath;
           let result = {};
           try {
             if (fs.existsSync(path)) result = JSON.parse(fs.readFileSync(path, 'utf8'));
@@ -519,6 +613,7 @@ jobs:
           node - <<'NODE'
           const fs = require('fs');
           const result = JSON.parse(fs.readFileSync('artifacts/autopilot-audit-request/audit-runner-result.json', 'utf8'));
+          const validator = JSON.parse(fs.readFileSync('artifacts/autopilot-audit-request/trusted-validator-evidence.json', 'utf8'));
           const authority = {
             schemaVersion: result.schemaVersion,
             status: result.status,
@@ -535,6 +630,13 @@ jobs:
             aiAuthority: result.aiAuthority,
             auditExecutionRunId: Number(process.env.GITHUB_RUN_ID),
             auditExecutionAttempt: Number(process.env.GITHUB_RUN_ATTEMPT),
+            validatorStatus: validator.status,
+            validatorExecutionRunId: validator.validatorExecutionRunId,
+            validatorExecutionAttempt: validator.validatorExecutionAttempt,
+            validatorAuditAllowed: validator.auditAllowed,
+            validatorP0: validator.p0,
+            validatorP1: validator.p1,
+            validatorP2: validator.p2,
           };
           const encoded = Buffer.from(JSON.stringify(authority), 'utf8').toString('base64url');
           fs.appendFileSync(process.env.GITHUB_OUTPUT, `authority=${encoded}\n`);
@@ -625,6 +727,7 @@ jobs:
           if (authority.repository !== process.env.GITHUB_REPOSITORY || authority.prNumber !== prNumber) fail('trusted Audit repository/PR identity mismatch');
           if (authority.reviewedHeadSha !== process.env.REQUESTED_HEAD || authority.workflowRunId !== workflowRunId) fail('trusted Audit exact-head/CI identity mismatch');
           if (authority.auditExecutionRunId !== auditExecutionRunId) fail('trusted Audit same-workflow execution identity mismatch');
+          if (authority.validatorStatus !== 'VALIDATOR_COMPLETED' || authority.validatorExecutionRunId !== auditExecutionRunId || authority.validatorExecutionAttempt !== Number(process.env.GITHUB_RUN_ATTEMPT) || authority.validatorAuditAllowed !== true || authority.validatorP0 !== 0 || authority.validatorP1 !== 0 || !Number.isSafeInteger(authority.validatorP2) || authority.validatorP2 < 0) fail('trusted fresh VALIDATOR evidence invalid');
           if (!['PASS', 'PASS_WITH_NOTES'].includes(authority.verdict) || authority.mergeAllowed !== true || authority.safetyInvariantResult !== 'PASS') fail('trusted Audit does not authorize Release handoff');
           if (authority.liveAuthority !== 'NONE' || authority.productionMutationAllowed !== false || authority.aiAuthority !== 'ZERO_AUTHORITY') fail('trusted Audit safety invariant mismatch');
           if (!/^[0-9a-f]{40}$/i.test(authority.baseSha || '')) fail('trusted Audit base SHA invalid');
@@ -665,6 +768,7 @@ jobs:
               "head_sha": "$REQUESTED_HEAD",
               "pr_number": $PR_NUMBER,
               "workflow_run_id": $WORKFLOW_RUN_ID,
+              "validator_execution_run_id": $AUDIT_EXECUTION_RUN_ID,
               "execution_id": "$EXECUTION_ID",
               "dedupe_key": "$DEDUPE_KEY",
               "live_authority": "NONE",

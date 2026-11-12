@@ -1,0 +1,63 @@
+current_autopilot_fresh_validator_gate_20261020:
+  work_order: WO-AUTOPILOT-20261017-FRESH-VALIDATOR-GATE
+  issue: 2760
+  pull_request: 2772
+  branch: fix/validator-evidence-gate-2760
+  status: CURRENT_MAIN_RECONVERGED_PENDING_FRESH_NON_AUTHOR_VALIDATOR
+  base_sha: 7e560405ad15b4eec8a5e46b0ad32873286df525
+  previous_head: fdc81d4d1694a41f0152aa5ab8908a5cccd194b9
+  previous_head_ci:
+    ci_run: 39014447418
+    actual_paper_run: 39014447395
+    capability_guard_run: 39014447400
+    activation_rehearsal_run: 39014447413
+    transport_readiness_run: 39014447392
+    readonly_broker_run: 39014447396
+    result: HISTORICAL_PASS_SUCCESSOR_REQUIRES_FRESH_EVIDENCE
+  previous_validator:
+    verdict: FAIL
+    p0: 0
+    p1: 2
+    findings:
+      - protected_main_not_reconciled
+      - work_order_missing_from_canonical_state
+    result: HISTORICAL_REVIEW_SUCCESSOR_REQUIRES_FRESH_REVIEW
+  repair:
+    - merged_current_protected_main_without_rewriting_history
+    - registered_work_order_and_phase_in_canonical_state
+  local_validation:
+    focused_tests: PASS_22_OF_22
+    full_test_suite: PASS_1259_ISOLATED_TEST_FILES
+    build: PASS
+    typecheck: PASS
+    preflight: PASS
+    validate_full: PASS
+    security_gate: PASS
+    git_diff_check: PASS
+  validated_successor_head: 4cbfdc93d6fb01e50cc985a8f19af5641c439136
+  exact_head_ci:
+    ci_run: 39378962568
+    actual_paper_run: 39378962602
+    capability_guard_run: 39378962558
+    activation_rehearsal_run: 39378962564
+    transport_readiness_run: 39378962551
+    readonly_broker_run: 39378962553
+    result: PASS_ALL_SIX_ON_VALIDATED_SUCCESSOR
+    status_after_evidence_commit: HISTORICAL_REQUIRES_FRESH_SUCCESSOR_CHECKS
+  aipos_evidence_successor_head: de440808fb30c5b0291d4e6dff9cf2090fc3fafe
+  latest_successor_ci:
+    ci_run: 39379663687
+    actual_paper_run: 39379663605
+    capability_guard_run: 39379663731
+    activation_rehearsal_run: 39379663688
+    transport_readiness_run: 39379663628
+    readonly_broker_run: 39379663625
+    result: PASS_ALL_SIX_ON_EXACT_HEAD
+    status_after_this_record_commit: HISTORICAL_REQUIRES_FRESH_SUCCESSOR_CHECKS
+  fresh_non_author_validator: PENDING_ON_FINAL_EXACT_HEAD
+  next: "Dynamically re-fetch current protected main, PR head/base, and all required exact-head checks; if still aligned and green, obtain the separate fresh non-author Validator receipt for that exact SHA. Keep Draft; Audit/Release/merge remain blocked. Do not record self-referential current-head evidence in this state entry."
+  safety:
+    liveAuthority: NONE
+    productionMutationAllowed: false
+    aiAuthority: ZERO_AUTHORITY
+    paper_only: true

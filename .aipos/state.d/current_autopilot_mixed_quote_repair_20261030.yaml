@@ -1,0 +1,18 @@
+current_autopilot_mixed_quote_repair_20261030:
+  work_order: WO-AUTOPILOT-20261017-FRESH-VALIDATOR-GATE
+  status: PUBLISHED_SUCCESSOR_CI_PASS_AIPOS_RECEIPT_SUCCESSOR_PENDING
+  issue: 2760
+  pull_request: 2772
+  branch: fix/validator-evidence-gate-2760
+  protected_main: f144b940925dc04df7c0849fbaad9e5f14f5befe
+  remote_pr_head_before_successor: d2817a60faf2126fc2351158f4188800a1fdc1d6
+  validated_successor_head: 15e034dc69662a7da51335535365c71c9c1ba600
+  exact_head_ci: 41072337072_SUCCESS
+  companion_workflows: 5_OF_5_SUCCESS
+  protected_main_and_pr_base: f144b940925dc04df7c0849fbaad9e5f14f5befe
+  pr_base_metadata: e7f8a426a57a08339eae3778ca50de6512d6acd9
+  finding: "P1 4387534372: mixed C-quoted/unquoted Git diff path tokens did not resolve against exact changed-file metadata."
+  local_repair: "Parser decodes each token independently, enumerates safe candidate boundaries, and requires unique exact metadata binding."
+  local_validation: "Final tree after merging protected main f144b940: Node 24.19; focused auditRunner 36/36; pnpm test PASS including preflight/build and 1310 isolated files; typecheck/validate:full/security PASS; lint 0 errors/47 warnings, clean-main baseline 47; net diff check PASS."
+  next: "Resolve the remote branch tip after this AIPOS receipt successor; wait for its exact-head CI/companions, then request one fresh non-author review. Keep Draft and unresolved threads; no Formal self-approval, Audit, Release, merge, or Oracle mutation."
+  safety: PAPER_ONLY_LIVE_NONE_PRODUCTION_MUTATION_FALSE_AI_ZERO_AUTHORITY

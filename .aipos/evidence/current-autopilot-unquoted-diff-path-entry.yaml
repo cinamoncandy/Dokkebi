@@ -1,0 +1,38 @@
+current_autopilot_validator_unquoted_diff_paths_20261027:
+  work_order: WO-AUTOPILOT-20261017-FRESH-VALIDATOR-GATE
+  handoff: .aipos/handoffs/2026-10-27-validator-unquoted-diff-path-p1.md
+  issue: 2760
+  pull_request: 2772
+  branch: fix/validator-evidence-gate-2760
+  status: LOCAL_VALIDATION_PASS_PENDING_AUTHENTICATED_PUBLICATION
+  protected_main: e7f8a426a57a08339eae3778ca50de6512d6acd9
+  predecessor_head: ef58af74c03ff504ac82f89def26e3c2e279280a
+  review_finding:
+    review_receipt: 5665534229
+    comment: 4387534372
+    severity: P1
+    summary: "Git diff unquoted paths containing ' b/' could be split at a filename substring rather than the old/new path boundary."
+  repair: "Match enumerated path-pair candidates against exact GitHub pull-files filename/previous_filename records; resolve block order independently; fail closed on ambiguity, unsafe path or mismatch."
+  local_validation:
+    node: 24.19.0
+    build: PASS
+    validator_runner: PASS_25_OF_25
+    audit_runner: PASS_34_OF_34
+    audit_contract: PASS_16_OF_16
+    preflight: PASS
+    typecheck: PASS
+    validate_full: PASS
+    security_gate: PASS_0_UNMITIGATED_0_SECRETS
+    lint: PASS_0_ERRORS_45_EXISTING_WARNINGS
+    full_test_suite: PASS_1290_ISOLATED_TEST_FILES
+    diff_check: PASS
+    aipos_yaml: PASS
+    aipos_drift: PASS
+    aipos_conformance: PASS
+  exact_head: PENDING_COMMIT
+  exact_head_workflows: PENDING
+  fresh_non_author_review: PENDING
+  formal_validator: PENDING
+  audit_release_merge: NOT_STARTED
+  next: "Verify GitHub authentication and current remote expected head before any non-force push to the existing PR. Keep Draft and do not resolve author-side review threads."
+  safety: PAPER_ONLY_LIVE_NONE_PRODUCTION_MUTATION_FALSE_AI_ZERO_AUTHORITY

@@ -40,6 +40,24 @@ test("Audit waits boundedly for independent exact-head evidence convergence", ()
   assert.match(workflow, /bounded Audit deadline/);
 });
 
+test("Audit and Release wait for completed-success consumer before reading its artifacts", () => {
+  const auditStart = workflow.indexOf("validator_run_file=\"$RUNNER_TEMP/nusa-deterministic-audit/consumer-run.json\"");
+  const auditArtifact = workflow.indexOf("validator_artifacts=", auditStart);
+  const releaseStart = workflow.indexOf("name: Load and verify trusted fresh VALIDATOR evidence");
+  const releaseArtifact = workflow.indexOf("validator_artifacts=", releaseStart);
+  assert.ok(auditStart >= 0 && auditArtifact > auditStart, "Audit must gate artifact lookup behind consumer completion");
+  assert.ok(releaseStart >= 0 && releaseArtifact > releaseStart, "Release must repeat the completed consumer check");
+  for (const gate of [workflow.slice(auditStart, auditArtifact), workflow.slice(releaseStart, releaseArtifact)]) {
+    assert.match(gate, /for poll in \$\(seq 1 30\)/);
+    assert.match(gate, /status\" = \"completed/);
+    assert.match(gate, /validate-completed-audit-consumer-run\.js/);
+    assert.match(gate, /\$GITHUB_REPOSITORY/);
+    assert.match(gate, /\$VALIDATOR_EXECUTION_RUN_ID/);
+    assert.match(gate, /sleep 5/);
+    assert.doesNotMatch(gate, /\.status == \"in_progress\" or \(\.status == \"completed\"/);
+  }
+});
+
 test("stale Audit requests are NO_ACTION and cannot release", () => {
   assert.match(workflow, /NO_ACTION stale\/non-releasable Audit request/);
   assert.match(workflow, /current_draft/);

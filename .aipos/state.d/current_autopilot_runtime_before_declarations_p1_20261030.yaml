@@ -1,0 +1,17 @@
+current_autopilot_runtime_before_declarations_p1_20261030:
+  work_order: WO-AUTOPILOT-20261017-FRESH-VALIDATOR-GATE
+  issue: 2760
+  pull_request: 2772
+  branch: fix/validator-evidence-gate-2760
+  status: P1_REPAIR_LOCAL_VALIDATION_PASS_AWAITING_PUBLICATION
+  predecessor_head: 8c53adc89039caca4e99df7429ee8ffafcb2406d
+  protected_main: f144b940925dc04df7c0849fbaad9e5f14f5befe
+  review_thread: PRRT_kwDOTUbne86yCNZM
+  finding_comment: 4425523632
+  finding: "Declaration-only files may mask tracked runtime JavaScript in validator dependency context."
+  repair: "Try TypeScript implementation and runtime candidates before declarations; include dist source fallback. Regression proves JavaScript is selected ahead of a matching declaration."
+  focused_tests: PASS_38_OF_38
+  local_validation: "Node 24.19: focused auditRunner 38/38, pnpm test 1310 isolated files, preflight/build/typecheck/validate:full/security, lint 0 errors and 47 baseline warnings, AIPOS YAML/drift/conformance/provenance, and diff check PASS."
+  exact_head_ci_review: PENDING_SUCCESSOR
+  next: "Complete local validation, verify the remote expected head, publish a non-force successor to the existing branch, then require exact-head CI/companions and a fresh non-author review."
+  safety: PAPER_ONLY_LIVE_NONE_PRODUCTION_MUTATION_FALSE_AI_ZERO_AUTHORITY

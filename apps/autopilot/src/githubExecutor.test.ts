@@ -184,7 +184,7 @@ describe("executeGithubDispatch", () => {
     const fakeFetch = (async (url: string | URL | Request, init?: RequestInit) => {
       calls.push({ url: String(url), init });
       if (String(url).endsWith("/pulls/42")) return prResponse();
-      if (String(url).includes("/actions/workflows/autopilot-deterministic-audit-release.yml/runs?")) {
+      if (String(url).includes("/actions/workflows/autopilot-execution-consumer.yml/runs?")) {
         return new Response(JSON.stringify({ workflow_runs: [] }), { status: 200, headers: { "content-type": "application/json" } });
       }
       return new Response(null, { status: 204 });
@@ -200,10 +200,10 @@ describe("executeGithubDispatch", () => {
     assert.equal(value.requestedHeadSha, auditRequest.headSha);
     assert.equal(value.observedHeadSha, auditRequest.headSha);
     assert.equal(calls[0]?.url, "https://api.example.test/repos/cinamoncandy/NUSA/pulls/42");
-    assert.match(calls[1]?.url ?? "", /actions\/workflows\/autopilot-deterministic-audit-release\.yml\/runs/);
+    assert.match(calls[1]?.url ?? "", /actions\/workflows\/autopilot-execution-consumer\.yml\/runs/);
     assert.equal(calls[2]?.url, "https://api.example.test/repos/cinamoncandy/NUSA/dispatches");
     const payload = JSON.parse(String(calls[2]?.init?.body));
-    assert.equal(payload.event_type, "nusa_autopilot_audit");
+    assert.equal(payload.event_type, "nusa_autopilot_execution");
     assert.equal(payload.client_payload.kind, "AUDIT_REQUEST");
     assert.equal(payload.client_payload.pr_number, 42);
     assert.ok(Object.keys(payload.client_payload).length <= 10);
@@ -221,7 +221,7 @@ describe("executeGithubDispatch", () => {
       const value = String(url);
       calls.push(value);
       if (value.endsWith("/pulls/42")) return prResponse();
-      if (value.includes("/actions/workflows/autopilot-deterministic-audit-release.yml/runs?")) {
+      if (value.includes("/actions/workflows/autopilot-execution-consumer.yml/runs?")) {
         return new Response(JSON.stringify({ workflow_runs: [{ display_title: auditRequest.dedupeKey }] }), { status: 200, headers: { "content-type": "application/json" } });
       }
       throw new Error("repository dispatch must not be reached");
@@ -241,7 +241,7 @@ describe("executeGithubDispatch", () => {
     const value = await executeGithubDispatch(retry, { token: "secret", allowedRepository: "cinamoncandy/NUSA", apiBaseUrl: "https://api.example.test/" }, (async (url: string | URL | Request) => {
       const target = String(url);
       if (target.endsWith("/pulls/42")) return prResponse();
-      if (target.includes("/actions/workflows/autopilot-deterministic-audit-release.yml/runs?")) return new Response(JSON.stringify({ workflow_runs: [{ display_title: auditRequest.dedupeKey, status: "in_progress", conclusion: null }] }), { status: 200, headers: { "content-type": "application/json" } });
+      if (target.includes("/actions/workflows/autopilot-execution-consumer.yml/runs?")) return new Response(JSON.stringify({ workflow_runs: [{ display_title: auditRequest.dedupeKey, status: "in_progress", conclusion: null }] }), { status: 200, headers: { "content-type": "application/json" } });
       throw new Error("repository dispatch must not be reached");
     }) as typeof fetch);
     assert.equal(value.status, "REJECTED");
@@ -254,7 +254,7 @@ describe("executeGithubDispatch", () => {
     const value = await executeGithubDispatch(retry, { token: "secret", allowedRepository: "cinamoncandy/NUSA", apiBaseUrl: "https://api.example.test/" }, (async (url: string | URL | Request) => {
       const target = String(url);
       if (target.endsWith("/pulls/42")) return prResponse();
-      if (target.includes("/actions/workflows/autopilot-deterministic-audit-release.yml/runs?")) return new Response(JSON.stringify({ workflow_runs: [{ display_title: auditRequest.dedupeKey, status: "completed", conclusion: "failure" }] }), { status: 200, headers: { "content-type": "application/json" } });
+      if (target.includes("/actions/workflows/autopilot-execution-consumer.yml/runs?")) return new Response(JSON.stringify({ workflow_runs: [{ display_title: auditRequest.dedupeKey, status: "completed", conclusion: "failure" }] }), { status: 200, headers: { "content-type": "application/json" } });
       if (target.endsWith("/dispatches")) { dispatched = true; return new Response(null, { status: 204 }); }
       throw new Error(`unexpected fetch ${target}`);
     }) as typeof fetch);

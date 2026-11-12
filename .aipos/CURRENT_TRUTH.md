@@ -13,8 +13,8 @@ Everything below is what the repository's records *claim*. Re-verify on GitHub b
 
 ## Work orders
 
-584 total: 555 in `.aipos/work-orders/`, 29 closed and merged in `.aipos/work-orders/archive/`.
-Of the 555 active files, 376 carry a closed status that has not been archived (merge not proven, or the path is still referenced) and 179 are open or unclassified.
+585 total: 556 in `.aipos/work-orders/`, 29 closed and merged in `.aipos/work-orders/archive/`.
+Of the 556 active files, 376 carry a closed status that has not been archived (merge not proven, or the path is still referenced) and 180 are open or unclassified.
 
 Most common statuses among the open files (new orders use only `READY_FOR_REVIEW`, `IN_PROGRESS`, `BLOCKED`, `COMPLETED`, `SUPERSEDED`, `ABANDONED`):
 
@@ -22,14 +22,14 @@ Most common statuses among the open files (new orders use only `READY_FOR_REVIEW
 |---|---|
 | READY_FOR_REVIEW | 53 |
 | LOCAL_VALIDATED_PENDING_CI | 17 |
+| IN_PROGRESS | 14 |
 | VERIFYING | 14 |
-| IN_PROGRESS | 13 |
 | completed | 7 |
 | COMPLETED_NO_SURVIVOR | 6 |
 | LOCAL_VALIDATED_PENDING_REVIEW_CI | 5 |
 | BLOCKED | 3 |
 
-### In progress or blocked (18)
+### In progress or blocked (19)
 
 | Work order | Status | Title |
 |---|---|---|
@@ -40,6 +40,7 @@ Most common statuses among the open files (new orders use only `READY_FOR_REVIEW
 | `WO-0051` | IN_PROGRESS | Constitutional Production Transition Human/Environment Gate |
 | `WO-20260924-MOBILE-DELIVERY-RESIDUAL-GATES` | BLOCKED | Residual Android delivery and device gates from closed mobile UI work orders |
 | `WO-20260927-AUTOPILOT-SCHEDULED-RECEIPT-RECOVERY` | IN_PROGRESS | Recover malformed scheduled runtime receipt state |
+| `WO-AUTOPILOT-20261017-FRESH-VALIDATOR-GATE` | IN_PROGRESS | Machine-enforce fresh non-author VALIDATOR evidence before Audit and Release |
 | `WO-AUTOPILOT-20261030-1851-CAUSAL-ADMISSION` | IN_PROGRESS | Bind publisher and source evidence before autonomous coding admission |
 | `WO-FUTURES-20261015-BINANCE-PUBLIC-COLLECTOR` | IN_PROGRESS | Research-only public Binance USD-M futures collector (BTCUSDT, ETHUSDT) |
 | `WO-ISSUE-2589-TICK-ERROR-CLASS` | IN_PROGRESS | Make a failed closed-learning tick root-causable: publish a bounded error class |

@@ -37,6 +37,16 @@ test("Release authority comes only from deterministic Audit, never PR comment JS
   assert.doesNotMatch(release, /auditComments/);
 });
 
+test("deterministic Audit requires successful same-consumer trusted Audit artifact as well as Validator evidence", () => {
+  const audit = jobSlice(releaseWorkflow, "audit", "release");
+  assert.match(audit, /trusted-audit-authority\.json/);
+  assert.match(audit, /validate-trusted-audit-authority\.js/);
+  assert.match(audit, /actions\/runs\/\$VALIDATOR_EXECUTION_RUN_ID\/artifacts/);
+  assert.match(audit, /validator_attempt/);
+  assert.match(consumerWorkflow, /Bind trusted same-workflow Audit authority/);
+  assert.match(consumerWorkflow, /name: autopilot-audit-request-\$\{\{ github\.run_id \}\}/);
+});
+
 test("execution consumer cannot perform repository-native Release", () => {
   assert.doesNotMatch(consumerWorkflow, /\n  release:/);
   assert.doesNotMatch(consumerWorkflow, /\n  release-recovery:/);

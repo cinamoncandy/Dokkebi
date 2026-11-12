@@ -17,7 +17,7 @@ import {
 } from "./codingRunner";
 import { GithubValidatedPatchPublisher } from "./githubValidatedPatchPublisher";
 import { verifyGithubActionsOidcToken, verifyGithubIsolatedConsumerIdentity, verifyGithubIsolatedConsumerRun, verifyGithubIsolatedSourceRun, verifyGithubReleaseControlOidcToken } from "./githubActionsOidc";
-import { AUDIT_PROVIDER, executeIndependentAudit, executeProviderGatedAudit, validateAuditRunnerRequest } from "./auditRunner";
+import { AUDIT_PROVIDER, executeIndependentAudit, executeIndependentValidator, executeProviderGatedAudit, executeProviderGatedValidator, validateAuditRunnerRequest, validateValidatorRunnerRequest, type AuditRunnerRequest, type ValidatorRunnerRequest } from "./auditRunner";
 import { classifyAiBudgetState } from "./aiBudgetState";
 import { decideCodingRunnerNoAction } from "./codingRunnerRemediation";
 import { claimVerifiedCausalDispatch, verifyClaimedCausalDispatch } from "./causalAdmissionAuthorization";
@@ -675,13 +675,15 @@ async function handleAuditExecute(request: Request, env: WorkerEnv): Promise<Res
     return json({ accepted: false, status: "AUDIT_FAILED_CLOSED", error: "AUDIT_GITHUB_APP_TOKEN_NOT_PROVIDED", liveAuthority: "NONE", productionMutationAllowed: false, aiAuthority: "ZERO_AUTHORITY" }, 401);
   }
 
-  let auditRequest;
+  let auditRequest: AuditRunnerRequest | ValidatorRunnerRequest;
   try {
-    auditRequest = validateAuditRunnerRequest(await request.json(), allowedRepository);
+    const body = await request.json() as { kind?: unknown };
+    auditRequest = body?.kind === "VALIDATOR_REQUEST"
+      ? validateValidatorRunnerRequest(body, allowedRepository)
+      : validateAuditRunnerRequest(body, allowedRepository);
   } catch (error) {
     return json({ accepted: false, status: "AUDIT_FAILED_CLOSED", error: error instanceof Error ? error.message : "AUDIT_RUNNER_REQUEST_INVALID", liveAuthority: "NONE", productionMutationAllowed: false, aiAuthority: "ZERO_AUTHORITY" }, 400);
   }
-
   if (globalReleaseFreezeActive(env)) {
     return json({ accepted: false, status: "AUDIT_FAILED_CLOSED", error: "GLOBAL_RELEASE_FREEZE_ACTIVE", reviewedHeadSha: auditRequest.headSha, baseSha: auditRequest.baseSha, workflowRunId: auditRequest.workflowRunId, liveAuthority: "NONE", productionMutationAllowed: false, aiAuthority: "ZERO_AUTHORITY" }, 409);
   }
@@ -717,6 +719,17 @@ async function handleAuditExecute(request: Request, env: WorkerEnv): Promise<Res
 
   try {
     const coordinator = env.NUSA_EXECUTION_COORDINATOR;
+    if (auditRequest.kind === "VALIDATOR_REQUEST") {
+      const validatorRequest = auditRequest;
+      const gated = await executeProviderGatedValidator(validatorRequest, {
+        readProviderWait: () => readProviderCapacityWait(coordinator, AUDIT_PROVIDER),
+        recordProviderWait: (stop) => recordProviderCapacityWait(coordinator, stop),
+        runValidator: () => executeIndependentValidator(validatorRequest, { ...env, NUSA_AUDIT_GITHUB_TOKEN: auditGithubToken }),
+        now: () => Date.now(),
+      });
+      if (gated.status === "VALIDATED") return json({ accepted: true, ...gated.result }, 200);
+      return json({ accepted: false, status: "VALIDATOR_FAILED_CLOSED", error: gated.status === "WAITING_PROVIDER_CAPACITY" ? "WAITING_PROVIDER_CAPACITY" : "PROVIDER_CAPACITY_STATE_UNAVAILABLE", ...(gated.status === "WAITING_PROVIDER_CAPACITY" ? { providerStopReason: gated.reason, nextRetryAt: gated.nextRetryAt, aiBudgetState: classifyAiBudgetState({ stopReason: gated.reason, nextRetryAt: gated.nextRetryAt }, Date.now()) } : {}), reviewedHeadSha: validatorRequest.headSha, baseSha: validatorRequest.baseSha, workflowRunId: validatorRequest.workflowRunId, liveAuthority: "NONE", productionMutationAllowed: false, aiAuthority: "ZERO_AUTHORITY" }, 409);
+    }
     const gated = await executeProviderGatedAudit(auditRequest, {
       readProviderWait: () => readProviderCapacityWait(coordinator, AUDIT_PROVIDER),
       recordProviderWait: (stop) => recordProviderCapacityWait(coordinator, stop),
@@ -728,7 +741,6 @@ async function handleAuditExecute(request: Request, env: WorkerEnv): Promise<Res
       accepted: false,
       status: "AUDIT_FAILED_CLOSED",
       error: gated.status === "WAITING_PROVIDER_CAPACITY" ? "WAITING_PROVIDER_CAPACITY" : "PROVIDER_CAPACITY_STATE_UNAVAILABLE",
-      // Diagnostic only: does not change the gate above, which already blocked the call.
       ...(gated.status === "WAITING_PROVIDER_CAPACITY" ? { providerStopReason: gated.reason, nextRetryAt: gated.nextRetryAt, aiBudgetState: classifyAiBudgetState({ stopReason: gated.reason, nextRetryAt: gated.nextRetryAt }, Date.now()) } : {}),
       reviewedHeadSha: auditRequest.headSha,
       baseSha: auditRequest.baseSha,

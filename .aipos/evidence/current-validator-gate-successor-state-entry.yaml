@@ -1,0 +1,36 @@
+current_autopilot_fresh_validator_gate_20261026:
+  work_order: WO-AUTOPILOT-20261017-FRESH-VALIDATOR-GATE
+  issue: 2760
+  pull_request: 2772
+  branch: fix/validator-evidence-gate-2760
+  status: P1_DIFF_EVIDENCE_PATH_REPAIR_LOCAL_VALIDATION_PASS_AWAITING_SUCCESSOR_CI_AND_REVIEW
+  protected_main: 54cfb2199cee1fdbaf5ea328c8a0940f4101e723
+  predecessor_pr_head: 3eee9bcfb1c71f2a3a4cfeb0f653830636dd8a3b
+  predecessor_pr_base: 54cfb2199cee1fdbaf5ea328c8a0940f4101e723
+  findings:
+    - "P1 #4377972408: deletion-only blockers need removed-line evidence references."
+    - "P1 #4378178003: whole-file deletion must use the old path and reset parser state at diff boundaries."
+  repair:
+    files:
+      - apps/autopilot/src/auditRunner.ts
+      - apps/autopilot/src/auditRunner.test.ts
+    behavior: "Old and new paths are tracked independently; per-file line/path state resets at diff --git; deletions bind to the old path, additions to the new path; deleted files cannot inherit the previous path."
+    fail_closed: true
+  predecessor_ci:
+    run: 40345771631
+    attempt: 2
+    result: PASS
+    scope: "Historical predecessor CI and companion workflows; not evidence for the repair successor."
+  local_validation:
+    node: 24.19.0
+    build: PASS
+    focused_audit_runner: PASS_34_OF_34
+    independent_audit_contract: PASS_16_OF_16
+    preflight: PASS
+    typecheck: PASS
+    validate_full: PASS
+    security_gate: PASS
+    full_tests: PASS_1288_ISOLATED_TEST_FILES
+    diff_check: PASS
+  next: "After committing AIPOS with the source repair, re-fetch the existing PR branch, publish only with non-force expected-head protection, then require exact-head workflows and fresh non-author review. Keep Draft; formal Validator, Audit, Release, and merge remain independent gates."
+  safety: PAPER_ONLY_LIVE_NONE_PRODUCTION_MUTATION_FALSE_AI_ZERO_AUTHORITY
