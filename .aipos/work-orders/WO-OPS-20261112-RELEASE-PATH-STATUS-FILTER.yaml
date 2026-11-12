@@ -1,0 +1,21 @@
+id: WO-OPS-20261112-RELEASE-PATH-STATUS-FILTER
+title: "Release-path CI lookups stop depending on the status=completed list filter"
+status: READY_FOR_REVIEW
+created: 2026-11-12
+implementation_branch: claude/status-filter-lookups
+authority_impact: none
+finding: "For main 5d9304c97 the GitHub runs API returned its completed, successful CI run only without status=completed (ci.yml: completed-filter 0, all 1; older main commits show 1 and 1). The Cloudflare Deploy run 43119032851 failed twice at 'Wait for exact-head CI success before deploying' (reads that list), and oracle-paper-release.yml checks CI the same way, so Release would refuse an exact source whose CI passed. Earlier the same omission hid the Deploy run of main 7f8de2167 from the preflight for about nine hours (fixed in #3091)."
+change:
+  - "autopilot-cloudflare-deploy.yml (exact-head CI wait), oracle-paper-release.yml (exact-source CI check) and deployment-convergence-watchdog.yml (exact-main CI conclusion): drop &status=completed. Each filter still requires the canonical CI run on the exact sha and conclusion === success; an unfinished run has a null conclusion."
+  - "tests/release-path-ci-lookups.test.js: pins the new queries and the success conclusion requirement."
+not_changed:
+  - "autopilot-cloudflare-deploy.yml deployment-history lookup (older baseline is the fail-safe direction), the android and windows release workflows, apps/autopilot githubReleaseCompletionResolver.ts (Worker code, listed for a later change), Audit, Release authority, P0 logic, any limit or authority."
+safety:
+  paper_only: true
+  liveAuthority: NONE
+  productionMutationAllowed: false
+  aiAuthority: ZERO_AUTHORITY
+validation:
+  - "release-path-ci-lookups 2/2; 11 related workflow test files 114/114."
+review: "Workflow change: independent review. Release is not blocked by a P0 now (#1461 closed), but the preflight on main will fail again until a deploy of the exact main exists."
+next_action: "Review and owner or Audit/Release merge; then the Cloudflare deploy of the new main finds its CI, the preflight passes, and the Oracle release can be dispatched for the new main."
