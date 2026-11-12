@@ -408,8 +408,10 @@ current_main_alignment_20261112:
   automatic_selector_and_claim: FAIL_CLOSED
   operational_wip_claims: UNKNOWN
   writer_lease: UNKNOWN
-  validation: "Merged tree: 69 focused and 1343 full test files passed; build, typecheck, validate:full and security passed; lint passed with 48 warnings. Exact-head CI remains pending."
-  exact_head_ci: PENDING
+  published_predecessor: 78314b55c51e78f8ebd32380ef47f1a184757b95
+  validation: "Predecessor merged tree: 69 focused and 1343 full test files passed; build, typecheck, validate:full and security passed; lint passed with 48 warnings."
+  predecessor_exact_head_ci: "Six workflows PASS including CI 43130001409; Cloudflare preflight 43129995989 failed on missing exact-main deployment evidence."
+  exact_head_ci: PENDING_FOR_SUCCESSOR
   independent_review: PENDING
   formal_validator_audit_release: NOT_STARTED
-  next: "Validate the merged candidate, then recheck main and PR head before any normal fast-forward publication. No operational claim or dispatch."
+  next: "Recheck current PR head and exact-head CI, then obtain independent review. Predecessor publication is complete; no operational claim or dispatch."
