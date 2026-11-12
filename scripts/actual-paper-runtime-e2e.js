@@ -475,6 +475,7 @@ function isTransientMarketReconnect(snapshotFailure, response) {
   if (snapshotFailure !== "PAPER_RUNTIME_NOT_RUNNING" && snapshotFailure !== "PAPER_MARKET_TRANSPORT_NOT_ONLINE"
     && snapshotFailure !== "PUBLIC_MARKET_RECONNECTING" && snapshotFailure !== "MARKET_DATA_RECONNECTING") return false;
   const diagnostic = safeRuntimeFailureDiagnostic(response, null);
+  if (diagnostic.scheduler_running !== true) return false;
   // PUBLIC_MARKET_RECOVERED is the last error for the moment between the market coming back and the runtime lifting the halt
   // (CI run 42954802110 failed on exactly that sample). It stays inside the same per-episode grace, so a runtime that never resumes still fails.
   // PUBLIC_MARKET_STALE is the same kind of public-feed hiccup: the runtime halts fail-closed when a ticker goes quiet and lifts the halt
@@ -758,7 +759,7 @@ async function observeAutomaticRuntime({
     }
     const snapshotFailure = observationSnapshotFailure(response);
     if (snapshotFailure != null && isTransientMarketReconnect(snapshotFailure, response)) {
-      if (reconnectEpisode == null) reconnectEpisode = { startedMs: elapsedMs, diagnostic: safeRuntimeFailureDiagnostic(response, observedAtMs) };
+      if (reconnectEpisode == null) reconnectEpisode = { startedMs: elapsedMs, failureCode: snapshotFailure, diagnostic: safeRuntimeFailureDiagnostic(response, observedAtMs) };
       const withinGrace = elapsedMs - reconnectEpisode.startedMs + pollIntervalMs <= reconnectGraceMs;
       const budgetLeft = elapsedMs + pollIntervalMs < maximumDurationMs;
       if (withinGrace && budgetLeft) {
@@ -766,7 +767,7 @@ async function observeAutomaticRuntime({
         continue;
       }
       // The reconnect did not resume in time: fail closed, reporting when it began.
-      failureCode = snapshotFailure;
+      failureCode = reconnectEpisode.failureCode;
       failureDiagnostic = reconnectEpisode.diagnostic;
       stopReason = "RUNTIME_OR_EVIDENCE_FAILURE";
       break;

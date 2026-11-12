@@ -641,6 +641,27 @@ const reconnectingOverrides = (from, to) => (readCount) => (readCount >= from &&
   ? { operations: { runtimeState: "HALTED", schedulerRunning: true, runtimeHaltReasons: ["KILL_SWITCH_ACTIVE"], heartbeat: { startedAt: BASE_TIME - 1_000, lastHeartbeatAt: BASE_TIME, lastError: "PUBLIC_MARKET_RECONNECTING" } } }
   : {});
 
+test("a halted reconnect with stopped scheduler fails immediately", async () => {
+  const result = await runObservation({ maximumDurationMs: 120_000, snapshotOverrides: (n) => n < 2 ? {} : { operations: { runtimeState: "HALTED", schedulerRunning: false, runtimeHaltReasons: ["KILL_SWITCH_ACTIVE"], heartbeat: { startedAt: BASE_TIME - 1_000, lastHeartbeatAt: BASE_TIME, lastError: "PUBLIC_MARKET_RECONNECTING" } } } });
+  assert.equal(result.status, "FAIL");
+  assert.equal(result.readCount, 2);
+  assert.equal(result.evidence.failure_code, "PAPER_RUNTIME_NOT_RUNNING");
+});
+
+test("an exhausted reconnect retains the first failure code and onset diagnostic", async () => {
+  const result = await runObservation({ maximumDurationMs: 120_000, snapshotOverrides: (n) => n < 2 ? {} : { operations: { runtimeState: n === 2 ? "RUNNING" : "HALTED", schedulerRunning: true, transport: "RECONNECTING", runtimeHaltReasons: ["KILL_SWITCH_ACTIVE"], heartbeat: { startedAt: BASE_TIME - 1_000, lastHeartbeatAt: BASE_TIME, lastError: n === 2 ? "PUBLIC_MARKET_RECONNECTING" : "PUBLIC_MARKET_RECOVERED" } } } });
+  assert.equal(result.status, "FAIL");
+  assert.equal(result.evidence.failure_code, "PAPER_MARKET_TRANSPORT_NOT_ONLINE");
+  assert.equal(result.evidence.failure_diagnostic.last_error_code, "PUBLIC_MARKET_RECONNECTING");
+  assert.equal(result.evidence.failure_diagnostic.observed_at, new Date(BASE_TIME + 1_000).toISOString());
+});
+
+test("each reconnect episode retains its own 45-second grace", async () => {
+  const result = await runObservation({ maximumDurationMs: 120_000, currentEvents: (n) => n > 72 ? [1, 2, 3].map((i) => cycleEvents(i, BASE_TIME + n * 1000)) : [], snapshotOverrides: (n) => (n >= 2 && n <= 36) || (n >= 38 && n <= 72) ? { operations: { runtimeState: "HALTED", schedulerRunning: true, runtimeHaltReasons: ["KILL_SWITCH_ACTIVE"], heartbeat: { startedAt: BASE_TIME - 1_000, lastHeartbeatAt: BASE_TIME, lastError: "PUBLIC_MARKET_RECONNECTING" } } } : {} });
+  assert.equal(result.status, "PASS");
+  assert.equal(result.evidence.transient_reconnect_episodes, 2);
+});
+
 test("a runner-side public-market reconnect that recovers inside the grace window does not fail the observation", async () => {
   const fixed = [1, 2, 3].map((cycle) => cycleEvents(cycle, BASE_TIME + cycle * 1_000));
   const result = await runObservation({

@@ -13,8 +13,8 @@ Everything below is what the repository's records *claim*. Re-verify on GitHub b
 
 ## Work orders
 
-584 total: 555 in `.aipos/work-orders/`, 29 closed and merged in `.aipos/work-orders/archive/`.
-Of the 555 active files, 376 carry a closed status that has not been archived (merge not proven, or the path is still referenced) and 179 are open or unclassified.
+585 total: 556 in `.aipos/work-orders/`, 29 closed and merged in `.aipos/work-orders/archive/`.
+Of the 556 active files, 376 carry a closed status that has not been archived (merge not proven, or the path is still referenced) and 180 are open or unclassified.
 
 Most common statuses among the open files (new orders use only `READY_FOR_REVIEW`, `IN_PROGRESS`, `BLOCKED`, `COMPLETED`, `SUPERSEDED`, `ABANDONED`):
 
@@ -22,14 +22,14 @@ Most common statuses among the open files (new orders use only `READY_FOR_REVIEW
 |---|---|
 | READY_FOR_REVIEW | 53 |
 | LOCAL_VALIDATED_PENDING_CI | 17 |
+| IN_PROGRESS | 14 |
 | VERIFYING | 14 |
-| IN_PROGRESS | 13 |
 | completed | 7 |
 | COMPLETED_NO_SURVIVOR | 6 |
 | LOCAL_VALIDATED_PENDING_REVIEW_CI | 5 |
 | BLOCKED | 3 |
 
-### In progress or blocked (18)
+### In progress or blocked (19)
 
 | Work order | Status | Title |
 |---|---|---|
@@ -38,6 +38,7 @@ Most common statuses among the open files (new orders use only `READY_FOR_REVIEW
 | `WO-0009` | BLOCKED | Harden repository and release-artifact security gates |
 | `WO-0010` | BLOCKED | Resolve remaining repository P0/P1 gaps before release-target changes |
 | `WO-0051` | IN_PROGRESS | Constitutional Production Transition Human/Environment Gate |
+| `WO-0059-PAPER-RECONNECT-GRACE-20261111` | IN_PROGRESS | Wait out a runner-side public-market reconnect during PAPER observation for a bounded time |
 | `WO-20260924-MOBILE-DELIVERY-RESIDUAL-GATES` | BLOCKED | Residual Android delivery and device gates from closed mobile UI work orders |
 | `WO-20260927-AUTOPILOT-SCHEDULED-RECEIPT-RECOVERY` | IN_PROGRESS | Recover malformed scheduled runtime receipt state |
 | `WO-AUTOPILOT-20261030-1851-CAUSAL-ADMISSION` | IN_PROGRESS | Bind publisher and source evidence before autonomous coding admission |
