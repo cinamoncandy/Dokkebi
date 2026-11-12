@@ -67,7 +67,7 @@ jobs:
           #
           # A cancelled run is the absence of a verdict, not a negative one. A failure still is one.
           for attempt in $(seq 1 30); do
-            gh api --paginate --slurp "repos/$GITHUB_REPOSITORY/actions/runs?head_sha=$HEAD_SHA&status=completed&per_page=100" > /tmp/nusa-exact-head-ci.json
+            gh api --paginate --slurp "repos/$GITHUB_REPOSITORY/actions/runs?head_sha=$HEAD_SHA&per_page=100" > /tmp/nusa-exact-head-ci.json
             verdict="$(HEAD_SHA="$HEAD_SHA" node - <<'NODE'
           const fs = require('fs');
           const pages = JSON.parse(fs.readFileSync('/tmp/nusa-exact-head-ci.json', 'utf8'));

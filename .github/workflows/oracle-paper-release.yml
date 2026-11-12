@@ -49,7 +49,7 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
-          conclusion="$(gh api --paginate "repos/$GITHUB_REPOSITORY/actions/workflows/ci.yml/runs?head_sha=$SOURCE_SHA&status=completed&per_page=100" --jq '.workflow_runs[]' \
+          conclusion="$(gh api --paginate "repos/$GITHUB_REPOSITORY/actions/workflows/ci.yml/runs?head_sha=$SOURCE_SHA&per_page=100" --jq '.workflow_runs[]' \
             | jq -sr --arg sha "$SOURCE_SHA" '[.[] | select(.path == ".github/workflows/ci.yml" and .head_sha == $sha and .conclusion == "success")][0].conclusion // empty')"
           [ "$conclusion" = "success" ] || { echo "::error::Exact-source $SOURCE_SHA has no successful canonical CI run"; exit 1; }
 
