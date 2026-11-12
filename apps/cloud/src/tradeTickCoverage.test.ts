@@ -4,7 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, it } from "node:test";
 import { DatabaseSync } from "node:sqlite";
-import { TradeTickCoverageWatch, readTradeTickCoverageDetailed, summarizeTradeCoverage } from "./tradeTickCoverage";
+import { TradeTickCoverageWatch, readTradeTickCoverageDetailed, summarizeTradeCoverage, tradeCoverageFailureCodeForTest } from "./tradeTickCoverage";
 
 const HOUR = 3_600_000;
 const NOW = Date.parse("2026-11-12T10:30:00Z");
@@ -90,5 +90,13 @@ describe("trade tick hour coverage watch", () => {
     } finally { rmSync(dir, { recursive: true, force: true }); }
     const unreadable = new TradeTickCoverageWatch(join(tmpdir(), "no-such-dir", "x.sqlite"), "KRW-XRP", () => NOW).snapshot();
     assert.ok(unreadable != null && "status" in unreadable && unreadable.status === "UNAVAILABLE");
+  });
+  it("never throws while naming a failure, even for a thrown value whose errcode getter throws", () => {
+    const hostile = { get errcode(): number { throw new Error("boom /secret/path"); } };
+    assert.equal(tradeCoverageFailureCodeForTest("QUERY", hostile), "QUERY_FAILED");
+    assert.equal(tradeCoverageFailureCodeForTest("OPEN", new Proxy({}, { get() { throw new Error("trap"); } })), "OPEN_FAILED");
+    assert.equal(tradeCoverageFailureCodeForTest("QUERY", { errcode: 5 }), "QUERY_FAILED_SQLITE_5");
+    assert.equal(tradeCoverageFailureCodeForTest("QUERY", { errcode: -1 }), "QUERY_FAILED");
+    assert.equal(tradeCoverageFailureCodeForTest("QUERY", null), "QUERY_FAILED");
   });
 });

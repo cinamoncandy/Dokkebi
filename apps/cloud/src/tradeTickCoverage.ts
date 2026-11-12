@@ -41,9 +41,15 @@ export function summarizeTradeCoverage(flags: readonly boolean[], asOfMs: number
 }
 
 function failureCode(stage: "OPEN" | "QUERY", error: unknown): string {
-  const code = (error as { errcode?: unknown } | null)?.errcode;
-  return Number.isSafeInteger(code) && (code as number) >= 0 && (code as number) < 100_000 ? `${stage}_FAILED_SQLITE_${code as number}` : `${stage}_FAILED`;
+  // Reading errcode can itself throw (a getter or proxy trap on an unusual thrown object); the catch handler must never throw.
+  try {
+    const code = (error as { errcode?: unknown } | null)?.errcode;
+    return Number.isSafeInteger(code) && (code as number) >= 0 && (code as number) < 100_000 ? `${stage}_FAILED_SQLITE_${code as number}` : `${stage}_FAILED`;
+  } catch { return `${stage}_FAILED`; }
 }
+
+/** Test seam: the failure code for an arbitrary thrown value. */
+export const tradeCoverageFailureCodeForTest = failureCode;
 
 /** The last `hours` full hours ending at the latest full hour at or before `nowMs`; an hour (t-1h, t] is covered when one tick sits in it. Read-only; one indexed lookup per hour. */
 export function readTradeTickCoverageDetailed(stateDbPath: string, market: string, nowMs: number, hours: number = TRADE_COVERAGE_WINDOW_HOURS): TradeTickCoverage | TradeTickCoverageUnavailable {

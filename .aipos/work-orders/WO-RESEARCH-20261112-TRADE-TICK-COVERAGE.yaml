@@ -16,5 +16,5 @@ safety:
   productionMutationAllowed: false
   aiAuthority: ZERO_AUTHORITY
 validation:
-  - "tradeTickCoverage.test (boundaries (t-1h, t], other market and future ticks ignored, fixed reason codes, invalid input, cache) and cloud-runtime-liveness-health with the new allow-list test: 50/50 together; the ratio-agreement check was mutated and the test failed, then restored."
+  - "tradeTickCoverage.test (boundaries (t-1h, t], other market and future ticks ignored, fixed reason codes, invalid input, cache) and cloud-runtime-liveness-health with the new allow-list test: 50/50 together; the ratio-agreement check and the failure-code guard (independent review P2: a throwing errcode getter) were each mutated and the tests failed, then restored."
 next_action: "Independent review, merge, release; then read tradeTickCoverage and fix the study span in the pre-registration draft."
