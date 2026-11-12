@@ -663,3 +663,72 @@ test("/health publishes the gap-fill timings only as six non-negative integers",
     }, 41866 + index);
   }
 });
+
+test("/health publishes why Research was not deployable as fixed codes only, and drops anything else", async () => {
+  const now = Date.parse("2026-11-12T01:00:00Z");
+  const tracker = new ClosedLearningLoopStatusTracker();
+  tracker.observeBootstrap({ status: "RESEARCH_NOT_DEPLOYABLE", reasons: ["ALLOCATED_CANDIDATE_NOT_QUALIFIED", "NO_ALLOCATION_ADVISORY", "NO_ALLOCATION_ADVISORY", "free text with spaces", "some/relative/path.txt", "lowercase_code", "AB", 7] });
+  tracker.observeRollover({ status: "WAITING_FOR_EVALUATION_WINDOW" }, now);
+  const snapshot = tracker.snapshot();
+  assert.deepEqual(snapshot.bootstrapReasons, ["ALLOCATED_CANDIDATE_NOT_QUALIFIED", "NO_ALLOCATION_ADVISORY"], "only fixed codes, unique and sorted");
+  let loop = snapshot;
+  await withServer({ runtimeLiveness: () => ({ ...LIVENESS, closedLearningLoop: loop }) }, async (handle) => {
+    const read = async () => JSON.parse((await request(handle.port, "/health")).body).runtime.closedLearningLoop;
+    assert.deepEqual((await read()).bootstrapReasons, ["ALLOCATED_CANDIDATE_NOT_QUALIFIED", "NO_ALLOCATION_ADVISORY"]);
+    loop = { ...snapshot, bootstrapReasons: ["OK_CODE", "bad value"] };
+    assert.equal((await read()).bootstrapReasons, undefined, "one bad entry withdraws the whole list");
+    loop = { ...snapshot, bootstrapReasons: ["A1B", "A2B", "A3B", "A4B", "A5B", "A6B"] };
+    assert.equal((await read()).bootstrapReasons, undefined, "more than five entries are withdrawn");
+    loop = { ...snapshot, bootstrap: "DEPLOYED" };
+    assert.equal((await read()).bootstrapReasons, undefined, "reasons are only published for RESEARCH_NOT_DEPLOYABLE");
+  }, 42591);
+  tracker.observeBootstrap({ status: "DEPLOYED", reasons: ["NO_ALLOCATION_ADVISORY"] });
+  tracker.observeRollover({ status: "WAITING_FOR_EVALUATION_WINDOW" }, now + 1);
+  assert.equal(tracker.snapshot().bootstrapReasons, undefined, "a deployable bootstrap carries no reasons");
+});
+
+test("bootstrapReasons: a sparse array, boundary lengths and a stale list after an error never reach /health (independent review of #3093)", async () => {
+  const now = Date.parse("2026-11-12T01:00:00Z");
+  const base = new ClosedLearningLoopStatusTracker();
+  base.observeBootstrap({ status: "RESEARCH_NOT_DEPLOYABLE", reasons: ["NO_ALLOCATION_ADVISORY"] });
+  base.observeRollover({ status: "WAITING_FOR_EVALUATION_WINDOW" }, now);
+  const snapshot = base.snapshot();
+  let loop = snapshot;
+  await withServer({ runtimeLiveness: () => ({ ...LIVENESS, closedLearningLoop: loop }) }, async (handle) => {
+    const read = async () => JSON.parse((await request(handle.port, "/health")).body).runtime.closedLearningLoop;
+    const sparse = Array(2); sparse[0] = "OK_CODE";
+    loop = { ...snapshot, bootstrapReasons: sparse };
+    assert.equal((await read()).bootstrapReasons, undefined, "a sparse array (a hole serializes as null) is withdrawn");
+    loop = { ...snapshot, bootstrapReasons: ["OK_CODE", undefined] };
+    assert.equal((await read()).bootstrapReasons, undefined, "an undefined entry is withdrawn");
+    loop = { ...snapshot, bootstrapReasons: ["A1B", "A2B", "A3B", "A4B", "A5B"] };
+    assert.deepEqual((await read()).bootstrapReasons, ["A1B", "A2B", "A3B", "A4B", "A5B"], "exactly five entries pass, in the given order");
+    const max = `A${"B".repeat(63)}`;
+    loop = { ...snapshot, bootstrapReasons: [max] };
+    assert.deepEqual((await read()).bootstrapReasons, [max], "a 64-character code passes");
+    loop = { ...snapshot, bootstrapReasons: [`${max}B`] };
+    assert.equal((await read()).bootstrapReasons, undefined, "a 65-character code is withdrawn");
+    loop = { ...snapshot, bootstrapReasons: ["DUPLICATE_CODE", "DUPLICATE_CODE"] };
+    assert.deepEqual((await read()).bootstrapReasons, ["DUPLICATE_CODE", "DUPLICATE_CODE"], "the server does not rewrite the list; de-duplication belongs to the tracker");
+    loop = { ...snapshot, bootstrapReasons: "NO_ALLOCATION_ADVISORY" };
+    assert.equal((await read()).bootstrapReasons, undefined, "a string is not an array");
+  }, 42592);
+});
+
+test("the tracker never carries bootstrap reasons into a later status: DEPLOYED then an error, and exactly 64 characters in", () => {
+  const now = Date.parse("2026-11-12T01:00:00Z");
+  const tracker = new ClosedLearningLoopStatusTracker();
+  tracker.observeBootstrap({ status: "RESEARCH_NOT_DEPLOYABLE", reasons: ["NO_ALLOCATION_ADVISORY"] });
+  tracker.observeRollover({ status: "WAITING_FOR_EVALUATION_WINDOW" }, now);
+  assert.deepEqual(tracker.snapshot().bootstrapReasons, ["NO_ALLOCATION_ADVISORY"]);
+  tracker.observeBootstrap({ status: "DEPLOYED" });
+  tracker.observeError(now + 1, "SOME_ERROR");
+  assert.equal(tracker.snapshot().bootstrapReasons, undefined, "an error after the bootstrap changed does not keep the old reasons");
+  tracker.observeBootstrap({ status: "RESEARCH_NOT_DEPLOYABLE", reasons: ["NO_ALLOCATION_ADVISORY"] });
+  tracker.observeError(now + 2, "SOME_ERROR");
+  assert.deepEqual(tracker.snapshot().bootstrapReasons, ["NO_ALLOCATION_ADVISORY"], "while still not deployable an error keeps the current reasons");
+  const long = `A${"B".repeat(63)}`;
+  tracker.observeBootstrap({ status: "RESEARCH_NOT_DEPLOYABLE", reasons: [long, `${long}B`, "AB"] });
+  tracker.observeRollover({ status: "WAITING_FOR_EVALUATION_WINDOW" }, now + 3);
+  assert.deepEqual(tracker.snapshot().bootstrapReasons, [long], "64 characters pass, 65 and 2 do not");
+});

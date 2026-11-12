@@ -19,6 +19,8 @@ export type ClosedLearningLoopStatus = {
   readonly lastTickAt: number;
   readonly ticks: number;
   readonly bootstrap: string;
+  /** Why Research was not deployable (RESEARCH_NOT_DEPLOYABLE only): up to five fixed upper-case codes, never free text. */
+  readonly bootstrapReasons?: readonly string[];
   readonly rollover: string;
   readonly rolloverReason?: string;
   readonly currentBlockedReason?: string;
@@ -98,6 +100,7 @@ export type ClosedLearningEvidenceCorrelation = Readonly<Partial<{
 }>>;
 
 const CODE = /^[A-Z][A-Z0-9_]{1,63}$/;
+const REASON_CODE = /^[A-Z][A-Z0-9_]{2,63}$/;
 const code = (value: unknown): string | undefined => {
   if (typeof value !== "string") return undefined;
   const head = value.split(":")[0]!;
@@ -110,6 +113,7 @@ export class ClosedLearningLoopStatusTracker {
   }
   private status: ClosedLearningLoopStatus | null = null;
   private bootstrap = "NOT_RUN";
+  private bootstrapReasons: readonly string[] = [];
   private periods: ClosedLearningEvidenceCorrelation = {};
   private cycle: ClosedLearningEvidenceCorrelation = {};
   private durable: { cyclesRecorded: number; lastCycleRecordedAt?: number } | null = null;
@@ -277,7 +281,7 @@ export class ClosedLearningLoopStatusTracker {
     });
     // lastCycleOutcome and evidence are always rebuilt here from their sources (this process first, then the durable copy), never carried
     // over from the previous status, so withdrawing the durable copy really withdraws what was published from it.
-    const { evidence: _previousEvidence, metaLearning: _previousMeta, lastCycleOutcome: _previousOutcome, lastBlockedReason: _previousReason, lastBlockedAt: _previousAt, lastErrorClass: _previousErrorClass, currentBlockedReason: _previousCurrent, nextEvaluationEligibleAt: _previousEligibility, ...rest } = this.status;
+    const { evidence: _previousEvidence, metaLearning: _previousMeta, lastCycleOutcome: _previousOutcome, bootstrapReasons: _previousBootstrapReasons, lastBlockedReason: _previousReason, lastBlockedAt: _previousAt, lastErrorClass: _previousErrorClass, currentBlockedReason: _previousCurrent, nextEvaluationEligibleAt: _previousEligibility, ...rest } = this.status;
     let eligibleAt: number | undefined;
     const start = this.periods.openPeriodStartAt;
     if (["WAITING_FOR_KST_DAY_ROLLOVER", "WAITING_FOR_EVALUATION_WINDOW"].includes(rest.rollover) && start !== undefined && Number.isSafeInteger(start) && start >= 0 && start <= rest.lastTickAt && start <= 8_640_000_000_000_000) {
@@ -292,6 +296,8 @@ export class ClosedLearningLoopStatusTracker {
       ...(this.evaluationPeriodMs === undefined ? {} : { evaluationPeriodMs: this.evaluationPeriodMs }),
       ...(rest.rollover === "BLOCKED" || rest.rollover === "ERROR" ? { currentBlockedReason: rest.rollover === "ERROR" ? "TICK_ERROR" : rest.rolloverReason ?? "BLOCKED_WITHOUT_CODE" } : {}),
       ...(eligibleAt === undefined ? {} : { nextEvaluationEligibleAt: eligibleAt }),
+      // Always rebuilt from the CURRENT bootstrap, never carried over from the previous status (observeError spreads the old one).
+      ...(this.bootstrap === "RESEARCH_NOT_DEPLOYABLE" && this.bootstrapReasons.length > 0 ? { bootstrapReasons: this.bootstrapReasons } : {}),
       ...(outcome === undefined ? {} : { lastCycleOutcome: outcome }),
       ...(this.lastBlocked === undefined ? {} : { lastBlockedReason: this.lastBlocked.reason, lastBlockedAt: this.lastBlocked.at }),
       ...(this.lastErrorClass === undefined ? {} : { lastErrorClass: this.lastErrorClass }),
@@ -300,8 +306,13 @@ export class ClosedLearningLoopStatusTracker {
     }) as ClosedLearningLoopStatus;
   }
 
-  public observeBootstrap(result: Pick<ClosedLearningInitialPaperBootstrapResult, "status">): void {
+  public observeBootstrap(result: Pick<ClosedLearningInitialPaperBootstrapResult, "status" | "reasons">): void {
     this.bootstrap = code(result.status) ?? "UNKNOWN";
+    // Reasons are published only for a non-deployable Research result, and only strings that already are fixed codes (no
+    // normalising of free text into a code), at most five, sorted and unique. Anything else is dropped; display only.
+    this.bootstrapReasons = result.status === "RESEARCH_NOT_DEPLOYABLE" && Array.isArray(result.reasons)
+      ? Object.freeze([...new Set(result.reasons.filter((reason): reason is string => typeof reason === "string" && REASON_CODE.test(reason)))].sort().slice(0, 5))
+      : Object.freeze([]);
   }
 
   public observeRollover(result: Pick<ClosedLearningRolloverResult, "status" | "reason" | "cycle">, now: number): void {
@@ -317,6 +328,7 @@ export class ClosedLearningLoopStatusTracker {
       lastTickAt: now,
       ticks: (previous?.ticks ?? 0) + 1,
       bootstrap: this.bootstrap,
+      ...(this.bootstrapReasons.length === 0 ? {} : { bootstrapReasons: this.bootstrapReasons }),
       rollover: code(result.status) ?? "UNKNOWN",
       ...(reason === undefined ? {} : { rolloverReason: reason }),
       cyclesEvaluated: (previous?.cyclesEvaluated ?? 0) + (evaluated ? 1 : 0),
