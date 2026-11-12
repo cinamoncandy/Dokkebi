@@ -458,3 +458,16 @@ inventory_successor_20261112:
   audit_release_merge: NOT_AUTHORIZED
   next: "Resolve the live PR SHA and six checks. If remote still equals f07d1e1, publish this candidate by fast-forward; if it is already published, do not republish. After passing exact-head checks, seek fresh non-author disposition. No Claim/Dispatch while WIP/Lease is UNKNOWN."
   safety: "PAPER_ONLY; liveAuthority=NONE; productionMutationAllowed=false; realOrderAuthority=false; aiAuthority=ZERO_AUTHORITY; FAIL_CLOSED"
+
+atomic_main_race_hold_20261112:
+  reviewed_pr_head: d70ab5ac69fde6d36faf4266c80061771860feb0
+  protected_main: f5aba595f406a367258fccd85801aae3e6125d6d
+  red: "In an isolated fixture, changing main inside Coordinator admission after the final GitHub read returned 201 and persisted one stale claim. This is not evidence of an operational incident."
+  repair: "Fail closed with CODEX_WIP_ATOMIC_MAIN_BINDING_UNVERIFIED for validated new claims and pre-run verification; keep identity-bound release usable."
+  positive_admission: UNVERIFIED_NOT_IMPLEMENTED
+  focused_validation: "86 tests passed and one skipped with Git Bash on PATH, including a final-read main movement fixture. An initial Windows invocation lacked Git Bash and failed one host-guard test; it passed on the corrected invocation."
+  full_validation: "1344 isolated test files passed before the later test-only final-read race addition; typecheck, validate:full and security passed, lint passed with 48 warnings."
+  independent_review: "Separate technical reviewer found no P0/P1 in the 503 hold and independently ran 72 focused tests against existing dist; formal Validator remains pending."
+  operational_wip_and_lease: UNKNOWN
+  claim_or_dispatch: NOT_ATTEMPTED
+  next: "Validate and independently review this local hold; establish an enforceable cross-system atomic admission contract before enabling normal claims."

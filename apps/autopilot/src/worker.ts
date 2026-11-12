@@ -1,5 +1,5 @@
 import baseWorker, { globalReleaseFreezeActive, handleCodingExecute, type Env as BaseEnv } from "./index";
-import { acquirePersistentExecution, admitActiveWip, claimIsolatedCausalAttempt, completeActiveWip, ExecutionCoordinator, handoffOrAcquirePersistentExecution, markPersistentExecutionDispatched, readActiveWip, readActiveWipCompletions, readPersistentControlPlaneHold, readProviderCapacityWait, recordCodingExecutionEvidence, recordProviderCapacityWait, releaseActiveWip, releasePersistentExecution } from "./executionCoordinator";
+import { acquirePersistentExecution, claimIsolatedCausalAttempt, completeActiveWip, ExecutionCoordinator, handoffOrAcquirePersistentExecution, markPersistentExecutionDispatched, readActiveWip, readActiveWipCompletions, readPersistentControlPlaneHold, readProviderCapacityWait, recordCodingExecutionEvidence, recordProviderCapacityWait, releaseActiveWip, releasePersistentExecution } from "./executionCoordinator";
 import { createCodingExecutionEvidence } from "./codingExecutionEvidence";
 import { reconcileCodingExecutionEvidence } from "./productionExecutionSpine";
 import {
@@ -198,7 +198,6 @@ async function trustedCausalRepairContext(
 }
 
 const WIP_RELEASE_IDENTITY = /^[A-Za-z0-9_.:|-]{1,512}$/;
-const CODEX_WIP_LIMIT = 2;
 type CodexWipFetch = (input: string, init?: RequestInit) => Promise<Response>;
 
 async function readBoundedCausalClaimBody(request: Request): Promise<string> {
@@ -482,24 +481,9 @@ export async function handleCodexWipCoordination(
       const unavailable = code.includes("UNAVAILABLE");
       return json({ accepted: false, error: unavailable ? "CODEX_WIP_MAIN_UNAVAILABLE" : "CODEX_WIP_MAIN_MISMATCH", ...authority }, unavailable ? 503 : 409);
     }
-    try {
-      const result = await admitActiveWip(env.NUSA_EXECUTION_COORDINATOR, {
-        dedupeKey,
-        executionId,
-        taskId: `issue-${selectedTask.task.issueNumber}`,
-        protectedMainSha: identity.sha,
-        taskSnapshotDigest: selectedTaskDigest,
-        leaseOwnerIdentity: `${identity.repository}:${identity.runId}:${identity.runAttempt}`,
-        canonicalOwner: selectedTask.task.canonicalOwner,
-        conflictKeys: selectedTask.task.conflictKeys,
-        claimedAt: now(),
-        maxConcurrent: CODEX_WIP_LIMIT,
-      });
-      if (!result.admitted) return json({ accepted: false, error: result.reason ?? "CODEX_WIP_ADMISSION_REJECTED", ...authority }, 409);
-      return json({ accepted: true, action: "claim", issueNumber, dedupeKey, executionId, claimReceipt: result.claim, ...authority }, 201);
-    } catch {
-      return json({ accepted: false, error: "CODEX_WIP_ADMISSION_UNAVAILABLE", ...authority }, 503);
-    }
+    // GitHub's main ref and the Coordinator cannot currently be committed in
+    // one transaction. Never create a claim using a potentially stale read.
+    return json({ accepted: false, error: "CODEX_WIP_ATOMIC_MAIN_BINDING_UNVERIFIED", ...authority }, 503);
   }
 
   if (body.action === "verify") {
@@ -532,9 +516,9 @@ export async function handleCodexWipCoordination(
         || !Number.isSafeInteger(latestClaim.leaseExpiresAt) || Number(latestClaim.leaseExpiresAt) <= now()) {
         return json({ accepted: false, error: "CODEX_WIP_CLAIM_RECEIPT_MISMATCH", ...authority }, 409);
       }
-      return json({ accepted: true, action: "verify", issueNumber, executionId,
-        claimReceipt: { taskId: latestClaim.taskId, protectedMainSha: latestClaim.protectedMainSha, taskSnapshotDigest: latestClaim.taskSnapshotDigest, leaseOwnerIdentity: latestClaim.leaseOwnerIdentity, leaseExpiresAt: latestClaim.leaseExpiresAt },
-        ...authority }, 200);
+      // Existing claim reads have the same cross-system race; do not authorize
+      // the runner while an atomic binding is unavailable. Release stays usable.
+      return json({ accepted: false, error: "CODEX_WIP_ATOMIC_MAIN_BINDING_UNVERIFIED", ...authority }, 503);
     } catch (error) {
       const code = error instanceof Error ? error.message : "CODEX_WIP_VERIFY_UNAVAILABLE";
       if (code === "CODEX_WORK_ORDER_MAIN_CHANGED") {

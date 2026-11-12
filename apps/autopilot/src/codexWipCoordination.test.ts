@@ -273,21 +273,95 @@ test("Codex claim is bound to the live OIDC workflow, task selection, and availa
   assert.equal((await readActiveWip(coordinator)).claims.length, 2);
 });
 
-test("Codex admits the exact protected-main Work Order once and rejects a duplicate claim", async () => {
+test("Codex holds even a valid Work Order until atomic main binding is available", async () => {
   const coordinator = namespace();
   const fixture = await oidcFixture();
   const fetchImpl = githubFetch(fixture);
   const admitted = await handleCodexWipCoordination(request(fixture.token, "claim"), env(coordinator), { now: () => NOW, fetchImpl });
-  assert.equal(admitted.status, 201);
-  const body = await admitted.json() as { claimReceipt: { taskId: string; taskSnapshotDigest: string; protectedMainSha: string; canonicalOwner: string; conflictKeys: string[] } };
-  assert.equal(body.claimReceipt.taskId, "issue-903");
-  assert.equal(body.claimReceipt.taskSnapshotDigest, TASK_DIGEST);
-  assert.equal(body.claimReceipt.protectedMainSha, SHA);
-  assert.equal(body.claimReceipt.canonicalOwner, "apps/autopilot");
-  assert.deepEqual(body.claimReceipt.conflictKeys, ["issue:903", "module:apps/autopilot/src"]);
+  assert.equal(admitted.status, 503);
+  assert.equal((await admitted.json() as { error: string }).error, "CODEX_WIP_ATOMIC_MAIN_BINDING_UNVERIFIED");
   const replay = await handleCodexWipCoordination(request(fixture.token, "claim"), env(coordinator), { now: () => NOW + 1, fetchImpl });
-  assert.equal(replay.status, 409);
+  assert.equal(replay.status, 503);
+  assert.equal((await readActiveWip(coordinator)).claims.length, 0);
+});
+
+test("an existing claim cannot authorize the runner while atomic main binding is unverified", async () => {
+  const coordinator = namespace();
+  const fixture = await oidcFixture();
+  const dedupeKey = `codex-wip:${fixture.claims.run_id}:${fixture.claims.run_attempt}:issue:903:sha:${SHA}`;
+  const executionId = `codex-execution:${fixture.claims.run_id}:${fixture.claims.run_attempt}:issue:903:sha:${SHA}`;
+  assert.equal((await admitActiveWip(coordinator, { dedupeKey, executionId, taskId: "issue-903", protectedMainSha: SHA,
+    taskSnapshotDigest: TASK_DIGEST, leaseOwnerIdentity: `${REPOSITORY}:${fixture.claims.run_id}:${fixture.claims.run_attempt}`,
+    canonicalOwner: "apps/autopilot", conflictKeys: ["issue:903"], claimedAt: NOW, maxConcurrent: 2 })).admitted, true);
+  const response = await handleCodexWipCoordination(request(fixture.token, "verify"), env(coordinator), { now: () => NOW + 1000, fetchImpl: githubFetch(fixture) });
+  assert.equal(response.status, 503);
+  assert.equal((await response.json() as { error: string }).error, "CODEX_WIP_ATOMIC_MAIN_BINDING_UNVERIFIED");
   assert.equal((await readActiveWip(coordinator)).claims.length, 1);
+  const released = await handleCodexWipCoordination(request(fixture.token, "release"), env(coordinator), { now: () => NOW + 2000, fetchImpl: githubFetch(fixture) });
+  assert.equal(released.status, 200);
+  assert.equal((await readActiveWip(coordinator)).claims.length, 0);
+});
+
+test("a protected-main change at Coordinator admission must not create a stale claim", async () => {
+  const underlying = namespace();
+  const fixture = await oidcFixture();
+  let main = SHA;
+  let admissionCalls = 0;
+  const coordinator: ExecutionCoordinatorNamespace = {
+    idFromName: underlying.idFromName,
+    get: (id) => {
+      const stub = underlying.get(id);
+      return { fetch: (input, init) => {
+        if (String(input).includes("/active-wip/admit")) {
+          admissionCalls += 1;
+          main = "c".repeat(40);
+        }
+        return stub.fetch(input, init);
+      } };
+    },
+  };
+  const normalFetch = githubFetch(fixture);
+  const fetchImpl = (input: string, init?: RequestInit) => String(input).endsWith("/git/ref/heads/main")
+    ? Promise.resolve(new Response(JSON.stringify({ object: { sha: main } }), { status: 200 }))
+    : normalFetch(input, init);
+  const response = await handleCodexWipCoordination(request(fixture.token, "claim"), env(coordinator), { now: () => NOW, fetchImpl });
+  const claims = (await readActiveWip(underlying)).claims;
+  assert.notEqual(response.status, 201, `main=${main}, admissionCalls=${admissionCalls}, claims=${claims.length}: main changed before Coordinator storage`);
+  assert.equal(claims.length, 0);
+  assert.equal(admissionCalls, 0);
+});
+
+test("a protected-main change immediately after the final read is held without admission", async () => {
+  const underlying = namespace();
+  const fixture = await oidcFixture();
+  let main = SHA;
+  let mainReads = 0;
+  let admissionCalls = 0;
+  const coordinator: ExecutionCoordinatorNamespace = {
+    idFromName: underlying.idFromName,
+    get: (id) => {
+      const stub = underlying.get(id);
+      return { fetch: (input, init) => {
+        if (String(input).includes("/active-wip/admit")) admissionCalls += 1;
+        return stub.fetch(input, init);
+      } };
+    },
+  };
+  const normalFetch = githubFetch(fixture);
+  const fetchImpl = (input: string, init?: RequestInit) => {
+    if (!String(input).endsWith("/git/ref/heads/main")) return normalFetch(input, init);
+    mainReads += 1;
+    const observed = main;
+    if (mainReads === 4) main = "c".repeat(40);
+    return Promise.resolve(new Response(JSON.stringify({ object: { sha: observed } }), { status: 200 }));
+  };
+  const response = await handleCodexWipCoordination(request(fixture.token, "claim"), env(coordinator), { now: () => NOW, fetchImpl });
+  assert.equal(mainReads, 4);
+  assert.equal(main, "c".repeat(40));
+  assert.equal(response.status, 503);
+  assert.equal((await response.json() as { error: string }).error, "CODEX_WIP_ATOMIC_MAIN_BINDING_UNVERIFIED");
+  assert.equal(admissionCalls, 0);
+  assert.equal((await readActiveWip(underlying)).claims.length, 0);
 });
 
 test("Codex release from another run cannot release the original task claim", async () => {

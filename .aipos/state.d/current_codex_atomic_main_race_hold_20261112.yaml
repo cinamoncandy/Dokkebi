@@ -1,0 +1,13 @@
+current_codex_atomic_main_race_hold_20261112:
+  work_order: WO-ISSUE-903-L1-EXECUTION-LEASE-HANDOFF
+  issue: 903
+  pull_request: 2039
+  reviewed_pr_head: d70ab5ac69fde6d36faf4266c80061771860feb0
+  protected_main: f5aba595f406a367258fccd85801aae3e6125d6d
+  status: LOCAL_VALIDATED_TECHNICALLY_REVIEWED
+  evidence: "An isolated post-check main movement created a stale claim on the predecessor; the local hold blocks new claim and existing-claim verify while preserving release. Focused tests: 86 passed, 1 skipped. Full suite passed 1344 files before a later test-only race addition; typecheck, validate:full and security passed; lint passed with 48 warnings."
+  positive_admission: UNVERIFIED_NOT_IMPLEMENTED
+  independent_technical_review: "No P0/P1 in the 503 hold; 72 focused tests passed independently against existing dist. Formal Validator remains pending."
+  operational_wip_and_lease: UNKNOWN
+  next: "Full validation and independent review of local hold; obtain a verified atomic cross-system admission contract before normal claims."
+  safety: PAPER_ONLY_LIVE_NONE_PRODUCTION_MUTATION_FALSE_REAL_ORDER_FALSE_REAL_TRANSFER_FALSE_AI_ZERO_AUTHORITY_FAIL_CLOSED
