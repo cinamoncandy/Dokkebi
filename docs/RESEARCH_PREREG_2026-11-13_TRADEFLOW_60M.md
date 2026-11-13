@@ -26,7 +26,9 @@ minutes later is profitable after costs. Null: the trade-flow features carry no 
 Decision every full hour; buy at the best ask at t, sell at the best bid at t+60m (a decision with no book at t or t+60m is dropped); fee 0.05% per
 side, stress 2x fee plus 5 bp per side; label = net return after base costs > 0; L2 logistic regression (full batch, 2,000 steps, rate 0.1, zero init)
 with lambda in {0.1, 1, 10}, chosen by validation mean net per trade; features standardised with training mean and deviation; top 3 eligible
-markets per hour by predicted probability, equal weight, hold 60 minutes. A "book at t" is the last sample in (t - 2 min, t], as in that script.
+markets per hour by predicted probability, equal weight, hold 60 minutes. A "book at t" is the last sample in (t - 2 min, t], as in that script. Standardisation uses the mean and the population deviation (divide by n)
+of each feature over the training rows of all eligible markets pooled; a feature with deviation 0 is divided by 1. Ties in the predicted probability within one
+hour are broken by market code ascending.
 
 ## 4. Features (exhaustive; nothing outside this list is used)
 Ticks of market m in a window (a, b] are those with `traded_at_ms` in that interval. `side = BID` is a taker buy, `ASK` a taker sell. V_BID and
@@ -35,7 +37,10 @@ V_ASK are the volume sums of the two sides.
 2. `imb60` = the same over (t - 60 min, t].
 3. `valImb60` = the same with price x volume as the weight, over (t - 60 min, t].
 4. `logCount15` = ln(1 + number of ticks in (t - 15 min, t]).
-5. `rv60` = sqrt(sum of squared ln(p_i / p_{i-1}) over consecutive ticks in (t - 60 min, t]); 0 if fewer than 2 ticks.
+5. `rv60` = sqrt(sum of squared ln(p_i / p_{i-1}) over consecutive ticks in (t - 60 min, t]); 0 if fewer than 2 ticks. "Consecutive" follows one
+   fixed total order of the ticks: `traded_at_ms` ascending, then `price` ascending, then `volume` ascending, then `side` ascending (`ASK` before `BID`).
+   Ticks of one market that share a timestamp are therefore ordered by that rule, never by storage order. The first tick of the window has no predecessor
+   inside the window (the predecessor is not looked up outside it).
 6. `volRatio` = ln((V60 + 1e-9) / (V24 / 24 + 1e-9)), V60 = total volume in (t - 60 min, t], V24 = total volume in (t - 24 h, t].
 A decision needs at least one tick in (t - 60 min, t], a book at t and a book at t + 60m. There is exactly one feature set: no feature subset
 is searched, so the only tuned quantity is lambda.
