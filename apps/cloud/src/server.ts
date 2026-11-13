@@ -422,7 +422,7 @@ function publicRuntimeLiveness(value: CloudRuntimeLivenessSnapshot): CloudRuntim
     if (rawByMarket != null && typeof rawByMarket === "object" && !Array.isArray(rawByMarket)) {
       for (const [market, rawResult] of Object.entries(rawByMarket)) {
         if (Object.keys(lastByMarket).length >= 20) break;
-        if (!/^KRW-[A-Z0-9-]+$/.test(market) || rawResult == null || typeof rawResult !== "object" || Array.isArray(rawResult)) continue;
+        if (!/^KRW-[A-Z0-9-]{1,32}$/.test(market) || rawResult == null || typeof rawResult !== "object" || Array.isArray(rawResult)) continue;
         const result = rawResult as Record<string, unknown>;
         if (!(["NO_GAPS", "FILLED", "PARTIAL", "RATE_LIMITED", "ERROR"].includes(String(result.status))
           && Number.isSafeInteger(result.lastAttemptAt) && Number(result.lastAttemptAt) >= 0

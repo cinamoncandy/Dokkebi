@@ -122,3 +122,14 @@ test("/health caps per-market diagnostics and rejects rows with invalid counters
     await server.stop();
   }
 });
+
+test("a market key longer than 32 characters is kept out of the per-market map", () => {
+  const o = fresh();
+  const longKey = `KRW-${"A".repeat(40)}`;
+  proto.recordGapFill.call(o, [
+    { market: longKey, status: "ERROR", missing: 1, recorded: 0, rejected: 1, pages: 1 },
+    { market: "KRW-BTC", status: "FILLED", missing: 1, recorded: 1, rejected: 0, pages: 1 },
+  ], 100);
+  const keys = Object.keys(proto.gapFill.call(o).lastByMarket ?? {});
+  assert.deepEqual(keys, ["KRW-BTC"]);
+});

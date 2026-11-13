@@ -314,7 +314,7 @@ export class ResearchExperimentOrchestrator {
     let lastErrorCode = previous?.lastErrorCode;
     const lastByMarket: Record<string, ResearchGapFillMarketSummary> = { ...(previous?.lastByMarket ?? {}) };
     const seenMarkets = new Set<string>();
-    const marketPattern = /^KRW-[A-Z0-9-]+$/;
+    const marketPattern = /^KRW-[A-Z0-9-]{1,32}$/;
     const marketStatuses = new Set<ResearchGapFillMarketStatus>(["NO_GAPS", "FILLED", "PARTIAL", "RATE_LIMITED", "ERROR"]);
     for (const result of results) {
       if (result == null || typeof result !== "object") continue;
