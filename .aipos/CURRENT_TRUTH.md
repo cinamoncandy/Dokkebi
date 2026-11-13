@@ -13,8 +13,8 @@ Everything below is what the repository's records *claim*. Re-verify on GitHub b
 
 ## Work orders
 
-596 total: 567 in `.aipos/work-orders/`, 29 closed and merged in `.aipos/work-orders/archive/`.
-Of the 567 active files, 376 carry a closed status that has not been archived (merge not proven, or the path is still referenced) and 191 are open or unclassified.
+597 total: 568 in `.aipos/work-orders/`, 29 closed and merged in `.aipos/work-orders/archive/`.
+Of the 568 active files, 376 carry a closed status that has not been archived (merge not proven, or the path is still referenced) and 192 are open or unclassified.
 
 Most common statuses among the open files (new orders use only `READY_FOR_REVIEW`, `IN_PROGRESS`, `BLOCKED`, `COMPLETED`, `SUPERSEDED`, `ABANDONED`):
 
@@ -22,14 +22,14 @@ Most common statuses among the open files (new orders use only `READY_FOR_REVIEW
 |---|---|
 | READY_FOR_REVIEW | 65 |
 | LOCAL_VALIDATED_PENDING_CI | 17 |
+| IN_PROGRESS | 14 |
 | VERIFYING | 14 |
-| IN_PROGRESS | 13 |
 | completed | 7 |
 | COMPLETED_NO_SURVIVOR | 6 |
 | LOCAL_VALIDATED_PENDING_REVIEW_CI | 5 |
 | BLOCKED | 3 |
 
-### In progress or blocked (18)
+### In progress or blocked (19)
 
 | Work order | Status | Title |
 |---|---|---|
@@ -46,6 +46,7 @@ Most common statuses among the open files (new orders use only `READY_FOR_REVIEW
 | `WO-ISSUE-659-LIVE-READINESS-PRODUCTION-WIRING` | IN_PROGRESS | Issue #659 LIVE-readiness production reader wiring |
 | `WO-OPS-20261015-DISK-CONSUMERS` | IN_PROGRESS | Read-only host diagnosis: where the 90% full root disk goes |
 | `WO-OPS-20261015-RELEASE-RETENTION` | IN_PROGRESS | Keep fewer old releases on the PAPER host (RELEASE_RETENTION 4 to 2) |
+| `WO-OPS-20261101-2948-BACKUP-RESTORE-BINARY-SAFETY` | IN_PROGRESS | Keep disaster-recovery backup and drill binary-safe for large SQLite snapshots |
 | `WO-RESEARCH-20261015-RAIM-VENUESPEC` | IN_PROGRESS | RAIM regime-adaptive market-making research: VenueSpec gate (step 2 of the validation ord… |
 | `WO-RESEARCH-20261101-CANDLE-FRESHNESS` | IN_PROGRESS | Keep the REST-backed Research candle head within the existing freshness window |
 | `WO-UI-20261019-LEARNING-FUNNEL` | IN_PROGRESS | Learning screen redesign step 2: Research funnel (tested -> discovery -> holdout) |
