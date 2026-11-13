@@ -22,13 +22,15 @@ it is **not** promotion evidence.
 For one KRW market, the signed taker-flow imbalance over the preceding 15 and 60 minutes predicts whether buying at the next full hour and selling 60
 minutes later is profitable after costs. Null: the trade-flow features carry no information about the 60-minute net return after costs.
 
-## 3. Rules: identical to `scripts/run-orderbook-study.js` as merged, except the features and the span
+## 3. Rules: identical to `scripts/run-orderbook-study.js` as merged, except the features, the span and one tie-break
 Decision every full hour; buy at the best ask at t, sell at the best bid at t+60m (a decision with no book at t or t+60m is dropped); fee 0.05% per
 side, stress 2x fee plus 5 bp per side; label = net return after base costs > 0; L2 logistic regression (full batch, 2,000 steps, rate 0.1, zero init)
 with lambda in {0.1, 1, 10}, chosen by validation mean net per trade; features standardised with training mean and deviation; top 3 eligible
 markets per hour by predicted probability, equal weight, hold 60 minutes. A "book at t" is the last sample in (t - 2 min, t], as in that script. Standardisation uses the mean and the population deviation (divide by n)
 of each feature over the training rows of all eligible markets pooled; a feature with deviation 0 is divided by 1. Ties in the predicted probability within one
-hour are broken by market code ascending.
+hour are broken by market code ascending. **This is the one deliberate deviation from the order-book script**, which sorts by score only and so keeps its
+input order on a tie. It is written out here because the new script has no earlier behaviour to inherit; it applies in every part (validation and holdout). It changes no
+threshold, and exact ties of a floating-point probability are not expected.
 
 ## 4. Features (exhaustive; nothing outside this list is used)
 Ticks of market m in a window (a, b] are those with `traded_at_ms` in that interval. `side = BID` is a taker buy, `ASK` a taker sell. V_BID and

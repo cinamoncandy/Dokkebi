@@ -17,4 +17,4 @@ safety:
   aiAuthority: ZERO_AUTHORITY
 validation:
   - "Documents and a work order only; validate-aipos-yaml and current-truth regenerated."
-next_action: "Independent review (first review REJECT: tick order in rv60 was ambiguous; fixed with a total order, plus standardisation and tie rules written out); re-review of the pre-registration; after it merges, a separate PR implements the study script before 2026-11-20; the run happens no earlier than 2026-11-20T00:30Z."
+next_action: "Independent review (first review REJECT: tick order in rv60 was ambiguous; fixed with a total order, plus standardisation and tie rules written out; second review REJECT: the market-code tie-break differs from the order-book script, now recorded as the one explicit deviation); re-review of the pre-registration; after it merges, a separate PR implements the study script before 2026-11-20; the run happens no earlier than 2026-11-20T00:30Z."
