@@ -90,3 +90,33 @@ test("invalid rows and old marks: store rejects them, prune deletes by age, over
   assert.ok(calls > 1, "the first round completed");
   db.close();
 });
+
+const { futuresFailureClass } = require("../dist/apps/cloud/src/researchFuturesCollector.js");
+
+test("a failed fetch leaves a fixed failure class: the HTTP status (a region block is HTTP_451), a timeout, or a coarse class, never the message", async () => {
+  const blocked = async () => ({ ok: false, status: 451, json: async () => ({}) });
+  const db = new SqliteDatabase(":memory:");
+  const c = new ResearchFuturesCollector(new SqliteFuturesPublicStore(db), { fetchImpl: blocked, now: () => NOW });
+  assert.equal(c.status().lastFailureClass, undefined, "nothing before a failure");
+  await c.collectOnce();
+  const s = c.status();
+  assert.equal(s.marksStored, 0);
+  assert.ok(s.failures > 0);
+  assert.equal(s.lastFailureClass, "HTTP_451");
+
+  const ok = new ResearchFuturesCollector(new SqliteFuturesPublicStore(new SqliteDatabase(":memory:")), { fetchImpl: fetchStub(), now: () => NOW });
+  await ok.collectOnce();
+  assert.equal(ok.status().lastFailureClass, undefined, "a healthy round never reports a class");
+});
+
+test("futuresFailureClass maps errors to fixed codes only", () => {
+  assert.equal(futuresFailureClass(new Error("HTTP_451")), "HTTP_451");
+  assert.equal(futuresFailureClass(new Error("HTTP_503")), "HTTP_503");
+  assert.equal(futuresFailureClass(Object.assign(new Error("The operation was aborted due to timeout"), { name: "TimeoutError" })), "TIMEOUT");
+  assert.equal(futuresFailureClass(Object.assign(new Error("aborted"), { name: "AbortError" })), "TIMEOUT");
+  assert.equal(futuresFailureClass(new Error("FUNDING_INVALID")), "INVALID_RESPONSE");
+  assert.equal(futuresFailureClass(new Error("KLINES_INVALID")), "INVALID_RESPONSE");
+  for (const odd of [new Error("connect ECONNREFUSED 1.2.3.4:443"), new Error("HTTP_45"), new Error("HTTP_4511"), new Error("HTTP_999"), new Error(""), "string", null, undefined, 7]) {
+    assert.equal(futuresFailureClass(odd), "FETCH_FAILED", "free text, hosts and malformed codes never leave this function");
+  }
+});

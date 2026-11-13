@@ -160,3 +160,13 @@ test("fails closed on missing snapshot, unsafe authority, forbidden credential-l
   assert.throws(() => validateRequest({ ...request, apiKey: "nope" }), /forbidden field/);
   assert.throws(() => snapshotPathFromEnv({ NUSA_RESEARCH_REPLAY_SNAPSHOT_PATH: ":memory:" }), /absolute durable path/);
 });
+
+test("a refused League allocation names the refusal code next to NO_ALLOCATION_ADVISORY, and only a fixed code", () => {
+  const withReason = (allocationUnavailableReason) => executeRequest(request, env, deps({ replayResearchRunWithPaperEvidence: () => ({ run: { provenance: { runFingerprintSha256: REPLAY }, allocation: null, allocationUnavailableReason }, qualification }) })).deployment;
+  assert.deepEqual(withReason("INSUFFICIENT_DIVERSIFICATION_CAPACITY").reasons, ["ALLOCATION_INSUFFICIENT_DIVERSIFICATION_CAPACITY", "NO_ALLOCATION_ADVISORY"]);
+  assert.deepEqual(withReason("NO_ALLOCATABLE_CANDIDATES").reasons, ["ALLOCATION_NO_ALLOCATABLE_CANDIDATES", "NO_ALLOCATION_ADVISORY"]);
+  for (const bad of [undefined, null, "", "lowercase", "has spaces", "AB", `A${"B".repeat(60)}`, 7, "/some/path"]) {
+    assert.deepEqual(withReason(bad).reasons, ["NO_ALLOCATION_ADVISORY"], `an unusable refusal code (${String(bad).slice(0, 12)}) adds nothing`);
+  }
+  assert.equal(withReason("NO_ALLOCATABLE_CANDIDATES").status, "NOT_DEPLOYABLE");
+});

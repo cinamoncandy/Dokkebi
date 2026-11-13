@@ -19,6 +19,13 @@ export type ClosedLearningLoopStatus = {
   readonly lastTickAt: number;
   readonly ticks: number;
   readonly bootstrap: string;
+  /** Why Research was not deployable (RESEARCH_NOT_DEPLOYABLE only): up to five fixed upper-case codes, never free text. */
+  readonly bootstrapReasons?: readonly string[];
+  /** RESEARCH_NOT_DEPLOYABLE only: how many candidates were judged and the qualification reason codes with their candidate counts. Integers and fixed codes. */
+  readonly bootstrapQualification?: { readonly candidates: number; readonly qualified: number; readonly insufficient: number; readonly rejected: number };
+  readonly bootstrapRejectionReasons?: Readonly<Record<string, number>>;
+  /** Judged candidates per strategy family (known id prefix or "other"): the diversity of the candidate set. */
+  readonly bootstrapCandidateFamilies?: Readonly<Record<string, number>>;
   readonly rollover: string;
   readonly rolloverReason?: string;
   readonly currentBlockedReason?: string;
@@ -98,6 +105,8 @@ export type ClosedLearningEvidenceCorrelation = Readonly<Partial<{
 }>>;
 
 const CODE = /^[A-Z][A-Z0-9_]{1,63}$/;
+const REASON_CODE = /^[A-Z][A-Z0-9_]{2,63}$/;
+const FAMILY_KEY = /^[a-z][a-z0-9]{1,15}$/;
 const code = (value: unknown): string | undefined => {
   if (typeof value !== "string") return undefined;
   const head = value.split(":")[0]!;
@@ -110,6 +119,10 @@ export class ClosedLearningLoopStatusTracker {
   }
   private status: ClosedLearningLoopStatus | null = null;
   private bootstrap = "NOT_RUN";
+  private bootstrapReasons: readonly string[] = [];
+  private bootstrapQualification: ClosedLearningLoopStatus["bootstrapQualification"];
+  private bootstrapRejectionReasons: Readonly<Record<string, number>> = Object.freeze({});
+  private bootstrapCandidateFamilies: Readonly<Record<string, number>> = Object.freeze({});
   private periods: ClosedLearningEvidenceCorrelation = {};
   private cycle: ClosedLearningEvidenceCorrelation = {};
   private durable: { cyclesRecorded: number; lastCycleRecordedAt?: number } | null = null;
@@ -277,7 +290,7 @@ export class ClosedLearningLoopStatusTracker {
     });
     // lastCycleOutcome and evidence are always rebuilt here from their sources (this process first, then the durable copy), never carried
     // over from the previous status, so withdrawing the durable copy really withdraws what was published from it.
-    const { evidence: _previousEvidence, metaLearning: _previousMeta, lastCycleOutcome: _previousOutcome, lastBlockedReason: _previousReason, lastBlockedAt: _previousAt, lastErrorClass: _previousErrorClass, currentBlockedReason: _previousCurrent, nextEvaluationEligibleAt: _previousEligibility, ...rest } = this.status;
+    const { evidence: _previousEvidence, metaLearning: _previousMeta, lastCycleOutcome: _previousOutcome, bootstrapReasons: _previousBootstrapReasons, bootstrapQualification: _previousBootstrapQualification, bootstrapRejectionReasons: _previousBootstrapRejectionReasons, bootstrapCandidateFamilies: _previousBootstrapCandidateFamilies, lastBlockedReason: _previousReason, lastBlockedAt: _previousAt, lastErrorClass: _previousErrorClass, currentBlockedReason: _previousCurrent, nextEvaluationEligibleAt: _previousEligibility, ...rest } = this.status;
     let eligibleAt: number | undefined;
     const start = this.periods.openPeriodStartAt;
     if (["WAITING_FOR_KST_DAY_ROLLOVER", "WAITING_FOR_EVALUATION_WINDOW"].includes(rest.rollover) && start !== undefined && Number.isSafeInteger(start) && start >= 0 && start <= rest.lastTickAt && start <= 8_640_000_000_000_000) {
@@ -292,6 +305,11 @@ export class ClosedLearningLoopStatusTracker {
       ...(this.evaluationPeriodMs === undefined ? {} : { evaluationPeriodMs: this.evaluationPeriodMs }),
       ...(rest.rollover === "BLOCKED" || rest.rollover === "ERROR" ? { currentBlockedReason: rest.rollover === "ERROR" ? "TICK_ERROR" : rest.rolloverReason ?? "BLOCKED_WITHOUT_CODE" } : {}),
       ...(eligibleAt === undefined ? {} : { nextEvaluationEligibleAt: eligibleAt }),
+      // Always rebuilt from the CURRENT bootstrap, never carried over from the previous status (observeError spreads the old one).
+      ...(this.bootstrap === "RESEARCH_NOT_DEPLOYABLE" && this.bootstrapReasons.length > 0 ? { bootstrapReasons: this.bootstrapReasons } : {}),
+      ...(this.bootstrap === "RESEARCH_NOT_DEPLOYABLE" && this.bootstrapQualification !== undefined ? { bootstrapQualification: this.bootstrapQualification } : {}),
+      ...(this.bootstrap === "RESEARCH_NOT_DEPLOYABLE" && this.bootstrapQualification !== undefined && Object.keys(this.bootstrapRejectionReasons).length > 0 ? { bootstrapRejectionReasons: this.bootstrapRejectionReasons } : {}),
+      ...(this.bootstrap === "RESEARCH_NOT_DEPLOYABLE" && this.bootstrapQualification !== undefined && Object.keys(this.bootstrapCandidateFamilies).length > 0 ? { bootstrapCandidateFamilies: this.bootstrapCandidateFamilies } : {}),
       ...(outcome === undefined ? {} : { lastCycleOutcome: outcome }),
       ...(this.lastBlocked === undefined ? {} : { lastBlockedReason: this.lastBlocked.reason, lastBlockedAt: this.lastBlocked.at }),
       ...(this.lastErrorClass === undefined ? {} : { lastErrorClass: this.lastErrorClass }),
@@ -300,8 +318,36 @@ export class ClosedLearningLoopStatusTracker {
     }) as ClosedLearningLoopStatus;
   }
 
-  public observeBootstrap(result: Pick<ClosedLearningInitialPaperBootstrapResult, "status">): void {
+  public observeBootstrap(result: Pick<ClosedLearningInitialPaperBootstrapResult, "status" | "reasons"> & { readonly qualificationSummary?: unknown }): void {
     this.bootstrap = code(result.status) ?? "UNKNOWN";
+    const summary = result.status === "RESEARCH_NOT_DEPLOYABLE" ? result.qualificationSummary as Record<string, unknown> | undefined : undefined;
+    const count = (value: unknown): number | undefined => (Number.isSafeInteger(value) && Number(value) >= 0 && Number(value) <= 1_000_000 ? Number(value) : undefined);
+    const [candidates, qualified, insufficient, rejected] = [count(summary?.candidateCount), count(summary?.qualifiedCount), count(summary?.insufficientCount), count(summary?.rejectedCount)];
+    this.bootstrapQualification = candidates === undefined || qualified === undefined || insufficient === undefined || rejected === undefined ? undefined : Object.freeze({ candidates, qualified, insufficient, rejected });
+    const rawCounts = summary?.reasonCounts;
+    // All or nothing, like the /health allow-list: one bad code or count, or more than eight codes, drops the whole map.
+    let reasonCounts: Record<string, number> = {};
+    if (this.bootstrapQualification !== undefined && rawCounts != null && typeof rawCounts === "object" && !Array.isArray(rawCounts)) {
+      const entries = Object.entries(rawCounts as Record<string, unknown>);
+      if (entries.length >= 1 && entries.length <= 8 && entries.every(([reason, value]) => REASON_CODE.test(reason) && count(value) !== undefined)) {
+        reasonCounts = Object.fromEntries(entries.map(([reason, value]) => [reason, Number(value)]));
+      }
+    }
+    this.bootstrapRejectionReasons = Object.freeze(reasonCounts);
+    let familyCounts: Record<string, number> = {};
+    const rawFamilies = summary?.familyCounts;
+    if (this.bootstrapQualification !== undefined && rawFamilies != null && typeof rawFamilies === "object" && !Array.isArray(rawFamilies)) {
+      const familyEntries = Object.entries(rawFamilies as Record<string, unknown>);
+      if (familyEntries.length >= 1 && familyEntries.length <= 4 && familyEntries.every(([family, value]) => FAMILY_KEY.test(family) && count(value) !== undefined)) {
+        familyCounts = Object.fromEntries(familyEntries.map(([family, value]) => [family, Number(value)]));
+      }
+    }
+    this.bootstrapCandidateFamilies = Object.freeze(familyCounts);
+    // Reasons are published only for a non-deployable Research result, and only strings that already are fixed codes (no
+    // normalising of free text into a code), at most five, sorted and unique. Anything else is dropped; display only.
+    this.bootstrapReasons = result.status === "RESEARCH_NOT_DEPLOYABLE" && Array.isArray(result.reasons)
+      ? Object.freeze([...new Set(result.reasons.filter((reason): reason is string => typeof reason === "string" && REASON_CODE.test(reason)))].sort().slice(0, 5))
+      : Object.freeze([]);
   }
 
   public observeRollover(result: Pick<ClosedLearningRolloverResult, "status" | "reason" | "cycle">, now: number): void {
@@ -317,6 +363,10 @@ export class ClosedLearningLoopStatusTracker {
       lastTickAt: now,
       ticks: (previous?.ticks ?? 0) + 1,
       bootstrap: this.bootstrap,
+      ...(this.bootstrapReasons.length === 0 ? {} : { bootstrapReasons: this.bootstrapReasons }),
+      ...(this.bootstrapQualification === undefined ? {} : { bootstrapQualification: this.bootstrapQualification }),
+      ...(Object.keys(this.bootstrapRejectionReasons).length === 0 ? {} : { bootstrapRejectionReasons: this.bootstrapRejectionReasons }),
+      ...(Object.keys(this.bootstrapCandidateFamilies).length === 0 ? {} : { bootstrapCandidateFamilies: this.bootstrapCandidateFamilies }),
       rollover: code(result.status) ?? "UNKNOWN",
       ...(reason === undefined ? {} : { rolloverReason: reason }),
       cyclesEvaluated: (previous?.cyclesEvaluated ?? 0) + (evaluated ? 1 : 0),

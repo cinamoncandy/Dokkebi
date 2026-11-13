@@ -14,7 +14,7 @@
 
 | 레벨 | 목표 | 통과 증거 (서버 기록으로 확인) | 지금 상태 |
 |---|---|---|---|
-| LL1 | 학습 폐루프 완성 | 체결이 있는 기간이 닫히고, 후보가 평가를 통과한 사이클이 기록되고, 재시작 뒤에도 이어지고(`survivesRestart`), 다음 기간(N+1)이 시작된다 | 2026-11-12 `/health runtime.closedLearningLoop`: 기간 218개가 마감됨(모두 소유자 기준선), `cyclesEvaluated=0`, `deployments=0`, `bootstrap=RESEARCH_NOT_DEPLOYABLE`. 평가 통과 사이클은 아직 없음 |
+| LL1 | 학습 폐루프 완성 | 체결이 있는 기간이 닫히고, 후보가 평가를 통과한 사이클이 기록되고, 재시작 뒤에도 이어지고(`survivesRestart`), 다음 기간(N+1)이 시작된다 | 2026-11-13 `/health runtime.closedLearningLoop`: 기간 239개가 마감됨(모두 소유자 기준선), `cyclesEvaluated=0`, `deployments=0`, `bootstrap=RESEARCH_NOT_DEPLOYABLE`. 이유 코드는 이제 공개된다: `ALLOCATION_NO_ALLOCATABLE_CANDIDATES`, `NO_ALLOCATION_ADVISORY`. 판정받은 후보 5개(돈치안 계열)가 전부 탈락(질적 게이트: 벤치마크 대비 우위 상실, 기대값 음수, 손익비 1 미만, 국면 취약 등). 평가 통과 사이클은 아직 없음 |
 | LL2 | 학습 효율 | 실패한 후보마다 원인 분류가 남고, 연구 우선순위가 기록된 근거로 정해진다 | 미착수 |
 | LL3 | 시장 국면 적응 | 국면 정의(사전등록)와 국면별 재평가 결과가 남는다. 국면이 바뀌면 후보 재평가가 자동으로 예약된다 | 미착수 |
 | LL4 | 자율 연구 | 가설 생성 → 사전등록 → 독립 검증 → 실패 원인 학습이 사람 개입 없이 한 바퀴 돈다. 단, 사전등록 규칙과 다중 비교 보정(예: K=195, p<0.05/K)을 시스템이 약하게 바꿀 수 없다 | 미착수 |
@@ -34,7 +34,8 @@ LL7, LL8은 "L6 이상"을 위한 제안이다. 둘 다 **권한을 늘리지 �
 ## LL1에서 지금 막힌 것과 다음 일
 
 - 후보 공급: 호가 연구(2차, 판정 2026-11-18T02:00Z 이후), 15분·60분 연구 후보. 15분·60분은 `#3090`으로 데이터셋 허용 규칙이 들어갔지만, 실험 단계의 증명 재검증(`#3081`)이 머지된 뒤 같은 방식의 후속 변경이 필요하다.
-- 사이클 기록 확인: 요약은 `/health`의 `runtime.closedLearningLoop`에 이미 있다(최상위가 아니라 `runtime` 아래). 지금 값은 사이클 0, 배포 0, 부트스트랩 `RESEARCH_NOT_DEPLOYABLE`이다. 연구 쪽에는 홀드아웃 통과가 1건(`HOLDOUT_CHALLENGER_BETTER`) 있지만 배포 가능 판정이 나지 않았다. 그 **이유 코드**(`deployment.reasons`)가 `/health`에 나오지 않아 원인을 읽지 못한다. 이유 코드를 고정 형식으로만 노출하는 것이 LL1의 첫 전제다.
+- 사이클 기록 확인: 요약은 `/health`의 `runtime.closedLearningLoop`에 있다(최상위가 아니라 `runtime` 아래). 2026-11-13 값은 사이클 0, 배포 0, 부트스트랩 `RESEARCH_NOT_DEPLOYABLE`이다. **이유 코드는 이제 고정 형식으로만 공개된다**(`bootstrapReasons`, 판정받은 후보 수와 탈락 코드 `bootstrapQualification`·`bootstrapRejectionReasons`, 후보 계열 `bootstrapCandidateFamilies`). 그래서 막힌 원인은 읽힌다: 후보 공급이다. 후보가 전부 손실이고 게이트가 제대로 거르고 있다. 게이트는 완화하지 않는다.
+- 후보 다양성: 종가 기반 규칙 계열(SMA·RSI·돈치안)은 소진됐다(`docs/RESEARCH_HYPOTHESIS_DIVERSITY_PLAN_20261112.md`). 체결 흐름 재시험은 이미 사전등록됐고(`docs/RESEARCH_PREREG_2026-11-13_TRADEFLOW_60M.md`, 결과는 2026-11-21 이후) 2026-10-13의 첫 시험은 실패했다. 선물 수집은 지역 차단(`HTTP_451`)으로 저장 0건이며 우회는 소유자 결정이다.
 - 재시작 증명: 사이클이 한 번 기록된 뒤 의도된 재시작으로 `survivesRestart`를 확인한다.
 
 ## 이 문서가 하지 않는 것

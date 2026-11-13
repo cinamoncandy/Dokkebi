@@ -1,0 +1,23 @@
+id: WO-RESEARCH-20261113-TRADEFLOW-STUDY-SCRIPT
+title: "Implement the pre-registered trade-flow 60m study script (not yet wired into the service)"
+status: READY_FOR_REVIEW
+created: 2026-11-13
+implementation_branch: claude/tradeflow-study-script
+authority_impact: none
+finding: "docs/RESEARCH_PREREG_2026-11-13_TRADEFLOW_60M.md (merged via #3100) fixes the study ML_TRADEFLOW_60M_20261113: span 2026-11-07..11-20 (forward holdout 11-16..11-20), six trade features, order-book execution, K = 198. Its section 10 says the script is a separate PR that must land before 2026-11-20 and may implement only what is written."
+change:
+  - "scripts/run-tradeflow-study.js: reads research_trade_ticks_v2 and the order-book source read-only, prints TRADEFLOW_STUDY {fixed status, numbers, booleans, dataset fingerprint}. It is fail-closed (unknown study id refused, DATA_FUTURE integrity check, WAITING_DATA until 2026-11-20T00:30Z)."
+  - "scripts/run-tradeflow-study.test.js: synthetic data only (11 tests): span and constants, waiting, the six features by hand, the fixed tick order, window edges, tie-break, eligibility and INSUFFICIENT_DATA, determinism, future rows, unknown id. Each guard was mutated and a test failed, then restored."
+not_changed:
+  - "The service hook and the host-diagnosis readout (a later PR), any threshold, gate, limit, risk, capital or authority, the order-book study. No trade tick value was read."
+disclosure:
+  - "Two places where the pre-registration text and scripts/run-orderbook-study.js code differ were implemented as the document says: eligibility counts the 168 training decision hours with a book and, separately, with a tick (the order-book script counts finished rows); INSUFFICIENT_DATA below 3 eligible markets (the order-book script uses below 4). The market-code tie-break is the documented deviation."
+  - "Order-book rows are kept about 14 days: a run right after 2026-11-20T00:30Z still finds 2026-11-07; a late run could lose the start of the training span and end as INSUFFICIENT_DATA."
+safety:
+  paper_only: true
+  liveAuthority: NONE
+  productionMutationAllowed: false
+  aiAuthority: ZERO_AUTHORITY
+validation:
+  - "node --test scripts/run-tradeflow-study.test.js 11/11; portability, platform-independent and AIPOS yaml checks."
+next_action: "Independent review against the merged pre-registration; merge; then a separate PR wires it into the research service and the host diagnosis; the run happens no earlier than 2026-11-20T00:30Z (09:30 KST), as soon after as possible."
