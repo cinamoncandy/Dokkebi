@@ -1,0 +1,20 @@
+id: WO-OPS-20261113-SMALL-HARDENING-WORDING
+title: "Carry two independent-review P2s: exact wording of the trade-flow child, and the order-book coverage failure code never throws"
+status: READY_FOR_REVIEW
+created: 2026-11-13
+implementation_branch: claude/small-hardening-wording
+authority_impact: none
+finding: "Two accepted P2s were carried to a later push. (1) #3102 review: 'never blocks Research' for the trade-flow child should read 'cannot fail Research'; a hung synchronous child can delay it by up to its 600 s timeout. (2) #3099 review: failureCode() in the trade-tick coverage reads error.errcode and was fixed there; apps/cloud/src/orderBookCoverage.ts has the same unguarded read inside a catch handler."
+change:
+  - "scripts/run-cloud-research-snapshot.js comment and WO-RESEARCH-20261113-TRADEFLOW-HOOK wording: cannot fail Research; may delay it by up to the timeout."
+  - "apps/cloud/src/orderBookCoverage.ts: failureCode() wraps the errcode read in try/catch and returns the fixed OPEN_FAILED / QUERY_FAILED code; a test (hostile getter, proxy trap, normal code, null) was added and the guard mutated to fail it."
+not_changed:
+  - "No behaviour of a normal error, no threshold, gate, limit, risk, capital or authority. Comment and defensive code only. NOT to be released before 2026-11-21 (a release backup interrupts tick collection during the trade-flow study span 2026-11-14..11-20); it rides with the next release."
+safety:
+  paper_only: true
+  liveAuthority: NONE
+  productionMutationAllowed: false
+  aiAuthority: ZERO_AUTHORITY
+validation:
+  - "orderBookCoverage.test 7/7 (including the new test), run-cloud-research-snapshot.test 9/9, tsc clean."
+next_action: "Independent review; merge; release no earlier than 2026-11-21."

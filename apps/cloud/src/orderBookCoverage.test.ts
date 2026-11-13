@@ -4,7 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, it } from "node:test";
 import { DatabaseSync } from "node:sqlite";
-import { COVERAGE_REQUIRED_RATIO, OrderBookCoverageWatch, readOrderBookCoverage, readOrderBookCoverageDetailed, summarizeCoverage } from "./orderBookCoverage";
+import { COVERAGE_REQUIRED_RATIO, OrderBookCoverageWatch, orderBookCoverageFailureCodeForTest, readOrderBookCoverage, readOrderBookCoverageDetailed, summarizeCoverage } from "./orderBookCoverage";
 
 const HOUR = 3_600_000;
 const NOW = Date.parse("2026-10-31T10:30:00Z");
@@ -96,5 +96,11 @@ describe("order-book hour coverage watch", () => {
       const bad = readOrderBookCoverageDetailed(path, "xrp", NOW, 6);
       assert.equal("reason" in bad && bad.reason, "INVALID_INPUT");
     } finally { rmSync(dir, { recursive: true, force: true }); }
+  });
+  it("never throws while naming a failure, even for a thrown value whose errcode getter throws", () => {
+    assert.equal(orderBookCoverageFailureCodeForTest("QUERY", { get errcode(): number { throw new Error("boom /secret/path"); } }), "QUERY_FAILED");
+    assert.equal(orderBookCoverageFailureCodeForTest("OPEN", new Proxy({}, { get() { throw new Error("trap"); } })), "OPEN_FAILED");
+    assert.equal(orderBookCoverageFailureCodeForTest("QUERY", { errcode: 5 }), "QUERY_FAILED_SQLITE_5");
+    assert.equal(orderBookCoverageFailureCodeForTest("QUERY", null), "QUERY_FAILED");
   });
 });
