@@ -7,9 +7,9 @@ Everything below is what the repository's records *claim*. Re-verify on GitHub b
 
 ## Newest handoff
 
-[`.aipos/handoffs/2026-11-08-core-speed-p0-p1-2770.md`](handoffs/2026-11-08-core-speed-p0-p1-2770.md) — CORE P0/P1 handoff — Issue #2770 late PAPER lease acquisition
+[`.aipos/handoffs/2026-11-13-main-handoff.md`](handoffs/2026-11-13-main-handoff.md) — CORE handoff — learning loop LL1, trade-flow study, release discipline (2026-11-13)
 
-> Observed: `2026-11-08` (Asia/Seoul)
+> Observed: `2026-11-13` (Asia/Seoul). Everything below is what the records claim at about 15:00 KST; re-verify on GitHub and `/health` before acting.
 
 ## Work orders
 
