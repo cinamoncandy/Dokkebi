@@ -383,3 +383,26 @@ test("verify-only drill does not run the database check on -wal/-shm sidecars of
     cleanup(root);
   }
 });
+
+test("verify-only drill passes a real WAL-mode snapshot whose -wal holds un-checkpointed pages, with sidecars sorted after the database", () => {
+  const { root, destination } = fixture();
+  const live = path.join(root, "live");
+  const source = path.join(root, "wal-snapshots");
+  fs.mkdirSync(live);
+  fs.mkdirSync(source);
+  const livePath = path.join(live, "state.db");
+  const database = new DatabaseSync(livePath);
+  try {
+    database.exec("PRAGMA journal_mode=WAL; PRAGMA wal_autocheckpoint=0; CREATE TABLE probe (id INTEGER PRIMARY KEY, v TEXT); INSERT INTO probe(v) VALUES ('a');");
+    for (const suffix of ["", "-wal", "-shm"]) fs.copyFileSync(`${livePath}${suffix}`, path.join(source, `state.db${suffix}`));
+    assert.ok(fs.statSync(path.join(source, "state.db-wal")).size > 0, "the fixture really has un-checkpointed WAL content");
+    const backup = createBackup({ include: [`DATABASE_SNAPSHOT:${source}`], destination, "snapshot-id": "snapshot-real-wal" });
+    const paths = backup.manifest.entries.map((entry) => entry.path);
+    assert.ok(paths.findIndex((p) => p.endsWith("state.db")) < paths.findIndex((p) => p.endsWith("state.db-wal")), "database sorts before its sidecars");
+    const result = runDrill({ snapshot: backup.snapshot, "drill-target": path.join(root, "real-wal-target"), "drill-log": path.join(root, "real-wal-log.json") });
+    assert.equal(result.databaseIntegrityChecks.length, 1);
+  } finally {
+    database.close();
+    cleanup(root);
+  }
+});

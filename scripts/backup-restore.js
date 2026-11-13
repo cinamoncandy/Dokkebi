@@ -514,6 +514,10 @@ function runDrill(args) {
       fs.mkdirSync(path.dirname(output), { recursive: true, mode: 0o700 });
       fs.copyFileSync(source, output, fs.constants.COPYFILE_EXCL);
       if (sha256File(output) !== entry.sha256) throw new Error(`drill checksum mismatch: ${entry.path}`);
+    }
+    // Check only after every entry is copied, so a main database is opened together with its -wal/-shm sidecars whatever the manifest order.
+    for (const entry of verified.manifest.entries) {
+      const output = path.join(target, ...entry.path.split("/"));
       if (entry.category === "DATABASE_SNAPSHOT"
         && !isPairedSqliteWalSidecar(entry, verified.manifest.entries)
         && !isVerifiedSqliteSha256Sidecar(entry, verified.manifest.entries, output)) {
