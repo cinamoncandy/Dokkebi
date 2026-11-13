@@ -1,0 +1,20 @@
+id: WO-RESEARCH-20261113-TRADEFLOW-PREREG
+title: "Pre-register the trade-flow 60m replication (and correct the draft that called it a new signal type)"
+status: READY_FOR_REVIEW
+created: 2026-11-13
+implementation_branch: claude/prereg-tradeflow-60m
+authority_impact: none
+finding: "The trade-flow design draft (docs/DRAFT_TRADEFLOW_STUDY_DESIGN_20261112.md) and the diversity plan called trade flow a new signal type. It is not: ML_TRADES_FLOW_15M_20261013 (WO-RESEARCH-20261013-TRADES-FLOW) already failed its holdout on 2026-10-13 (144 trades, -0.532% per trade vs -0.279% universe, p 0.998). The corrected pre-registration discloses that failure and states the reasons for a replication (live-recorded ticks, a longer span, order-book execution) instead of presenting a fresh hypothesis."
+change:
+  - "docs/RESEARCH_PREREG_2026-11-13_TRADEFLOW_60M.md: hypothesis, the identical rules of the order-book study, six listed features, eligibility, span (train 2026-11-07..11-14, validation 11-14..11-16, forward holdout 11-16..11-20), K = 198 (p < 0.05/198), PASS rule, failure handling and recording."
+  - "Correction notes in the draft design and in the diversity plan."
+not_changed:
+  - "No study code, service, threshold, gate, limit, risk, capital or authority. No trade tick value was examined; only presence counts (/health tradeTickCoverage: 188 of 192 hours) and row totals."
+safety:
+  paper_only: true
+  liveAuthority: NONE
+  productionMutationAllowed: false
+  aiAuthority: ZERO_AUTHORITY
+validation:
+  - "Documents and a work order only; validate-aipos-yaml and current-truth regenerated."
+next_action: "Independent review of the pre-registration; after it merges, a separate PR implements the study script before 2026-11-20; the run happens no earlier than 2026-11-20T00:30Z."
