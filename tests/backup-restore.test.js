@@ -356,3 +356,30 @@ test("destructive restore command is intentionally unavailable", () => {
   assert.notEqual(result.status, 0);
   assert.match(result.stderr, /destructive restore is intentionally unsupported/);
 });
+
+test("verify-only drill does not run the database check on -wal/-shm sidecars of a paired database, but still on an unpaired one", () => {
+  const { root, destination } = fixture();
+  const source = path.join(root, "database-snapshots");
+  const databasePath = path.join(source, "state.db");
+  fs.mkdirSync(source);
+  const database = new DatabaseSync(databasePath);
+  database.exec("CREATE TABLE recovery_probe (id INTEGER PRIMARY KEY); INSERT INTO recovery_probe DEFAULT VALUES;");
+  database.close();
+  fs.writeFileSync(`${databasePath}-wal`, Buffer.alloc(0));
+  fs.writeFileSync(`${databasePath}-shm`, Buffer.alloc(0));
+  try {
+    const backup = createBackup({ include: [`DATABASE_SNAPSHOT:${source}`], destination, "snapshot-id": "snapshot-wal-shm" });
+    assert.equal(backup.manifest.entries.length, 3);
+    const result = runDrill({ snapshot: backup.snapshot, "drill-target": path.join(root, "wal-target"), "drill-log": path.join(root, "wal-log.json") });
+    assert.equal(result.databaseIntegrityChecks.length, 1, "only the main database is integrity-checked");
+    assert.ok(result.databaseIntegrityChecks[0].path.endsWith("state.db"));
+
+    const orphan = path.join(root, "orphan-snapshots");
+    fs.mkdirSync(orphan);
+    fs.writeFileSync(path.join(orphan, "lonely.db-wal"), "not a database");
+    const orphanBackup = createBackup({ include: [`DATABASE_SNAPSHOT:${orphan}`], destination, "snapshot-id": "snapshot-orphan-wal" });
+    assert.throws(() => runDrill({ snapshot: orphanBackup.snapshot, "drill-target": path.join(root, "orphan-target"), "drill-log": path.join(root, "orphan-log.json") }));
+  } finally {
+    cleanup(root);
+  }
+});

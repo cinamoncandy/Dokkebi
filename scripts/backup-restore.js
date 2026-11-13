@@ -291,6 +291,16 @@ function isVerifiedSqliteSha256Sidecar(entry, entries, copiedSidecarPath) {
   return fs.readFileSync(copiedSidecarPath, "utf8") === expected;
 }
 
+// SQLite -wal/-shm files are not standalone databases: they are checksum-verified like every entry and are read together with
+// their paired main database, whose integrity check opens them. Only a sidecar whose main database is also in the snapshot is skipped.
+function isPairedSqliteWalSidecar(entry, entries) {
+  if (entry.category !== "DATABASE_SNAPSHOT") return false;
+  const suffix = ["-wal", "-shm"].find((candidate) => entry.path.endsWith(candidate));
+  if (!suffix) return false;
+  const databasePath = entry.path.slice(0, -suffix.length);
+  return entries.some((candidate) => candidate.category === "DATABASE_SNAPSHOT" && candidate.path === databasePath);
+}
+
 function parseIncludes(raw) {
   if (!Array.isArray(raw) || raw.length === 0) throw new Error("at least one --include CATEGORY:/absolute/path is required");
   return raw.map((entry) => {
@@ -505,6 +515,7 @@ function runDrill(args) {
       fs.copyFileSync(source, output, fs.constants.COPYFILE_EXCL);
       if (sha256File(output) !== entry.sha256) throw new Error(`drill checksum mismatch: ${entry.path}`);
       if (entry.category === "DATABASE_SNAPSHOT"
+        && !isPairedSqliteWalSidecar(entry, verified.manifest.entries)
         && !isVerifiedSqliteSha256Sidecar(entry, verified.manifest.entries, output)) {
         databaseIntegrityChecks.push(Object.freeze({ path: entry.path, ...verifySqliteIntegrity(output) }));
       }
