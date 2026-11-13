@@ -1,0 +1,20 @@
+id: WO-RESEARCH-20261113-TRADEFLOW-HOOK
+title: "Run the trade-flow study from the research service and read its result line in the host diagnosis"
+status: READY_FOR_REVIEW
+created: 2026-11-13
+implementation_branch: claude/tradeflow-study-hook
+authority_impact: none
+finding: "scripts/run-tradeflow-study.js (WO-RESEARCH-20261113-TRADEFLOW-STUDY-SCRIPT) is read-only and prints one TRADEFLOW_STUDY line, but nothing runs it and nothing reads that line. The pre-registration (docs/RESEARCH_PREREG_2026-11-13_TRADEFLOW_60M.md section 9) says the read-only host diagnosis prints it."
+change:
+  - "scripts/run-cloud-research-snapshot.js: one more bounded child (same heap flag, 600 s timeout) after the RAIM study, exactly like the order-book and RAIM studies; a failure is logged as TRADEFLOW_STUDY_FAILED_CLOSED and never blocks canonical Research. Test updated (6 spawns) plus a test that a trade-flow failure does not block Research."
+  - ".github/workflows/oracle-host-diagnose.yml: a tradeflow_study projection of the newest TRADEFLOW_STUDY journal line (fixed status code, numbers, booleans, a 64-hex fingerprint and a DATA_* reason code only; everything else is dropped) and the TRADEFLOW_STUDY marker count in the journal availability probe. The workflow stays read-only. Test added."
+not_changed:
+  - "The study itself, thresholds, gates, limits, risk, capital, authority, the order-book and RAIM studies. Until 2026-11-20T00:30Z the study prints WAITING_DATA only. No trade tick value is read by this change."
+safety:
+  paper_only: true
+  liveAuthority: NONE
+  productionMutationAllowed: false
+  aiAuthority: ZERO_AUTHORITY
+validation:
+  - "run-cloud-research-snapshot.test, oracle-host-diagnose-workflow.test and run-tradeflow-study.test pass; the study script name and the DATA_ reason-code guard were each mutated and a test failed, then restored."
+next_action: "Independent review; merge; ONE release (the host needs the script and the runner before 2026-11-20T00:30Z, release no later than 2026-11-19); the run happens at 2026-11-20 09:30 KST or just after."

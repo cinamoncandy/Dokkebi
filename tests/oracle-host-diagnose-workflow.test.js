@@ -175,12 +175,37 @@ test("the RAIM study projection keeps a fixed status and numbers only and fails 
   assert.equal(project(""), "RAIM_STUDY_UNAVAILABLE");
 });
 
+// WO-RESEARCH-20261113-TRADEFLOW-HOOK: the TRADEFLOW study line is read from the Research journal like the order-book study line.
+test("the TRADEFLOW study projection keeps a fixed status, numbers, booleans and a fingerprint only and fails closed", () => {
+  const start = text.indexOf("tradeflow=\"$(journalctl");
+  assert.ok(start > 0, "the TRADEFLOW projection exists");
+  const block = text.slice(start, text.indexOf("summary=\"${summary}\"$'\\n'\"tradeflow_study", start));
+  assert.match(block, /nusa-research\.service/);
+  assert.doesNotMatch(block, /\/var\/lib\/nusa/, "no state-directory read");
+  const code = block.slice(block.indexOf("node -e '") + "node -e '".length, block.lastIndexOf("')\""));
+  const project = (input) => {
+    const run = require("node:child_process").spawnSync(process.execPath, ["-e", code], { input, encoding: "utf8" });
+    assert.equal(run.status, 0, run.stderr);
+    return run.stdout.trim();
+  };
+  const fp = "b".repeat(64);
+  const line = "TRADEFLOW_STUDY " + JSON.stringify({ status: "HOLDOUT_FAIL", markets: 30, eligible: 9, holdoutTrades: 80, discoveryPass: true, datasetFingerprint: fp, note: "free text", privateField: "private-value", market: "KRW-BTC" });
+  assert.deepEqual(JSON.parse(project(line)), { status: "HOLDOUT_FAIL", markets: 30, eligible: 9, holdoutTrades: 80, discoveryPass: true, datasetFingerprint: fp });
+  assert.doesNotMatch(project(line), /free text|private-value|KRW-BTC/);
+  assert.deepEqual(JSON.parse(project("TRADEFLOW_STUDY " + JSON.stringify({ status: "DATA_INTEGRITY_FAIL", reasonCode: "DATA_FUTURE" }))), { status: "DATA_INTEGRITY_FAIL", reasonCode: "DATA_FUTURE" });
+  assert.deepEqual(JSON.parse(project("TRADEFLOW_STUDY " + JSON.stringify({ status: "DATA_INTEGRITY_FAIL", reasonCode: "open failed: /secret" }))), { status: "DATA_INTEGRITY_FAIL" }, "a free-text reason is dropped");
+  assert.equal(project("TRADEFLOW_STUDY {"), "TRADEFLOW_STUDY_UNAVAILABLE");
+  assert.equal(project("TRADEFLOW_STUDY " + JSON.stringify({ status: "FORGED_PASS" })), "TRADEFLOW_STUDY_UNAVAILABLE");
+  assert.equal(project("[cloud-research-snapshot] TRADEFLOW_STUDY_FAILED_CLOSED"), "TRADEFLOW_STUDY_FAILED_CLOSED");
+  assert.equal(project(""), "TRADEFLOW_STUDY_UNAVAILABLE");
+});
+
 // WO-OPS-20261109-DIAGNOSE-RESEARCH-JOURNAL: the Research journal probe prints counts and one timestamp only, never log text.
 test("the Research journal availability probe prints only counts and a timestamp", () => {
   const start = text.indexOf('echo "== Research journal availability');
   assert.ok(start > 0, "the probe exists");
   const block = text.slice(start, text.indexOf('echo "== Forward Research log projection', start));
-  for (const marker of ["ORDERBOOK_STUDY", "RAIM_STUDY", "DATA_INTEGRITY", "REGIME_FORWARD_STUDY"]) assert.match(block, new RegExp(marker));
+  for (const marker of ["ORDERBOOK_STUDY", "RAIM_STUDY", "TRADEFLOW_STUDY", "DATA_INTEGRITY", "REGIME_FORWARD_STUDY"]) assert.match(block, new RegExp(marker));
   const printed = block.split("\n").filter((line) => /^\s*(echo|for)\b/.test(line)).join("\n");
   assert.doesNotMatch(printed, /echo\s+"?\$rj\b|printf\s+'%s\\n'\s+"\$rj"\s*$/m, "the journal text itself is never printed");
   assert.match(block, /grep -c/);
