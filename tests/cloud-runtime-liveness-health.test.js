@@ -604,6 +604,23 @@ test("/health publishes the order-book coverage as fixed numbers, or UNAVAILABLE
   }
 });
 
+test("/health publishes the trade-tick coverage as fixed numbers that agree, or UNAVAILABLE with a fixed reason code, and no study bar", async () => {
+  const good = { schemaVersion: 1, market: "KRW-XRP", windowHours: 192, coveredHours: 150, ratio: 0.781, longestGapHours: 12, asOfMs: 1_792_000_000_000, note: "x", meetsStudyBar: true };
+  await withServer({ runtimeLiveness: () => ({ ...LIVENESS, tradeTickCoverage: good }) }, async (handle) => {
+    assert.deepEqual(JSON.parse((await request(handle.port, "/health")).body).runtime.tradeTickCoverage, { schemaVersion: 1, windowHours: 192, coveredHours: 150, ratio: 0.781, longestGapHours: 12, asOfMs: 1_792_000_000_000 }, "the market, unknown fields and any bar flag are dropped");
+  }, 42641);
+  await withServer({ runtimeLiveness: () => ({ ...LIVENESS, tradeTickCoverage: { schemaVersion: 1, status: "UNAVAILABLE", reason: "QUERY_FAILED_SQLITE_1", asOfMs: 1_792_000_000_000, path: "/var/lib/x" } }) }, async (handle) => {
+    assert.deepEqual(JSON.parse((await request(handle.port, "/health")).body).runtime.tradeTickCoverage, { schemaVersion: 1, status: "UNAVAILABLE", reason: "QUERY_FAILED_SQLITE_1", asOfMs: 1_792_000_000_000 });
+  }, 42642);
+  const bads = [{ ...good, ratio: 1.5 }, { ...good, ratio: 0.5 }, { ...good, coveredHours: 999 }, { ...good, longestGapHours: 193 }, { ...good, windowHours: 0, coveredHours: 0, ratio: 0 }, { ...good, windowHours: 1441 },
+    { ...good, ratio: "0.781" }, { ...good, asOfMs: 0 }, { ...good, schemaVersion: 2 }, { schemaVersion: 1, status: "UNAVAILABLE", reason: "open failed: /secret/path", asOfMs: 1_792_000_000_000 }, [good], "x"];
+  for (const [index, bad] of bads.entries()) {
+    await withServer({ runtimeLiveness: () => ({ ...LIVENESS, tradeTickCoverage: bad }) }, async (handle) => {
+      assert.equal(JSON.parse((await request(handle.port, "/health")).body).runtime.tradeTickCoverage, undefined, `invalid shape ${index} is omitted`);
+    }, 42643 + index);
+  }
+});
+
 test("/health publishes the stored-data integrity result as a status plus non-negative integers only", async () => {
   await withServer({ runtimeLiveness: () => ({ ...LIVENESS, dataIntegrity: { status: "FAIL", observedAt: 1_792_000_000_000, candleFuture: 1, note: "x", bad: -2 } }) }, async (handle) => {
     assert.deepEqual(JSON.parse((await request(handle.port, "/health")).body).runtime.dataIntegrity, { status: "FAIL", observedAt: 1_792_000_000_000, candleFuture: 1 });
