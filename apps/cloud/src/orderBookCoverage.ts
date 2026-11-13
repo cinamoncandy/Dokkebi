@@ -47,9 +47,15 @@ export interface OrderBookCoverageUnavailable {
 }
 
 function failureCode(stage: "OPEN" | "QUERY", error: unknown): string {
-  const code = (error as { errcode?: unknown } | null)?.errcode;
-  return Number.isSafeInteger(code) && (code as number) >= 0 && (code as number) < 100_000 ? `${stage}_FAILED_SQLITE_${code as number}` : `${stage}_FAILED`;
+  // Reading errcode can itself throw (a getter or proxy trap on an unusual thrown object); the catch handler must never throw.
+  try {
+    const code = (error as { errcode?: unknown } | null)?.errcode;
+    return Number.isSafeInteger(code) && (code as number) >= 0 && (code as number) < 100_000 ? `${stage}_FAILED_SQLITE_${code as number}` : `${stage}_FAILED`;
+  } catch { return `${stage}_FAILED`; }
 }
+
+/** Test seam: the failure code for an arbitrary thrown value. */
+export const orderBookCoverageFailureCodeForTest = failureCode;
 
 /** The last `hours` full hours ending at the latest full hour at or before `nowMs`, each as a book-at-t check. Read-only; one indexed lookup per hour. A failure is returned as a fixed code, never guessed away. */
 export function readOrderBookCoverageDetailed(stateDbPath: string, market: string, nowMs: number, hours: number = COVERAGE_WINDOW_HOURS): OrderBookCoverage | OrderBookCoverageUnavailable {
