@@ -36,7 +36,7 @@ the release rolls back, and the rollback also restarts the services. Consequence
 | 0.2 | `deploy/health-watch.json` `expectedState` is `RUNNING` in a reviewed PR that merged BEFORE the release (else `UNEXPECTED_UP`) | merged PR |
 | 0.3 | A fresh backup exists and the disk has free space (the host was 90% used in October; re-measure). The release backup takes about 30 min and must not be cancelled | diagnose output |
 | 0.4 | The owner states the start date so research studies can be re-pre-registered with the real span | owner message |
-| 0.5 | The rollback hazard is closed: the operator shows, WITHOUT starting any service, that the env file makes the order path off for the previous build as well, or the owner accepts in writing that a failed activation may start the previous build with orders ON. Candidate mitigation (must be verified in code and in a test before use): while only collection is wanted, leave `NUSA_CLOUD_PAPER_INITIAL_CAPITAL_KRW` unset so no PAPER execution loop is created in either build | operator output of the env file (`grep` of the two keys, values redacted if sensitive), code reference, test |
+| 0.5 | The rollback hazard is closed by PROOF, never by accepting the risk. The release rollback (`rollback_and_restore`) restarts the previous build, which does not know the switch. Required: a code reference and a passing test showing that the previous build cannot create an order path with the env file as it will be at release time, or a separate blocking mechanism that has itself been verified. Candidate mechanism (NOT yet proven; it needs a test on the build that will be the rollback target): leave `NUSA_CLOUD_PAPER_INITIAL_CAPITAL_KRW` unset so no PAPER execution loop is created. The owner cannot waive this condition, and the first release does not start until it passes | code reference, test output, operator output of the env file (values redacted if sensitive) |
 | 0.6 | `NUSA_PAPER_ORDER_PATH=OFF` is already written in `/etc/nusa/cloud-runtime.env` (`0600`) BEFORE the release is dispatched. Verified by the operator reading the file, not by starting the service | operator output |
 | 0.7 | The readiness and soak checks pass with the order path off (the readiness script requires `ok: true` and all checks true; whether a paper-runtime check is among them is NOT yet read). If a check requires the order path, the release would fail and roll back (see 3 above), so this stays blocked until it is read | read of `scripts/oracle-readiness-check.js` and the `/ready` checks |
 
@@ -49,6 +49,18 @@ the release rolls back, and the rollback also restarts the services. Consequence
    - **Behaviour:** an attempt that would produce an order does not. This is NOT covered by a test today (only a guard test and a research-continues test exist); it needs a decision-driven test before this stage is approved, or it is stated as unproven.
    - **Observation:** `paperOrderCount` and fill counts do not rise, and `lastMarketEventAt` and the research row counts do rise, read at two points at least one hour apart. Field names were not read from a running host; if a field is missing the check does not pass and the stage stays blocked.
 4. If any check fails: stop the service first, confirm it is inactive, then follow the rollback.
+
+### A failed release is not a stopped service
+
+Read in `activate` (`deploy/oracle/nusa-release-step.sh`): when readiness or the soak fails, the script either restores the previous
+build and restarts it, or, if the previous build cannot open the migrated database (`rollback_schema_compatible` fails), **keeps the
+new build running** ("keeping $1 active (no rollback)") and exits with an error. So after any failed or ambiguous release the
+agent must not assume the service is down:
+
+1. Operator reports `systemctl is-active nusa.service` and the active release SHA immediately (`readlink -f /opt/nusa/current`).
+2. If the service is running and the Stage A evidence (structure, behaviour, observation) is not complete for that exact SHA, the
+   operator stops it at once (`sudo systemctl stop nusa.service`) and the agent reads that it is inactive.
+3. Only then are the cause and the next release discussed. A failure message in the workflow log is never taken as proof that no order path is running.
 
 ## Stage B: order path ON (only after the permit fix; separate approval, separate release)
 
