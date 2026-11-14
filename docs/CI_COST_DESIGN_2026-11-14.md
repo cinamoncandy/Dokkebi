@@ -23,14 +23,14 @@ Sample (fixed, so it can be repeated): the 40 merged PRs with these numbers, fil
 
 Classification rule (shell, run by the agent): `REF` = the sorted unique set of `docs/<name>.md` strings that appear in `tests/*.js`,
 `scripts/*.js` and `scripts/*.mjs` (`grep -ho "docs/[A-Za-z0-9_./-]*\.md" ... | sort -u`, 38 distinct files). A PR is "docs only" if every file is
-`docs/*.md` and not in `REF`; "docs plus records" if every file is such a doc or under `.aipos/`; otherwise "code or config". The 17 tests that
+`docs/*.md` and not in `REF`; "docs plus records" if every file is such a doc or under `.aipos/`; otherwise "everything else" (full CI set; not necessarily a code or config change). The 17 tests that
 read `.aipos/` are `grep -l "\.aipos" tests/*.js`.
 
 | Class | PRs |
 | --- | --- |
 | only `docs/*.md` files, none of them in `REF` | 0 of 40 |
 | `docs/*.md` (not in `REF`) plus `.aipos` records | 9 of 40 (22.5%) |
-| anything touching code, tests, scripts, workflows, deploy or config | 31 of 40 |
+| everything else: keeps the full CI set (includes PRs that change code, tests, scripts, workflows, deploy or config, but also a PR that changes only a doc that a test or script reads); the sample did not separate these further | 31 of 40 |
 
 The earlier count in this note's first version (8 of 40) used the 40 most recent merges at that moment; the sample above is fixed and gives 9. The
 share is a count of PRs by file class, not a time or cost saving.
