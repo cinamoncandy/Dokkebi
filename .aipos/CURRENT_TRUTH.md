@@ -7,9 +7,9 @@ Everything below is what the repository's records *claim*. Re-verify on GitHub b
 
 ## Newest handoff
 
-[`.aipos/handoffs/2026-11-13-main-handoff.md`](handoffs/2026-11-13-main-handoff.md) — CORE handoff — learning loop LL1, trade-flow study, release discipline (2026-11-13)
+[`.aipos/handoffs/2026-11-14-main-handoff.md`](handoffs/2026-11-14-main-handoff.md) — CORE handoff — service stop and restart, second trade-flow pre-registration, closed drafts (2026-11-14)
 
-> Observed: `2026-11-13` (Asia/Seoul). Everything below is what the records claim at about 15:00 KST; re-verify on GitHub and `/health` before acting.
+> Observed: `2026-11-14` (Asia/Seoul), about 14:20 KST. Everything below is what the records claim; re-verify on GitHub and `/health` before acting. This supersedes `2026-11-13-main-handoff.md` for the host state, the trade-flow schedule and the release rules.
 
 ## Work orders
 
