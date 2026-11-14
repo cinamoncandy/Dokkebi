@@ -204,5 +204,5 @@ if (require.main === module) {
     if (!path.startsWith("/")) throw new Error("state path");
     const db = new DatabaseSync(path, { readOnly: true });
     try { console.log("TRADEFLOW_STUDY", JSON.stringify({ ...runStudy({ db }), studyVersion: VERSION })); } finally { db.close(); }
-  } catch { console.error("TRADEFLOW_STUDY_FAILED_CLOSED"); process.exitCode = 1; }
+  } catch { console.error(`TRADEFLOW_STUDY_FAILED_CLOSED:V${VERSION}`); process.exitCode = 1; }
 }

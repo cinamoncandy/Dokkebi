@@ -168,3 +168,14 @@ test("the printed study line names its study version", () => {
   const src = require("node:fs").readFileSync(require("node:path").resolve(__dirname, "run-tradeflow-study.js"), "utf8");
   assert.match(src, /studyVersion: VERSION/);
 });
+
+test("a failed run names its study in the failure line", () => {
+  const cwd = require("node:path").resolve(__dirname, "..");
+  for (const [id, version] of [["ML_TRADEFLOW_60M_20261113", 1], ["ML_TRADEFLOW_60M_20261114", 2]]) {
+    const env = { ...process.env, NUSA_TRADEFLOW_STUDY_ID: id };
+    delete env.NUSA_CLOUD_STATE_DB_PATH;
+    const run = spawnSync(process.execPath, ["scripts/run-tradeflow-study.js"], { cwd, env, encoding: "utf8" });
+    assert.notEqual(run.status, 0);
+    assert.match(run.stderr, new RegExp(`TRADEFLOW_STUDY_FAILED_CLOSED:V${version}\\b`));
+  }
+});

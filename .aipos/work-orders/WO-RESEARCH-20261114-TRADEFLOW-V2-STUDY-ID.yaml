@@ -10,7 +10,7 @@ change:
   - "scripts/run-cloud-research-snapshot.js: the bounded read-only study child runs once per id (each 600 s limit, each failure fail-closed and never blocks Research)."
   - ".github/workflows/oracle-host-diagnose.yml: tradeflow_study= (the first study) and tradeflow_study_v2= (lines with studyVersion 2); the same fixed-field projection."
 not_changed:
-  - "No rule, threshold, bar, limit, risk, capital or authority. The first study's behaviour is unchanged. A failed-closed message names no study, so a failure of either study shows as TRADEFLOW_STUDY_FAILED_CLOSED on the first key."
+  - "No rule, threshold, bar, limit, risk, capital or authority. The first study's behaviour is unchanged. A failed-closed message now names its study (TRADEFLOW_STUDY_FAILED_CLOSED:V1 or :V2), so one study failure never hides the other study line."
 safety:
   paper_only: true
   liveAuthority: NONE

@@ -41,6 +41,17 @@ test("a trade-flow study failure is logged and never blocks canonical Research",
   assert.equal(calls, 2, "both pre-registered studies are attempted even if each fails"); assert.equal(result.status, "COMPLETED");
 });
 
+test("each trade-flow study failure is logged with its own version", () => {
+  const messages = [];
+  const original = console.error;
+  console.error = (...args) => { messages.push(args.join(" ")); };
+  try {
+    run({ env: { NUSA_SOURCE_COMMIT: SHA, NUSA_CLOUD_STATE_DB_PATH: path.resolve("/var/lib/nusa/state.sqlite") },
+      spawnSync: (executable, args, options) => (args.includes("scripts/run-tradeflow-study.js") && options.env.NUSA_TRADEFLOW_STUDY_ID === "ML_TRADEFLOW_60M_20261114" ? { status: 1 } : { status: 0 }) });
+  } finally { console.error = original; }
+  assert.deepEqual(messages.filter((m) => m.includes("TRADEFLOW_STUDY_FAILED_CLOSED")), ["[cloud-research-snapshot] TRADEFLOW_STUDY_FAILED_CLOSED:V2"]);
+});
+
 test("accepts matching deployed source commit identities", () => {
   const env = buildResearchEnv({
     NUSA_SOURCE_COMMIT: SHA.toUpperCase(),
