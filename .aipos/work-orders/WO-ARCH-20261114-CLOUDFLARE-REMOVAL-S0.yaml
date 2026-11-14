@@ -1,0 +1,23 @@
+id: WO-ARCH-20261114-CLOUDFLARE-REMOVAL-S0
+title: Cloudflare removal S0 - read-only inventory of every Worker call, the Cloudflare-only workflows and the Release HOLD that must be replaced
+status: READY_FOR_REVIEW
+created: 2026-11-14
+implementation_branch: claude/cloudflare-removal-s0-inventory
+owner_decision: "2026-11-14: Cloudflare is not needed; remove the connection in stages (owner message). This is phase S0 of docs/PROPOSAL_SIMPLIFICATION_2026-11-14.md."
+objective: "Name every caller of the Worker, what each call decides and what state it holds, so S1-S3 can replace them without losing a safety control."
+evidence:
+  inventory: docs/CLOUDFLARE_REMOVAL_INVENTORY_2026-11-14.md
+  key_finding: "/control-plane/release-check is a required gate of the auto-merge path that combines the Coordinator HOLD and the Worker-configured global freeze (two stores) with GitHub-side conditions; it fails closed. Removing Cloudflare removes the first two stores, so S3 needs owner-controlled durable replacements, tested separately, before that call is switched."
+scope:
+  - Documentation and this work order only.
+exclusions:
+  - No workflow, code, secret, Cloudflare, host or deployment change; no relaxation of HOLD, freeze, WIP, Audit or Release.
+safety:
+  paper_only: true
+  liveAuthority: NONE
+  productionMutationAllowed: false
+  aiAuthority: ZERO_AUTHORITY
+review_round_1: "ACCEPT WITH P2 at f2d387029. Fixed: the HOLD (Coordinator DO) and the global freeze (Worker configuration) are two stores with separate owners, and the PR-level holds live in GitHub; release-check is one required gate of the auto-merge path, not proven to be the only gate on every merge; section 3 now requires per-input fail-closed tests, binding to PR number, head and base, a re-read right before the merge with a race test, and evidence that branch protection and merge permissions cannot bypass the replacement gate."
+unverified: "Items marked CONFIRM in the inventory (Coordinator state of the coding routes, the scheduled reconciliation, the convergence workflows) were not read in detail."
+acceptance:
+  - A non-author review confirms the route table matches worker.ts and the workflows, and that the HOLD replacement conditions in section 3 are sufficient.
