@@ -16,7 +16,8 @@ the research collection stopped for 18 h, and orders were produced without permi
 | --- | --- | --- |
 | Market data freshness | `lastMarketEventAt` in the runtime heartbeat | older than a fixed window while `expectedState` is RUNNING |
 | Research collection | research row counts (order book, trade ticks) in the research status | no growth between two reads |
-| Order without permit evidence | the learning timeline stage `PERMISSION` with reason `NO_CANONICAL_TRADE_PERMISSION_EVIDENCE` (`apps/cloud/src/runtime.ts`) next to an `ORDER_INTENT` or `FILL` of the same cycle | any such order, ever (a P0 signal, #3108) |
+| Order without permit evidence | In `apps/cloud/src/runtime.ts` every cycle records a `PERMISSION` event (today always `SKIP` with `NO_CANONICAL_TRADE_PERMISSION_EVIDENCE`, because no permit evidence is produced yet, #3108), and `ORDER_INTENT` with status `PASS` only when the result is `FILLED`, `SKIP` when `WAIT`, `FAIL` otherwise; fills are recorded as `FILL` | P0 only for: in the same cycle, `ORDER_INTENT` status `PASS` or a `FILL`, and no `PERMISSION` event with status `PASS`. A cycle with `PERMISSION SKIP` and `ORDER_INTENT FAIL` (or `SKIP`) is a normal refusal and is NOT an alarm. After the #3108 fix the same rule still holds, because a legitimate order then has a `PERMISSION PASS` |
+| Observation incomplete | the learning timeline can be truncated or an event can be missing | a separate "observation failure" alarm when a cycle has an `ORDER_INTENT PASS` or `FILL` but its `PERMISSION` event cannot be found in the returned window, or the window is empty while orders exist; never silently treated as OK |
 | Order path expected OFF | order and fill counters while the operator has the order path OFF (`NUSA_PAPER_ORDER_PATH`) | any increase |
 
 All field names above must be read from a real response of a running host before any rule is written (the service is stopped now, so
@@ -44,6 +45,14 @@ the host env file) plus an owner step (store the same value as an Actions secret
    While expected STOPPED the watch does not call the authenticated route at all.
 5. The watch only reads. It never restarts, deploys or changes anything.
 
+### Token handling requirements (all tested in W2/W3)
+
+- The monitor token is sent only in an `Authorization` header from one step's environment; never in a URL, a query string or a command-line argument.
+- An authentication failure never prints the token or the header, and the step does not run with shell tracing on.
+- The token and the response body are never written to an artifact, a debug output, a comment or an issue (the issue text stays fixed text, a reason code and the run URL). A regression test greps the workflow for any echo of the secret and the issue builder for any response field.
+- On the host the monitor credential is rejected for every route and method outside the fixed GET allow-list, and it never gains a write scope; both are tested.
+- Revoking or rotating the credential makes the watch fail closed (an alarm), never a silent pass; the rotation steps are written in the W2 PR.
+
 ## 5. Order of work (each one PR)
 
 | Step | Change | Needs |
@@ -52,7 +61,9 @@ the host env file) plus an owner step (store the same value as an Actions secret
 | W2 | Monitor-credential code and tests on the host (section 3) | non-author review; release; operator and owner steps |
 | W3 | Watch v2 workflow with the rules of section 2 and the authority map entry | owner approval for the secret and `secrets` permission; non-author review |
 
-W1 depends on the service running, so until the restart (blocked by the runbook preconditions) only W2 can start.
+W1 depends on the service running, so until the restart (blocked by the runbook preconditions) it cannot start. W2 (host code and tests) does not depend on W1 and can start at once.
+
+W3 is complete only when all of these hold: the W2 code passed an independent review and is released; the monitor token's read-only scope and route limit are verified; W1 confirmed the real response fields; the owner approved storing the Actions secret; and the W3 PR has exact-head CI and an independent review.
 
 ## 6. Not in scope
 
