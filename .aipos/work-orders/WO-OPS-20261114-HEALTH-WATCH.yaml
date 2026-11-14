@@ -1,0 +1,23 @@
+id: WO-OPS-20261114-HEALTH-WATCH
+title: Off-host health watch - the system, not a person, notices a stopped or unexpectedly started PAPER host
+status: READY_FOR_REVIEW
+created: 2026-11-14
+implementation_branch: claude/health-watch-issue
+owner_decision: "2026-11-14: the owner approved the improvement list including 'the system opens an issue automatically' ('다 해'). This adds a second workflow with the same single write authority as the security gate watch (`issues: write`; no secrets, no repository write). The owner may veto it before it is un-drafted."
+trigger: "The PAPER service stopped on 2026-11-13 and a PAPER order path ran without permit evidence; both were noticed by a person (see docs/PROPOSAL_TARGET_ARCHITECTURE_2026-10.md, observability)."
+change:
+  - ".github/workflows/health-watch.yml: every 30 minutes (and workflow_dispatch) one GET of the public health route in deploy/health-watch.json on a GitHub-hosted runner; scripts/health-watch-decide.js classifies it against expectedState; on DOWN, UNEXPECTED_UP or CONFIG_INVALID it opens or comments on ONE issue by exact title (fixed text, a reason code and the run URL only)."
+  - "deploy/health-watch.json: expectedState STOPPED now (the service is stopped on purpose); the restart PR sets it to RUNNING."
+  - ".github/workflow-authority-map.json and tests/workflow-authority-map.test.js: the new job declares only issues write."
+not_changed:
+  - "Nothing on the host, in Cloudflare or in the PAPER runtime. The watch never restarts, deploys, merges or approves. No risk, threshold, capital or gate change."
+safety:
+  paper_only: true
+  liveAuthority: NONE
+  productionMutationAllowed: false
+  aiAuthority: ZERO_AUTHORITY
+validation:
+  - "tests/health-watch.test.js (4) pass; mutation removing the UNEXPECTED_UP branch fails one test. A real probe of the public route returned HTTP 502 (service stopped) which the decision maps to no alert while STOPPED."
+review_round_1: "ACCEPT WITH P2 at 1b5fc2568. P2 fixed: an unreadable, unparsable or non-https deploy/health-watch.json now ends in a CONFIG_INVALID alarm (simulated locally with broken JSON). P2 accepted as a residual: the find-then-create issue step is not atomic; the concurrency group (one run at a time) prevents the realistic race, a second run only comments."
+unverified: "The schedule has not fired and the issue step has not run (only visible on GitHub). Only liveness is watched: the public health route's field names for collection gaps and permit evidence were not read from a running host, so those alarms need a separate read path (follow-up)."
+next: "Non-author review, then un-draft. After the restart PR, confirm expectedState RUNNING and one real alert/no-alert cycle."

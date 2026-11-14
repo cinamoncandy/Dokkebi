@@ -155,3 +155,10 @@ test("every acknowledged debt entry names the issue that owns it", () => {
     }
   }
 });
+
+test("the scheduled health watch declares only its issue-writing authority", () => {
+  const job = collect()["health-watch.yml"].jobs.watch;
+  assert.deepEqual(job.write, ["issues"]);
+  assert.equal(job.secrets, false);
+  assert.equal(job.environment, null);
+});
