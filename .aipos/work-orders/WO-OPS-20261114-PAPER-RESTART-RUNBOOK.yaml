@@ -1,0 +1,21 @@
+id: WO-OPS-20261114-PAPER-RESTART-RUNBOOK
+title: PAPER service restart runbook - two stages (collection ON with orders OFF, then orders ON after the permit fix)
+status: READY_FOR_REVIEW
+created: 2026-11-14
+implementation_branch: claude/paper-restart-runbook
+owner_decision: "2026-11-14: the owner told the agent to do the whole improvement list on its own judgement ('알아서 다 해'). Earlier the owner decided: stop the service, restart it when the work is done."
+objective: "Replace a restart order that lived only in the conversation with a reviewed checklist, with evidence per step and the owner approval gates."
+evidence:
+  runbook: docs/PAPER_RESTART_RUNBOOK_2026-11-14.md
+scope:
+  - Documentation and this work order only.
+exclusions:
+  - Nothing starts, releases, restarts or changes the host. Each stage needs the owner's approval at that time. No relaxation of any gate.
+safety:
+  paper_only: true
+  liveAuthority: NONE
+  productionMutationAllowed: false
+  aiAuthority: ZERO_AUTHORITY
+unverified: "No step has been run. The research row-count field names and paperOrderCount in /health were not read from a running host; the diagnose workflow output defines them. The Release HOLD and WIP evidence source after the Cloudflare removal is not chosen yet."
+acceptance:
+  - A non-author review confirms the stages, the gates and that Stage A cannot place an order.
