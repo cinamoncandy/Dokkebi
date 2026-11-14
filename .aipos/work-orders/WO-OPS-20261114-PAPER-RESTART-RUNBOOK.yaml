@@ -1,0 +1,25 @@
+id: WO-OPS-20261114-PAPER-RESTART-RUNBOOK
+title: PAPER service restart runbook - two stages (collection ON with orders OFF, then orders ON after the permit fix)
+status: READY_FOR_REVIEW
+created: 2026-11-14
+implementation_branch: claude/paper-restart-runbook
+owner_decision: "2026-11-14: the owner told the agent to do the whole improvement list on its own judgement ('알아서 다 해'). Earlier the owner decided: stop the service, restart it when the work is done."
+objective: "Replace a restart order that lived only in the conversation with a reviewed checklist, with evidence per step and the owner approval gates."
+evidence:
+  runbook: docs/PAPER_RESTART_RUNBOOK_2026-11-14.md
+scope:
+  - Documentation and this work order only.
+exclusions:
+  - Nothing starts, releases, restarts or changes the host. Each stage needs the owner's approval at that time. No relaxation of any gate.
+safety:
+  paper_only: true
+  liveAuthority: NONE
+  productionMutationAllowed: false
+  aiAuthority: ZERO_AUTHORITY
+review_round_1: "REJECT at 1b3f3602e (2 P1, 2 P2), all valid. Read deploy/oracle/nusa-release-step.sh: activate restarts nusa.service and nusa-autopilot, starts the research timer, requires is-active, readiness and a ~180 s soak, and rolls back (restarting the previous build, which lacks the switch) on failure. Runbook now: the release is the first start; OFF must be in the env file before the release; the rollback hazard and readiness-with-OFF are blocking preconditions 0.5-0.7; Stage B allows only an explicit ON and forbids deleting the line; emergency order is stop first, confirm inactive, then set OFF; structure, behaviour and observation evidence are separate and /health fields stay unverified."
+review_round_2: "REJECT at 6f19aaa3c (2 P1, 1 P2), valid. 0.5 no longer allows the owner to accept the rollback risk: proof or a verified blocking mechanism only. New section: a failed release is not a stopped service (activate can keep the new build running when the previous build cannot open the migrated database, or restart the previous build); after any failed or ambiguous release the operator reports is-active and the active SHA and stops the service unless the Stage A evidence is complete. The behaviour test for order refusal is still missing and stays a precondition for Stage A."
+review_round_3: "ACCEPT WITH P2 at 387ddffab. P2 fixed: the behaviour-test wording now matches this work order (no approval or run without a passing decision-driven order-refusal test); after a failed or ambiguous release the operator stops the service first and reports afterwards (the active SHA is still readable when stopped). Stage A remains BLOCKED on 0.5, 0.7 and that test."
+review_round_4: "ACCEPT WITH P2 at fd1a64875. P2 fixed: the behaviour evidence now names #3120 (decision-driven test) and keeps Stage A blocked until it has passed exact-head CI and is in the released SHA; its scope is stated (tick-driven path, current build, not the rollback target)."
+unverified: "No step has been run. The research row-count field names and paperOrderCount in /health were not read from a running host; the diagnose workflow output defines them. The Release HOLD and WIP evidence source after the Cloudflare removal is not chosen yet."
+acceptance:
+  - A non-author review confirms the stages, the gates and that Stage A cannot place an order.
