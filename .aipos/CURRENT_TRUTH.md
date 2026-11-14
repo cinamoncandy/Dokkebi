@@ -20,7 +20,7 @@ Most common statuses among the open files (new orders use only `READY_FOR_REVIEW
 
 | Status | Files |
 |---|---|
-| READY_FOR_REVIEW | 70 |
+| READY_FOR_REVIEW | 71 |
 | LOCAL_VALIDATED_PENDING_CI | 17 |
 | IN_PROGRESS | 15 |
 | VERIFYING | 14 |

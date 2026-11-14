@@ -1,6 +1,6 @@
 id: WO-ARCH-20261114-SIMPLIFICATION
 title: Simplification step 2 - remove Cloudflare in stages, mobile-only product surface, one verification path
-status: PROPOSED_NEEDS_NON_AUTHOR_REVIEW_AND_OWNER_APPROVAL
+status: READY_FOR_REVIEW
 priority: P1
 owner: nusa-development
 repository: cinamoncandy/NUSA
@@ -20,5 +20,5 @@ exclusions:
   - No relaxation of Audit, Release, WIP, risk, threshold or capital gates.
   - PAPER_ONLY, liveAuthority=NONE, productionMutationAllowed=false, aiAuthority=ZERO_AUTHORITY unchanged.
 acceptance:
-  - A non-author review accepts the phase order and the safety exclusions.
+  - (Proposal; needs owner approval before any phase.) A non-author review accepts the phase order and the safety exclusions.
   - The owner answers the open points before S1 starts.
