@@ -26,7 +26,8 @@ export interface DurableObjectStubLike {
   fetch(input: RequestInfo | URL, init?: RequestInit): Promise<Response>;
 }
 
-export type PersistentExecutionState = "LEASED" | "HANDED_OFF" | "DISPATCHED" | "RELEASED" | "COMPLETED" | "WAITING_RATE_LIMIT" | "BLOCKED";
+const PERSISTENT_EXECUTION_STATES = ["LEASED", "HANDED_OFF", "DISPATCHED", "RELEASED", "COMPLETED", "WAITING_RATE_LIMIT", "BLOCKED"] as const;
+export type PersistentExecutionState = typeof PERSISTENT_EXECUTION_STATES[number];
 
 export interface PersistentExecutionStop {
   schemaVersion: 1;
@@ -1471,9 +1472,9 @@ export async function readPersistentExecutionStrict(namespace: ExecutionCoordina
   if (typeof record !== "object" || Array.isArray(record)) throw new Error("PERSISTENT_EXECUTION_STATE_READ_INVALID");
   // A record with a damaged required field is not shown as a normally read record: the whole record is unproven.
   const fields = record as Record<string, unknown>;
-  const text = (value: unknown): boolean => typeof value === "string" && value.length > 0;
+  const text = (value: unknown): boolean => typeof value === "string" && value.length > 0; // `state` must be one of the stored state names
   const time = (value: unknown): boolean => Number.isSafeInteger(value) && Number(value) > 0;
-  if (!text(fields.dedupeKey) || !text(fields.executionId) || !text(fields.state) || !time(fields.leaseExpiresAt) || !time(fields.updatedAt)
+  if (!text(fields.dedupeKey) || !text(fields.executionId) || !(PERSISTENT_EXECUTION_STATES as readonly unknown[]).includes(fields.state) || !time(fields.leaseExpiresAt) || !time(fields.updatedAt)
     || (fields.taskId !== undefined && typeof fields.taskId !== "string")) throw new Error("PERSISTENT_EXECUTION_STATE_READ_INVALID");
   return record as PersistentExecutionRecord;
 }

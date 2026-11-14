@@ -88,13 +88,14 @@ const inflightFetches = new WeakMap<JwksCache, Map<string, Promise<ReadonlyMap<s
  */
 async function loadKeys(jwksCache: JwksCache, teamDomain: string, now: number, fetchJwks: JwksFetcher, force: boolean): Promise<ReadonlyMap<string, JsonWebKey> | undefined> {
   const cached = jwksCache.get(teamDomain);
-  const fresh = cached !== undefined && cached.keys.size > 0 && now - cached.fetchedAt < JWKS_TTL_MS;
+  // An age below zero means the clock went backwards: the entry is then not trusted as fresh and an attempt is allowed once (the attempt time is rewritten below).
+  const fresh = cached !== undefined && cached.keys.size > 0 && now - cached.fetchedAt >= 0 && now - cached.fetchedAt < JWKS_TTL_MS;
   if (fresh && !force) return cached.keys;
   let inflight = inflightFetches.get(jwksCache);
   if (!inflight) { inflight = new Map(); inflightFetches.set(jwksCache, inflight); }
   const running = inflight.get(teamDomain);
   if (running) return running;
-  if (cached !== undefined && now - cached.lastAttemptAt < JWKS_MIN_REFETCH_MS) return fresh ? cached.keys : undefined;
+  if (cached !== undefined && now - cached.lastAttemptAt >= 0 && now - cached.lastAttemptAt < JWKS_MIN_REFETCH_MS) return fresh ? cached.keys : undefined;
   jwksCache.set(teamDomain, { keys: cached?.keys ?? NO_KEYS, fetchedAt: cached?.fetchedAt ?? 0, lastAttemptAt: now });
   const fallback = fresh ? cached.keys : undefined;
   const attempt = (async (): Promise<ReadonlyMap<string, JsonWebKey> | undefined> => {

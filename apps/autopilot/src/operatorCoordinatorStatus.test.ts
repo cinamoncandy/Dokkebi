@@ -143,10 +143,10 @@ test("a persistent execution record is shown with its stored lease expiry; an un
   await admitActiveWip(failing, claim);
   const body = await (await handleOperatorCoordinatorStatus(get(await token(pair, goodClaims())), env(failing), { now: () => NOW, fetchJwks: async () => keys, jwksCache: new Map() })).json() as Record<string, any>;
   assert.equal(body.claims[0].persistentExecution, "UNKNOWN");
-  const withRecord = namespace({ override: (call) => call.path === "/execution" ? new Response(JSON.stringify({ record: { dedupeKey: claim.dedupeKey, executionId: claim.executionId, state: "RUNNING", leaseExpiresAt: NOW + 1_000, updatedAt: NOW - 5_000, taskId: "issue-3108", provider: "secret-provider", headSha: "b".repeat(40) } }), { status: 200 }) : undefined });
+  const withRecord = namespace({ override: (call) => call.path === "/execution" ? new Response(JSON.stringify({ record: { dedupeKey: claim.dedupeKey, executionId: claim.executionId, state: "DISPATCHED", leaseExpiresAt: NOW + 1_000, updatedAt: NOW - 5_000, taskId: "issue-3108", provider: "secret-provider", headSha: "b".repeat(40) } }), { status: 200 }) : undefined });
   await admitActiveWip(withRecord, claim);
   const second = await (await handleOperatorCoordinatorStatus(get(await token(pair, goodClaims())), env(withRecord), { now: () => NOW, fetchJwks: async () => keys, jwksCache: new Map() })).json() as Record<string, any>;
-  assert.deepEqual(second.claims[0].persistentExecution, { state: "RUNNING", taskId: "issue-3108", leaseExpiresAt: NOW + 1_000, updatedAt: NOW - 5_000, leaseState: "LEASE_ACTIVE" });
+  assert.deepEqual(second.claims[0].persistentExecution, { state: "DISPATCHED", taskId: "issue-3108", leaseExpiresAt: NOW + 1_000, updatedAt: NOW - 5_000, leaseState: "LEASE_ACTIVE" });
   assert.doesNotMatch(JSON.stringify(second), /secret-provider/, "fields that are not part of the view are never echoed");
 });
 
@@ -314,7 +314,7 @@ test("only an explicit null record means NOT_STORED; a missing, malformed or for
     ["not JSON", () => new Response("<html>", { status: 200 }), "UNKNOWN"],
     ["record is a string", () => new Response(JSON.stringify({ record: "stored" }), { status: 200 }), "UNKNOWN"],
     ["record is an array", () => new Response(JSON.stringify({ record: [] }), { status: 200 }), "UNKNOWN"],
-    ["record of another identity", () => new Response(JSON.stringify({ record: { dedupeKey: "someone-else", executionId: "x", state: "RUNNING", leaseExpiresAt: NOW + 1_000, updatedAt: NOW } }), { status: 200 }), "UNKNOWN"],
+    ["record of another identity", () => new Response(JSON.stringify({ record: { dedupeKey: "someone-else", executionId: "x", state: "DISPATCHED", leaseExpiresAt: NOW + 1_000, updatedAt: NOW } }), { status: 200 }), "UNKNOWN"],
     ["server error", () => new Response("{}", { status: 500 }), "UNKNOWN"],
   ];
   for (const [name, respond, expected] of shapes) {
@@ -421,7 +421,7 @@ test("a burst of concurrent requests causes one key-set fetch, not one per reque
 test("an execution record with a damaged required field is UNKNOWN as a whole", async () => {
   const pair = await newKeyPair();
   const keys = await jwksOf(pair);
-  const valid = { dedupeKey: claim.dedupeKey, executionId: claim.executionId, state: "RUNNING", leaseExpiresAt: NOW + 1_000, updatedAt: NOW - 5_000, taskId: "issue-3108" };
+  const valid = { dedupeKey: claim.dedupeKey, executionId: claim.executionId, state: "DISPATCHED", leaseExpiresAt: NOW + 1_000, updatedAt: NOW - 5_000, taskId: "issue-3108" };
   const variants: Array<[string, Record<string, unknown>, boolean]> = [
     ["valid", valid, true],
     ["no taskId is fine", { ...valid, taskId: undefined }, true],
@@ -442,4 +442,37 @@ test("an execution record with a damaged required field is UNKNOWN as a whole", 
     assert.equal(typeof body.claims[0].persistentExecution === "object", ok, name);
     if (!ok) assert.equal(body.claims[0].persistentExecution, "UNKNOWN", name);
   }
+});
+
+test("only a stored execution state name is accepted; every other string makes the record UNKNOWN", async () => {
+  const pair = await newKeyPair();
+  const keys = await jwksOf(pair);
+  const base = { dedupeKey: claim.dedupeKey, executionId: claim.executionId, leaseExpiresAt: NOW + 1_000, updatedAt: NOW - 5_000 };
+  const shown = async (state: unknown) => {
+    const ns = namespace({ override: (call) => call.path === "/execution" ? new Response(JSON.stringify({ record: { ...base, state } }), { status: 200 }) : undefined });
+    await admitActiveWip(ns, claim);
+    const body = await (await handleOperatorCoordinatorStatus(get(await token(pair, goodClaims())), env(ns), { now: () => NOW, fetchJwks: async () => keys, jwksCache: new Map() })).json() as Record<string, any>;
+    return body.claims[0].persistentExecution;
+  };
+  for (const state of ["LEASED", "HANDED_OFF", "DISPATCHED", "RELEASED", "COMPLETED", "WAITING_RATE_LIMIT", "BLOCKED"]) {
+    assert.equal((await shown(state)).state, state, state);
+  }
+  for (const state of ["INVALID_STATE", "leased", "RUNNING", "LEASED ", "", "BLOCKED;DROP", 5, null]) assert.equal(await shown(state), "UNKNOWN", String(state));
+});
+
+test("a clock that goes backwards neither blocks key refetches for long nor allows a burst", async () => {
+  const pair = await newKeyPair();
+  const keys = await jwksOf(pair);
+  const cache: JwksCache = new Map();
+  let fetches = 0;
+  const fetchJwks = async () => { fetches += 1; return keys; };
+  const at = (now: number) => ({ now, requestHostname: HOST, fetchJwks, jwksCache: cache });
+  const unknown = await token(pair, goodClaims(), { alg: "RS256", kid: "rotated" });
+  assert.equal((await verifyAccessJwt(await token(pair, goodClaims()), config, at(NOW))).ok, true);
+  assert.equal(fetches, 1);
+  // The clock jumps back two hours: one attempt is allowed at once, then the minute starts again from the new time.
+  assert.deepEqual(await verifyAccessJwt(unknown, config, at(NOW - 7_200_000)), { ok: false, code: "KID_UNKNOWN" });
+  assert.equal(fetches, 2, "one attempt after the clock went back");
+  assert.deepEqual(await verifyAccessJwt(unknown, config, at(NOW - 7_199_000)), { ok: false, code: "KID_UNKNOWN" });
+  assert.equal(fetches, 2, "and the limit holds again at the new time");
 });
