@@ -83,6 +83,41 @@ LIVE or any real-money authority; relaxing risk, threshold, capital, WIP or Audi
 host changes from an agent session; a big-bang rewrite; deploying or changing any Cloudflare setting before S4 is
 approved. The owner's earlier request to set up Cloudflare Access for the Coordinator read is withdrawn by decision 1.
 
+## 5a. Further improvements found while working (2026-11-14)
+
+| # | Improvement | State | Needs |
+| --- | --- | --- | --- |
+| I1 | Separate switch for the PAPER order path so isolating orders does not stop research collection (the 2026-11-13 stop cost an 18 h data gap) | PR #3115 (`NUSA_PAPER_ORDER_PATH`; only exactly `ON` keeps the path) | review, CI, then a separate owner approval to use it on the host |
+| I2 | Off-host health watch so the system, not a person, notices a stopped or unexpectedly started host | PR #3116 (liveness only) | review, CI; richer alarms (collection gap, order without permit evidence) need an authenticated read path first |
+| I3 | `CURRENT_TRUTH.md` is regenerated and re-committed by every PR because `tests/aipos-current-truth.test.js` requires the committed bytes to equal the generator output; any merge that changes a work order makes every other open PR stale | PROPOSAL | owner approval and non-author review (governance change) |
+| I4 | One small host carries the PAPER service, research collection, backups and the diagnosis runner (1 vCPU, 954 MB in the 2026-10-27 measurement) | PROPOSAL | a fresh measurement; host changes are done by the operator, not by an agent session |
+| I5 | The phone origin depends on one free DuckDNS name | RISK RECORDED | no change now |
+
+### I3 in detail
+
+Problem: the file cannot go stale by hand, but it goes stale by every other PR's merge. Open PRs must merge `main` and
+regenerate it again and again, and CI fails with a stale-file error that is not a real defect.
+
+Options:
+- **A (recommended):** stop committing the generated file. Keep the generator and its determinism tests, add a
+  `--stdout` mode, and change the cold-start instruction (`AGENTS.md`, `CLAUDE.md`) from "read the file" to "run the
+  generator". The records stay the source of truth, and the output is still derived only from them.
+- **B:** keep it committed but check it only on `main` after merge. This needs a bot commit to protected `main`, which
+  the release rules do not allow an agent to add.
+
+Safety: neither option removes a validator, relaxes a gate or changes what the records claim. The risk of A is a cold
+agent that skips the generator step, so the instruction must be explicit and a test must pin the wording.
+
+### I4 in detail
+
+Move the self-hosted diagnosis runner off the PAPER host first (least risk, largest relief), then re-measure CPU,
+memory and disk before deciding on anything larger. Nothing here is started by this proposal.
+
+### I5
+
+If the DuckDNS name stops resolving the phone loses its data source while the host keeps running. The I2 watch reads the
+same name, so a name failure would also look like the host being down; the issue text says to check the name as well.
+
 ## 6. Open points for the owner
 
 - Answered 2026-11-14: the phone reaches the PAPER host at `https://nusa-api.duckdns.org` (DuckDNS), not through Cloudflare.
