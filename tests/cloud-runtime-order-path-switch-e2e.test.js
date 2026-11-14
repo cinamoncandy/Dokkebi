@@ -159,7 +159,11 @@ async function runWith(overrides, port, label) {
     handle = startCloudRuntime(testEnv(token, port, filename, overrides), undefined, candidateBoundDashboardHydrator(), capture.factory);
     await capture.fire(buyTicker());
     const snapshot = await loadOperations(port, token);
-    const events = snapshot.paperLearning?.events ?? [];
+    // A missing field is a failure, never an empty list: the projection must be observable in every run.
+    assert.ok(Array.isArray(snapshot.paperLearning?.events), "paperLearning.events must be an array");
+    assert.ok(Array.isArray(snapshot.orders), "orders must be an array");
+    assert.ok(Array.isArray(snapshot.markets), "markets must be an array");
+    const events = snapshot.paperLearning.events;
     return { snapshot, stages: events.map((event) => event.stage), events };
   } finally {
     if (handle) await handle.stop();
@@ -181,11 +185,13 @@ test("a BUY decision with the order path OFF produces no order, no fill and no o
     assert.equal(run.snapshot.productionMutationAllowed, false);
     // The read-only dashboard still answers, the pipeline reports no execution loop, and market data still reaches it.
     assert.equal(run.snapshot.operations?.pipelineStage, "READ_ONLY_DASHBOARD", `pipeline stage with ${JSON.stringify(value)}`);
-    assert.ok((run.snapshot.markets ?? []).some((market) => market.market === "KRW-BTC"), `market data must still be received with ${JSON.stringify(value)}`);
+    assert.ok(run.snapshot.markets.some((market) => market.market === "KRW-BTC"), `market data must still be received with ${JSON.stringify(value)}`);
     assert.ok(!run.stages.includes("FILL"), `no FILL may exist with ${JSON.stringify(value)}, got ${run.stages.join(",")}`);
+    // Scope: this proves that no order intent PASSES and no fill exists. It does not prove that a refusal event is recorded
+    // (without an order boundary no intent event is expected) and it covers the tick-driven path only.
     const intents = run.events.filter((event) => event.stage === "ORDER_INTENT");
     assert.ok(intents.every((event) => event.status !== "PASS"), `no passing ORDER_INTENT may exist with ${JSON.stringify(value)}`);
-    assert.equal((run.snapshot.orders ?? []).length, 0, "the read-only order list must be empty");
+    assert.equal(run.snapshot.orders.length, 0, "the read-only order list must be empty");
   }
 });
 
