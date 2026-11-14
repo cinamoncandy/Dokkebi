@@ -200,6 +200,23 @@ test("the TRADEFLOW study projection keeps a fixed status, numbers, booleans and
   assert.equal(project(""), "TRADEFLOW_STUDY_UNAVAILABLE");
 });
 
+// WO-RESEARCH-20261114-TRADEFLOW-V2-STUDY-ID: the second study prints studyVersion 2; the diagnosis shows the latest line of each study under its own key.
+test("the diagnosis reads the first and the second TRADEFLOW study lines separately and keeps the study version", () => {
+  const v1Start = text.indexOf("tradeflow=\"$(journalctl");
+  const v2Start = text.indexOf("tradeflow2=\"$(journalctl");
+  assert.ok(v1Start > 0 && v2Start > v1Start, "both projections exist, the first one first");
+  const v1Pipe = text.slice(v1Start, text.indexOf("| cut -c1-2000", v1Start));
+  const v2Pipe = text.slice(v2Start, text.indexOf("| cut -c1-2000", v2Start));
+  assert.match(v1Pipe, /grep -v '"studyVersion":2'/, "the first study line is every line that is not version 2");
+  assert.match(v2Pipe, /grep '"studyVersion":2'/, "the second study line is a version-2 line");
+  assert.match(text, /summary="\$\{summary\}"\$'\\n'"tradeflow_study_v2=\$\{tradeflow2\}"/);
+  const block = text.slice(v2Start, text.indexOf("summary=\"${summary}\"$'\\n'\"tradeflow_study_v2", v2Start));
+  const code = block.slice(block.indexOf("node -e '") + "node -e '".length, block.lastIndexOf("')\""));
+  const run = require("node:child_process").spawnSync(process.execPath, ["-e", code], { input: "TRADEFLOW_STUDY " + JSON.stringify({ status: "WAITING_DATA", daysCollected: 3, studyVersion: 2, note: "free text" }), encoding: "utf8" });
+  assert.equal(run.status, 0, run.stderr);
+  assert.deepEqual(JSON.parse(run.stdout), { status: "WAITING_DATA", daysCollected: 3, studyVersion: 2 });
+});
+
 // WO-OPS-20261109-DIAGNOSE-RESEARCH-JOURNAL: the Research journal probe prints counts and one timestamp only, never log text.
 test("the Research journal availability probe prints only counts and a timestamp", () => {
   const start = text.indexOf('echo "== Research journal availability');

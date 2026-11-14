@@ -153,3 +153,18 @@ test("an unknown study id is refused instead of falling back to another span", (
   assert.notEqual(run.status, 0);
   assert.match(run.stderr, /TRADEFLOW_STUDY_ID_UNKNOWN/);
 });
+
+test("the second pre-registered study has its own span, K and version, and the first keeps its own", () => {
+  const run = spawnSync(process.execPath, ["-e", "const m = require('./scripts/run-tradeflow-study.js'); console.log(JSON.stringify({ id: m.STUDY_ID, version: m.VERSION, k: m.K, s: [m.START, m.VAL, m.HOLD, m.END].map((t) => new Date(t).toISOString()) }))"], { cwd: require("node:path").resolve(__dirname, ".."), env: { ...process.env, NUSA_TRADEFLOW_STUDY_ID: "ML_TRADEFLOW_60M_20261114" }, encoding: "utf8" });
+  assert.equal(run.status, 0, run.stderr);
+  assert.deepEqual(JSON.parse(run.stdout), { id: "ML_TRADEFLOW_60M_20261114", version: 2, k: 201, s: ["2026-11-15T06:00:00.000Z", "2026-11-22T06:00:00.000Z", "2026-11-24T06:00:00.000Z", "2026-11-28T06:00:00.000Z"] });
+  assert.equal(require("./run-tradeflow-study.js").VERSION, 1);
+  assert.equal(K, 198);
+  const first = Object.values(require("./run-tradeflow-study.js").SPANS);
+  assert.equal(first.length, 2, "exactly the two pre-registered studies exist");
+});
+
+test("the printed study line names its study version", () => {
+  const src = require("node:fs").readFileSync(require("node:path").resolve(__dirname, "run-tradeflow-study.js"), "utf8");
+  assert.match(src, /studyVersion: VERSION/);
+});

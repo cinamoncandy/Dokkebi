@@ -8,7 +8,7 @@
  * It places no order, writes nothing, and its result is research evidence only (a PASS qualifies a forward SHADOW test, not promotion).
  *
  * Identical to scripts/run-orderbook-study.js except: the six trade features, the span, the eligibility counts, and ONE tie-break (equal predicted
- * probabilities within an hour are ordered by market code ascending; the order-book script keeps input order). The PASS rule is the same with K = 198.
+ * probabilities within an hour are ordered by market code ascending; the order-book script keeps input order). The PASS rule is the same with K = 198 (201 for the second study).
  * Two readings of the document that differ from the order-book script's code are spelled out here so nobody has to guess:
  * - eligibility counts decision hours t in [START, VAL) (168 hours) that have a book at t, and separately those with at least one tick in
  *   (t - 1 h, t]; each must reach 90% of 168. The order-book script counts finished rows instead.
@@ -18,15 +18,17 @@ const crypto = require("node:crypto");
 const { orderBookSource } = require("./lib/orderBookSource.js");
 const M = 60_000;
 const H = 60 * M;
+// Each pre-registered study has its own span, hypothesis count K and a small version number (printed so a journal line names its study).
 const SPANS = Object.freeze({
-  ML_TRADEFLOW_60M_20261113: Object.freeze({ START: Date.parse("2026-11-07T00:00:00Z"), VAL: Date.parse("2026-11-14T00:00:00Z"), HOLD: Date.parse("2026-11-16T00:00:00Z"), END: Date.parse("2026-11-20T00:00:00Z") }),
+  ML_TRADEFLOW_60M_20261113: Object.freeze({ VERSION: 1, K: 198, START: Date.parse("2026-11-07T00:00:00Z"), VAL: Date.parse("2026-11-14T00:00:00Z"), HOLD: Date.parse("2026-11-16T00:00:00Z"), END: Date.parse("2026-11-20T00:00:00Z") }),
+  // docs/RESEARCH_PREREG_2026-11-14_TRADEFLOW_60M_V2.md: the same rules on a later span; K = 198 + 3 lambdas.
+  ML_TRADEFLOW_60M_20261114: Object.freeze({ VERSION: 2, K: 201, START: Date.parse("2026-11-15T06:00:00Z"), VAL: Date.parse("2026-11-22T06:00:00Z"), HOLD: Date.parse("2026-11-24T06:00:00Z"), END: Date.parse("2026-11-28T06:00:00Z") }),
 });
 const DEFAULT_STUDY_ID = "ML_TRADEFLOW_60M_20261113";
 // An unknown id is refused instead of falling back to another span (fail closed).
 const STUDY_ID = process.env.NUSA_TRADEFLOW_STUDY_ID === undefined || process.env.NUSA_TRADEFLOW_STUDY_ID === "" ? DEFAULT_STUDY_ID : process.env.NUSA_TRADEFLOW_STUDY_ID;
 if (!Object.prototype.hasOwnProperty.call(SPANS, STUDY_ID)) throw new Error("TRADEFLOW_STUDY_ID_UNKNOWN");
-const { START, VAL, HOLD, END } = SPANS[STUDY_ID];
-const K = 198;
+const { VERSION, K, START, VAL, HOLD, END } = SPANS[STUDY_ID];
 const FEE = 0.0005;
 const STRESS_SLIP = 0.0005;
 const PICKS = 3;
@@ -193,7 +195,7 @@ function runStudy({ db, now = Date.now() }) {
   };
 }
 
-module.exports = { runStudy, evaluate, featuresAt, tickSeries, compareTicks, START, VAL, HOLD, END, SPANS, STUDY_ID, K };
+module.exports = { runStudy, evaluate, featuresAt, tickSeries, compareTicks, START, VAL, HOLD, END, SPANS, STUDY_ID, K, VERSION };
 
 if (require.main === module) {
   try {
@@ -201,6 +203,6 @@ if (require.main === module) {
     const path = String(process.env.NUSA_CLOUD_STATE_DB_PATH || "");
     if (!path.startsWith("/")) throw new Error("state path");
     const db = new DatabaseSync(path, { readOnly: true });
-    try { console.log("TRADEFLOW_STUDY", JSON.stringify(runStudy({ db }))); } finally { db.close(); }
+    try { console.log("TRADEFLOW_STUDY", JSON.stringify({ ...runStudy({ db }), studyVersion: VERSION })); } finally { db.close(); }
   } catch { console.error("TRADEFLOW_STUDY_FAILED_CLOSED"); process.exitCode = 1; }
 }

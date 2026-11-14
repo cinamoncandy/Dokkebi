@@ -1,0 +1,21 @@
+id: WO-RESEARCH-20261114-TRADEFLOW-V2-STUDY-ID
+title: "Let the trade-flow study script, the research service hook and the host diagnosis run and read the second pre-registered study"
+status: READY_FOR_REVIEW
+created: 2026-11-14
+implementation_branch: claude/tradeflow-v2-study-id
+authority_impact: none
+finding: "docs/RESEARCH_PREREG_2026-11-14_TRADEFLOW_60M_V2.md pre-registers a second run (ML_TRADEFLOW_60M_20261114) on a later span. The script knew only the first id, the hook ran it once, and the host diagnosis showed one line."
+change:
+  - "scripts/run-tradeflow-study.js: a per-study table of span, hypothesis count K (198 and 201) and version; the printed line carries a numeric studyVersion. The first study's rules, span and K are unchanged."
+  - "scripts/run-cloud-research-snapshot.js: the bounded read-only study child runs once per id (each 600 s limit, each failure fail-closed and never blocks Research)."
+  - ".github/workflows/oracle-host-diagnose.yml: tradeflow_study= (the first study) and tradeflow_study_v2= (lines with studyVersion 2); the same fixed-field projection."
+not_changed:
+  - "No rule, threshold, bar, limit, risk, capital or authority. The first study's behaviour is unchanged. A failed-closed message names no study, so a failure of either study shows as TRADEFLOW_STUDY_FAILED_CLOSED on the first key."
+safety:
+  paper_only: true
+  liveAuthority: NONE
+  productionMutationAllowed: false
+  aiAuthority: ZERO_AUTHORITY
+validation:
+  - "tests: run-tradeflow-study (13), run-cloud-research-snapshot (9), oracle-host-diagnose-workflow (16); the v2 K mutation (201 to 200) fails a test."
+next_action: "Independent review. Merge needs no release by itself, but the script and hook only take effect on the host after one release, which must happen before 2026-11-28 and not during the holdout (2026-11-24T06:00Z..11-28T06:00Z); it is planned after the first study reports on 2026-11-21."

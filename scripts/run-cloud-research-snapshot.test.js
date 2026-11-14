@@ -23,7 +23,7 @@ test("forward timeout/nonzero failures remain explicit while independent canonic
     let calls = 0;
     const result = run({ env: { NUSA_SOURCE_COMMIT: SHA, NUSA_CLOUD_STATE_DB_PATH: path.resolve("/var/lib/nusa/state.sqlite") },
       spawnSync: () => ++calls === 1 ? failure : { status: 0 } });
-    assert.equal(calls, 6); assert.equal(result.forwardExecution, "FAILED"); assert.ok(result.forwardFailure);
+    assert.equal(calls, 7); assert.equal(result.forwardExecution, "FAILED"); assert.ok(result.forwardFailure);
   }
 });
 
@@ -31,14 +31,14 @@ test("an order-book study failure is logged and never blocks canonical Research"
   let calls = 0;
   const result = run({ env: { NUSA_SOURCE_COMMIT: SHA, NUSA_CLOUD_STATE_DB_PATH: path.resolve("/var/lib/nusa/state.sqlite") },
     spawnSync: () => ++calls === 2 ? { status: 1 } : { status: 0 } });
-  assert.equal(calls, 6); assert.equal(result.status, "COMPLETED");
+  assert.equal(calls, 7); assert.equal(result.status, "COMPLETED");
 });
 
 test("a trade-flow study failure is logged and never blocks canonical Research", () => {
   let calls = 0;
   const result = run({ env: { NUSA_SOURCE_COMMIT: SHA, NUSA_CLOUD_STATE_DB_PATH: path.resolve("/var/lib/nusa/state.sqlite") },
     spawnSync: (executable, args) => (args.includes("scripts/run-tradeflow-study.js") ? (calls += 1, { status: 1 }) : { status: 0 }) });
-  assert.equal(calls, 1); assert.equal(result.status, "COMPLETED");
+  assert.equal(calls, 2, "both pre-registered studies are attempted even if each fails"); assert.equal(result.status, "COMPLETED");
 });
 
 test("accepts matching deployed source commit identities", () => {
@@ -92,7 +92,7 @@ test("runs bounded forward study then canonical preload + real public-market Res
     },
   });
   assert.equal(result.status, "COMPLETED");
-  assert.equal(calls.length, 6);
+  assert.equal(calls.length, 7);
   assert.deepEqual(calls[0].args, ["--max-old-space-size=256", "scripts/run-regime-forward-study.js"]);
   assert.equal(calls[0].options.timeout, 120000);
   assert.deepEqual(calls[1].args, ["--max-old-space-size=256", "scripts/run-orderbook-study.js"]);
@@ -103,6 +103,10 @@ test("runs bounded forward study then canonical preload + real public-market Res
   assert.equal(calls[3].options.timeout, 600000);
   assert.deepEqual(calls[4].args, ["--max-old-space-size=256", "scripts/run-tradeflow-study.js"]);
   assert.equal(calls[4].options.timeout, 600000);
+  assert.equal(calls[4].options.env.NUSA_TRADEFLOW_STUDY_ID, "ML_TRADEFLOW_60M_20261113");
+  assert.deepEqual(calls[5].args, ["--max-old-space-size=256", "scripts/run-tradeflow-study.js"]);
+  assert.equal(calls[5].options.timeout, 600000);
+  assert.equal(calls[5].options.env.NUSA_TRADEFLOW_STUDY_ID, "ML_TRADEFLOW_60M_20261114");
   assert.equal(result.learningLedgerPath, path.resolve("/var/lib/nusa/research-investment-learning.jsonl"));
   assert.equal(observed.executable, path.resolve("/usr/bin/node"));
   assert.deepEqual(observed.args, ["--max-old-space-size=256", "-r", "./scripts/research-replay-snapshot-capture.js", "scripts/research-real-market-run.js"]);
