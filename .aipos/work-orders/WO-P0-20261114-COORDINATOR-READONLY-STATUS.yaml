@@ -1,0 +1,25 @@
+id: WO-P0-20261114-COORDINATOR-READONLY-STATUS
+title: "Authenticated read-only operator view of the existing ExecutionCoordinator (bootstrap for #903 / #3108)"
+status: READY_FOR_REVIEW
+created: 2026-11-14
+implementation_branch: claude/coordinator-readonly-status
+authority_impact: none
+owner_decision: "2026-11-14, NUSA CORE conversation: a limited bootstrap exception to the 'verify a live Lease before any code mutation' precondition of #903 comment 6824304140, for this draft PR only (read-only GET code and tests). Not approved: Claim, Dispatch or Lease creation, WIP cap changes, a new store or Coordinator, deployment, Cloudflare Access policy changes. The exception does not make the Coordinator WIP/Lease known; #3108 stays BLOCKED_WIP_UNKNOWN until a read succeeds."
+related: ["#903", "#2039 (not modified; held)", "#3108"]
+finding: "No authenticated operator read path exists: readActiveWip and readPersistentExecution are internal helpers over the Durable Object binding, the Worker routes expose no claim list, and apps/autopilot/src has no Access JWT verification. The Lease needed to start code work could therefore never be read."
+change:
+  - "apps/autopilot/src/operatorCoordinatorStatus.ts: GET /operator/coordinator/status. Verifies a Cloudflare Access RS256 JWT (signature from the team key set, issuer, audience, expiry, not-before, operator email allow-list, hostname allow-list); every failure, including an unreachable key set, is one 401 body; a missing or malformed configuration is a 503 that never reads the Coordinator. Reads through the existing helpers (GET only), twice around the per-claim reads, and reports UNKNOWN for unproven values and for an inconsistent or unreadable snapshot."
+  - "apps/autopilot/src/worker.ts: one route line."
+  - "apps/autopilot/src/operatorCoordinatorStatus.test.ts: 13 tests (valid read, no-write proof by recording every Coordinator call, stale claim not pruned, UNKNOWN cases, 30+ adversarial token defects, key-set failure and refetch limit, uniform denial body, closed configuration, GET only, Worker wiring)."
+reported_fields: "observedAt, workerRevision (NUSA_DEPLOYMENT_REVISION or UNKNOWN), per claim: claimId (executionId), dedupeKey, canonicalOwner, conflictKeys, claimedAt, claimExpiresAt (COMPUTED as claimedAt + ACTIVE_WIP_CLAIM_MAX_AGE_MS, 3,600,000 ms, the Coordinator's own staleness rule), claimState ACTIVE or EXPIRED_NOT_PRUNED, leaseHolder UNKNOWN and heartbeat UNKNOWN (neither is stored), persistent execution state, taskId and leaseExpiresAt when stored; activeCount and overPolicyCap against the policy cap 2 (reported, not enforced here)."
+not_changed:
+  - "The Coordinator, its storage, the WIP policy, Lease TTL, heartbeat or takeover, wrangler.jsonc, any Cloudflare Access policy, any deployment. No Claim, Dispatch or Lease is created or changed by this PR or by the route."
+operator_setup_not_done: "To use the route after a separately approved Worker release, an operator must (1) create the Access application and policy for the route's hostname, (2) set NUSA_ACCESS_TEAM_DOMAIN, NUSA_ACCESS_AUD, NUSA_ACCESS_OPERATOR_EMAILS and NUSA_ACCESS_ALLOWED_HOSTS as Worker variables. Until all four are valid the route answers 503."
+safety:
+  paper_only: true
+  liveAuthority: NONE
+  productionMutationAllowed: false
+  aiAuthority: ZERO_AUTHORITY
+validation:
+  - "13 new tests pass; seven mutations (signature, audience, host, expiry, operator, issuer, algorithm checks removed one at a time) each fail at least one test."
+next_action: "Independent security review of the draft and exact-head CI. No deployment, no Cloudflare change and no Lease use before a separate approval."
