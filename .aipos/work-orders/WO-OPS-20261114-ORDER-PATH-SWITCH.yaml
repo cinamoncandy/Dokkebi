@@ -1,0 +1,29 @@
+id: WO-OPS-20261114-ORDER-PATH-SWITCH
+title: Operator switch NUSA_PAPER_ORDER_PATH - isolate the PAPER order path without stopping market data or research collection
+status: READY_FOR_REVIEW
+priority: P1
+owner: nusa-development
+repository: cinamoncandy/NUSA
+authority_impact: reduces authority only (can remove the ability to order, cannot add any)
+objective: >-
+  Stopping the whole nusa service to isolate orders also stopped research collection (an 18 h gap on 2026-11-13).
+  Add an explicit switch so an operator can turn the PAPER order path off while market data, research collection and
+  the read-only dashboard keep running.
+evidence:
+  code: apps/cloud/src/runtime.ts (startPaperRuntime)
+  tests: tests/cloud-runtime-order-path-switch.test.js
+  design: docs/PROPOSAL_SIMPLIFICATION_2026-11-14.md
+behavior:
+  - 'NUSA_PAPER_ORDER_PATH unset or exactly "ON": unchanged behaviour (writer lease, execution loop and order boundary created).'
+  - 'Any other value, including OFF, empty or a typo: no writer lease, no execution loop, no order boundary, so no order can be produced (fail closed).'
+scope:
+  - One guard in startPaperRuntime and two tests. No default change, no risk, threshold, capital or gate change.
+exclusions:
+  - No host change from an agent session; the operator sets the variable in /etc/nusa/cloud-runtime.env and restarts, which needs a separate owner approval and a release.
+  - Does not fix the missing PERMIT evidence (#3108, still BLOCKED_WIP_UNKNOWN).
+  - PAPER_ONLY, liveAuthority=NONE, productionMutationAllowed=false, aiAuthority=ZERO_AUTHORITY unchanged.
+validation:
+  - 'New tests pass (2). Mutation: removing the guard fails the OFF test.'
+  - 'tests/paper-startup-lease-budget-2770.test.js fails 2 tests (database.connection.setAuthorizer is not a function, Node 22 sandbox) identically on main without this change; CI runs Node 24.'
+acceptance:
+  - A non-author review accepts the guard as authority-reducing and the fail-closed parsing.
