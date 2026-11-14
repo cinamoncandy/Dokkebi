@@ -56,9 +56,12 @@ function run(options = {}) {
   // Pre-registered RAIM market-making study (read-only; WAITING_DATA until its window is collected). Its failure never blocks Research.
   const raim = spawn(executable, [RESEARCH_MAX_OLD_SPACE_ARG, "scripts/run-raim-study.js"], { cwd, env, stdio: "inherit", shell: false, timeout: 600000 });
   if (raim.error || raim.signal || raim.status !== 0) console.error("[cloud-research-snapshot] RAIM_STUDY_FAILED_CLOSED");
-  // Pre-registered TRADEFLOW study (docs/RESEARCH_PREREG_2026-11-13_TRADEFLOW_60M.md; read-only; WAITING_DATA until 2026-11-20T00:30Z). Its failure cannot fail Research; a hung run can still delay it by up to the 600 s timeout.
-  const tradeflow = spawn(executable, [RESEARCH_MAX_OLD_SPACE_ARG, "scripts/run-tradeflow-study.js"], { cwd, env, stdio: "inherit", shell: false, timeout: 600000 });
-  if (tradeflow.error || tradeflow.signal || tradeflow.status !== 0) console.error("[cloud-research-snapshot] TRADEFLOW_STUDY_FAILED_CLOSED");
+  // Pre-registered TRADEFLOW studies (docs/RESEARCH_PREREG_2026-11-13_TRADEFLOW_60M.md and ..._2026-11-14_..._V2.md; read-only; WAITING_DATA until each span ends). Each run's
+  // failure cannot fail Research; a hung run can still delay it by up to its 600 s timeout. Each journal line names its study through `studyVersion`.
+  for (const [studyId, version] of [["ML_TRADEFLOW_60M_20261113", 1], ["ML_TRADEFLOW_60M_20261114", 2]]) {
+    const tradeflow = spawn(executable, [RESEARCH_MAX_OLD_SPACE_ARG, "scripts/run-tradeflow-study.js"], { cwd, env: { ...env, NUSA_TRADEFLOW_STUDY_ID: studyId }, stdio: "inherit", shell: false, timeout: 600000 });
+    if (tradeflow.error || tradeflow.signal || tradeflow.status !== 0) console.error(`[cloud-research-snapshot] TRADEFLOW_STUDY_FAILED_CLOSED:V${version}`);
+  }
   const args = [RESEARCH_MAX_OLD_SPACE_ARG, "-r", "./scripts/research-replay-snapshot-capture.js", "scripts/research-real-market-run.js"];
   const result = spawn(executable, args, { cwd, env, stdio: "inherit", shell: false });
   if (result.error) throw result.error;

@@ -200,6 +200,45 @@ test("the TRADEFLOW study projection keeps a fixed status, numbers, booleans and
   assert.equal(project(""), "TRADEFLOW_STUDY_UNAVAILABLE");
 });
 
+// WO-RESEARCH-20261114-TRADEFLOW-V2-STUDY-ID: the second study prints studyVersion 2; the diagnosis shows the latest line of each study under its own key.
+test("the diagnosis reads the first and the second TRADEFLOW study lines separately and keeps the study version", () => {
+  const v1Start = text.indexOf("tradeflow=\"$(journalctl");
+  const v2Start = text.indexOf("tradeflow2=\"$(journalctl");
+  assert.ok(v1Start > 0 && v2Start > v1Start, "both projections exist, the first one first");
+  const v1Pipe = text.slice(v1Start, text.indexOf("| cut -c1-2000", v1Start));
+  const v2Pipe = text.slice(v2Start, text.indexOf("| cut -c1-2000", v2Start));
+  assert.match(v1Pipe, /grep -v -e '"studyVersion":2' -e 'FAILED_CLOSED:V2'/, "the first study line is every line that is not version 2");
+  assert.match(v2Pipe, /grep -e '"studyVersion":2' -e 'FAILED_CLOSED:V2'/, "the second study line is a version-2 line or its failure");
+  assert.match(text, /summary="\$\{summary\}"\$'\\n'"tradeflow_study_v2=\$\{tradeflow2\}"/);
+  const block = text.slice(v2Start, text.indexOf("summary=\"${summary}\"$'\\n'\"tradeflow_study_v2", v2Start));
+  const code = block.slice(block.indexOf("node -e '") + "node -e '".length, block.lastIndexOf("')\""));
+  const run = require("node:child_process").spawnSync(process.execPath, ["-e", code], { input: "TRADEFLOW_STUDY " + JSON.stringify({ status: "WAITING_DATA", daysCollected: 3, studyVersion: 2, note: "free text" }), encoding: "utf8" });
+  assert.equal(run.status, 0, run.stderr);
+  assert.deepEqual(JSON.parse(run.stdout), { status: "WAITING_DATA", daysCollected: 3, studyVersion: 2 });
+});
+
+test("a failure of one TRADEFLOW study never hides the line of the other study", () => {
+  const pick = (startMarker, input) => {
+    const start = text.indexOf(startMarker);
+    const stage = text.slice(text.indexOf("grep 'TRADEFLOW_STUDY'", start), text.indexOf("| cut -c1-2000", start)).trim();
+    const run = require("node:child_process").spawnSync("bash", ["-c", stage], { input, encoding: "utf8" });
+    assert.equal(run.status, 0, run.stderr);
+    return run.stdout.trim();
+  };
+  const old1 = 'TRADEFLOW_STUDY {"status":"WAITING_DATA","daysCollected":3}';
+  const new1 = 'TRADEFLOW_STUDY {"status":"WAITING_DATA","daysCollected":4,"studyVersion":1}';
+  const new2 = 'TRADEFLOW_STUDY {"status":"WAITING_DATA","daysCollected":1,"studyVersion":2}';
+  const fail1 = "[cloud-research-snapshot] TRADEFLOW_STUDY_FAILED_CLOSED:V1";
+  const fail2 = "[cloud-research-snapshot] TRADEFLOW_STUDY_FAILED_CLOSED:V2";
+  const first = (input) => pick("tradeflow=\"$(journalctl", input);
+  const second = (input) => pick("tradeflow2=\"$(journalctl", input);
+  assert.equal(first([old1, new2, fail2].join("\n")), old1, "a version-2 failure is not the first study's line");
+  assert.equal(second([old1, new2, fail2].join("\n")), fail2, "the second study shows its own failure");
+  assert.equal(first([old1, new1, new2, fail1].join("\n")), fail1, "the first study shows its own failure");
+  assert.equal(second([old1, new1, new2, fail1].join("\n")), new2, "a version-1 failure is not the second study's line");
+  assert.equal(second([old1].join("\n")), "", "no second-study line yet");
+});
+
 // WO-OPS-20261109-DIAGNOSE-RESEARCH-JOURNAL: the Research journal probe prints counts and one timestamp only, never log text.
 test("the Research journal availability probe prints only counts and a timestamp", () => {
   const start = text.indexOf('echo "== Research journal availability');
