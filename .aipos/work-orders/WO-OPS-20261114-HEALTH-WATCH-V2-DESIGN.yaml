@@ -1,0 +1,22 @@
+id: WO-OPS-20261114-HEALTH-WATCH-V2-DESIGN
+title: Health watch v2 design - deeper signals (collection, permit evidence) behind a dedicated read-only monitor credential
+status: READY_FOR_REVIEW
+created: 2026-11-14
+implementation_branch: claude/health-watch-v2-design
+owner_decision: "2026-11-14: the owner told the agent to do the improvement list on its own judgement. Adding a secret and the `secrets` permission still needs the owner's approval at W3."
+objective: "Extend the liveness-only watch (#3116) to the signals that were missed in the 2026-11-13/14 incidents, without putting a broad credential into GitHub."
+evidence:
+  design: docs/HEALTH_WATCH_V2_DESIGN_2026-11-14.md
+  key_finding: "The only runtime credential, NUSA_CLOUD_DASHBOARD_TOKEN, carries paper:trade, settings:write and users:manage scopes (apps/cloud/src/cloudRuntimeConfig.ts), so it must never be an Actions secret; a dedicated dashboard:read-only monitor credential on a fixed GET allow-list is needed first."
+scope:
+  - Documentation and this work order only.
+exclusions:
+  - No code, workflow, secret, host or Cloudflare change. No relaxation of any gate.
+safety:
+  paper_only: true
+  liveAuthority: NONE
+  productionMutationAllowed: false
+  aiAuthority: ZERO_AUTHORITY
+unverified: "The signal field names (lastMarketEventAt, research row counts, PERMISSION/ORDER_INTENT stages in /api/paper-operations) were read from code, not from a running host; the service is stopped."
+acceptance:
+  - A non-author review confirms the credential finding, the alarm rules and that no broad token reaches GitHub.
