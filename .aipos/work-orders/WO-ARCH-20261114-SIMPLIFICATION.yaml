@@ -11,7 +11,7 @@ objective: >-
 evidence:
   proposal: docs/PROPOSAL_SIMPLIFICATION_2026-11-14.md
   builds_on: docs/PROPOSAL_TARGET_ARCHITECTURE_2026-10.md
-  mobile_data_source: apps/desktop/src/mobileBridge.ts
+  mobile_data_source: 'main app: canonical cloud origin (apps/mobile/src/canonicalOrigin.ts); prototype monitor: apps/desktop/src/mobileBridge.ts'
   worker_calls: [/github/webhook, /control-plane/release-check, /coding/execute, /audit/execute]
 scope:
   - Documentation and this work order only.

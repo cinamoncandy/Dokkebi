@@ -18,10 +18,11 @@ and does not repeat it. Safety stays as is: PAPER_ONLY, `liveAuthority=NONE`, `p
 | Size | 42 workflows, 203 scripts, 1,013 test files, 590 work orders, apps: autopilot, cloud, desktop, execution, mobile |
 | Cloudflare | Worker `nusa-autopilot` with the Durable Object `ExecutionCoordinator`. Workflows call it: `autopilot-github-event-bridge` (`/github/webhook`), `autopilot-deterministic-audit-release` (`/control-plane/release-check`), `autopilot-execution-consumer` (`/coding/execute`, `/audit/execute`). Cloudflare workflows: deploy, promote, credential-preflight, runtime-proof (hourly), deployment-readiness |
 | Deploy trigger | `autopilot-cloudflare-deploy` runs on every push to `main` that touches `apps/autopilot/**` |
-| Mobile | `apps/mobile` is a read-only monitor. Its only data source is the desktop localhost bridge (`apps/desktop/src/mobileBridge.ts`: `/health`, `/api/status`, `/api/account`, `/api/market`, `/api/markets`, `/api/candles`, `/api/events`) |
+| Mobile | Two paths exist in code. (1) The main app reads the canonical cloud origin (`apps/mobile/src/canonicalOrigin.ts`, set from the GitHub variable `NUSA_MOBILE_API_BASE_URL` = `https://nusa-api.duckdns.org`, read by the owner on 2026-11-14), i.e. the PAPER host directly, through DuckDNS, not Cloudflare. (2) A read-only "local monitor prototype" (`apps/mobile/README.md`) reads the desktop localhost bridge (`apps/desktop/src/mobileBridge.ts`) and is only used when `EXPO_PUBLIC_NUSA_MONITOR_URL` is set |
 
-Consequence: freezing the desktop app today would leave the mobile app without data, and removing the Worker today
-would stop the release-check and execution calls of the auto-merge path.
+Consequence: removing the Worker today would stop the release-check and execution calls of the auto-merge path.
+Freezing desktop only affects mobile if the monitor-prototype path (2) is in use; S1 below first proves which path the
+phone really uses. The phone path (1) does not depend on Cloudflare.
 
 ## 3. Target shape (three layers)
 
@@ -31,15 +32,15 @@ would stop the release-check and execution calls of the auto-merge path.
 3. **Frozen, not deleted:** desktop app and its release workflows, and other surfaces nobody uses, move behind an
    `attic/` boundary (excluded from builds and required CI) per module, through governed PRs.
 
-Mobile stays. Its data comes from a new read-only status route on the PAPER host (GET only, no order, credential,
-setting or control route), replacing the desktop bridge as the source.
+Mobile stays. Its data comes from the PAPER host at the canonical origin. A new host route is added only if S1 shows
+the phone still needs data that only the desktop bridge provides.
 
 ## 4. Phases (each is one PR, each reversible)
 
 | Phase | Change | Exit evidence | Rollback |
 | --- | --- | --- | --- |
 | S0 | Inventory (read only): for each Worker call in a workflow, what the step decides, what happens if it is moved into Actions, and what the Coordinator WIP cap protects | a table committed under `docs/`; no code change | none needed |
-| S1 | Host read-only status route for mobile (same fixed GET set as the desktop bridge, from the host's own state, authenticated, fail closed) | mobile app reads the same fields from the host; no write route exists; adversarial tests | remove the route; the desktop bridge is untouched |
+| S1 | Prove the phone path: list every endpoint the shipped app calls and whether the host serves it. Only for a gap, add a host read-only GET route (no order, credential, setting or control route, authenticated, fail closed) | table of app calls vs host routes; gaps closed with adversarial tests | remove a new route; the desktop bridge is untouched |
 | S2 | Move each Worker-decided check into Actions and run both in parallel (shadow): the two answers must match on real PRs | N consecutive PRs with identical decisions, mismatches listed | keep calling the Worker |
 | S3 | Switch the workflow URLs to the Actions-side check; keep every check, relax none | auto-merge still blocks a bad PR in a rehearsal; Audit/Release unchanged | switch the URLs back |
 | S4 | Remove Cloudflare: delete the deploy, promote, preflight, runtime-proof and readiness workflows and `apps/autopilot` through governed PRs; the owner deletes the Worker in the Cloudflare account last | no workflow references `workers.dev`; required checks list updated with owner approval | restore from git history; redeploy by the old workflow |
@@ -56,5 +57,5 @@ approved. The owner's earlier request to set up Cloudflare Access for the Coordi
 
 ## 6. Open points for the owner
 
-- Is the PAPER host reachable from the phone today (for the S1 route)? Which path should the phone use?
-- Confirm that the desktop app may be frozen after S1 is proven.
+- Answered 2026-11-14: the phone reaches the PAPER host at `https://nusa-api.duckdns.org` (DuckDNS), not through Cloudflare.
+- Answered 2026-11-14: the desktop app may be frozen once S1 proves the phone does not need it (the owner only uses mobile).
