@@ -26,7 +26,8 @@ export interface DurableObjectStubLike {
   fetch(input: RequestInfo | URL, init?: RequestInit): Promise<Response>;
 }
 
-export type PersistentExecutionState = "LEASED" | "HANDED_OFF" | "DISPATCHED" | "RELEASED" | "COMPLETED" | "WAITING_RATE_LIMIT" | "BLOCKED";
+const PERSISTENT_EXECUTION_STATES = ["LEASED", "HANDED_OFF", "DISPATCHED", "RELEASED", "COMPLETED", "WAITING_RATE_LIMIT", "BLOCKED"] as const;
+export type PersistentExecutionState = typeof PERSISTENT_EXECUTION_STATES[number];
 
 export interface PersistentExecutionStop {
   schemaVersion: 1;
@@ -1454,6 +1455,28 @@ export async function readPersistentExecution(namespace: ExecutionCoordinatorNam
   if (!response.ok) throw new Error("PERSISTENT_EXECUTION_STATE_READ_FAILED");
   const body = await response.json() as { record?: PersistentExecutionRecord | null };
   return body.record ?? null;
+}
+
+/**
+ * Strict variant for the read-only operator view. `readPersistentExecution` turns a missing or malformed `record` into null; here only an
+ * explicit `"record": null` means "no record", and every other shape (or a failed read) throws, so the caller can say UNKNOWN.
+ */
+export async function readPersistentExecutionStrict(namespace: ExecutionCoordinatorNamespace, dedupeKey: string): Promise<PersistentExecutionRecord | null> {
+  const stub = namespace.get(namespace.idFromName(dedupeKey));
+  const response = await stub.fetch("https://execution-coordinator/execution", { method: "GET" });
+  if (!response.ok) throw new Error("PERSISTENT_EXECUTION_STATE_READ_FAILED");
+  const body: unknown = await response.json();
+  if (body === null || typeof body !== "object" || Array.isArray(body) || !Object.prototype.hasOwnProperty.call(body, "record")) throw new Error("PERSISTENT_EXECUTION_STATE_READ_INVALID");
+  const record = (body as { record: unknown }).record;
+  if (record === null) return null;
+  if (typeof record !== "object" || Array.isArray(record)) throw new Error("PERSISTENT_EXECUTION_STATE_READ_INVALID");
+  // A record with a damaged required field is not shown as a normally read record: the whole record is unproven.
+  const fields = record as Record<string, unknown>;
+  const text = (value: unknown): boolean => typeof value === "string" && value.length > 0; // `state` must be one of the stored state names
+  const time = (value: unknown): boolean => Number.isSafeInteger(value) && Number(value) > 0;
+  if (!text(fields.dedupeKey) || !text(fields.executionId) || !(PERSISTENT_EXECUTION_STATES as readonly unknown[]).includes(fields.state) || !time(fields.leaseExpiresAt) || !time(fields.updatedAt)
+    || (fields.taskId !== undefined && typeof fields.taskId !== "string")) throw new Error("PERSISTENT_EXECUTION_STATE_READ_INVALID");
+  return record as PersistentExecutionRecord;
 }
 
 export async function handoffOrAcquirePersistentExecution(namespace: ExecutionCoordinatorNamespace, input: PersistentExecutionAcquireRequest): Promise<{ acquired: boolean; reason?: string; nextRetryAt?: number }> {
