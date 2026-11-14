@@ -1,4 +1,4 @@
-import { ACTIVE_WIP_CLAIM_MAX_AGE_MS, readActiveWip, readPersistentExecution, type ActiveWipClaim, type ExecutionCoordinatorNamespace } from "./executionCoordinator";
+import { ACTIVE_WIP_CLAIM_MAX_AGE_MS, readActiveWip, readPersistentExecutionStrict, type ActiveWipClaim, type ExecutionCoordinatorNamespace } from "./executionCoordinator";
 
 /**
  * Authenticated, read-only operator view of the existing ExecutionCoordinator (#903, #3108).
@@ -73,19 +73,28 @@ function decodeJsonPart(value: string): Record<string, unknown> | undefined {
   } catch { return undefined; }
 }
 
-export interface JwksCacheEntry { readonly keys: ReadonlyMap<string, JsonWebKey>; readonly fetchedAt: number; }
+export interface JwksCacheEntry { readonly keys: ReadonlyMap<string, JsonWebKey>; readonly fetchedAt: number; readonly lastAttemptAt: number; }
 export type JwksCache = Map<string, JwksCacheEntry>;
 /** The key sets of this Worker isolate. A caller may pass its own cache (the tests do), so no reset function needs to be exported. */
 const sharedJwksCache: JwksCache = new Map();
+const NO_KEYS: ReadonlyMap<string, JsonWebKey> = new Map();
 
+/**
+ * Keys come from the cache while they are fresh. A fetch is attempted at most once per JWKS_MIN_REFETCH_MS per team domain, **whether or not it
+ * succeeds**: a failing or malformed key endpoint cannot be hammered by repeated requests, and an unknown key id cannot force a refetch storm.
+ */
 async function loadKeys(jwksCache: JwksCache, teamDomain: string, now: number, fetchJwks: JwksFetcher, force: boolean): Promise<ReadonlyMap<string, JsonWebKey> | undefined> {
   const cached = jwksCache.get(teamDomain);
-  if (cached && now - cached.fetchedAt < JWKS_TTL_MS && !force) return cached.keys;
-  // A refetch is rate limited so that an unknown key id cannot make this route hammer the key endpoint.
-  if (cached && force && now - cached.fetchedAt < JWKS_MIN_REFETCH_MS) return cached.keys;
+  const fresh = cached !== undefined && cached.keys.size > 0 && now - cached.fetchedAt < JWKS_TTL_MS;
+  if (fresh && !force) return cached.keys;
+  if (cached !== undefined && now - cached.lastAttemptAt < JWKS_MIN_REFETCH_MS) return fresh ? cached.keys : undefined;
+  const fail = () => {
+    jwksCache.set(teamDomain, { keys: cached?.keys ?? NO_KEYS, fetchedAt: cached?.fetchedAt ?? 0, lastAttemptAt: now });
+    return fresh ? cached.keys : undefined;
+  };
   try {
     const body = await fetchJwks(`https://${teamDomain}/cdn-cgi/access/certs`) as { keys?: unknown };
-    if (!body || !Array.isArray(body.keys) || body.keys.length === 0 || body.keys.length > JWKS_MAX_KEYS) return cached?.keys && now - cached.fetchedAt < JWKS_TTL_MS ? cached.keys : undefined;
+    if (!body || !Array.isArray(body.keys) || body.keys.length === 0 || body.keys.length > JWKS_MAX_KEYS) return fail();
     const keys = new Map<string, JsonWebKey>();
     for (const entry of body.keys as unknown[]) {
       const key = entry as Record<string, unknown>;
@@ -93,11 +102,11 @@ async function loadKeys(jwksCache: JwksCache, teamDomain: string, now: number, f
         keys.set(key.kid, { kty: "RSA", n: key.n, e: key.e, alg: "RS256", ext: true });
       }
     }
-    if (keys.size === 0) return undefined;
-    jwksCache.set(teamDomain, { keys, fetchedAt: now });
+    if (keys.size === 0) return fail();
+    jwksCache.set(teamDomain, { keys, fetchedAt: now, lastAttemptAt: now });
     return keys;
   } catch {
-    return undefined;
+    return fail();
   }
 }
 
@@ -199,15 +208,24 @@ function describeClaim(claim: ActiveWipClaim, now: number, persistent: unknown):
 /** Reads the active WIP claims twice around the per-claim execution reads. An unequal pair, or any failed read, is reported as UNKNOWN, never as an empty slot. */
 export async function readCoordinatorSnapshot(namespace: ExecutionCoordinatorNamespace, now: number, revision: string): Promise<Record<string, unknown>> {
   const header = { schemaVersion: 1, observedAt: now, workerRevision: revision, policyActiveWipCap: POLICY_ACTIVE_WIP_CAP, liveAuthority: "NONE", productionMutationAllowed: false, aiAuthority: "ZERO_AUTHORITY", readOnly: true };
+  const isObject = (value: unknown): boolean => value !== null && typeof value === "object" && !Array.isArray(value);
   let first;
   try { first = await readActiveWip(namespace); } catch { return { ...header, snapshot: "UNAVAILABLE", claims: "UNKNOWN", activeCount: "UNKNOWN" }; }
   if (first.claims.length > MAX_ACTIVE_CLAIMS_SHOWN) return { ...header, snapshot: "UNAVAILABLE", claims: "UNKNOWN", activeCount: "UNKNOWN" };
+  // An entry that is not an object cannot be described at all: the whole snapshot is unproven, not partly empty.
+  if (!first.claims.every(isObject)) return { ...header, snapshot: "MALFORMED", claims: "UNKNOWN", activeCount: "UNKNOWN" };
   const executions: unknown[] = [];
   for (const claim of first.claims) {
-    try { executions.push(typeof claim.dedupeKey === "string" && claim.dedupeKey.length > 0 ? await readPersistentExecution(namespace, claim.dedupeKey) : "UNKNOWN"); } catch { executions.push("UNKNOWN"); }
+    try {
+      if (typeof claim.dedupeKey !== "string" || claim.dedupeKey.length === 0) { executions.push("UNKNOWN"); continue; }
+      const record = await readPersistentExecutionStrict(namespace, claim.dedupeKey);
+      // A stored record for another identity says nothing about this claim.
+      executions.push(record !== null && record.dedupeKey !== claim.dedupeKey ? "UNKNOWN" : record);
+    } catch { executions.push("UNKNOWN"); }
   }
   let second;
   try { second = await readActiveWip(namespace); } catch { return { ...header, snapshot: "UNAVAILABLE", claims: "UNKNOWN", activeCount: "UNKNOWN" }; }
+  if (!second.claims.every(isObject)) return { ...header, snapshot: "MALFORMED", claims: "UNKNOWN", activeCount: "UNKNOWN" };
   if (JSON.stringify(first.claims) !== JSON.stringify(second.claims)) return { ...header, snapshot: "INCONSISTENT", claims: "UNKNOWN", activeCount: "UNKNOWN" };
   const claims = first.claims.map((claim, index) => describeClaim(claim, now, executions[index]));
   const activeCount = claims.filter((claim) => claim.claimState === "ACTIVE").length;

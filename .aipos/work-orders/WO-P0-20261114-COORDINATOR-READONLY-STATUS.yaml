@@ -9,8 +9,9 @@ related: ["#903", "#2039 (not modified; held)", "#3108"]
 finding: "No authenticated operator read path exists: readActiveWip and readPersistentExecution are internal helpers over the Durable Object binding, the Worker routes expose no claim list, and apps/autopilot/src has no Access JWT verification. The Lease needed to start code work could therefore never be read."
 change:
   - "apps/autopilot/src/operatorCoordinatorStatus.ts: GET /operator/coordinator/status. Verifies a Cloudflare Access RS256 JWT (signature from the team key set, issuer, audience, expiry, not-before, operator email allow-list, hostname allow-list); every failure, including an unreachable key set, is one 401 body; a missing or malformed configuration is a 503 that never reads the Coordinator. Reads through the existing helpers (GET only), twice around the per-claim reads, and reports UNKNOWN for unproven values and for an inconsistent or unreadable snapshot."
+  - "apps/autopilot/src/executionCoordinator.ts: readPersistentExecutionStrict, a read-only variant in which only an explicit \"record\": null means no record (the existing helper maps a missing or malformed record to null). The existing helper is unchanged."
   - "apps/autopilot/src/worker.ts: one route line."
-  - "apps/autopilot/src/operatorCoordinatorStatus.test.ts: 13 tests (valid read, no-write proof by recording every Coordinator call, stale claim not pruned, UNKNOWN cases, 30+ adversarial token defects, key-set failure and refetch limit, uniform denial body, closed configuration, GET only, Worker wiring)."
+  - "apps/autopilot/src/operatorCoordinatorStatus.test.ts: 16 tests (valid read, no-write proof by recording every Coordinator call, stale claim not pruned, UNKNOWN cases, 30+ adversarial token defects, key-set failure and refetch limit, uniform denial body, closed configuration, GET only, Worker wiring)."
 reported_fields: "observedAt, workerRevision (NUSA_DEPLOYMENT_REVISION or UNKNOWN), per claim: claimId (executionId), dedupeKey, canonicalOwner, conflictKeys, claimedAt, claimExpiresAt (COMPUTED as claimedAt + ACTIVE_WIP_CLAIM_MAX_AGE_MS, 3,600,000 ms, the Coordinator's own staleness rule), claimState ACTIVE or EXPIRED_NOT_PRUNED, leaseHolder UNKNOWN and heartbeat UNKNOWN (neither is stored), persistent execution state, taskId and leaseExpiresAt when stored; activeCount and overPolicyCap against the policy cap 2 (reported, not enforced here)."
 not_changed:
   - "The Coordinator, its storage, the WIP policy, Lease TTL, heartbeat or takeover, wrangler.jsonc, any Cloudflare Access policy, any deployment. No Claim, Dispatch or Lease is created or changed by this PR or by the route."
@@ -21,5 +22,6 @@ safety:
   productionMutationAllowed: false
   aiAuthority: ZERO_AUTHORITY
 validation:
-  - "13 new tests pass; seven mutations (signature, audience, host, expiry, operator, issuer, algorithm checks removed one at a time) each fail at least one test."
+  - "Independent security review round 1 (REJECT at 9074c0667): fixed a missing or malformed execution record shown as NOT_STORED (now UNKNOWN), a failed key-set fetch not counting as an attempt (now at most one attempt per minute per team domain), and non-object claim entries (the whole snapshot is MALFORMED). Regression tests added; the four matching mutations fail."
+  - "16 new tests pass; seven mutations (signature, audience, host, expiry, operator, issuer, algorithm checks removed one at a time) each fail at least one test."
 next_action: "Independent security review of the draft and exact-head CI. No deployment, no Cloudflare change and no Lease use before a separate approval."

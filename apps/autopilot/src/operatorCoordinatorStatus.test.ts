@@ -302,3 +302,82 @@ test("the Worker serves the route closed unless fully configured and leaves the 
   const other = await worker.fetch(new Request(`https://${HOST}/operator/coordinator/other`), {} as never);
   assert.notEqual(other.status, 200);
 });
+
+test("only an explicit null record means NOT_STORED; a missing, malformed or foreign record is UNKNOWN", async () => {
+  const pair = await newKeyPair();
+  const keys = await jwksOf(pair);
+  const shapes: Array<[string, () => Response, unknown]> = [
+    ["explicit null", () => new Response(JSON.stringify({ record: null }), { status: 200 }), "NOT_STORED"],
+    ["record missing", () => new Response("{}", { status: 200 }), "UNKNOWN"],
+    ["body is an array", () => new Response("[]", { status: 200 }), "UNKNOWN"],
+    ["body is null", () => new Response("null", { status: 200 }), "UNKNOWN"],
+    ["not JSON", () => new Response("<html>", { status: 200 }), "UNKNOWN"],
+    ["record is a string", () => new Response(JSON.stringify({ record: "stored" }), { status: 200 }), "UNKNOWN"],
+    ["record is an array", () => new Response(JSON.stringify({ record: [] }), { status: 200 }), "UNKNOWN"],
+    ["record of another identity", () => new Response(JSON.stringify({ record: { dedupeKey: "someone-else", executionId: "x", state: "RUNNING", leaseExpiresAt: NOW + 1_000, updatedAt: NOW } }), { status: 200 }), "UNKNOWN"],
+    ["server error", () => new Response("{}", { status: 500 }), "UNKNOWN"],
+  ];
+  for (const [name, respond, expected] of shapes) {
+    const ns = namespace({ override: (call) => call.path === "/execution" ? respond() : undefined });
+    await admitActiveWip(ns, claim);
+    const body = await (await handleOperatorCoordinatorStatus(get(await token(pair, goodClaims())), env(ns), { now: () => NOW, fetchJwks: async () => keys, jwksCache: new Map() })).json() as Record<string, any>;
+    assert.equal(body.snapshot, "CONSISTENT", name);
+    assert.equal(body.claims[0].persistentExecution, expected, name);
+  }
+});
+
+test("a claim list with an entry that is not an object makes the whole snapshot MALFORMED, never partly empty", async () => {
+  const pair = await newKeyPair();
+  const keys = await jwksOf(pair);
+  const good = { dedupeKey: "k:1", executionId: "e1", canonicalOwner: "apps/cloud", conflictKeys: ["a"], claimedAt: NOW - 1_000 };
+  const lists: unknown[][] = [[null], ["claim"], [[1]], [7], [good, null], [null, good]];
+  for (const list of lists) {
+    const ns = namespace({ override: (call) => call.path === "/active-wip" ? new Response(JSON.stringify({ claims: list, activeExecutions: list.length }), { status: 200 }) : undefined });
+    const response = await handleOperatorCoordinatorStatus(get(await token(pair, goodClaims())), env(ns), { now: () => NOW, fetchJwks: async () => keys, jwksCache: new Map() });
+    assert.equal(response.status, 200, JSON.stringify(list));
+    const body = await response.json() as Record<string, any>;
+    assert.deepEqual([body.snapshot, body.claims, body.activeCount], ["MALFORMED", "UNKNOWN", "UNKNOWN"], JSON.stringify(list));
+  }
+  let reads = 0;
+  const secondBad = namespace({ override: (call) => {
+    if (call.path !== "/active-wip") return undefined;
+    reads += 1;
+    return new Response(JSON.stringify({ claims: reads === 1 ? [good] : [null], activeExecutions: 1 }), { status: 200 });
+  } });
+  const body = await (await handleOperatorCoordinatorStatus(get(await token(pair, goodClaims())), env(secondBad), { now: () => NOW, fetchJwks: async () => keys, jwksCache: new Map() })).json() as Record<string, any>;
+  assert.equal(body.snapshot, "MALFORMED", "the second read is checked too");
+});
+
+test("a failing or malformed key endpoint is tried at most once per minute, however many requests arrive", async () => {
+  const pair = await newKeyPair();
+  const keys = await jwksOf(pair);
+  const jwt = await token(pair, goodClaims());
+  const run = async (broken: () => Promise<unknown>) => {
+    const cache: JwksCache = new Map();
+    let fetches = 0;
+    const fetchJwks = async () => { fetches += 1; return broken(); };
+    const at = (now: number) => ({ now, requestHostname: HOST, fetchJwks, jwksCache: cache });
+    for (let index = 0; index < 5; index += 1) assert.deepEqual(await verifyAccessJwt(jwt, config, at(NOW + index * 1_000)), { ok: false, code: "JWKS_UNAVAILABLE" });
+    assert.equal(fetches, 1, "five requests within a minute cause one fetch");
+    assert.deepEqual(await verifyAccessJwt(jwt, config, at(NOW + 61_000)), { ok: false, code: "JWKS_UNAVAILABLE" });
+    assert.equal(fetches, 2, "after a minute one more attempt is allowed");
+    assert.deepEqual(await verifyAccessJwt(jwt, config, at(NOW + 62_000)), { ok: false, code: "JWKS_UNAVAILABLE" });
+    assert.equal(fetches, 2, "and a failed attempt starts the minute again");
+  };
+  await run(async () => { throw new Error("network down"); });
+  await run(async () => ({ keys: [] }));
+  await run(async () => "not an object");
+  // A key set that worked earlier keeps serving while it is fresh, and a failed refetch for an unknown key id is limited the same way.
+  const cache: JwksCache = new Map();
+  let fetches = 0; let up = true;
+  const fetchJwks = async () => { fetches += 1; if (!up) throw new Error("down"); return keys; };
+  const at = (now: number) => ({ now, requestHostname: HOST, fetchJwks, jwksCache: cache });
+  assert.equal((await verifyAccessJwt(jwt, config, at(NOW))).ok, true);
+  up = false;
+  const rotated = await token(pair, goodClaims(), { alg: "RS256", kid: "rotated" });
+  assert.deepEqual(await verifyAccessJwt(rotated, config, at(NOW + 61_000)), { ok: false, code: "KID_UNKNOWN" });
+  assert.equal(fetches, 2);
+  assert.deepEqual(await verifyAccessJwt(rotated, config, at(NOW + 70_000)), { ok: false, code: "KID_UNKNOWN" });
+  assert.equal(fetches, 2, "the failed refetch counts as an attempt");
+  assert.equal((await verifyAccessJwt(jwt, config, at(NOW + 80_000))).ok, true, "the earlier key set still serves valid tokens while it is fresh");
+});

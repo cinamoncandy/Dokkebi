@@ -1456,6 +1456,22 @@ export async function readPersistentExecution(namespace: ExecutionCoordinatorNam
   return body.record ?? null;
 }
 
+/**
+ * Strict variant for the read-only operator view. `readPersistentExecution` turns a missing or malformed `record` into null; here only an
+ * explicit `"record": null` means "no record", and every other shape (or a failed read) throws, so the caller can say UNKNOWN.
+ */
+export async function readPersistentExecutionStrict(namespace: ExecutionCoordinatorNamespace, dedupeKey: string): Promise<PersistentExecutionRecord | null> {
+  const stub = namespace.get(namespace.idFromName(dedupeKey));
+  const response = await stub.fetch("https://execution-coordinator/execution", { method: "GET" });
+  if (!response.ok) throw new Error("PERSISTENT_EXECUTION_STATE_READ_FAILED");
+  const body: unknown = await response.json();
+  if (body === null || typeof body !== "object" || Array.isArray(body) || !Object.prototype.hasOwnProperty.call(body, "record")) throw new Error("PERSISTENT_EXECUTION_STATE_READ_INVALID");
+  const record = (body as { record: unknown }).record;
+  if (record === null) return null;
+  if (typeof record !== "object" || Array.isArray(record)) throw new Error("PERSISTENT_EXECUTION_STATE_READ_INVALID");
+  return record as PersistentExecutionRecord;
+}
+
 export async function handoffOrAcquirePersistentExecution(namespace: ExecutionCoordinatorNamespace, input: PersistentExecutionAcquireRequest): Promise<{ acquired: boolean; reason?: string; nextRetryAt?: number }> {
   const stub = namespace.get(namespace.idFromName(input.dedupeKey));
   const response = await stub.fetch("https://execution-coordinator/handoff-or-acquire", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(input) });
