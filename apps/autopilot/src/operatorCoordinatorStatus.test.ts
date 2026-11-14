@@ -460,19 +460,30 @@ test("only a stored execution state name is accepted; every other string makes t
   for (const state of ["INVALID_STATE", "leased", "RUNNING", "LEASED ", "", "BLOCKED;DROP", 5, null]) assert.equal(await shown(state), "UNKNOWN", String(state));
 });
 
-test("a clock that goes backwards neither blocks key refetches for long nor allows a burst", async () => {
+test("a clock that goes backwards never restarts the one-minute fetch limit, however the times alternate", async () => {
   const pair = await newKeyPair();
   const keys = await jwksOf(pair);
   const cache: JwksCache = new Map();
   let fetches = 0;
   const fetchJwks = async () => { fetches += 1; return keys; };
   const at = (now: number) => ({ now, requestHostname: HOST, fetchJwks, jwksCache: cache });
+  const valid = await token(pair, goodClaims());
   const unknown = await token(pair, goodClaims(), { alg: "RS256", kid: "rotated" });
-  assert.equal((await verifyAccessJwt(await token(pair, goodClaims()), config, at(NOW))).ok, true);
+  const T = NOW;
+  assert.equal((await verifyAccessJwt(valid, config, at(T))).ok, true);
   assert.equal(fetches, 1);
-  // The clock jumps back two hours: one attempt is allowed at once, then the minute starts again from the new time.
-  assert.deepEqual(await verifyAccessJwt(unknown, config, at(NOW - 7_200_000)), { ok: false, code: "KID_UNKNOWN" });
-  assert.equal(fetches, 2, "one attempt after the clock went back");
-  assert.deepEqual(await verifyAccessJwt(unknown, config, at(NOW - 7_199_000)), { ok: false, code: "KID_UNKNOWN" });
-  assert.equal(fetches, 2, "and the limit holds again at the new time");
+  // Alternating times around the stored one: no extra fetch, ever.
+  for (let index = 0; index < 10; index += 1) {
+    assert.deepEqual(await verifyAccessJwt(unknown, config, at(T - 1)), { ok: false, code: "JWKS_UNAVAILABLE" }, "earlier than the stored time: refused");
+    assert.deepEqual(await verifyAccessJwt(unknown, config, at(T)), { ok: false, code: "KID_UNKNOWN" }, "at the stored time: the cache serves, the limit holds");
+    assert.deepEqual(await verifyAccessJwt(unknown, config, at(T - 7_200_000)), { ok: false, code: "JWKS_UNAVAILABLE" }, "two hours earlier: refused");
+  }
+  assert.equal(fetches, 1, "no fetch while the times go backwards or alternate");
+  // While the clock is earlier than the stored time the cached keys are not trusted as fresh: a valid token is refused, not served from a doubtful cache.
+  assert.deepEqual(await verifyAccessJwt(valid, config, at(T - 5_000)), { ok: false, code: "JWKS_UNAVAILABLE" });
+  assert.equal(fetches, 1);
+  // Once the clock is past the stored time again the normal rules apply.
+  assert.equal((await verifyAccessJwt(valid, config, at(T + 1_000))).ok, true);
+  assert.deepEqual(await verifyAccessJwt(unknown, config, at(T + 61_000)), { ok: false, code: "KID_UNKNOWN" });
+  assert.equal(fetches, 2, "one refetch after the minute has really passed");
 });
