@@ -5,7 +5,7 @@ const { readFileSync } = require("node:fs");
 const { join } = require("node:path");
 const { test } = require("node:test");
 
-const workflow = readFileSync(join(__dirname, "../.github/workflows/security-gate-watch.yml"), "utf8");
+const workflow = readFileSync(join(__dirname, "../.github/workflows/security-gate-watch.yml"), "utf8").replace(/\r\n/g, "\n");
 
 test("security gate watch reuses only the exact canonical incident title, from the full open-issue list", () => {
   assert.match(workflow, /gh api --paginate "repos\/\$GITHUB_REPOSITORY\/issues\?state=open&per_page=100"/);
