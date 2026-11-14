@@ -120,5 +120,5 @@ same name, so a name failure would also look like the host being down; the issue
 
 ## 6. Open points for the owner
 
-- Answered 2026-11-14: the phone reaches the PAPER host at `https://nusa-api.duckdns.org` (DuckDNS), not through Cloudflare.
+- Answered 2026-11-14: the repository build input for the phone origin is `https://nusa-api.duckdns.org` (DuckDNS, not Cloudflare). That the installed app really connects there is checked in S1 on a real device.
 - Answered 2026-11-14: the desktop app may be frozen once S1 proves the phone does not need it (the owner only uses mobile).
