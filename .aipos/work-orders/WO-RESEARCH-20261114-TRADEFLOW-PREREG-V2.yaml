@@ -1,0 +1,19 @@
+id: WO-RESEARCH-20261114-TRADEFLOW-PREREG-V2
+title: "Pre-register a second trade-flow 60m run on a later span (the first run's training span contains an 18-hour collection gap)"
+status: READY_FOR_REVIEW
+created: 2026-11-14
+implementation_branch: claude/prereg-tradeflow-v2
+authority_impact: none
+finding: "The PAPER runtime service nusa was inactive from about 2026-11-13 19:00 KST until the release of 2026-11-14 13:20 KST (NRestarts 0; cause unknown; the service log is not readable by the diagnosis account). The tick and order-book collector lives in that service, so about 18 hours were not recorded (/health orderBookCoverage: 164 of 192 hours, longest gap 18 h). About 14 hours of that gap fall in the training span of ML_TRADEFLOW_60M_20261113, whose bar is 152 of 168 hours, so it will most likely end INSUFFICIENT_DATA (an expectation from counts, not a verdict)."
+change:
+  - "docs/RESEARCH_PREREG_2026-11-14_TRADEFLOW_60M_V2.md: same rules and script as the first run; train 2026-11-15T06:00Z..11-22T06:00Z, validation ..11-24T06:00Z, holdout ..11-28T06:00Z; K = 201 (p < 0.05/201); run no earlier than 2026-11-28T06:30Z."
+not_changed:
+  - "The first run, its script and hook, the order-book study, any threshold, gate, limit, risk, capital or authority. No tick value was examined."
+safety:
+  paper_only: true
+  liveAuthority: NONE
+  productionMutationAllowed: false
+  aiAuthority: ZERO_AUTHORITY
+validation:
+  - "Documents and a work order only; validate-aipos-yaml and current-truth regenerated."
+next_action: "Independent review of the pre-registration. Separately, a small PR adds the study id to the script, its test and a hook that can run both ids; it must be released before 2026-11-28 (one release inside the span is acceptable; none during the holdout)."
