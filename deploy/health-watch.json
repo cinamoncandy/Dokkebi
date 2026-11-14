@@ -1,0 +1,5 @@
+{
+  "expectedState": "STOPPED",
+  "healthUrl": "https://nusa-api.duckdns.org/health",
+  "note": "Set expectedState to RUNNING in the same PR that restarts the PAPER service, and back to STOPPED for a planned stop. The watch is read-only: one GET of the public health route."
+}

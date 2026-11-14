@@ -1,0 +1,70 @@
+name: Health Watch
+
+# Design gap found 2026-11-13/14: the PAPER service stopped and a PAPER order path ran without permit evidence, and in both cases a
+# person noticed before the system did. This read-only watch makes one GET of the public health route every 30 minutes and opens or
+# updates one issue when the host does not match deploy/health-watch.json (expectedState). It changes nothing on the host, in the
+# repository or in Cloudflare, and it never restarts anything. It only sees liveness; richer signals need a separate read path.
+on:
+  schedule:
+    - cron: "7,37 * * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  issues: write
+
+concurrency:
+  group: health-watch
+  cancel-in-progress: false
+
+jobs:
+  watch:
+    name: probe public health route
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          ref: main
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: 24
+      - name: Probe and decide
+        id: decide
+        run: |
+          set -uo pipefail
+          URL="$(node -e 'process.stdout.write(JSON.parse(require("fs").readFileSync("deploy/health-watch.json","utf8")).healthUrl)')"
+          case "$URL" in https://*) ;; *) echo "health url must be https"; exit 1;; esac
+          CODE="$(curl -sS -m 20 -o /tmp/health.json -w '%{http_code}' "$URL" || true)"
+          RESULT="$(node scripts/health-watch-decide.js deploy/health-watch.json "${CODE:-0}" /tmp/health.json)"
+          echo "alert=${RESULT%% *}" >> "$GITHUB_OUTPUT"
+          echo "reason=${RESULT#* }" >> "$GITHUB_OUTPUT"
+          echo "$RESULT"
+      - name: Report one issue
+        if: steps.decide.outputs.alert == 'DOWN' || steps.decide.outputs.alert == 'UNEXPECTED_UP' || steps.decide.outputs.alert == 'CONFIG_INVALID'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          ALERT: ${{ steps.decide.outputs.alert }}
+          REASON: ${{ steps.decide.outputs.reason }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          set -euo pipefail
+          case "$ALERT" in
+            DOWN) TITLE="PAPER host is not answering (expected RUNNING)";;
+            UNEXPECTED_UP) TITLE="PAPER host is answering while it should be STOPPED";;
+            *) TITLE="Health watch configuration is invalid";;
+          esac
+          # Fixed text, a short reason code and the run URL only; nothing from the probe body reaches the issue.
+          BODY="$(printf 'Health watch result: %s (%s).\n\nRun: %s\n\nExpected state is set in deploy/health-watch.json. This watch is read-only and restarts nothing. Check the host, then close this issue.' "$ALERT" "$REASON" "$RUN_URL")"
+          find_existing() {
+            gh api --paginate "repos/$GITHUB_REPOSITORY/issues?state=open&per_page=100" --jq ".[] | select(.pull_request == null and .title == \"$TITLE\") | .number" | awk 'NR == 1'
+          }
+          EXISTING="$(find_existing)"
+          if [ -z "$EXISTING" ]; then
+            EXISTING="$(find_existing)"
+          fi
+          if [ -z "$EXISTING" ]; then
+            gh api "repos/$GITHUB_REPOSITORY/issues" -f title="$TITLE" -f body="$BODY" >/dev/null
+          else
+            gh api "repos/$GITHUB_REPOSITORY/issues/$EXISTING/comments" -f body="$BODY" >/dev/null
+          fi
