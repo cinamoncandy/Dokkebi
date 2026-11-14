@@ -11,7 +11,7 @@ Items marked CONFIRM are not yet read in detail and must be checked in S1 before
 
 | Route | Who calls it | What it does | State it keeps |
 | --- | --- | --- | --- |
-| `POST /control-plane/release-check` | `autopilot-deterministic-audit-release.yml` (step "Verify durable control-plane Release clearance") | Checks GitHub OIDC (audience `nusa-autopilot`), that the Coordinator exists, the global release freeze variable, and the durable control-plane HOLD. Answers `RELEASE_CONTROL_CLEAR` only when all pass. The workflow fails unless the answer is exactly CLEAR with `liveAuthority=NONE`, `productionMutationAllowed=false`, `aiAuthority=ZERO_AUTHORITY` | the HOLD record in the Coordinator (Durable Object) and `NUSA_GLOBAL_RELEASE_FREEZE` in `wrangler.jsonc` |
+| `POST /control-plane/release-check` | `autopilot-deterministic-audit-release.yml` (step "Verify durable control-plane Release clearance") | Checks GitHub OIDC (audience `nusa-autopilot`), that the Coordinator exists, the global release freeze variable, and the durable control-plane HOLD. Answers `RELEASE_CONTROL_CLEAR` only when all pass. The workflow fails unless the answer is exactly CLEAR with `liveAuthority=NONE`, `productionMutationAllowed=false`, `aiAuthority=ZERO_AUTHORITY` | two different stores: the control-plane HOLD record in the Coordinator (Durable Object), and the global freeze `NUSA_GLOBAL_RELEASE_FREEZE` in the deployed Worker configuration (`wrangler.jsonc`) |
 | `POST /audit/execute`, `POST /coding/execute` | `autopilot-execution-consumer.yml`; `/coding/execute` also `scripts/autopilot-dispatch-retry.js` | Run or hand off an audit or coding step for a queued execution | Coordinator records (Claim, Dispatch, Lease) CONFIRM |
 | `POST /coding/propose`, `/coding/wip-release`, `/coding/publish`, `/coding/sandbox/validate` | the coding workflows (`autopilot-codex-coding.yml` and related) | coding proposal, WIP release, publish, sandbox check | Coordinator WIP slots CONFIRM |
 | `POST /coding/causal/claim` | `scripts/autopilot-causal-claim.js` | claim for the causal-verification flow | Coordinator CONFIRM |
@@ -32,21 +32,35 @@ Items marked CONFIRM are not yet read in detail and must be checked in S1 before
 | `cloudflare-deployment-readiness.yml` | readiness check for the deploy | remove with the deploy |
 | `deployment-convergence-*`, `autopilot-reconverge.yml`, `autopilot-already-merged-audit-convergence.yml` | convergence of merged heads with the deployed Worker | CONFIRM how much they depend on the Worker |
 
-## 3. The one control that must not be lost
+## 3. The control that must not be lost
 
-`/control-plane/release-check` is the durable **Release HOLD and global freeze** that the auto-merge path asks before it
-may merge. It fails closed: if the Worker is down, merging stops. Removing Cloudflare therefore also removes the place where
-the HOLD is stored. S3 must supply an equivalent that keeps these properties:
+`/control-plane/release-check` is the check that the auto-merge path asks before it may merge. It is **one required gate of that path, not
+proven to be the only gate on every possible merge**: whether GitHub's branch protection and merge permissions force every merge through
+it is not verified here (S1 must read the protection settings). It combines three inputs that live in different places:
 
-1. The HOLD and the global freeze live in one durable place that an agent session cannot change by itself.
-2. Reading it is part of the same required check that gates merging, and an unreadable HOLD blocks the merge (fail closed).
-3. The merge path still returns the same three safety facts (`liveAuthority=NONE`, `productionMutationAllowed=false`,
-   `aiAuthority=ZERO_AUTHORITY`) and a test fails if any is missing.
-4. Setting or clearing the HOLD stays an owner action recorded in git or in a protected GitHub setting.
+| Input | Where it lives today | Who can change it today |
+| --- | --- | --- |
+| control-plane HOLD | the Coordinator (Durable Object) persistent state | the Worker's control-plane routes (CONFIRM who calls them) |
+| global release freeze | `NUSA_GLOBAL_RELEASE_FREEZE` in the deployed Worker configuration | whoever deploys the Worker (a `main` merge deploys it) |
+| PR-level hold and other release conditions | GitHub (labels, issues, checks) read by the Release workflow itself | GitHub permissions |
 
-Candidate homes for the HOLD (to be chosen in S1 with a review): a protected file on `main` changed only through the owner's
-PR, or a protected repository environment with required reviewers. A plain repository variable is NOT enough if an agent
-token can edit it. Until the choice is made and tested in shadow, the Worker check stays.
+It fails closed: if the Worker is down, merging stops. Removing Cloudflare removes the first two stores. S3 must supply replacements
+that keep these properties, **separately for the HOLD and for the freeze**:
+
+1. Each lives in one durable place that an agent session cannot change by itself, and each says who may change it.
+2. Reading it is part of the same required check that gates merging, and an unreadable value blocks the merge (fail closed). A
+   test for each of three cases must fail the merge: read failure, freeze active, HOLD active.
+3. The result is bound to the exact PR number, head SHA and base SHA, and returns the same three safety facts (`liveAuthority=NONE`,
+   `productionMutationAllowed=false`, `aiAuthority=ZERO_AUTHORITY`); a test fails if any is missing.
+4. The state is read again immediately before the merge (the current workflow also re-checks clearance close to the merge), and a
+   change between the check and the merge blocks it. A race test sets the HOLD between the two reads.
+5. Evidence that protected `main` and the real merge permissions cannot bypass the replacement gate (the branch protection settings
+   and the merge actor are read and recorded in S1).
+6. Setting or clearing the HOLD or the freeze stays an owner action recorded in git or in a protected GitHub setting.
+
+Candidate homes (to be chosen in S1 with a review): a protected file on `main` changed only through the owner's PR, or a protected
+repository environment with required reviewers. A plain repository variable is NOT enough if an agent token can edit it. Until the
+choice is made and has run in shadow (S2), the Worker check stays.
 
 ## 4. What the Coordinator protects (for the WIP replacement)
 
