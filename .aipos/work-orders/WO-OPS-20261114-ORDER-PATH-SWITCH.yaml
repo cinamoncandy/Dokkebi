@@ -28,3 +28,4 @@ validation:
   - 'tests/paper-startup-lease-budget-2770.test.js fails 2 tests (database.connection.setAuthorizer is not a function, Node 22 sandbox) identically on main without this change; CI runs Node 24.'
 acceptance:
   - A non-author review accepts the guard as authority-reducing and the fail-closed parsing.
+decision_driven_proof: "tests/cloud-runtime-order-path-switch-e2e.test.js (3 tests, same harness as tests/cloud-runtime-paper-learning-issue-755.test.js, real composition root and a real BUY decision): control ON produces a FILL and pipelineStage PAPER_EXECUTION_LOOP; with OFF, off and true no FILL, no passing ORDER_INTENT, an empty read-only order list, pipelineStage READ_ONLY_DASHBOARD and market data still reaching the dashboard; with the PAPER capital unset on THIS build no FILL either. Mutation: removing the guard fails the OFF test. The capital-unset test is NOT proof for an older (rollback target) build."
