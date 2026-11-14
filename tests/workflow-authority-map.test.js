@@ -29,6 +29,13 @@ test("the repository's own workflows satisfy the committed authority map", () =>
   assert.equal(result.ok, true);
 });
 
+test("the scheduled security gate watch declares only its issue-writing authority", () => {
+  const job = collect()["security-gate-watch.yml"].jobs.watch;
+  assert.deepEqual(job.write, ["issues"]);
+  assert.equal(job.secrets, false);
+  assert.equal(job.environment, null);
+});
+
 test("the map records every workflow and reports real write authority", () => {
   const map = collect();
   assert.ok(Object.keys(map).length >= 30, "all workflows are parsed");

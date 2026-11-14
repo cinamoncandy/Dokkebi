@@ -1,0 +1,22 @@
+id: WO-OPS-20261031-SECURITY-GATE-WATCH
+title: "Daily security-gate watch on main (a newly published advisory must not first show up as every open PR failing)"
+status: READY_FOR_REVIEW
+created: 2026-10-31
+revived: 2026-11-14
+implementation_branch: claude/security-gate-watch-revive
+owner_decision: "2026-11-14: the owner allowed the new `issues: write` permission of this workflow (the only new write authority; no secrets, no repository write)."
+trigger: "Advisory 1244009 (joi, high) made the security gate fail on every PR, including docs-only ones, and was seen only when the PRs failed. The gate ran only on push and pull_request."
+change:
+  - ".github/workflows/security-gate-watch.yml: daily cron (21:17 UTC) and workflow_dispatch; checks out main, installs the locked dependencies, runs pnpm run security:gate; on failure opens or comments on ONE issue titled 'Security gate is failing on main' and fails the run."
+  - "Same pinned actions as ci.yml (validate-workflow-action-pins and validate-workflow-action-inputs pass). Permissions: contents read, issues write. No secrets, no repository write, no waiver."
+not_changed:
+  - "The security gate, its thresholds, COMPENSATED mitigations and ci.yml are untouched. No advisory is waived. No release, deploy, merge or approval path is touched."
+safety:
+  paper_only: true
+  liveAuthority: NONE
+  productionMutationAllowed: false
+  aiAuthority: ZERO_AUTHORITY
+validation:
+  - "validate-workflow-action-pins PASS, validate-workflow-action-inputs PASS, js-yaml parse, tests that read the workflow directory (25 pass), validate-aipos-yaml PASS."
+unverified: "The schedule has not fired and the issue step has not run (cron and issue creation can only be seen on GitHub). The sandbox cannot run pnpm run security:gate end to end (the license check needs installed node_modules)."
+next: "Non-author review of the new workflow, then the release path. After the first scheduled run, confirm the run is green on a clean main and that a failing run creates exactly one issue."

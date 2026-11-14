@@ -1,0 +1,7 @@
+current_ops_security_gate_watch_20261031:
+  work_order: WO-OPS-20261031-SECURITY-GATE-WATCH
+  status: LOCAL_VALIDATED_PENDING_REVIEW_CI
+  branch: claude/security-gate-watch
+  validation: "see the work order"
+  next: "CI, then the release path; confirm the first scheduled run."
+  safety: PAPER_ONLY_LIVE_NONE_PRODUCTION_MUTATION_FALSE_AI_ZERO_AUTHORITY
