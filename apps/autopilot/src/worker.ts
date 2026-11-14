@@ -27,6 +27,7 @@ import { executeVerifiedIsolatedCausalVerification } from "./isolatedCausalVerif
 import { verifyGithubCausalProducerEvidence, verifyGithubCodingPublisherIdentity, verifyGithubCodingPublisherRun, type SourceExecutionIdentity } from "./githubActionsOidc";
 import { createCausalAdmissionReceipt } from "./causalRegressionAdmission";
 import { applyCausalRepairPatch, verifyCausalPublishedFiles } from "./causalRepairPatch";
+import { handleOperatorCoordinatorStatus } from "./operatorCoordinatorStatus";
 import { createCausalProposalReceipt, verifyCausalProposalReceipt, CAUSAL_REPAIR_TARGET as SIGNED_CAUSAL_REPAIR_TARGET } from "./causalProposalReceipt";
 
 export { ExecutionCoordinator };
@@ -765,6 +766,9 @@ async function handleAuditExecute(request: Request, env: WorkerEnv): Promise<Res
 const worker = {
   async fetch(request: Request, env: WorkerEnv): Promise<Response> {
     const url = new URL(request.url);
+
+    // Authenticated read-only operator view of the existing Coordinator (Cloudflare Access JWT; closed unless fully configured).
+    if (url.pathname === "/operator/coordinator/status") return handleOperatorCoordinatorStatus(request, env);
 
     if (request.method === "POST" && url.pathname === "/control-plane/release-check") {
       return handleReleaseControlPlaneCheck(request, env);

@@ -128,7 +128,7 @@ jobs:
           }
 
           CI_CONCLUSION="$(
-            gh api "repos/$GITHUB_REPOSITORY/actions/runs?head_sha=$MAIN_SHA&status=completed&per_page=100" \
+            gh api "repos/$GITHUB_REPOSITORY/actions/runs?head_sha=$MAIN_SHA&per_page=100" \
               --jq '[.workflow_runs[] | select(.name == "CI" and .path == ".github/workflows/ci.yml" and .head_sha == "'"$MAIN_SHA"'" and .conclusion == "success")][0].conclusion // empty'
           )"
           if [ "$CI_CONCLUSION" != "success" ]; then

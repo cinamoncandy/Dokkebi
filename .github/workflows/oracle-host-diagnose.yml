@@ -85,7 +85,7 @@ jobs:
           echo "last400_lines=$(printf '%s\n' "$rj" | grep -c .)"
           echo "permission_hint_lines=$(printf '%s\n' "$rj" | grep -ciE 'insufficient permissions|No journal files|not seeing messages')"
           rj26="$(journalctl -u nusa-research.service --since "-26 hours" --no-pager -o cat 2>&1)"
-          for marker in ORDERBOOK_STUDY RAIM_STUDY DATA_INTEGRITY REGIME_FORWARD_STUDY; do echo "marker_${marker}_last400=$(printf '%s\n' "$rj" | grep -c "$marker") marker_${marker}_26h=$(printf '%s\n' "$rj26" | grep -c "$marker")"; done
+          for marker in ORDERBOOK_STUDY RAIM_STUDY TRADEFLOW_STUDY DATA_INTEGRITY REGIME_FORWARD_STUDY; do echo "marker_${marker}_last400=$(printf '%s\n' "$rj" | grep -c "$marker") marker_${marker}_26h=$(printf '%s\n' "$rj26" | grep -c "$marker")"; done
           echo "lines_last_26h=$(journalctl -u nusa-research.service --since "-26 hours" --no-pager -o cat 2>&1 | grep -c .)"
           echo "newest_entry=$(journalctl -u nusa-research.service -n 1 --no-pager -o short-iso 2>&1 | cut -c1-30)"
           echo "== Forward Research log projection (last 26 hours; fixed fields only; absence is not success)"
@@ -159,6 +159,20 @@ jobs:
             const out = { status: v.status }; for (const [k, x] of Object.entries(v)) if (/^[a-zA-Z]{1,40}$/.test(k) && (typeof x === "boolean" || Number.isFinite(x) || (/Fingerprint$/.test(k) && /^[a-f0-9]{64}$/.test(x)))) out[k] = x; console.log(JSON.stringify(out));
           } catch { console.log(line.includes("RAIM_STUDY_FAILED_CLOSED") ? "RAIM_STUDY_FAILED_CLOSED" : "RAIM_STUDY_UNAVAILABLE"); }')"
           summary="${summary}"$'\n'"raim_study=${raim}"
+          # Latest pre-registered TRADEFLOW study line (docs/RESEARCH_PREREG_2026-11-13_TRADEFLOW_60M.md): a fixed status code plus numbers/booleans only.
+          tradeflow="$(journalctl -u nusa-research.service --since "-26 hours" --no-pager -o cat 2>/dev/null | grep 'TRADEFLOW_STUDY' | grep -v -e '"studyVersion":2' -e 'FAILED_CLOSED:V2' | tail -1 | cut -c1-2000 | node -e '
+          const line = require("node:fs").readFileSync(0, "utf8"); const i = line.indexOf("TRADEFLOW_STUDY ");
+          try { const v = JSON.parse(line.slice(i + 16)); if (i < 0 || !["WAITING_DATA", "INSUFFICIENT_DATA", "DATA_INTEGRITY_FAIL", "HOLDOUT_PASS", "HOLDOUT_FAIL"].includes(v.status)) throw 0;
+            const out = { status: v.status }; for (const [k, x] of Object.entries(v)) if (/^[a-zA-Z]{1,40}$/.test(k) && (typeof x === "boolean" || Number.isFinite(x) || (/Fingerprint$/.test(k) && /^[a-f0-9]{64}$/.test(x)) || (k === "reasonCode" && /^DATA_[A-Z_]{1,30}$/.test(x)))) out[k] = x; console.log(JSON.stringify(out));
+          } catch { console.log(line.includes("TRADEFLOW_STUDY_FAILED_CLOSED") ? "TRADEFLOW_STUDY_FAILED_CLOSED" : "TRADEFLOW_STUDY_UNAVAILABLE"); }')"
+          summary="${summary}"$'\n'"tradeflow_study=${tradeflow}"
+          # Latest line of the second pre-registered TRADEFLOW study (docs/RESEARCH_PREREG_2026-11-14_TRADEFLOW_60M_V2.md; it prints studyVersion 2): a fixed status code plus numbers/booleans only.
+          tradeflow2="$(journalctl -u nusa-research.service --since "-26 hours" --no-pager -o cat 2>/dev/null | grep 'TRADEFLOW_STUDY' | grep -e '"studyVersion":2' -e 'FAILED_CLOSED:V2' | tail -1 | cut -c1-2000 | node -e '
+          const line = require("node:fs").readFileSync(0, "utf8"); const i = line.indexOf("TRADEFLOW_STUDY ");
+          try { const v = JSON.parse(line.slice(i + 16)); if (i < 0 || !["WAITING_DATA", "INSUFFICIENT_DATA", "DATA_INTEGRITY_FAIL", "HOLDOUT_PASS", "HOLDOUT_FAIL"].includes(v.status)) throw 0;
+            const out = { status: v.status }; for (const [k, x] of Object.entries(v)) if (/^[a-zA-Z]{1,40}$/.test(k) && (typeof x === "boolean" || Number.isFinite(x) || (/Fingerprint$/.test(k) && /^[a-f0-9]{64}$/.test(x)) || (k === "reasonCode" && /^DATA_[A-Z_]{1,30}$/.test(x)))) out[k] = x; console.log(JSON.stringify(out));
+          } catch { console.log(line.includes("TRADEFLOW_STUDY_FAILED_CLOSED") ? "TRADEFLOW_STUDY_FAILED_CLOSED" : "TRADEFLOW_STUDY_UNAVAILABLE"); }')"
+          summary="${summary}"$'\n'"tradeflow_study_v2=${tradeflow2}"
           # Latest stored-data integrity probe from the Research service: a fixed status plus integers only.
           integrity="$(journalctl -u nusa-research.service --since "-26 hours" --no-pager -o cat 2>/dev/null | grep 'DATA_INTEGRITY' | tail -1 | cut -c1-2000 | node -e '
           const line = require("node:fs").readFileSync(0, "utf8"); const i = line.indexOf("DATA_INTEGRITY ");

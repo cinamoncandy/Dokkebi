@@ -1,0 +1,17 @@
+id: WO-LEARNING-20261112-LEVELS-LL1-LL8
+title: "Long-term learning loop target: LL1 to LL8 (design proposal)"
+status: READY_FOR_REVIEW
+created: 2026-11-12
+implementation_branch: claude/learning-loop-levels
+authority_impact: none
+finding: "Owner direction on 2026-11-12: aim for L6 and beyond for the learning loop. FORGE L1/L2 already name code-development stages, so the learning levels are named LL1..LL8."
+change:
+  - "docs/LEARNING_LOOP_LEVELS_20261112.md: levels LL1..LL8 with the server-side evidence that passes each, the invariants that never change, the order (bottom up, regression switches higher levels off), and the current LL1 blockers."
+not_changed:
+  - "No code, limit, threshold, risk setting, authority or workflow. Proposal only; not an official roadmap until the owner approves and an independent review accepts it."
+safety:
+  paper_only: true
+  liveAuthority: NONE
+  productionMutationAllowed: false
+  aiAuthority: ZERO_AUTHORITY
+next_action: "Open the draft PR after the pending release has run (a merge during a release supersedes it), then independent review."

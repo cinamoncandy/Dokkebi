@@ -1,0 +1,22 @@
+id: WO-LEARNING-20261112-CANDIDATE-FAMILIES-AND-PLAN
+title: "Show which strategy families the judged candidates belong to; write the hypothesis diversity plan"
+status: READY_FOR_REVIEW
+created: 2026-11-12
+implementation_branch: claude/candidate-diversity
+authority_impact: none
+finding: "After release c9b99e186 /health shows 9 judged candidates, 0 qualified, 9 rejected, every one with BENCHMARK_EDGE_LOST, DEFLATED_SHARPE_BELOW_CONFIDENCE_THRESHOLD, EXPECTANCY_TURNS_NEGATIVE, NON_POSITIVE_BUY_AND_HOLD_OUTPERFORMANCE, PROFIT_FACTOR_BELOW_ONE, REGIME_FRAGILE_EDGE: all candidates lose money. The Research executor supports only three candle-price rule families (SMA crossover, RSI mean reversion, Donchian breakout), one family per run, so the nine are probably variants of one family. The meta-learner marks close-price rule strategies on five markets as exhausted (overfit rate 100%) and recommends ORDERBOOK+INTRADAY+ALL_KRW+ML. The futures collector stored nothing (88 rounds, 528 failures)."
+change:
+  - "closedLearningInitialPaperBootstrap.ts summarizeQualification adds familyCounts: judged candidates per known id prefix (sma, rsi, donchian) or other, highest count first."
+  - "closedLearningLoopStatus.ts keeps bootstrapCandidateFamilies (1..4 keys matching ^[a-z][a-z0-9]{1,15}$, safe integer values), only while RESEARCH_NOT_DEPLOYABLE, all or nothing, rebuilt in publish()."
+  - "server.ts publicRuntimeLiveness: independent allow-list for the same map."
+  - "docs/RESEARCH_HYPOTHESIS_DIVERSITY_PLAN_20261112.md: facts, diversity diagnosis, four candidate hypothesis families with data status, rules (pre-registration before results, multiple-comparison budget, gates unchanged), the proposed order."
+not_changed:
+  - "Qualification, PBO, cost, parameter, economic-edge and evidence-breadth gates, thresholds, allocation policy, deployability, the Research executor and its families, risk, capital, authority. The plan implements no hypothesis family and runs nothing."
+safety:
+  paper_only: true
+  liveAuthority: NONE
+  productionMutationAllowed: false
+  aiAuthority: ZERO_AUTHORITY
+validation:
+  - "closed-learning-qualification-summary 4/4 and cloud-runtime-liveness-health with the new family test: 48/48 together."
+next_action: "Independent review, merge, release; read bootstrapCandidateFamilies; investigate the futures collector failures read-only; write the trade-flow pre-registration draft."

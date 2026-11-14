@@ -1,0 +1,21 @@
+id: WO-RESEARCH-20261112-FUTURES-FAILURE-CLASS-AND-TRADEFLOW-DRAFT
+title: "Say why the futures collector stores nothing; draft the trade-flow study design"
+status: READY_FOR_REVIEW
+created: 2026-11-12
+implementation_branch: claude/futures-failure-class
+authority_impact: none
+finding: "2026-11-12 /health runtime.futuresCollector: rounds 91, failures 546, marksStored 0, fundingStored 0, klinesStored 0 (six failures per round, every fetch fails, nothing stored). The collector swallows the error, so the cause cannot be read. Earlier research records (WO-RESEARCH-20261013-ML-EXTERNAL) and docs/NUSA_CLAUDE_DESIGN_V1.md say Binance public futures returned HTTP 451 (region block); a sandbox call to the same endpoint also returns 451. The host itself has not been observed. The hypothesis diversity plan (docs/RESEARCH_HYPOTHESIS_DIVERSITY_PLAN_20261112.md, #3097) ranks trade flow second, with data available now."
+change:
+  - "researchFuturesCollector.ts: futuresFailureClass maps a fetch failure to a fixed code (HTTP_<status>, TIMEOUT, INVALID_RESPONSE, FETCH_FAILED); the collector keeps the last one and status() returns it as lastFailureClass. The error message never leaves the function."
+  - "server.ts publicRuntimeLiveness: lastFailureClass passes only if it matches ^[A-Z][A-Z0-9_]{2,31}$; the counters are published as before and stay when the class is dropped."
+  - "docs/DRAFT_TRADEFLOW_STUDY_DESIGN_20261112.md: a draft (not a pre-registration) of the trade-flow study: hypothesis, data structure, what is reused from the order-book study, the list of values to fix before pre-registration (span, data bar, features, K, pass rule, cross-study multiple comparison), read-only checks first, and the order of work."
+not_changed:
+  - "What the collector fetches, stores or retries, retention, the Research executor, qualification gates, thresholds, risk, capital, authority. No workaround for a region block is added or proposed; whether to pursue one is the owner's decision. The draft implements and runs nothing and no trade tick value was examined."
+safety:
+  paper_only: true
+  liveAuthority: NONE
+  productionMutationAllowed: false
+  aiAuthority: ZERO_AUTHORITY
+validation:
+  - "research-futures-collector (existing + 2 new: HTTP_451 class from a blocked fetch and none after a healthy round; the mapping function never lets free text, hosts or malformed codes out) and cloud-runtime-liveness-health with the new class cases: 50/50 together; portability and platform-independent checks pass."
+next_action: "Independent review, merge, release; read futuresCollector.lastFailureClass; then the trade-tick coverage display and the trade-flow pre-registration."

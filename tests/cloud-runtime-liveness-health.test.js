@@ -604,6 +604,23 @@ test("/health publishes the order-book coverage as fixed numbers, or UNAVAILABLE
   }
 });
 
+test("/health publishes the trade-tick coverage as fixed numbers that agree, or UNAVAILABLE with a fixed reason code, and no study bar", async () => {
+  const good = { schemaVersion: 1, market: "KRW-XRP", windowHours: 192, coveredHours: 150, ratio: 0.781, longestGapHours: 12, asOfMs: 1_792_000_000_000, note: "x", meetsStudyBar: true };
+  await withServer({ runtimeLiveness: () => ({ ...LIVENESS, tradeTickCoverage: good }) }, async (handle) => {
+    assert.deepEqual(JSON.parse((await request(handle.port, "/health")).body).runtime.tradeTickCoverage, { schemaVersion: 1, windowHours: 192, coveredHours: 150, ratio: 0.781, longestGapHours: 12, asOfMs: 1_792_000_000_000 }, "the market, unknown fields and any bar flag are dropped");
+  }, 42641);
+  await withServer({ runtimeLiveness: () => ({ ...LIVENESS, tradeTickCoverage: { schemaVersion: 1, status: "UNAVAILABLE", reason: "QUERY_FAILED_SQLITE_1", asOfMs: 1_792_000_000_000, path: "/var/lib/x" } }) }, async (handle) => {
+    assert.deepEqual(JSON.parse((await request(handle.port, "/health")).body).runtime.tradeTickCoverage, { schemaVersion: 1, status: "UNAVAILABLE", reason: "QUERY_FAILED_SQLITE_1", asOfMs: 1_792_000_000_000 });
+  }, 42642);
+  const bads = [{ ...good, ratio: 1.5 }, { ...good, ratio: 0.5 }, { ...good, coveredHours: 999 }, { ...good, longestGapHours: 193 }, { ...good, windowHours: 0, coveredHours: 0, ratio: 0 }, { ...good, windowHours: 1441 },
+    { ...good, ratio: "0.781" }, { ...good, asOfMs: 0 }, { ...good, schemaVersion: 2 }, { schemaVersion: 1, status: "UNAVAILABLE", reason: "open failed: /secret/path", asOfMs: 1_792_000_000_000 }, [good], "x"];
+  for (const [index, bad] of bads.entries()) {
+    await withServer({ runtimeLiveness: () => ({ ...LIVENESS, tradeTickCoverage: bad }) }, async (handle) => {
+      assert.equal(JSON.parse((await request(handle.port, "/health")).body).runtime.tradeTickCoverage, undefined, `invalid shape ${index} is omitted`);
+    }, 42643 + index);
+  }
+});
+
 test("/health publishes the stored-data integrity result as a status plus non-negative integers only", async () => {
   await withServer({ runtimeLiveness: () => ({ ...LIVENESS, dataIntegrity: { status: "FAIL", observedAt: 1_792_000_000_000, candleFuture: 1, note: "x", bad: -2 } }) }, async (handle) => {
     assert.deepEqual(JSON.parse((await request(handle.port, "/health")).body).runtime.dataIntegrity, { status: "FAIL", observedAt: 1_792_000_000_000, candleFuture: 1 });
@@ -621,6 +638,14 @@ test("/health publishes the public futures collector counters as non-negative in
   await withServer({ runtimeLiveness: () => ({ ...LIVENESS, futuresCollector: { ...good, rounds: -1 } }) }, async (handle) => {
     assert.equal(JSON.parse((await request(handle.port, "/health")).body).runtime.futuresCollector, undefined);
   }, 42391);
+  await withServer({ runtimeLiveness: () => ({ ...LIVENESS, futuresCollector: { ...good, lastFailureClass: "HTTP_451" } }) }, async (handle) => {
+    assert.deepEqual(JSON.parse((await request(handle.port, "/health")).body).runtime.futuresCollector, { ...good, lastFailureClass: "HTTP_451" });
+  }, 42595);
+  for (const [index, bad] of ["http_451", "HTTP 451", "connect ECONNREFUSED 1.2.3.4", "AB", `A${"B".repeat(32)}`, 451, null, ["HTTP_451"]].entries()) {
+    await withServer({ runtimeLiveness: () => ({ ...LIVENESS, futuresCollector: { ...good, lastFailureClass: bad } }) }, async (handle) => {
+      assert.deepEqual(JSON.parse((await request(handle.port, "/health")).body).runtime.futuresCollector, good, "an unusable failure class is dropped; the counters stay");
+    }, 42596 + index);
+  }
 });
 
 test("/health publishes the SHADOW rolling-holdout summary only as the declared shape: a mode, integers and code-keyed counts", async () => {
@@ -662,4 +687,148 @@ test("/health publishes the gap-fill timings only as six non-negative integers",
       assert.equal(published.runs, 3);
     }, 41866 + index);
   }
+});
+
+test("/health publishes why Research was not deployable as fixed codes only, and drops anything else", async () => {
+  const now = Date.parse("2026-11-12T01:00:00Z");
+  const tracker = new ClosedLearningLoopStatusTracker();
+  tracker.observeBootstrap({ status: "RESEARCH_NOT_DEPLOYABLE", reasons: ["ALLOCATED_CANDIDATE_NOT_QUALIFIED", "NO_ALLOCATION_ADVISORY", "NO_ALLOCATION_ADVISORY", "free text with spaces", "some/relative/path.txt", "lowercase_code", "AB", 7] });
+  tracker.observeRollover({ status: "WAITING_FOR_EVALUATION_WINDOW" }, now);
+  const snapshot = tracker.snapshot();
+  assert.deepEqual(snapshot.bootstrapReasons, ["ALLOCATED_CANDIDATE_NOT_QUALIFIED", "NO_ALLOCATION_ADVISORY"], "only fixed codes, unique and sorted");
+  let loop = snapshot;
+  await withServer({ runtimeLiveness: () => ({ ...LIVENESS, closedLearningLoop: loop }) }, async (handle) => {
+    const read = async () => JSON.parse((await request(handle.port, "/health")).body).runtime.closedLearningLoop;
+    assert.deepEqual((await read()).bootstrapReasons, ["ALLOCATED_CANDIDATE_NOT_QUALIFIED", "NO_ALLOCATION_ADVISORY"]);
+    loop = { ...snapshot, bootstrapReasons: ["OK_CODE", "bad value"] };
+    assert.equal((await read()).bootstrapReasons, undefined, "one bad entry withdraws the whole list");
+    loop = { ...snapshot, bootstrapReasons: ["A1B", "A2B", "A3B", "A4B", "A5B", "A6B"] };
+    assert.equal((await read()).bootstrapReasons, undefined, "more than five entries are withdrawn");
+    loop = { ...snapshot, bootstrap: "DEPLOYED" };
+    assert.equal((await read()).bootstrapReasons, undefined, "reasons are only published for RESEARCH_NOT_DEPLOYABLE");
+  }, 42591);
+  tracker.observeBootstrap({ status: "DEPLOYED", reasons: ["NO_ALLOCATION_ADVISORY"] });
+  tracker.observeRollover({ status: "WAITING_FOR_EVALUATION_WINDOW" }, now + 1);
+  assert.equal(tracker.snapshot().bootstrapReasons, undefined, "a deployable bootstrap carries no reasons");
+});
+
+test("bootstrapReasons: a sparse array, boundary lengths and a stale list after an error never reach /health (independent review of #3093)", async () => {
+  const now = Date.parse("2026-11-12T01:00:00Z");
+  const base = new ClosedLearningLoopStatusTracker();
+  base.observeBootstrap({ status: "RESEARCH_NOT_DEPLOYABLE", reasons: ["NO_ALLOCATION_ADVISORY"] });
+  base.observeRollover({ status: "WAITING_FOR_EVALUATION_WINDOW" }, now);
+  const snapshot = base.snapshot();
+  let loop = snapshot;
+  await withServer({ runtimeLiveness: () => ({ ...LIVENESS, closedLearningLoop: loop }) }, async (handle) => {
+    const read = async () => JSON.parse((await request(handle.port, "/health")).body).runtime.closedLearningLoop;
+    const sparse = Array(2); sparse[0] = "OK_CODE";
+    loop = { ...snapshot, bootstrapReasons: sparse };
+    assert.equal((await read()).bootstrapReasons, undefined, "a sparse array (a hole serializes as null) is withdrawn");
+    loop = { ...snapshot, bootstrapReasons: ["OK_CODE", undefined] };
+    assert.equal((await read()).bootstrapReasons, undefined, "an undefined entry is withdrawn");
+    loop = { ...snapshot, bootstrapReasons: ["A1B", "A2B", "A3B", "A4B", "A5B"] };
+    assert.deepEqual((await read()).bootstrapReasons, ["A1B", "A2B", "A3B", "A4B", "A5B"], "exactly five entries pass, in the given order");
+    const max = `A${"B".repeat(63)}`;
+    loop = { ...snapshot, bootstrapReasons: [max] };
+    assert.deepEqual((await read()).bootstrapReasons, [max], "a 64-character code passes");
+    loop = { ...snapshot, bootstrapReasons: [`${max}B`] };
+    assert.equal((await read()).bootstrapReasons, undefined, "a 65-character code is withdrawn");
+    loop = { ...snapshot, bootstrapReasons: ["DUPLICATE_CODE", "DUPLICATE_CODE"] };
+    assert.deepEqual((await read()).bootstrapReasons, ["DUPLICATE_CODE", "DUPLICATE_CODE"], "the server does not rewrite the list; de-duplication belongs to the tracker");
+    loop = { ...snapshot, bootstrapReasons: "NO_ALLOCATION_ADVISORY" };
+    assert.equal((await read()).bootstrapReasons, undefined, "a string is not an array");
+  }, 42592);
+});
+
+test("the tracker never carries bootstrap reasons into a later status: DEPLOYED then an error, and exactly 64 characters in", () => {
+  const now = Date.parse("2026-11-12T01:00:00Z");
+  const tracker = new ClosedLearningLoopStatusTracker();
+  tracker.observeBootstrap({ status: "RESEARCH_NOT_DEPLOYABLE", reasons: ["NO_ALLOCATION_ADVISORY"] });
+  tracker.observeRollover({ status: "WAITING_FOR_EVALUATION_WINDOW" }, now);
+  assert.deepEqual(tracker.snapshot().bootstrapReasons, ["NO_ALLOCATION_ADVISORY"]);
+  tracker.observeBootstrap({ status: "DEPLOYED" });
+  tracker.observeError(now + 1, "SOME_ERROR");
+  assert.equal(tracker.snapshot().bootstrapReasons, undefined, "an error after the bootstrap changed does not keep the old reasons");
+  tracker.observeBootstrap({ status: "RESEARCH_NOT_DEPLOYABLE", reasons: ["NO_ALLOCATION_ADVISORY"] });
+  tracker.observeError(now + 2, "SOME_ERROR");
+  assert.deepEqual(tracker.snapshot().bootstrapReasons, ["NO_ALLOCATION_ADVISORY"], "while still not deployable an error keeps the current reasons");
+  const long = `A${"B".repeat(63)}`;
+  tracker.observeBootstrap({ status: "RESEARCH_NOT_DEPLOYABLE", reasons: [long, `${long}B`, "AB"] });
+  tracker.observeRollover({ status: "WAITING_FOR_EVALUATION_WINDOW" }, now + 3);
+  assert.deepEqual(tracker.snapshot().bootstrapReasons, [long], "64 characters pass, 65 and 2 do not");
+});
+
+test("/health publishes how many candidates were judged and the fixed qualification codes, as integers and codes only", async () => {
+  const now = Date.parse("2026-11-12T01:00:00Z");
+  const tracker = new ClosedLearningLoopStatusTracker();
+  tracker.observeBootstrap({ status: "RESEARCH_NOT_DEPLOYABLE", reasons: ["NO_ALLOCATION_ADVISORY"], qualificationSummary: { candidateCount: 19, qualifiedCount: 0, insufficientCount: 4, rejectedCount: 15, reasonCounts: { PBO_TOO_HIGH: 15, "free text": 3, lowercase: 2, COST_STRESS_FAILED: 7 } } });
+  tracker.observeRollover({ status: "WAITING_FOR_EVALUATION_WINDOW" }, now);
+  const snapshot = tracker.snapshot();
+  assert.deepEqual(snapshot.bootstrapQualification, { candidates: 19, qualified: 0, insufficient: 4, rejected: 15 });
+  assert.equal(snapshot.bootstrapRejectionReasons, undefined, "the tracker drops the WHOLE code map when one code is bad (independent review of #3096)");
+  assert.deepEqual(snapshot.bootstrapQualification, { candidates: 19, qualified: 0, insufficient: 4, rejected: 15 }, "the counts stay");
+  const clean = new ClosedLearningLoopStatusTracker();
+  clean.observeBootstrap({ status: "RESEARCH_NOT_DEPLOYABLE", qualificationSummary: { candidateCount: 19, qualifiedCount: 0, insufficientCount: 4, rejectedCount: 15, reasonCounts: { PBO_TOO_HIGH: 15, COST_STRESS_FAILED: 7 } } });
+  clean.observeRollover({ status: "WAITING_FOR_EVALUATION_WINDOW" }, now);
+  assert.deepEqual({ ...clean.snapshot().bootstrapRejectionReasons }, { PBO_TOO_HIGH: 15, COST_STRESS_FAILED: 7 }, "a clean map is kept as it is");
+  for (const bad of [{ PBO_TOO_HIGH: -1 }, { PBO_TOO_HIGH: 1.5 }, { PBO_TOO_HIGH: "3" }, Object.fromEntries(Array.from({ length: 9 }, (_, i) => [`CODE_${i}`, 1])), {}, ["PBO_TOO_HIGH"]]) {
+    const t = new ClosedLearningLoopStatusTracker();
+    t.observeBootstrap({ status: "RESEARCH_NOT_DEPLOYABLE", qualificationSummary: { candidateCount: 2, qualifiedCount: 0, insufficientCount: 0, rejectedCount: 2, reasonCounts: bad } });
+    t.observeRollover({ status: "WAITING_FOR_EVALUATION_WINDOW" }, now);
+    assert.equal(t.snapshot().bootstrapRejectionReasons, undefined, "an unusable code map is dropped as a whole");
+    assert.deepEqual(t.snapshot().bootstrapQualification, { candidates: 2, qualified: 0, insufficient: 0, rejected: 2 });
+  }
+  const cleanSnapshot = clean.snapshot();
+  let loop = cleanSnapshot;
+  await withServer({ runtimeLiveness: () => ({ ...LIVENESS, closedLearningLoop: loop }) }, async (handle) => {
+    const read = async () => JSON.parse((await request(handle.port, "/health")).body).runtime.closedLearningLoop;
+    const published = await read();
+    assert.deepEqual(published.bootstrapQualification, { candidates: 19, qualified: 0, insufficient: 4, rejected: 15 });
+    assert.deepEqual(published.bootstrapRejectionReasons, { PBO_TOO_HIGH: 15, COST_STRESS_FAILED: 7 });
+    loop = { ...cleanSnapshot, bootstrapRejectionReasons: { PBO_TOO_HIGH: 15, "bad code": 1 } };
+    assert.equal((await read()).bootstrapRejectionReasons, undefined, "one bad code drops the whole map");
+    assert.deepEqual((await read()).bootstrapQualification, { candidates: 19, qualified: 0, insufficient: 4, rejected: 15 }, "the counts stay");
+    loop = { ...cleanSnapshot, bootstrapRejectionReasons: { PBO_TOO_HIGH: -1 } };
+    assert.equal((await read()).bootstrapRejectionReasons, undefined, "a negative count drops the map");
+    loop = { ...cleanSnapshot, bootstrapRejectionReasons: { PBO_TOO_HIGH: 1.5 } };
+    assert.equal((await read()).bootstrapRejectionReasons, undefined, "a fractional count drops the map");
+    loop = { ...cleanSnapshot, bootstrapRejectionReasons: Object.fromEntries(Array.from({ length: 9 }, (_, i) => [`CODE_${i}`, 1])) };
+    assert.equal((await read()).bootstrapRejectionReasons, undefined, "more than eight codes drops the map");
+    loop = { ...cleanSnapshot, bootstrapRejectionReasons: ["PBO_TOO_HIGH"] };
+    assert.equal((await read()).bootstrapRejectionReasons, undefined, "an array is not a map");
+    loop = { ...cleanSnapshot, bootstrapQualification: { candidates: 19, qualified: "0", insufficient: 4, rejected: 15 } };
+    const withBadCounts = await read();
+    assert.equal(withBadCounts.bootstrapQualification, undefined, "a non-integer count withdraws the counts");
+    assert.equal(withBadCounts.bootstrapRejectionReasons, undefined, "and with them the code map");
+    loop = { ...cleanSnapshot, bootstrap: "DEPLOYED" };
+    const deployed = await read();
+    assert.equal(deployed.bootstrapQualification, undefined);
+    assert.equal(deployed.bootstrapRejectionReasons, undefined);
+  }, 42593);
+  tracker.observeBootstrap({ status: "DEPLOYED", qualificationSummary: { candidateCount: 1, qualifiedCount: 1, insufficientCount: 0, rejectedCount: 0, reasonCounts: {} } });
+  tracker.observeError(now + 1, "SOME_ERROR");
+  assert.equal(tracker.snapshot().bootstrapQualification, undefined, "no stale qualification after the bootstrap changed");
+  assert.equal(tracker.snapshot().bootstrapRejectionReasons, undefined);
+});
+
+test("/health publishes the judged candidates per strategy family, and drops a malformed family map as a whole", async () => {
+  const now = Date.parse("2026-11-12T01:00:00Z");
+  const summary = (familyCounts) => ({ candidateCount: 9, qualifiedCount: 0, insufficientCount: 0, rejectedCount: 9, reasonCounts: { PBO_TOO_HIGH: 9 }, familyCounts });
+  const make = (familyCounts) => { const t = new ClosedLearningLoopStatusTracker(); t.observeBootstrap({ status: "RESEARCH_NOT_DEPLOYABLE", qualificationSummary: summary(familyCounts) }); t.observeRollover({ status: "WAITING_FOR_EVALUATION_WINDOW" }, now); return t.snapshot(); };
+  assert.deepEqual({ ...make({ sma: 9 }).bootstrapCandidateFamilies }, { sma: 9 });
+  for (const bad of [{ sma: 5, "Bad Key": 4 }, { sma: -1 }, { sma: 1.5 }, { sma: "9" }, { a: 1, b: 1, c: 1, d: 1, e: 1 }, {}, ["sma"], { SMA: 9 }, { [`s${"m".repeat(16)}`]: 1 }]) {
+    assert.equal(make(bad).bootstrapCandidateFamilies, undefined, "an unusable family map is dropped as a whole in the tracker");
+  }
+  const good = make({ sma: 9 });
+  let loop = good;
+  await withServer({ runtimeLiveness: () => ({ ...LIVENESS, closedLearningLoop: loop }) }, async (handle) => {
+    const read = async () => JSON.parse((await request(handle.port, "/health")).body).runtime.closedLearningLoop;
+    assert.deepEqual((await read()).bootstrapCandidateFamilies, { sma: 9 });
+    for (const bad of [{ sma: 5, "Bad Key": 4 }, { sma: -1 }, { sma: 1.5 }, { sma: "9" }, { a: 1, b: 1, c: 1, d: 1, e: 1 }, ["sma"], { SMA: 9 }]) {
+      loop = { ...good, bootstrapCandidateFamilies: bad };
+      assert.equal((await read()).bootstrapCandidateFamilies, undefined, "the server drops a malformed family map as a whole");
+    }
+    loop = { ...good, bootstrap: "DEPLOYED" };
+    assert.equal((await read()).bootstrapCandidateFamilies, undefined, "only while RESEARCH_NOT_DEPLOYABLE");
+  }, 42594);
 });

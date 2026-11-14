@@ -1,0 +1,23 @@
+id: WO-LEARNING-20261112-ALLOCATION-REASON-AND-GAP
+title: "Say why the League refused to allocate, and record the single-candidate gap"
+status: READY_FOR_REVIEW
+created: 2026-11-12
+implementation_branch: claude/allocation-reason-code
+authority_impact: none
+finding: "After release 69c199b37, /health shows bootstrapReasons=[NO_ALLOCATION_ADVISORY]. That reason covers two different causes (no qualified candidate, or too few for the default diversification capacity). Reading the code and reproducing it showed a second, structural point: the worker deploys only when the League allocation has exactly one entry, while the real Research run uses the default policy (candidate cap 0.4, up to five), which never yields exactly one entry."
+change:
+  - "scripts/closed-learning-research-worker.js: when the allocation is unavailable, the League refusal code (a fixed upper-case code) is added as ALLOCATION_<code> next to NO_ALLOCATION_ADVISORY. Anything that is not a fixed code adds nothing. Display only; deployability is unchanged."
+  - "scripts/closed-learning-research-worker.test.js: refusal codes pass, unusable values add nothing."
+  - "tests/league-allocation-single-candidate-gap.test.js: records what the default policy produces for 0..8 qualified candidates and that a one-candidate policy yields one entry (characterization, not endorsement)."
+  - "docs/PROPOSAL_SINGLE_CANDIDATE_DEPLOYMENT_GAP_20261112.md: facts, the table, three options (A single-candidate policy in the Research run, B the worker picks rank 1, C leave it), recommendation: read the reason first, decide only if the cause is not 'no qualified candidate'."
+not_changed:
+  - "Qualification gates, PBO, cost, parameter and economic-edge checks, thresholds, allocation policy, deployability, risk, capital, authority. No option in the proposal is implemented."
+safety:
+  paper_only: true
+  liveAuthority: NONE
+  productionMutationAllowed: false
+  aiAuthority: ZERO_AUTHORITY
+validation:
+  - "closed-learning-research-worker 10/10; league-allocation-single-candidate-gap 3/3."
+review_20261112: "Independent review ACCEPT WITH P2. P2 fixed: the proposal table and the characterization test now say that 'zero' also covers candidates that exist but are not eligible, not QUALIFIED_FOR_LEAGUE, or below the 0.5 evidence breadth (all give NO_ALLOCATABLE_CANDIDATES); the new test pins exactly 0.49 (refused) vs 0.5 (kept), eligible=false, INSUFFICIENT outcome, and two candidates at 0.5 (capacity refusal). league-allocation-single-candidate-gap 3/3."
+next_action: "Independent review, merge, release; read bootstrapReasons for the refusal code; then the owner decides on option A or B only if the cause is not 'no qualified candidate'."

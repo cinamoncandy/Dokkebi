@@ -1,0 +1,35 @@
+current_research_gapfill_per_market_health_20261105:
+  work_order: WO-DATA-20261105-GAPFILL-PER-MARKET-HEALTH
+  issue: 2815
+  observed_at_utc: "2026-11-05T12:49:22Z"
+  protected_main: 185c52c22691a5a35b13fe024cb39d810719a833
+  branch: WO-DATA-20261105-GAPFILL-PER-MARKET-HEALTH
+  status: IN_PROGRESS
+  canonical_scope: DISPLAY_ONLY_RESEARCH_GAP_FILL_DIAGNOSTIC
+  prior_issue_finding: 6460727724
+  prior_aggregate_implementation: PR_2918_MERGED
+  overlap_check:
+    PR_2975: "separate freshness cadence and bounded fetch page; no changed-file overlap"
+    PR_3000: "Oracle convergence; separate worktree and branch"
+    exact_per_market_work: "no open branch or implementation PR found"
+  implementation:
+    per_market_summary: PASS
+    /health_strict_sanitizer: PASS
+    raw_error_text_excluded: PASS
+  validation:
+    focused: PASS_6_OF_6
+    preflight: PASS
+    build: PASS
+    typecheck: PASS
+    validate_full: PASS
+    security: PASS_ZERO_HIGH_CRITICAL_ZERO_SECRETS
+    lint: PASS_ZERO_ERRORS_47_BASELINE_WARNINGS
+    full_tests: PASS_1327_ISOLATED_TEST_FILES
+    diff_check: PASS
+    exact_head_ci: PENDING
+    independent_review: PENDING
+  production_runtime_values: UNVERIFIED
+  learning_loop_verified: false
+  performance_improvement: UNPROVEN
+  safety: PAPER_ONLY_LIVE_NONE_PRODUCTION_MUTATION_FALSE_REAL_ORDER_FALSE_REAL_TRANSFER_FALSE_AI_ZERO_AUTHORITY
+  next: "Open one Draft PR against main, verify exact-head CI, and obtain independent Research/Data review; production host values remain unverified."

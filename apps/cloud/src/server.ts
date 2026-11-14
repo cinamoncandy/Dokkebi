@@ -112,19 +112,22 @@ export interface CloudRuntimeLivenessSnapshot {
   /** Order-book hour coverage for the first research market (market name never published), or UNAVAILABLE with a fixed reason code. */
   readonly orderBookCoverage?: { readonly schemaVersion: 1; readonly windowHours: number; readonly coveredHours: number; readonly ratio: number; readonly longestGapHours: number; readonly meetsStudyBar: boolean; readonly asOfMs: number }
     | { readonly schemaVersion: 1; readonly status: "UNAVAILABLE"; readonly reason: string; readonly asOfMs: number };
+  /** Trade-tick hour coverage for the first research market (market name never published; no study bar), or UNAVAILABLE with a fixed reason code. */
+  readonly tradeTickCoverage?: { readonly schemaVersion: 1; readonly windowHours: number; readonly coveredHours: number; readonly ratio: number; readonly longestGapHours: number; readonly asOfMs: number }
+    | { readonly schemaVersion: 1; readonly status: "UNAVAILABLE"; readonly reason: string; readonly asOfMs: number };
   readonly orderBookCollector?: { readonly rounds: number; readonly markets: number; readonly samplesStored: number; readonly failures: number; readonly rejected?: number; readonly lastRoundAt?: number };
-  readonly futuresCollector?: { readonly rounds: number; readonly marksStored: number; readonly fundingStored: number; readonly klinesStored: number; readonly failures: number; readonly rejected: number; readonly lastRoundAt?: number };
+  readonly futuresCollector?: { readonly rounds: number; readonly marksStored: number; readonly fundingStored: number; readonly klinesStored: number; readonly failures: number; readonly rejected: number; readonly lastRoundAt?: number; readonly lastFailureClass?: string };
   readonly microstructureRecorder?: { readonly orderBookSamples: number; readonly tradeTicks: number; readonly writeFailures: number; readonly rejectedRows?: number; readonly lastRecordedAt?: number };
   readonly researchExperimentTicks?: { readonly lastTickAt: number; readonly lastStatus: string; readonly ticks: number; readonly sessionsStarted: number; readonly counts: Readonly<Record<string, number>> };
   /** Display-only outcome of the hourly REST gap fill (the candle series head writer): fixed codes and integers. */
   readonly researchRollingHoldout?: Readonly<Record<string, object>>;
-  readonly researchGapFill?: { readonly lastRunAt?: number; readonly runs: number; readonly deferred: number; readonly counts: Readonly<Record<string, number>>; readonly lastErrorCode?: string; readonly timingsMs?: Readonly<Record<string, number>> };
+  readonly researchGapFill?: { readonly lastRunAt?: number; readonly runs: number; readonly deferred: number; readonly counts: Readonly<Record<string, number>>; readonly lastByMarket?: Readonly<Record<string, { readonly lastAttemptAt: number; readonly status: string; readonly missing: number; readonly recorded: number; readonly rejected: number; readonly pages: number; readonly errorCode?: string }>>; readonly lastErrorCode?: string; readonly timingsMs?: Readonly<Record<string, number>> };
   /** The same research experiment summaries keyed by bar length ("1m", "15m", "60m", "240m"). */
   readonly researchExperimentTicksByInterval?: Readonly<Record<string, { readonly lastTickAt: number; readonly lastStatus: string; readonly ticks: number; readonly sessionsStarted: number; readonly counts: Readonly<Record<string, number>> }>>;
   /** Canonical PAPER ledger identity: a 64-hex fingerprint of ledger truth and integer counts/times only. */
   readonly paperLedger?: { readonly ledgerFingerprintSha256: string; readonly fillCount: number; readonly openPositionCount: number; readonly lastFillAt?: number; readonly ledgerUpdatedAt: number };
   /** Production closed-learning loop status: fixed codes and integers only. */
-  readonly closedLearningLoop?: Readonly<Record<string, string | number | undefined | Readonly<Record<string, string | number | undefined>>>>;
+  readonly closedLearningLoop?: Readonly<Record<string, string | number | undefined | readonly string[] | Readonly<Record<string, string | number | undefined>>>>;
   /** Full lowercase 40-hex build commit of the running process; omitted when absent or malformed. */
   readonly sourceCommitSha?: string;
   readonly paperLossSession?: { readonly evaluatedAt: number; readonly consecutiveLossCount: number; readonly maxConsecutiveLosses: number; readonly consecutiveLossLimitEnabled?: boolean; readonly todayCompletedSells: number; readonly todayLosingSells: number; readonly periodIdentity?: string; readonly periodStartedAt?: number; readonly lastIncrementAt?: number | null };
@@ -399,7 +402,7 @@ function publicRuntimeLiveness(value: CloudRuntimeLivenessSnapshot): CloudRuntim
   };
   const ticksSummary = publicTicks(source.researchExperimentTicks as Record<string, unknown> | null | undefined);
   const experimentTicks = ticksSummary === undefined ? {} : { researchExperimentTicks: ticksSummary };
-  // Research gap fill: three integers, an optional timestamp, at most 12 code-keyed integer counts and one optional code.
+  // Research gap fill: aggregate fixed codes and timings plus bounded per-market fixed statuses/counters only.
   const rawGap = source.researchGapFill as Record<string, unknown> | null | undefined;
   let researchGapFill: { researchGapFill?: Record<string, unknown> } = {};
   if (rawGap != null && typeof rawGap === "object" && !Array.isArray(rawGap) && Number.isSafeInteger(rawGap.runs) && Number(rawGap.runs) >= 0 && Number.isSafeInteger(rawGap.deferred) && Number(rawGap.deferred) >= 0
@@ -414,8 +417,29 @@ function publicRuntimeLiveness(value: CloudRuntimeLivenessSnapshot): CloudRuntim
     const timingKeys = ["lastFillMs", "lastReadMs", "lastMaterializeMs", "maxFillMs", "maxReadMs", "maxMaterializeMs"] as const;
     const timingsMs = rawTimings != null && typeof rawTimings === "object" && !Array.isArray(rawTimings) && timingKeys.every((key) => Number.isSafeInteger(rawTimings[key]) && Number(rawTimings[key]) >= 0)
       ? { timingsMs: Object.fromEntries(timingKeys.map((key) => [key, Number(rawTimings[key])])) } : {};
+    const lastByMarket: Record<string, { lastAttemptAt: number; status: string; missing: number; recorded: number; rejected: number; pages: number; errorCode?: string }> = {};
+    const rawByMarket = rawGap.lastByMarket as Record<string, unknown> | null | undefined;
+    if (rawByMarket != null && typeof rawByMarket === "object" && !Array.isArray(rawByMarket)) {
+      for (const [market, rawResult] of Object.entries(rawByMarket)) {
+        if (Object.keys(lastByMarket).length >= 20) break;
+        if (!/^KRW-[A-Z0-9-]{1,32}$/.test(market) || rawResult == null || typeof rawResult !== "object" || Array.isArray(rawResult)) continue;
+        const result = rawResult as Record<string, unknown>;
+        if (!(["NO_GAPS", "FILLED", "PARTIAL", "RATE_LIMITED", "ERROR"].includes(String(result.status))
+          && Number.isSafeInteger(result.lastAttemptAt) && Number(result.lastAttemptAt) >= 0
+          && ["missing", "recorded", "rejected", "pages"].every((key) => Number.isSafeInteger(result[key]) && Number(result[key]) >= 0))) continue;
+        lastByMarket[market] = {
+          lastAttemptAt: Number(result.lastAttemptAt),
+          status: result.status as string,
+          missing: Number(result.missing),
+          recorded: Number(result.recorded),
+          rejected: Number(result.rejected),
+          pages: Number(result.pages),
+          ...(typeof result.errorCode === "string" && /^[A-Z][A-Z0-9_]{1,47}$/.test(result.errorCode) ? { errorCode: result.errorCode } : {}),
+        };
+      }
+    }
     researchGapFill = { researchGapFill: {
-      runs: Number(rawGap.runs), deferred: Number(rawGap.deferred), counts, ...timingsMs,
+      runs: Number(rawGap.runs), deferred: Number(rawGap.deferred), counts, lastByMarket, ...timingsMs,
       ...(Number.isSafeInteger(rawGap.lastRunAt) && Number(rawGap.lastRunAt) >= 0 ? { lastRunAt: Number(rawGap.lastRunAt) } : {}),
       ...(typeof rawGap.lastErrorCode === "string" && /^[A-Z][A-Z0-9_]{1,47}$/.test(rawGap.lastErrorCode) ? { lastErrorCode: rawGap.lastErrorCode } : {}),
     } };
@@ -455,18 +479,47 @@ function publicRuntimeLiveness(value: CloudRuntimeLivenessSnapshot): CloudRuntim
   }
   // Closed-learning loop: integers for the counters and the tick time, fixed codes for the steps; nothing else.
   const rawLoop = source.closedLearningLoop as Record<string, unknown> | null | undefined;
-  let closedLearningLoop: { closedLearningLoop?: Record<string, string | number | Record<string, string | number>> } = {};
+  let closedLearningLoop: { closedLearningLoop?: Record<string, string | number | readonly string[] | Record<string, string | number>> } = {};
   const LOOP_INTS = ["lastTickAt", "ticks", "cyclesEvaluated", "deployments"] as const;
   const LOOP_CODES = ["bootstrap", "rollover", "rolloverReason", "lastCycleStatus", "lastCycleOutcome", "lastBlockedReason", "lastErrorClass"] as const;
   if (rawLoop != null && typeof rawLoop === "object" && LOOP_INTS.every((key) => Number.isSafeInteger(rawLoop[key]) && Number(rawLoop[key]) >= 0)
     && typeof rawLoop.bootstrap === "string" && typeof rawLoop.rollover === "string") {
-    const loop: Record<string, string | number | Record<string, string | number>> = {};
+    const loop: Record<string, string | number | readonly string[] | Record<string, string | number>> = {};
     for (const key of LOOP_INTS) loop[key] = Number(rawLoop[key]);
     for (const key of LOOP_CODES) { const value = rawLoop[key]; if (typeof value === "string" && /^[A-Z][A-Z0-9_]{1,63}$/.test(value)) loop[key] = value; }
     if ((loop.rollover === "BLOCKED" || loop.rollover === "ERROR") && typeof rawLoop.currentBlockedReason === "string" && /^[A-Z][A-Z0-9_]{1,63}$/.test(rawLoop.currentBlockedReason)) loop.currentBlockedReason = rawLoop.currentBlockedReason;
     const eligibleAt = rawLoop.nextEvaluationEligibleAt;
     const cadence = rawLoop.evaluationPeriodMs;
     if (cadence === 3_600_000 || cadence === 86_400_000) loop.evaluationPeriodMs = cadence;
+    // Why Research was not deployable: at most five codes that already are fixed upper-case codes; one bad entry drops the whole list.
+    // Array.from makes holes of a sparse array explicit (every() skips them and they would serialize as null).
+    if (loop.bootstrap === "RESEARCH_NOT_DEPLOYABLE" && Array.isArray(rawLoop.bootstrapReasons) && rawLoop.bootstrapReasons.length >= 1 && rawLoop.bootstrapReasons.length <= 5) {
+      const dense: unknown[] = Array.from(rawLoop.bootstrapReasons as unknown[]);
+      if (dense.every((reason) => typeof reason === "string" && /^[A-Z][A-Z0-9_]{2,63}$/.test(reason))) loop.bootstrapReasons = Object.freeze([...(dense as string[])]);
+    }
+    // How many candidates were judged and which fixed qualification codes stopped them: integers and fixed codes only. A malformed
+    // count withdraws both fields; a malformed code or value drops the whole code map (never a partial map).
+    if (loop.bootstrap === "RESEARCH_NOT_DEPLOYABLE" && rawLoop.bootstrapQualification != null && typeof rawLoop.bootstrapQualification === "object" && !Array.isArray(rawLoop.bootstrapQualification)) {
+      const q = rawLoop.bootstrapQualification as Record<string, unknown>;
+      const keys = ["candidates", "qualified", "insufficient", "rejected"] as const;
+      if (keys.every((key) => Number.isSafeInteger(q[key]) && Number(q[key]) >= 0 && Number(q[key]) <= 1_000_000)) {
+        loop.bootstrapQualification = Object.freeze({ candidates: Number(q.candidates), qualified: Number(q.qualified), insufficient: Number(q.insufficient), rejected: Number(q.rejected) });
+        const rawCounts = rawLoop.bootstrapRejectionReasons;
+        if (rawCounts != null && typeof rawCounts === "object" && !Array.isArray(rawCounts)) {
+          const entries = Object.entries(rawCounts as Record<string, unknown>);
+          if (entries.length >= 1 && entries.length <= 8 && entries.every(([code, value]) => /^[A-Z][A-Z0-9_]{2,63}$/.test(code) && Number.isSafeInteger(value) && Number(value) >= 0 && Number(value) <= 1_000_000)) {
+            loop.bootstrapRejectionReasons = Object.freeze(Object.fromEntries(entries.map(([code, value]) => [code, Number(value)])));
+          }
+        }
+        const rawFamilies = rawLoop.bootstrapCandidateFamilies;
+        if (rawFamilies != null && typeof rawFamilies === "object" && !Array.isArray(rawFamilies)) {
+          const familyEntries = Object.entries(rawFamilies as Record<string, unknown>);
+          if (familyEntries.length >= 1 && familyEntries.length <= 4 && familyEntries.every(([family, value]) => /^[a-z][a-z0-9]{1,15}$/.test(family) && Number.isSafeInteger(value) && Number(value) >= 0 && Number(value) <= 1_000_000)) {
+            loop.bootstrapCandidateFamilies = Object.freeze(Object.fromEntries(familyEntries.map(([family, value]) => [family, Number(value)])));
+          }
+        }
+      }
+    }
     const periodStart = (rawLoop.evidence as Record<string, unknown> | null)?.openPeriodStartAt;
     const isHourlyBoundary = cadence === 3_600_000 && Number.isSafeInteger(periodStart) && Number(periodStart) >= 0 && Number(periodStart) <= Number(loop.lastTickAt) && Number(eligibleAt) === Number(periodStart) + cadence;
     if (["WAITING_FOR_KST_DAY_ROLLOVER", "WAITING_FOR_EVALUATION_WINDOW"].includes(String(loop.rollover)) && Number.isSafeInteger(eligibleAt) && Number(eligibleAt) > Number(loop.lastTickAt)
@@ -560,10 +613,10 @@ function publicRuntimeLiveness(value: CloudRuntimeLivenessSnapshot): CloudRuntim
   }
   // Public futures collector: non-negative integer counters and one timestamp only.
   const rawFutures = source.futuresCollector as Record<string, unknown> | null | undefined;
-  let futuresCollector: { futuresCollector?: Record<string, number> } = {};
+  let futuresCollector: { futuresCollector?: Record<string, number | string> } = {};
   const futuresKeys = ["rounds", "marksStored", "fundingStored", "klinesStored", "failures", "rejected"];
   if (rawFutures != null && typeof rawFutures === "object" && futuresKeys.every((key) => Number.isSafeInteger(rawFutures[key]) && Number(rawFutures[key]) >= 0)) {
-    futuresCollector = { futuresCollector: { ...Object.fromEntries(futuresKeys.map((key) => [key, Number(rawFutures[key])])), ...(Number.isSafeInteger(rawFutures.lastRoundAt) && Number(rawFutures.lastRoundAt) > 0 ? { lastRoundAt: Number(rawFutures.lastRoundAt) } : {}) } };
+    futuresCollector = { futuresCollector: { ...Object.fromEntries(futuresKeys.map((key) => [key, Number(rawFutures[key])])), ...(Number.isSafeInteger(rawFutures.lastRoundAt) && Number(rawFutures.lastRoundAt) > 0 ? { lastRoundAt: Number(rawFutures.lastRoundAt) } : {}), ...(typeof rawFutures.lastFailureClass === "string" && /^[A-Z][A-Z0-9_]{2,31}$/.test(rawFutures.lastFailureClass) ? { lastFailureClass: rawFutures.lastFailureClass } : {}) } };
   }
   // Stored-data integrity probe: a fixed status plus non-negative integers only.
   const rawIntegrity = source.dataIntegrity as Record<string, unknown> | null | undefined;
@@ -589,6 +642,19 @@ function publicRuntimeLiveness(value: CloudRuntimeLivenessSnapshot): CloudRuntim
       orderBookCoverage = { orderBookCoverage: { schemaVersion: 1, windowHours: Number(rawCoverage.windowHours), coveredHours: Number(rawCoverage.coveredHours), ratio: rawCoverage.ratio, longestGapHours: Number(rawCoverage.longestGapHours), meetsStudyBar: rawCoverage.meetsStudyBar, asOfMs: Number(rawCoverage.asOfMs) } };
     }
   }
+  // Trade-tick hour coverage (display only): fixed numbers, or UNAVAILABLE with a fixed upper-case reason. No bar is published; the numbers must agree with each other.
+  const rawTradeCoverage = source.tradeTickCoverage as Record<string, unknown> | null | undefined;
+  let tradeTickCoverage: { tradeTickCoverage?: NonNullable<CloudRuntimeLivenessSnapshot["tradeTickCoverage"]> } = {};
+  if (rawTradeCoverage != null && typeof rawTradeCoverage === "object" && !Array.isArray(rawTradeCoverage) && rawTradeCoverage.schemaVersion === 1 && Number.isSafeInteger(rawTradeCoverage.asOfMs) && Number(rawTradeCoverage.asOfMs) > 0) {
+    if (rawTradeCoverage.status === "UNAVAILABLE" && typeof rawTradeCoverage.reason === "string" && /^[A-Z][A-Z0-9_]{2,63}$/.test(rawTradeCoverage.reason)) {
+      tradeTickCoverage = { tradeTickCoverage: { schemaVersion: 1, status: "UNAVAILABLE", reason: rawTradeCoverage.reason, asOfMs: Number(rawTradeCoverage.asOfMs) } };
+    } else if (rawTradeCoverage.status === undefined && Number.isSafeInteger(rawTradeCoverage.windowHours) && Number(rawTradeCoverage.windowHours) > 0 && Number(rawTradeCoverage.windowHours) <= 1440
+      && Number.isSafeInteger(rawTradeCoverage.coveredHours) && Number(rawTradeCoverage.coveredHours) >= 0 && Number(rawTradeCoverage.coveredHours) <= Number(rawTradeCoverage.windowHours)
+      && Number.isSafeInteger(rawTradeCoverage.longestGapHours) && Number(rawTradeCoverage.longestGapHours) >= 0 && Number(rawTradeCoverage.longestGapHours) <= Number(rawTradeCoverage.windowHours)
+      && typeof rawTradeCoverage.ratio === "number" && rawTradeCoverage.ratio === Math.round((Number(rawTradeCoverage.coveredHours) / Number(rawTradeCoverage.windowHours)) * 1000) / 1000) {
+      tradeTickCoverage = { tradeTickCoverage: { schemaVersion: 1, windowHours: Number(rawTradeCoverage.windowHours), coveredHours: Number(rawTradeCoverage.coveredHours), ratio: rawTradeCoverage.ratio, longestGapHours: Number(rawTradeCoverage.longestGapHours), asOfMs: Number(rawTradeCoverage.asOfMs) } };
+    }
+  }
   const rawResearch = source.researchCollectionStatus;
   const research = typeof rawResearch === "string" && ["COLLECTING", "DISABLED", "INVALID", "UNAVAILABLE"].includes(rawResearch)
     ? {
@@ -606,7 +672,7 @@ function publicRuntimeLiveness(value: CloudRuntimeLivenessSnapshot): CloudRuntim
     : {};
   // Build identity: only a full lowercase 40-hex commit is published, never other text.
   const sourceCommitSha = typeof source.sourceCommitSha === "string" && /^[0-9a-f]{40}$/.test(source.sourceCommitSha) ? { sourceCommitSha: source.sourceCommitSha } : {};
-  return Object.freeze({ ...sourceCommitSha, ...paperLedger, ...timestamps, ...counters, ...(lastPaperDecisionOutcome === undefined ? {} : { lastPaperDecisionOutcome }), lastError, ...(previousStop === undefined ? {} : { previousStop }), ...stall, ...research, ...funnel, ...lossSession, ...lossAttribution, ...experimentTicks, ...experimentTicksByInterval, ...researchGapFill, ...rollingHoldout, ...closedLearningLoop, ...microstructure, ...orderBookCollector, ...orderBookCoverage, ...futuresCollector, ...dataIntegrity }) as unknown as CloudRuntimeLivenessSnapshot;
+  return Object.freeze({ ...sourceCommitSha, ...paperLedger, ...timestamps, ...counters, ...(lastPaperDecisionOutcome === undefined ? {} : { lastPaperDecisionOutcome }), lastError, ...(previousStop === undefined ? {} : { previousStop }), ...stall, ...research, ...funnel, ...lossSession, ...lossAttribution, ...experimentTicks, ...experimentTicksByInterval, ...researchGapFill, ...rollingHoldout, ...closedLearningLoop, ...microstructure, ...orderBookCollector, ...orderBookCoverage, ...tradeTickCoverage, ...futuresCollector, ...dataIntegrity }) as unknown as CloudRuntimeLivenessSnapshot;
 }
 
 const PUBLIC_HEALTH_REASONS = new Set(["EVIDENCE_HEALTHY", "EVIDENCE_DEGRADED", "EVIDENCE_FAILED", "EVIDENCE_STALE", "EVIDENCE_MISSING", "EVIDENCE_INVALID_TIME", "RECOVERY_NOT_VERIFIED"]);

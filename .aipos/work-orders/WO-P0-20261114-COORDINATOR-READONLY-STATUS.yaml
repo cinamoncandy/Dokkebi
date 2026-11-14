@@ -1,0 +1,29 @@
+id: WO-P0-20261114-COORDINATOR-READONLY-STATUS
+title: "Authenticated read-only operator view of the existing ExecutionCoordinator (bootstrap for #903 / #3108)"
+status: READY_FOR_REVIEW
+created: 2026-11-14
+implementation_branch: claude/coordinator-readonly-status
+authority_impact: none
+owner_decision: "2026-11-14, NUSA CORE conversation: a limited bootstrap exception to the 'verify a live Lease before any code mutation' precondition of #903 comment 6824304140, for this draft PR only (read-only GET code and tests). Not approved: Claim, Dispatch or Lease creation, WIP cap changes, a new store or Coordinator, deployment, Cloudflare Access policy changes. The exception does not make the Coordinator WIP/Lease known; #3108 stays BLOCKED_WIP_UNKNOWN until a read succeeds."
+related: ["#903", "#2039 (not modified; held)", "#3108"]
+finding: "No authenticated operator read path exists: readActiveWip and readPersistentExecution are internal helpers over the Durable Object binding, the Worker routes expose no claim list, and apps/autopilot/src has no Access JWT verification. The Lease needed to start code work could therefore never be read."
+change:
+  - "apps/autopilot/src/operatorCoordinatorStatus.ts: GET /operator/coordinator/status. Verifies a Cloudflare Access RS256 JWT (signature from the team key set, issuer, audience, expiry, not-before, operator email allow-list, hostname allow-list); every failure, including an unreachable key set, is one 401 body; a missing or malformed configuration is a 503 that never reads the Coordinator. Reads through the existing helpers (GET only), twice around the per-claim reads, and reports UNKNOWN for unproven values and for an inconsistent or unreadable snapshot."
+  - "apps/autopilot/src/executionCoordinator.ts: readPersistentExecutionStrict, a read-only variant in which only an explicit \"record\": null means no record (the existing helper maps a missing or malformed record to null). The existing helper is unchanged."
+  - "apps/autopilot/src/worker.ts: one route line."
+  - "apps/autopilot/src/operatorCoordinatorStatus.test.ts: 20 tests (valid read, no-write proof by recording every Coordinator call, stale claim not pruned, UNKNOWN cases, 30+ adversarial token defects, key-set failure and refetch limit, uniform denial body, closed configuration, GET only, Worker wiring)."
+reported_fields: "observedAt, workerRevision (NUSA_DEPLOYMENT_REVISION or UNKNOWN), per claim: claimId (executionId), dedupeKey, canonicalOwner, conflictKeys, claimedAt, claimExpiresAt (COMPUTED as claimedAt + ACTIVE_WIP_CLAIM_MAX_AGE_MS, 3,600,000 ms, the Coordinator's own staleness rule), claimState ACTIVE or EXPIRED_NOT_PRUNED, leaseHolder UNKNOWN and heartbeat UNKNOWN (neither is stored), persistent execution state, taskId and leaseExpiresAt when stored; activeCount and overPolicyCap against the policy cap 2 (reported, not enforced here)."
+not_changed:
+  - "The Coordinator, its storage, the WIP policy, Lease TTL, heartbeat or takeover, wrangler.jsonc, any Cloudflare Access policy, any deployment. No Claim, Dispatch or Lease is created or changed by this PR or by the route."
+operator_setup_not_done: "To use the route after a separately approved Worker release, an operator must (1) create the Access application and policy for the route's hostname, (2) set NUSA_ACCESS_TEAM_DOMAIN, NUSA_ACCESS_AUD, NUSA_ACCESS_OPERATOR_EMAILS and NUSA_ACCESS_ALLOWED_HOSTS as Worker variables. Until all four are valid the route answers 503."
+safety:
+  paper_only: true
+  liveAuthority: NONE
+  productionMutationAllowed: false
+  aiAuthority: ZERO_AUTHORITY
+validation:
+  - "Independent security review round 3 (ACCEPT WITH P2 at dc48fa211): the execution state must be one of the seven stored state names (PersistentExecutionState is now derived from one list, so the check cannot drift), and the clock handling. A first attempt allowed one refetch after a backwards clock; round 4 (REJECT at 440056dae) showed that alternating times could then restart the one-minute limit repeatedly. Now a time earlier than the stored one never counts as fresh and never allows a fetch (the request is refused until the clock is past the stored time again); a test with alternating times and two mutations (the reviewed bug and a cache from the future trusted as fresh) were added."
+  - "Independent security review round 2 (REJECT at 680fcb06f): fixed the key-set fetch limit under concurrent requests (the attempt time is now written before the request starts and concurrent requests share one in-flight fetch) and an execution record with a damaged required field (the whole record is UNKNOWN). A 100-request burst test and a field-validation test were added; the matching mutations fail."
+  - "Independent security review round 1 (REJECT at 9074c0667): fixed a missing or malformed execution record shown as NOT_STORED (now UNKNOWN), a failed key-set fetch not counting as an attempt (now at most one attempt per minute per team domain), and non-object claim entries (the whole snapshot is MALFORMED). Regression tests added; the four matching mutations fail."
+  - "20 new tests pass; seven mutations (signature, audience, host, expiry, operator, issuer, algorithm checks removed one at a time) each fail at least one test."
+next_action: "Independent security review of the draft and exact-head CI. No deployment, no Cloudflare change and no Lease use before a separate approval."

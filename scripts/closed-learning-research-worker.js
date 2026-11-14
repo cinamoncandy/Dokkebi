@@ -62,7 +62,14 @@ function projectPaperDeployment(snapshot, replay, originalRunFingerprintSha256) 
   const replayRunFingerprintSha256 = String(run?.provenance?.runFingerprintSha256 || "").trim().toLowerCase();
   if (!SHA64.test(replayRunFingerprintSha256)) throw new Error("closed-learning worker replay provenance is invalid");
   const allocation = run.allocation;
-  if (allocation == null) return notDeployable("NO_ALLOCATION_ADVISORY");
+  if (allocation == null) {
+    // Why the League refused to allocate (a fixed code such as NO_ALLOCATABLE_CANDIDATES or INSUFFICIENT_DIVERSIFICATION_CAPACITY).
+    // Only a value that already is a fixed upper-case code is passed on, prefixed so it cannot be mistaken for another reason.
+    const unavailable = typeof run.allocationUnavailableReason === "string" && /^[A-Z][A-Z0-9_]{2,52}$/.test(run.allocationUnavailableReason)
+      ? [`ALLOCATION_${run.allocationUnavailableReason}`]
+      : [];
+    return notDeployable("NO_ALLOCATION_ADVISORY", ...unavailable);
+  }
   if (!Array.isArray(allocation.entries)) throw new Error("closed-learning worker allocation entries are invalid");
   if (allocation.entries.length !== 1) return notDeployable("ALLOCATION_NOT_SINGLE_CANDIDATE");
 
