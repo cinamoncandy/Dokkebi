@@ -46,7 +46,7 @@ the release rolls back, and the rollback also restarts the services. Consequence
 2. After the release reports success, the agent reads the state (read-only `oracle-host-diagnose.yml` with `health_only`).
 3. Three different kinds of evidence are needed; none replaces another:
    - **Structure:** the running build has the switch and the env value is `OFF` (diagnose output of the build SHA; no order boundary exists, from the code and `tests/cloud-runtime-order-path-switch.test.js`).
-   - **Behaviour:** an attempt that would produce an order does not. This is NOT covered by a test today (only a guard test and a research-continues test exist); it needs a decision-driven test before this stage is approved, or it is stated as unproven.
+   - **Behaviour:** an attempt that would produce an order does not. Stage A is NOT approved and NOT run until a decision-driven order-refusal test passes. A note that it is unproven never replaces a passing test. Today only a guard test and a research-continues test exist, so this stage is blocked.
    - **Observation:** `paperOrderCount` and fill counts do not rise, and `lastMarketEventAt` and the research row counts do rise, read at two points at least one hour apart. Field names were not read from a running host; if a field is missing the check does not pass and the stage stays blocked.
 4. If any check fails: stop the service first, confirm it is inactive, then follow the rollback.
 
@@ -57,9 +57,10 @@ build and restarts it, or, if the previous build cannot open the migrated databa
 new build running** ("keeping $1 active (no rollback)") and exits with an error. So after any failed or ambiguous release the
 agent must not assume the service is down:
 
-1. Operator reports `systemctl is-active nusa.service` and the active release SHA immediately (`readlink -f /opt/nusa/current`).
-2. If the service is running and the Stage A evidence (structure, behaviour, observation) is not complete for that exact SHA, the
-   operator stops it at once (`sudo systemctl stop nusa.service`) and the agent reads that it is inactive.
+1. Operator stops the service FIRST, without waiting for any report: `sudo systemctl stop nusa.service`, then confirms `ActiveState=inactive`
+   and reports the output. Waiting for a status report while an order path may be alive is not allowed.
+2. After the stop, the operator reports `readlink -f /opt/nusa/current` (the active SHA is still readable when the service is stopped) and the
+   agent reads that the service is inactive. A running service is restarted only under a new owner approval and a complete Stage A evidence set.
 3. Only then are the cause and the next release discussed. A failure message in the workflow log is never taken as proof that no order path is running.
 
 ## Stage B: order path ON (only after the permit fix; separate approval, separate release)
