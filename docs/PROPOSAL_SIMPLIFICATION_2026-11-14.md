@@ -42,12 +42,40 @@ the phone still needs data that only the desktop bridge provides.
 | S0 | Inventory (read only): for each Worker call in a workflow, what the step decides, what happens if it is moved into Actions, and what the Coordinator WIP cap protects | a table committed under `docs/`; no code change | none needed |
 | S1 | Prove the phone path: list every endpoint the shipped app calls and whether the host serves it. Only for a gap, add a host read-only GET route (no order, credential, setting or control route, authenticated, fail closed) | table of app calls vs host routes; gaps closed with adversarial tests | remove a new route; the desktop bridge is untouched |
 | S2 | Move each Worker-decided check into Actions and run both in parallel (shadow): the two answers must match on real PRs | N consecutive PRs with identical decisions, mismatches listed | keep calling the Worker |
-| S3 | Switch the workflow URLs to the Actions-side check; keep every check, relax none | auto-merge still blocks a bad PR in a rehearsal; Audit/Release unchanged | switch the URLs back |
+| S3 | Switch each Worker call to its Actions-side replacement (see the conditions below); keep every check, relax none | auto-merge still blocks a bad PR in a rehearsal; Audit/Release unchanged | switch the URLs back |
 | S4 | Remove Cloudflare: delete the deploy, promote, preflight, runtime-proof and readiness workflows and `apps/autopilot` through governed PRs; the owner deletes the Worker in the Cloudflare account last | no workflow references `workers.dev`; required checks list updated with owner approval | restore from git history; redeploy by the old workflow |
 | S5 | Freeze the desktop app and its release pipeline (only after S1 is confirmed on a real phone) | desktop excluded from CI; mobile unaffected | move back out of `attic/` |
 
-The WIP cap that the Coordinator enforces must be replaced by an equivalent limit (for example a workflow
-concurrency group) in S2 before S3. It is never dropped.
+### Conditions that gate S3 (all required, none optional)
+
+The Coordinator enforces more than a count. A single workflow `concurrency` group does **not** reproduce it. S3 does not start until each item below is met and recorded in the S2 evidence:
+
+1. The global active WIP limit stays at most 2 (the Coordinator's policy cap), enforced by one mechanism that every
+   workflow in the auto-merge path goes through.
+2. Equivalence to the Coordinator: duplicate Claim for the same key is refused, a Lease that expires is released
+   and cannot be used after expiry, a retry does not create a second active slot, and two workflows racing for the
+   last slot never both win. Each case has a test, and the same cases are run against the existing Coordinator so the
+   two answers can be compared.
+3. Independent (non-author) review of the equivalence tests, and a rollback rehearsal (S3 -> back to the Worker URLs)
+   that passes before the switch.
+
+### What S3 replaces (per call, not a URL swap)
+
+An Actions workflow is not a drop-in server. For each Worker call S0 must name the replacement before S3:
+
+| Worker call | Replacement to be specified in S0 |
+| --- | --- |
+| `/control-plane/release-check` | a job in the release workflow that computes the same decision from the exact-head checks, with the decision written as a step output and an artifact |
+| `/coding/execute`, `/audit/execute` | the existing execution-consumer job runs the step directly; its result is an artifact the Audit step reads |
+| `/github/webhook` | a workflow `on:` trigger for the same event |
+
+### S4 rollback is not only a git restore
+
+Deleting the Worker in the Cloudflare account cannot be undone from git. Before the owner deletes it, S4 records: the
+Worker name and routes, the Durable Object state that would be lost (the Coordinator records are only a cache of GitHub
+state, to be confirmed in S0), the secrets and variables that would have to be set again, and a redeploy rehearsal.
+Deleting the Worker is the last step and is done only after at least one full release has run without any `workers.dev`
+call.
 
 ## 5. Not in scope
 
