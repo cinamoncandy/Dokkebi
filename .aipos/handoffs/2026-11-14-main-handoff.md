@@ -20,7 +20,7 @@ Observed: `2026-11-14` (Asia/Seoul), about 14:20 KST. Everything below is what t
 - 2026-11-14 09:17 KST: the first `TRADEFLOW_STUDY` line was `WAITING_DATA` (7 days collected), as expected.
 - 2026-11-15 09:16 KST: next Research run (refreshes the candle freshness, which shows `CANDLES_STALE` after the stop).
 - 2026-11-21 09:16 KST: first possible result of the first trade-flow study; record it in `docs/research-ledger/experiments.json` and a work order. The order-book study 2 verdict is read on the 2026-11-19 09:17 run (or 11-18 11:00 KST or later).
-- After 11-21 and before 2026-11-24T06:00Z (15:00 KST): one release carrying #3110 so that the second study runs. A release backup stalls collection for about 30 minutes; one release inside the span is acceptable (the bar allows 16 missing hours), **none during the holdout** (2026-11-24T06:00Z..11-28T06:00Z). The second study cannot be read before 2026-11-28T06:30Z (first Research run after that: 2026-11-29 09:16 KST).
+- After the first trade-flow result is recorded on 2026-11-21 (not before), perform at most one release before 2026-11-24T06:00Z (15:00 KST), carrying #3110 so that the second study runs. A release backup stalls collection for about 30 minutes; one release inside the span is acceptable (the bar allows 16 missing hours), **none during the holdout** (2026-11-24T06:00Z..11-28T06:00Z). The second study cannot be read before 2026-11-28T06:30Z (first Research run after that: 2026-11-29 09:16 KST).
 - During the research span (to 2026-11-28) a stop or restart of the host services leaves a gap that cannot be repaired; announce any planned stop first.
 
 ## Release path notes
