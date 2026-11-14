@@ -1469,6 +1469,12 @@ export async function readPersistentExecutionStrict(namespace: ExecutionCoordina
   const record = (body as { record: unknown }).record;
   if (record === null) return null;
   if (typeof record !== "object" || Array.isArray(record)) throw new Error("PERSISTENT_EXECUTION_STATE_READ_INVALID");
+  // A record with a damaged required field is not shown as a normally read record: the whole record is unproven.
+  const fields = record as Record<string, unknown>;
+  const text = (value: unknown): boolean => typeof value === "string" && value.length > 0;
+  const time = (value: unknown): boolean => Number.isSafeInteger(value) && Number(value) > 0;
+  if (!text(fields.dedupeKey) || !text(fields.executionId) || !text(fields.state) || !time(fields.leaseExpiresAt) || !time(fields.updatedAt)
+    || (fields.taskId !== undefined && typeof fields.taskId !== "string")) throw new Error("PERSISTENT_EXECUTION_STATE_READ_INVALID");
   return record as PersistentExecutionRecord;
 }
 

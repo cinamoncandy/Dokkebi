@@ -381,3 +381,65 @@ test("a failing or malformed key endpoint is tried at most once per minute, howe
   assert.equal(fetches, 2, "the failed refetch counts as an attempt");
   assert.equal((await verifyAccessJwt(jwt, config, at(NOW + 80_000))).ok, true, "the earlier key set still serves valid tokens while it is fresh");
 });
+
+test("a burst of concurrent requests causes one key-set fetch, not one per request", async () => {
+  const pair = await newKeyPair();
+  const keys = await jwksOf(pair);
+  const burst = async (cache: JwksCache, now: number, fetchJwks: (url: string) => Promise<unknown>, count: number) => {
+    const tokens = await Promise.all(Array.from({ length: count }, (_, index) => token(pair, goodClaims(), { alg: "RS256", kid: `unknown-${index}` })));
+    return Promise.all(tokens.map((jwt) => verifyAccessJwt(jwt, config, { now, requestHostname: HOST, fetchJwks, jwksCache: cache })));
+  };
+  const slow = (counter: { n: number }, body: () => unknown) => async () => { counter.n += 1; await new Promise((resolve) => setTimeout(resolve, 20)); const value = body(); if (value instanceof Error) throw value; return value; };
+
+  // Cold cache, working endpoint: 100 distinct unknown key ids at once.
+  const cold = { n: 0 };
+  const coldResults = await burst(new Map(), NOW, slow(cold, () => keys), 100);
+  assert.equal(cold.n, 1, "one fetch for 100 concurrent requests");
+  assert.ok(coldResults.every((result) => !result.ok && (result as { code: string }).code === "KID_UNKNOWN"));
+
+  // Cold cache, failing endpoint.
+  const failing = { n: 0 };
+  const failResults = await burst(new Map(), NOW, slow(failing, () => new Error("down")), 100);
+  assert.equal(failing.n, 1, "one failed fetch for 100 concurrent requests");
+  assert.ok(failResults.every((result) => !result.ok && (result as { code: string }).code === "JWKS_UNAVAILABLE"));
+
+  // Warm cache, a minute later: an unknown key id may force one refetch, however many ask at once.
+  const warm: JwksCache = new Map();
+  const first = { n: 0 };
+  assert.equal((await verifyAccessJwt(await token(pair, goodClaims()), config, { now: NOW, requestHostname: HOST, fetchJwks: slow(first, () => keys), jwksCache: warm })).ok, true);
+  assert.equal(first.n, 1);
+  const again = { n: 0 };
+  const warmResults = await burst(warm, NOW + 61_000, slow(again, () => keys), 100);
+  assert.equal(again.n, 1, "one refetch for 100 concurrent unknown key ids");
+  assert.ok(warmResults.every((result) => !result.ok));
+  // And the minute starts again afterwards.
+  const after = { n: 0 };
+  await burst(warm, NOW + 62_000, slow(after, () => keys), 20);
+  assert.equal(after.n, 0, "no new fetch within the minute");
+});
+
+test("an execution record with a damaged required field is UNKNOWN as a whole", async () => {
+  const pair = await newKeyPair();
+  const keys = await jwksOf(pair);
+  const valid = { dedupeKey: claim.dedupeKey, executionId: claim.executionId, state: "RUNNING", leaseExpiresAt: NOW + 1_000, updatedAt: NOW - 5_000, taskId: "issue-3108" };
+  const variants: Array<[string, Record<string, unknown>, boolean]> = [
+    ["valid", valid, true],
+    ["no taskId is fine", { ...valid, taskId: undefined }, true],
+    ["state missing", { ...valid, state: undefined }, false],
+    ["state empty", { ...valid, state: "" }, false],
+    ["state not a string", { ...valid, state: 7 }, false],
+    ["leaseExpiresAt a string", { ...valid, leaseExpiresAt: "tomorrow" }, false],
+    ["leaseExpiresAt negative", { ...valid, leaseExpiresAt: -5 }, false],
+    ["leaseExpiresAt fractional", { ...valid, leaseExpiresAt: 1.5 }, false],
+    ["updatedAt missing", { ...valid, updatedAt: undefined }, false],
+    ["taskId not a string", { ...valid, taskId: 42 }, false],
+    ["executionId missing", { ...valid, executionId: undefined }, false],
+  ];
+  for (const [name, record, ok] of variants) {
+    const ns = namespace({ override: (call) => call.path === "/execution" ? new Response(JSON.stringify({ record }), { status: 200 }) : undefined });
+    await admitActiveWip(ns, claim);
+    const body = await (await handleOperatorCoordinatorStatus(get(await token(pair, goodClaims())), env(ns), { now: () => NOW, fetchJwks: async () => keys, jwksCache: new Map() })).json() as Record<string, any>;
+    assert.equal(typeof body.claims[0].persistentExecution === "object", ok, name);
+    if (!ok) assert.equal(body.claims[0].persistentExecution, "UNKNOWN", name);
+  }
+});

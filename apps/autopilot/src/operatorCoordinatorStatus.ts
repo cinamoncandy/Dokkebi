@@ -79,35 +79,44 @@ export type JwksCache = Map<string, JwksCacheEntry>;
 const sharedJwksCache: JwksCache = new Map();
 const NO_KEYS: ReadonlyMap<string, JsonWebKey> = new Map();
 
+const inflightFetches = new WeakMap<JwksCache, Map<string, Promise<ReadonlyMap<string, JsonWebKey> | undefined>>>();
+
 /**
  * Keys come from the cache while they are fresh. A fetch is attempted at most once per JWKS_MIN_REFETCH_MS per team domain, **whether or not it
- * succeeds**: a failing or malformed key endpoint cannot be hammered by repeated requests, and an unknown key id cannot force a refetch storm.
+ * succeeds**, and the attempt time is written **before** the request starts, so a burst of concurrent requests cannot each start one. Requests
+ * that arrive while a fetch is running share that one fetch instead of starting their own.
  */
 async function loadKeys(jwksCache: JwksCache, teamDomain: string, now: number, fetchJwks: JwksFetcher, force: boolean): Promise<ReadonlyMap<string, JsonWebKey> | undefined> {
   const cached = jwksCache.get(teamDomain);
   const fresh = cached !== undefined && cached.keys.size > 0 && now - cached.fetchedAt < JWKS_TTL_MS;
   if (fresh && !force) return cached.keys;
+  let inflight = inflightFetches.get(jwksCache);
+  if (!inflight) { inflight = new Map(); inflightFetches.set(jwksCache, inflight); }
+  const running = inflight.get(teamDomain);
+  if (running) return running;
   if (cached !== undefined && now - cached.lastAttemptAt < JWKS_MIN_REFETCH_MS) return fresh ? cached.keys : undefined;
-  const fail = () => {
-    jwksCache.set(teamDomain, { keys: cached?.keys ?? NO_KEYS, fetchedAt: cached?.fetchedAt ?? 0, lastAttemptAt: now });
-    return fresh ? cached.keys : undefined;
-  };
-  try {
-    const body = await fetchJwks(`https://${teamDomain}/cdn-cgi/access/certs`) as { keys?: unknown };
-    if (!body || !Array.isArray(body.keys) || body.keys.length === 0 || body.keys.length > JWKS_MAX_KEYS) return fail();
-    const keys = new Map<string, JsonWebKey>();
-    for (const entry of body.keys as unknown[]) {
-      const key = entry as Record<string, unknown>;
-      if (key && key.kty === "RSA" && typeof key.kid === "string" && typeof key.n === "string" && typeof key.e === "string" && (key.alg === undefined || key.alg === "RS256") && (key.use === undefined || key.use === "sig")) {
-        keys.set(key.kid, { kty: "RSA", n: key.n, e: key.e, alg: "RS256", ext: true });
+  jwksCache.set(teamDomain, { keys: cached?.keys ?? NO_KEYS, fetchedAt: cached?.fetchedAt ?? 0, lastAttemptAt: now });
+  const fallback = fresh ? cached.keys : undefined;
+  const attempt = (async (): Promise<ReadonlyMap<string, JsonWebKey> | undefined> => {
+    try {
+      const body = await fetchJwks(`https://${teamDomain}/cdn-cgi/access/certs`) as { keys?: unknown };
+      if (!body || !Array.isArray(body.keys) || body.keys.length === 0 || body.keys.length > JWKS_MAX_KEYS) return fallback;
+      const keys = new Map<string, JsonWebKey>();
+      for (const entry of body.keys as unknown[]) {
+        const key = entry as Record<string, unknown>;
+        if (key && key.kty === "RSA" && typeof key.kid === "string" && typeof key.n === "string" && typeof key.e === "string" && (key.alg === undefined || key.alg === "RS256") && (key.use === undefined || key.use === "sig")) {
+          keys.set(key.kid, { kty: "RSA", n: key.n, e: key.e, alg: "RS256", ext: true });
+        }
       }
+      if (keys.size === 0) return fallback;
+      jwksCache.set(teamDomain, { keys, fetchedAt: now, lastAttemptAt: now });
+      return keys;
+    } catch {
+      return fallback;
     }
-    if (keys.size === 0) return fail();
-    jwksCache.set(teamDomain, { keys, fetchedAt: now, lastAttemptAt: now });
-    return keys;
-  } catch {
-    return fail();
-  }
+  })();
+  inflight.set(teamDomain, attempt);
+  try { return await attempt; } finally { inflight.delete(teamDomain); }
 }
 
 async function defaultFetchJwks(url: string): Promise<unknown> {
