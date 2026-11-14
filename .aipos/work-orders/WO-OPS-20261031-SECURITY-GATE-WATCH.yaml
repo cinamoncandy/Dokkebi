@@ -8,7 +8,7 @@ owner_decision: "2026-11-14: the owner allowed the new `issues: write` permissio
 trigger: "Advisory 1244009 (joi, high) made the security gate fail on every PR, including docs-only ones, and was seen only when the PRs failed. The gate ran only on push and pull_request."
 change:
   - ".github/workflows/security-gate-watch.yml: daily cron (21:17 UTC) and workflow_dispatch; checks out main, installs the locked dependencies, runs pnpm run security:gate; on failure opens or comments on ONE issue titled 'Security gate is failing on main' and fails the run."
-  - "Same pinned actions as ci.yml (validate-workflow-action-pins and validate-workflow-action-inputs pass). Permissions: contents read, issues write. No secrets, no repository write, no waiver."
+  - "Same pinned actions as ci.yml (validate-workflow-action-pins and validate-workflow-action-inputs pass). Permissions: contents read, issues write. No secrets, no repository write, no waiver. The issue carries fixed text and the run URL only (the gate output stays in the run log); the existing issue is found by paging all open issues and comparing the exact title, checked twice."
 not_changed:
   - "The security gate, its thresholds, COMPENSATED mitigations and ci.yml are untouched. No advisory is waived. No release, deploy, merge or approval path is touched."
 safety:
