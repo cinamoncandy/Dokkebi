@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { ACTIVE_WIP_CLAIM_MAX_AGE_MS, ExecutionCoordinator, admitActiveWip, readActiveWip, type ExecutionCoordinatorNamespace } from "./executionCoordinator";
-import { handleOperatorCoordinatorStatus, parseAccessConfig, resetOperatorJwksCacheForTest, verifyAccessJwt, POLICY_ACTIVE_WIP_CAP, type AccessConfig, type OperatorStatusEnv } from "./operatorCoordinatorStatus";
+import { handleOperatorCoordinatorStatus, parseAccessConfig, verifyAccessJwt, POLICY_ACTIVE_WIP_CAP, type AccessConfig, type JwksCache, type OperatorStatusEnv } from "./operatorCoordinatorStatus";
 import worker from "./worker";
 
 class MemoryStorage {
@@ -69,18 +69,16 @@ const get = (jwt: string | null, host = HOST, method = "GET") => new Request(`ht
 const claim = { dedupeKey: "evolve-coding:abc:github-issue-3108", executionId: "evolve-coding:abc", canonicalOwner: "apps/cloud", conflictKeys: ["apps/cloud/src/cloudPaperExecutionBoundary.ts"], claimedAt: NOW - 60_000, maxConcurrent: 2 };
 
 async function verify(jwt: string | null, pair: CryptoKeyPair, over: Partial<AccessConfig> = {}, fetchJwks?: (url: string) => Promise<unknown>, host = HOST) {
-  resetOperatorJwksCacheForTest();
   const keys = await jwksOf(pair);
-  return verifyAccessJwt(jwt, { ...config, ...over }, { now: NOW, requestHostname: host, fetchJwks: fetchJwks ?? (async () => keys) });
+  return verifyAccessJwt(jwt, { ...config, ...over }, { now: NOW, requestHostname: host, fetchJwks: fetchJwks ?? (async () => keys), jwksCache: new Map() });
 }
 
 test("a valid Access token for an allowed operator and host reads the Coordinator state", async () => {
-  resetOperatorJwksCacheForTest();
   const pair = await newKeyPair();
   const keys = await jwksOf(pair);
   const ns = namespace();
   assert.equal((await admitActiveWip(ns, claim)).admitted, true);
-  const response = await handleOperatorCoordinatorStatus(get(await token(pair, goodClaims())), env(ns), { now: () => NOW, fetchJwks: async () => keys });
+  const response = await handleOperatorCoordinatorStatus(get(await token(pair, goodClaims())), env(ns), { now: () => NOW, fetchJwks: async () => keys, jwksCache: new Map() });
   assert.equal(response.status, 200);
   const body = await response.json() as Record<string, any>;
   assert.equal(body.snapshot, "CONSISTENT");
@@ -108,7 +106,6 @@ test("a valid Access token for an allowed operator and host reads the Coordinato
 });
 
 test("a read never writes: only GET requests to the two read paths reach the Coordinator, and the stored state is unchanged", async () => {
-  resetOperatorJwksCacheForTest();
   const pair = await newKeyPair();
   const keys = await jwksOf(pair);
   const calls: Call[] = [];
@@ -117,7 +114,7 @@ test("a read never writes: only GET requests to the two read paths reach the Coo
   calls.length = 0;
   const before = JSON.stringify((await readActiveWip(ns)).claims);
   calls.length = 0;
-  const response = await handleOperatorCoordinatorStatus(get(await token(pair, goodClaims())), env(ns), { now: () => NOW, fetchJwks: async () => keys });
+  const response = await handleOperatorCoordinatorStatus(get(await token(pair, goodClaims())), env(ns), { now: () => NOW, fetchJwks: async () => keys, jwksCache: new Map() });
   assert.equal(response.status, 200);
   assert.ok(calls.length >= 3);
   assert.ok(calls.every((call) => call.method === "GET"), JSON.stringify(calls));
@@ -126,54 +123,50 @@ test("a read never writes: only GET requests to the two read paths reach the Coo
 });
 
 test("a stale claim is shown as expired but is not pruned, and an empty Coordinator reads as an empty read", async () => {
-  resetOperatorJwksCacheForTest();
   const pair = await newKeyPair();
   const keys = await jwksOf(pair);
   const ns = namespace();
   await admitActiveWip(ns, { ...claim, claimedAt: NOW - ACTIVE_WIP_CLAIM_MAX_AGE_MS - 1_000 });
-  const stale = await (await handleOperatorCoordinatorStatus(get(await token(pair, goodClaims())), env(ns), { now: () => NOW, fetchJwks: async () => keys })).json() as Record<string, any>;
+  const stale = await (await handleOperatorCoordinatorStatus(get(await token(pair, goodClaims())), env(ns), { now: () => NOW, fetchJwks: async () => keys, jwksCache: new Map() })).json() as Record<string, any>;
   assert.equal(stale.claims[0].claimState, "EXPIRED_NOT_PRUNED");
   assert.equal(stale.activeCount, 0, "an expired claim is not counted as active");
   assert.equal(stale.storedClaimCount, 1);
   assert.equal((await readActiveWip(ns)).claims.length, 1, "the read did not prune");
-  const empty = await (await handleOperatorCoordinatorStatus(get(await token(pair, goodClaims())), env(namespace()), { now: () => NOW, fetchJwks: async () => keys })).json() as Record<string, any>;
+  const empty = await (await handleOperatorCoordinatorStatus(get(await token(pair, goodClaims())), env(namespace()), { now: () => NOW, fetchJwks: async () => keys, jwksCache: new Map() })).json() as Record<string, any>;
   assert.deepEqual([empty.snapshot, empty.claims, empty.activeCount], ["CONSISTENT", [], 0]);
 });
 
 test("a persistent execution record is shown with its stored lease expiry; an unreadable one is UNKNOWN", async () => {
-  resetOperatorJwksCacheForTest();
   const pair = await newKeyPair();
   const keys = await jwksOf(pair);
   const failing = namespace({ override: (call) => call.path === "/execution" ? new Response("{}", { status: 500 }) : undefined });
   await admitActiveWip(failing, claim);
-  const body = await (await handleOperatorCoordinatorStatus(get(await token(pair, goodClaims())), env(failing), { now: () => NOW, fetchJwks: async () => keys })).json() as Record<string, any>;
+  const body = await (await handleOperatorCoordinatorStatus(get(await token(pair, goodClaims())), env(failing), { now: () => NOW, fetchJwks: async () => keys, jwksCache: new Map() })).json() as Record<string, any>;
   assert.equal(body.claims[0].persistentExecution, "UNKNOWN");
   const withRecord = namespace({ override: (call) => call.path === "/execution" ? new Response(JSON.stringify({ record: { dedupeKey: claim.dedupeKey, executionId: claim.executionId, state: "RUNNING", leaseExpiresAt: NOW + 1_000, updatedAt: NOW - 5_000, taskId: "issue-3108", provider: "secret-provider", headSha: "b".repeat(40) } }), { status: 200 }) : undefined });
   await admitActiveWip(withRecord, claim);
-  const second = await (await handleOperatorCoordinatorStatus(get(await token(pair, goodClaims())), env(withRecord), { now: () => NOW, fetchJwks: async () => keys })).json() as Record<string, any>;
+  const second = await (await handleOperatorCoordinatorStatus(get(await token(pair, goodClaims())), env(withRecord), { now: () => NOW, fetchJwks: async () => keys, jwksCache: new Map() })).json() as Record<string, any>;
   assert.deepEqual(second.claims[0].persistentExecution, { state: "RUNNING", taskId: "issue-3108", leaseExpiresAt: NOW + 1_000, updatedAt: NOW - 5_000, leaseState: "LEASE_ACTIVE" });
   assert.doesNotMatch(JSON.stringify(second), /secret-provider/, "fields that are not part of the view are never echoed");
 });
 
 test("an inconsistent or unreadable snapshot is UNKNOWN, never an empty slot", async () => {
-  resetOperatorJwksCacheForTest();
   const pair = await newKeyPair();
   const keys = await jwksOf(pair);
   const claimOf = (id: string) => ({ dedupeKey: `k:${id}`, executionId: id, canonicalOwner: "apps/cloud", conflictKeys: ["a"], claimedAt: NOW - 1_000 });
   const shifting = namespace({ override: (call, count) => call.path === "/active-wip" ? new Response(JSON.stringify({ claims: [claimOf(count === 1 ? "one" : "two")], activeExecutions: 1 }), { status: 200 }) : undefined });
-  const inconsistent = await (await handleOperatorCoordinatorStatus(get(await token(pair, goodClaims())), env(shifting), { now: () => NOW, fetchJwks: async () => keys })).json() as Record<string, any>;
+  const inconsistent = await (await handleOperatorCoordinatorStatus(get(await token(pair, goodClaims())), env(shifting), { now: () => NOW, fetchJwks: async () => keys, jwksCache: new Map() })).json() as Record<string, any>;
   assert.deepEqual([inconsistent.snapshot, inconsistent.claims, inconsistent.activeCount], ["INCONSISTENT", "UNKNOWN", "UNKNOWN"]);
   const broken = namespace({ override: (call) => call.path === "/active-wip" ? new Response("{}", { status: 500 }) : undefined });
-  const unavailable = await (await handleOperatorCoordinatorStatus(get(await token(pair, goodClaims())), env(broken), { now: () => NOW, fetchJwks: async () => keys })).json() as Record<string, any>;
+  const unavailable = await (await handleOperatorCoordinatorStatus(get(await token(pair, goodClaims())), env(broken), { now: () => NOW, fetchJwks: async () => keys, jwksCache: new Map() })).json() as Record<string, any>;
   assert.deepEqual([unavailable.snapshot, unavailable.claims, unavailable.activeCount], ["UNAVAILABLE", "UNKNOWN", "UNKNOWN"]);
 });
 
 test("unsafe stored values are shown as UNKNOWN instead of being echoed", async () => {
-  resetOperatorJwksCacheForTest();
   const pair = await newKeyPair();
   const keys = await jwksOf(pair);
   const odd = namespace({ override: (call) => call.path === "/active-wip" ? new Response(JSON.stringify({ claims: [{ dedupeKey: "k", executionId: "<script>alert(1)</script>", canonicalOwner: "x y", conflictKeys: ["ok:1", "bad key"], claimedAt: "yesterday" }], activeExecutions: 1 }), { status: 200 }) : undefined });
-  const body = await (await handleOperatorCoordinatorStatus(get(await token(pair, goodClaims())), env(odd), { now: () => NOW, fetchJwks: async () => keys })).json() as Record<string, any>;
+  const body = await (await handleOperatorCoordinatorStatus(get(await token(pair, goodClaims())), env(odd), { now: () => NOW, fetchJwks: async () => keys, jwksCache: new Map() })).json() as Record<string, any>;
   assert.equal(body.claims[0].claimId, "UNKNOWN");
   assert.equal(body.claims[0].canonicalOwner, "UNKNOWN");
   assert.deepEqual(body.claims[0].conflictKeys, ["ok:1", "UNKNOWN"]);
@@ -238,13 +231,13 @@ test("an unreachable, empty or malformed key set is a denial (fail closed)", asy
 });
 
 test("an unknown key id refetches the key set at most once per minute", async () => {
-  resetOperatorJwksCacheForTest();
   const pair = await newKeyPair();
   const keys = await jwksOf(pair);
   let fetches = 0;
   const fetchJwks = async () => { fetches += 1; return keys; };
   const unknown = await token(pair, goodClaims(), { alg: "RS256", kid: "rotated-key" });
-  const at = (now: number) => ({ now, requestHostname: HOST, fetchJwks });
+  const cache: JwksCache = new Map();
+  const at = (now: number) => ({ now, requestHostname: HOST, fetchJwks, jwksCache: cache });
   assert.deepEqual(await verifyAccessJwt(unknown, config, at(NOW)), { ok: false, code: "KID_UNKNOWN" });
   assert.equal(fetches, 1, "the key set was fetched just now, so an unknown key id does not fetch it again");
   assert.deepEqual(await verifyAccessJwt(unknown, config, at(NOW + 30_000)), { ok: false, code: "KID_UNKNOWN" });
@@ -256,18 +249,17 @@ test("an unknown key id refetches the key set at most once per minute", async ()
 });
 
 test("every denial answers with the same body, and the Coordinator is never touched", async () => {
-  resetOperatorJwksCacheForTest();
   const pair = await newKeyPair();
   const keys = await jwksOf(pair);
   const calls: Call[] = [];
   const ns = namespace({ calls });
   const attempts: Array<string | null> = [null, "garbage", await token(await newKeyPair(), goodClaims()), await token(pair, goodClaims({ exp: NOW / 1000 - 5 })), await token(pair, goodClaims({ email: "x@example.com" }))];
   for (const attempt of attempts) {
-    const response = await handleOperatorCoordinatorStatus(get(attempt), env(ns), { now: () => NOW, fetchJwks: async () => keys });
+    const response = await handleOperatorCoordinatorStatus(get(attempt), env(ns), { now: () => NOW, fetchJwks: async () => keys, jwksCache: new Map() });
     assert.equal(response.status, 401);
     assert.deepEqual(await response.json(), { error: "UNAUTHORIZED" });
   }
-  const hostile = await handleOperatorCoordinatorStatus(get(await token(pair, goodClaims()), "evil.example.com"), env(ns), { now: () => NOW, fetchJwks: async () => keys });
+  const hostile = await handleOperatorCoordinatorStatus(get(await token(pair, goodClaims()), "evil.example.com"), env(ns), { now: () => NOW, fetchJwks: async () => keys, jwksCache: new Map() });
   assert.equal(hostile.status, 401);
   assert.equal(calls.length, 0, "no denied request reached the Coordinator");
 });
@@ -285,10 +277,10 @@ test("a missing or malformed configuration keeps the route closed", async () => 
   ];
   for (const over of closed) {
     assert.equal(parseAccessConfig(env(ns, over)), undefined, JSON.stringify(over));
-    const response = await handleOperatorCoordinatorStatus(get(jwt), env(ns, over), { now: () => NOW, fetchJwks: async () => keys });
+    const response = await handleOperatorCoordinatorStatus(get(jwt), env(ns, over), { now: () => NOW, fetchJwks: async () => keys, jwksCache: new Map() });
     assert.equal(response.status, 503, JSON.stringify(over));
   }
-  assert.equal((await handleOperatorCoordinatorStatus(get(jwt), env(undefined), { now: () => NOW, fetchJwks: async () => keys })).status, 503, "no Coordinator binding");
+  assert.equal((await handleOperatorCoordinatorStatus(get(jwt), env(undefined), { now: () => NOW, fetchJwks: async () => keys, jwksCache: new Map() })).status, 503, "no Coordinator binding");
   assert.deepEqual(parseAccessConfig(env(ns)), config);
 });
 
@@ -297,7 +289,7 @@ test("only GET is served", async () => {
   const keys = await jwksOf(pair);
   const jwt = await token(pair, goodClaims());
   for (const method of ["POST", "PUT", "DELETE", "PATCH", "HEAD"]) {
-    const response = await handleOperatorCoordinatorStatus(new Request(`https://${HOST}/operator/coordinator/status`, { method, headers: { "cf-access-jwt-assertion": jwt } }), env(namespace()), { now: () => NOW, fetchJwks: async () => keys });
+    const response = await handleOperatorCoordinatorStatus(new Request(`https://${HOST}/operator/coordinator/status`, { method, headers: { "cf-access-jwt-assertion": jwt } }), env(namespace()), { now: () => NOW, fetchJwks: async () => keys, jwksCache: new Map() });
     assert.equal(response.status, 405, method);
   }
 });

@@ -73,12 +73,12 @@ function decodeJsonPart(value: string): Record<string, unknown> | undefined {
   } catch { return undefined; }
 }
 
-interface JwksCacheEntry { readonly keys: ReadonlyMap<string, JsonWebKey>; readonly fetchedAt: number; }
-const jwksCache = new Map<string, JwksCacheEntry>();
+export interface JwksCacheEntry { readonly keys: ReadonlyMap<string, JsonWebKey>; readonly fetchedAt: number; }
+export type JwksCache = Map<string, JwksCacheEntry>;
+/** The key sets of this Worker isolate. A caller may pass its own cache (the tests do), so no reset function needs to be exported. */
+const sharedJwksCache: JwksCache = new Map();
 
-export function resetOperatorJwksCacheForTest(): void { jwksCache.clear(); }
-
-async function loadKeys(teamDomain: string, now: number, fetchJwks: JwksFetcher, force: boolean): Promise<ReadonlyMap<string, JsonWebKey> | undefined> {
+async function loadKeys(jwksCache: JwksCache, teamDomain: string, now: number, fetchJwks: JwksFetcher, force: boolean): Promise<ReadonlyMap<string, JsonWebKey> | undefined> {
   const cached = jwksCache.get(teamDomain);
   if (cached && now - cached.fetchedAt < JWKS_TTL_MS && !force) return cached.keys;
   // A refetch is rate limited so that an unknown key id cannot make this route hammer the key endpoint.
@@ -101,7 +101,7 @@ async function loadKeys(teamDomain: string, now: number, fetchJwks: JwksFetcher,
   }
 }
 
-export async function defaultFetchJwks(url: string): Promise<unknown> {
+async function defaultFetchJwks(url: string): Promise<unknown> {
   const response = await fetch(url, { method: "GET", headers: { accept: "application/json" }, signal: AbortSignal.timeout(3000) });
   if (!response.ok) throw new Error("JWKS_HTTP_ERROR");
   const text = await response.text();
@@ -112,7 +112,7 @@ export async function defaultFetchJwks(url: string): Promise<unknown> {
 export async function verifyAccessJwt(
   token: string | null,
   config: AccessConfig,
-  context: { readonly now: number; readonly requestHostname: string; readonly fetchJwks: JwksFetcher },
+  context: { readonly now: number; readonly requestHostname: string; readonly fetchJwks: JwksFetcher; readonly jwksCache?: JwksCache },
 ): Promise<{ readonly ok: true; readonly operator: string } | { readonly ok: false; readonly code: AccessDenial }> {
   const deny = (code: AccessDenial) => ({ ok: false as const, code });
   if (token === null || token.trim() === "") return deny("TOKEN_MISSING");
@@ -125,11 +125,12 @@ export async function verifyAccessJwt(
   if (!header || !claims || !signature || signature.length === 0) return deny("TOKEN_MALFORMED");
   if (header.alg !== "RS256") return deny("ALG_NOT_ALLOWED");
   if (typeof header.kid !== "string" || header.kid.length === 0 || header.kid.length > 200) return deny("KID_MISSING");
-  let keys = await loadKeys(config.teamDomain, context.now, context.fetchJwks, false);
+  const jwksCache = context.jwksCache ?? sharedJwksCache;
+  let keys = await loadKeys(jwksCache, config.teamDomain, context.now, context.fetchJwks, false);
   if (!keys) return deny("JWKS_UNAVAILABLE");
   let jwk = keys.get(header.kid);
   if (!jwk) {
-    keys = await loadKeys(config.teamDomain, context.now, context.fetchJwks, true);
+    keys = await loadKeys(jwksCache, config.teamDomain, context.now, context.fetchJwks, true);
     if (!keys) return deny("JWKS_UNAVAILABLE");
     jwk = keys.get(header.kid);
     if (!jwk) return deny("KID_UNKNOWN");
@@ -218,14 +219,14 @@ function safeRevision(value: string | undefined): string { return typeof value =
 export async function handleOperatorCoordinatorStatus(
   request: Request,
   env: OperatorStatusEnv,
-  dependencies: { readonly now?: () => number; readonly fetchJwks?: JwksFetcher } = {},
+  dependencies: { readonly now?: () => number; readonly fetchJwks?: JwksFetcher; readonly jwksCache?: JwksCache } = {},
 ): Promise<Response> {
   if (request.method !== "GET") return json({ error: "METHOD_NOT_ALLOWED" }, 405);
   const config = parseAccessConfig(env);
   if (!config || !env.NUSA_EXECUTION_COORDINATOR) return json({ error: "OPERATOR_STATUS_NOT_CONFIGURED" }, 503);
   const now = (dependencies.now ?? Date.now)();
   const verdict = await verifyAccessJwt(request.headers.get("cf-access-jwt-assertion"), config, {
-    now, requestHostname: new URL(request.url).hostname, fetchJwks: dependencies.fetchJwks ?? defaultFetchJwks,
+    now, requestHostname: new URL(request.url).hostname, fetchJwks: dependencies.fetchJwks ?? defaultFetchJwks, jwksCache: dependencies.jwksCache,
   });
   // One body for every denial, so the response is not an oracle for which check failed.
   if (!verdict.ok) return json({ error: "UNAUTHORIZED" }, 401);
