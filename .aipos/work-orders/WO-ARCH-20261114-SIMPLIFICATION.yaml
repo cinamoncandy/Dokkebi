@@ -1,0 +1,24 @@
+id: WO-ARCH-20261114-SIMPLIFICATION
+title: Simplification step 2 - remove Cloudflare in stages, mobile-only product surface, one verification path
+status: READY_FOR_REVIEW
+priority: P1
+owner: nusa-development
+repository: cinamoncandy/NUSA
+authority_impact: none
+objective: >-
+  Record the owner decisions of 2026-11-14 (remove Cloudflare, simplify the design, mobile only) as a staged,
+  reversible plan S0 to S5, without changing code, workflows or any Cloudflare setting in this publication.
+evidence:
+  proposal: docs/PROPOSAL_SIMPLIFICATION_2026-11-14.md
+  builds_on: docs/PROPOSAL_TARGET_ARCHITECTURE_2026-10.md
+  mobile_data_source: 'main app: canonical cloud origin (apps/mobile/src/canonicalOrigin.ts); prototype monitor: apps/desktop/src/mobileBridge.ts'
+  worker_calls: [/github/webhook, /control-plane/release-check, /coding/execute, /audit/execute]
+scope:
+  - Documentation and this work order only.
+exclusions:
+  - No workflow, code, Cloudflare, host or deployment change.
+  - No relaxation of Audit, Release, WIP, risk, threshold or capital gates.
+  - PAPER_ONLY, liveAuthority=NONE, productionMutationAllowed=false, aiAuthority=ZERO_AUTHORITY unchanged.
+acceptance:
+  - (Proposal; needs owner approval before any phase.) A non-author review accepts the phase order and the safety exclusions.
+  - The owner answers the open points before S1 starts.
