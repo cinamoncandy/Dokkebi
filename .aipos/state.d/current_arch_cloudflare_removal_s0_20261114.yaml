@@ -1,0 +1,7 @@
+current_arch_cloudflare_removal_s0_20261114:
+  work_order: WO-ARCH-20261114-CLOUDFLARE-REMOVAL-S0
+  status: LOCAL_VALIDATED_PENDING_REVIEW_CI
+  branch: claude/cloudflare-removal-s0-inventory
+  validation: "see the work order"
+  next: "Non-author review, CI, then S1 (finish CONFIRM items, choose the HOLD home)."
+  safety: PAPER_ONLY_LIVE_NONE_PRODUCTION_MUTATION_FALSE_AI_ZERO_AUTHORITY
