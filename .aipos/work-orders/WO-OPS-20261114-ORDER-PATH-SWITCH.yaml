@@ -24,7 +24,7 @@ exclusions:
   - PAPER_ONLY, liveAuthority=NONE, productionMutationAllowed=false, aiAuthority=ZERO_AUTHORITY unchanged.
 validation:
   - 'New tests pass (2). Mutations: removing the guard fails the OFF test; trimming the value (" ON " enabling) fails it too. Review round 1 (ACCEPT WITH P2): exact ON only; OFF also holds after a later handle.startPaperRuntime() call.'
-  - 'Not covered by an automated test (stated, not claimed): a tick-driven proof that no order is produced and that research collection continues while OFF. The guard sits before every creation of the execution loop, boundary and writer lease; verify on the host before any use.'
+  - 'A third test feeds one market tick with the order path OFF and ON and asserts research still receives it (3 tests pass). It guards against the switch cutting market data or research; it does not by itself prove order blocking, which rests on the guard sitting before every creation of the writer lease, execution loop and order boundary (code review). Still not covered by a test: a decision-driven proof that an order is refused and a dashboard response while OFF; verify on the host before any use.'
   - 'tests/paper-startup-lease-budget-2770.test.js fails 2 tests (database.connection.setAuthorizer is not a function, Node 22 sandbox) identically on main without this change; CI runs Node 24.'
 acceptance:
   - A non-author review accepts the guard as authority-reducing and the fail-closed parsing.
