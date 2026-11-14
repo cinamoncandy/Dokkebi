@@ -5,11 +5,14 @@
  * (WO-OPS-20261030-AIPOS-STATUS-ARCHIVE-TRUTH).
  *
  * It is derived only from the work orders (active and archived) and the newest handoff, with no
- * timestamp, so the same repository always produces the same bytes. `tests/aipos-current-truth.test.js`
- * fails when the committed file differs from this script's output, so it cannot go stale by hand.
+ * timestamp, so the same repository always produces the same bytes. The file is NOT committed (it is in .gitignore):
+ * committing it made every merge that changed a work order turn every other open PR stale. A cold agent generates it
+ * on read, so it cannot be stale and cannot be hand-written. `tests/aipos-current-truth.test.js` pins that it stays
+ * untracked and that the instructions tell the agent to generate it.
  *
- *   node scripts/generate-aipos-current-truth.js           # rewrite .aipos/CURRENT_TRUTH.md
- *   node scripts/generate-aipos-current-truth.js --check   # exit 1 if the committed file is stale
+ *   node scripts/generate-aipos-current-truth.js           # write the local, untracked .aipos/CURRENT_TRUTH.md
+ *   node scripts/generate-aipos-current-truth.js --stdout  # print it without writing a file
+ *   node scripts/generate-aipos-current-truth.js --check   # exit 1 unless the output is non-empty and deterministic
  *
  * The file states what the records CLAIM. A status in a work order is a claim, not proof: verify
  * against GitHub before acting (CLAUDE.md step 2).
@@ -108,14 +111,15 @@ if (require.main === module) {
   const root = process.cwd();
   const fresh = render(root);
   if (process.argv.includes("--check")) {
-    const current = existsSync(join(root, OUTPUT)) ? readFileSync(join(root, OUTPUT), "utf8") : null;
-    if (current !== fresh) {
-      console.error(`AIPOS_CURRENT_TRUTH FAIL ${OUTPUT} is stale; run: node scripts/generate-aipos-current-truth.js`);
+    if (fresh.trim() === "" || fresh !== render(root)) {
+      console.error("AIPOS_CURRENT_TRUTH FAIL the generated output is empty or not deterministic");
       process.exit(1);
     }
-    console.log("AIPOS_CURRENT_TRUTH PASS");
+    console.log("AIPOS_CURRENT_TRUTH PASS (generated on read; the file is not committed)");
+  } else if (process.argv.includes("--stdout")) {
+    process.stdout.write(fresh);
   } else {
     writeFileSync(join(root, OUTPUT), fresh);
-    console.log(`AIPOS_CURRENT_TRUTH wrote ${OUTPUT}`);
+    console.log(`AIPOS_CURRENT_TRUTH wrote ${OUTPUT} (local, untracked)`);
   }
 }
