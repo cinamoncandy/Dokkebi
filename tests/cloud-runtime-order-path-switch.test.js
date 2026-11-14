@@ -20,6 +20,8 @@ const run = async (extra, port) => {
       NUSA_CLOUD_PAPER_INITIAL_CAPITAL_KRW: "1000000",
       ...extra,
     }, undefined, undefined, undefined, undefined, repository);
+    // A deferred or repeated activation must not bring the order path back when it is OFF.
+    handle.startPaperRuntime();
     return leaseStarts;
   } finally {
     if (handle) await handle.stop();
@@ -33,7 +35,7 @@ test("order path switch: unset and ON keep the order path (writer lease requeste
 });
 
 test("order path switch: OFF and any other value create no order path (fail closed)", async () => {
-  for (const [value, port] of [["OFF", 42993], ["off", 42994], ["", 42995], ["true", 42996], ["ONN", 42997]]) {
+  for (const [value, port] of [["OFF", 42993], ["off", 42994], ["", 42995], ["true", 42996], ["ONN", 42997], [" ON ", 42998], ["On", 42999]]) {
     assert.equal(await run({ NUSA_PAPER_ORDER_PATH: value }, port), 0, `value ${JSON.stringify(value)} must disable the order path`);
   }
 });

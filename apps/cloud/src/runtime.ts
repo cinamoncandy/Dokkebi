@@ -503,7 +503,7 @@ export function startCloudRuntime(
   // read-only dashboard. Unset or exactly "ON" keeps today's behaviour. Any other value (including a typo) is OFF:
   // no writer lease, no execution loop and no order boundary are created, so no order can be produced. It can only
   // remove the ability to order, never add authority.
-  const paperOrderPathEnabled = env.NUSA_PAPER_ORDER_PATH === undefined || env.NUSA_PAPER_ORDER_PATH.trim() === "ON";
+  const paperOrderPathEnabled = env.NUSA_PAPER_ORDER_PATH === undefined || env.NUSA_PAPER_ORDER_PATH === "ON";
   const startPaperRuntime = (): void => {
     if (paperRuntimeStarted) return;
     if (!paperOrderPathEnabled) { paperRuntimeStarted = true; return; }

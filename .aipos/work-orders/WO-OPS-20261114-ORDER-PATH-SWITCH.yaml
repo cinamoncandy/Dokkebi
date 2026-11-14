@@ -23,7 +23,8 @@ exclusions:
   - Does not fix the missing PERMIT evidence (#3108, still BLOCKED_WIP_UNKNOWN).
   - PAPER_ONLY, liveAuthority=NONE, productionMutationAllowed=false, aiAuthority=ZERO_AUTHORITY unchanged.
 validation:
-  - 'New tests pass (2). Mutation: removing the guard fails the OFF test.'
+  - 'New tests pass (2). Mutations: removing the guard fails the OFF test; trimming the value (" ON " enabling) fails it too. Review round 1 (ACCEPT WITH P2): exact ON only; OFF also holds after a later handle.startPaperRuntime() call.'
+  - 'Not covered by an automated test (stated, not claimed): a tick-driven proof that no order is produced and that research collection continues while OFF. The guard sits before every creation of the execution loop, boundary and writer lease; verify on the host before any use.'
   - 'tests/paper-startup-lease-budget-2770.test.js fails 2 tests (database.connection.setAuthorizer is not a function, Node 22 sandbox) identically on main without this change; CI runs Node 24.'
 acceptance:
   - A non-author review accepts the guard as authority-reducing and the fail-closed parsing.
