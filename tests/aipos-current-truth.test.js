@@ -4,14 +4,39 @@ const assert = require("node:assert/strict");
 const fs = require("node:fs");
 const os = require("node:os");
 const path = require("node:path");
+const { spawnSync } = require("node:child_process");
 const { OUTPUT, render, newestHandoff } = require("../scripts/generate-aipos-current-truth.js");
 
 // WO-OPS-20261030-AIPOS-STATUS-ARCHIVE-TRUTH: .aipos/CURRENT_TRUTH.md is generated, never hand-written.
 const repo = path.join(__dirname, "..");
 
-test("CURRENT_TRUTH.md is up to date with the work orders and newest handoff", () => {
-  const committed = fs.readFileSync(path.join(repo, OUTPUT), "utf8");
-  assert.equal(committed, render(repo), "stale: run `node scripts/generate-aipos-current-truth.js` and commit the result");
+test("CURRENT_TRUTH.md is generated on read and never committed", () => {
+  const ignore = fs.readFileSync(path.join(repo, ".gitignore"), "utf8").replace(/\r\n/g, "\n").split("\n");
+  assert.ok(ignore.includes(OUTPUT), `${OUTPUT} must be listed in .gitignore`);
+  const tracked = spawnSync("git", ["ls-files", "--", OUTPUT], { cwd: repo, encoding: "utf8" });
+  // A failing git command must fail this test, never skip the check.
+  assert.equal(tracked.status, 0, `git ls-files failed: ${tracked.stderr}`);
+  assert.equal(tracked.stdout.trim(), "", `${OUTPUT} must not be tracked (generated on read)`);
+});
+
+test("--stdout prints exactly what render() returns and writes no file", () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), "nusa-truth-stdout-"));
+  fs.cpSync(path.join(repo, ".aipos", "handoffs"), path.join(root, ".aipos", "handoffs"), { recursive: true });
+  fs.mkdirSync(path.join(root, ".aipos", "work-orders", "archive"), { recursive: true });
+  fs.writeFileSync(path.join(root, ".aipos", "work-orders", "WO-X.yaml"), "id: WO-X\ntitle: X\nstatus: IN_PROGRESS\n");
+  const run = spawnSync(process.execPath, [path.join(repo, "scripts", "generate-aipos-current-truth.js"), "--stdout"], { cwd: root, encoding: "utf8" });
+  assert.equal(run.status, 0, run.stderr);
+  assert.equal(run.stdout, render(root));
+  assert.equal(fs.existsSync(path.join(root, OUTPUT)), false);
+});
+
+test("the cold-start instructions tell the agent to generate the file", () => {
+  for (const name of ["AGENTS.md", "CLAUDE.md"]) {
+    const text = fs.readFileSync(path.join(repo, name), "utf8").replace(/\r\n/g, "\n");
+    assert.match(text, /aipos:truth|generate-aipos-current-truth/, `${name} must say how to generate CURRENT_TRUTH.md`);
+    assert.match(text, /not committed|generated on read|untracked/i, `${name} must say the file is not committed`);
+    assert.match(text, /regenerate it/i, `${name} must say to regenerate it every time, not trust an existing local copy`);
+  }
 });
 
 function fixture() {
