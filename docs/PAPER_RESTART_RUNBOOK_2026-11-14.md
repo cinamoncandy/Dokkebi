@@ -46,7 +46,7 @@ the release rolls back, and the rollback also restarts the services. Consequence
 2. After the release reports success, the agent reads the state (read-only `oracle-host-diagnose.yml` with `health_only`).
 3. Three different kinds of evidence are needed; none replaces another:
    - **Structure:** the running build has the switch and the env value is `OFF` (diagnose output of the build SHA; no order boundary exists, from the code and `tests/cloud-runtime-order-path-switch.test.js`).
-   - **Behaviour:** an attempt that would produce an order does not. Stage A is NOT approved and NOT run until a decision-driven order-refusal test passes. A note that it is unproven never replaces a passing test. Today only a guard test and a research-continues test exist, so this stage is blocked.
+   - **Behaviour:** an attempt that would produce an order does not. The decision-driven test now exists (PR #3120: `tests/cloud-runtime-order-path-switch-e2e.test.js`, ON control produces a FILL, OFF produces none). Stage A stays BLOCKED until that test has passed in exact-head CI AND is contained in the release SHA that Stage A deploys. Its scope is the tick-driven path of the CURRENT build; it does not cover every order entry point and it is not proof for the previous (rollback target) build, which is condition 0.5.
    - **Observation:** `paperOrderCount` and fill counts do not rise, and `lastMarketEventAt` and the research row counts do rise, read at two points at least one hour apart. Field names were not read from a running host; if a field is missing the check does not pass and the stage stays blocked.
 4. If any check fails: stop the service first, confirm it is inactive, then follow the rollback.
 
