@@ -1,0 +1,24 @@
+id: WO-ARCH-20261114-CI-COST-DESIGN
+title: CI cost and queue design note - measured PR classes, recommendation to defer risk-proportional CI, Windows job inventory as the next step
+status: READY_FOR_REVIEW
+created: 2026-11-14
+implementation_branch: claude/ci-cost-design
+owner_decision: "2026-11-14: the owner told the agent to do the improvement list on its own judgement and to record item 3 as a design note ('그렇게 해')."
+objective: "Record what was measured about CI cost so a later decision on required checks rests on data, and avoid an unsafe 'docs is light' rule."
+evidence:
+  design: docs/CI_COST_DESIGN_2026-11-14.md
+  measurement: "fixed sample of 40 merged PRs (numbers listed in the design note) by file class: 0 docs-only, 9 docs plus records, 31 in the full-CI class (everything else; includes code or config changes but is not limited to them); 38 docs files are read by tests or scripts and 17 tests read .aipos."
+scope:
+  - Documentation and this work order only.
+exclusions:
+  - No workflow, required check, branch protection, runner or code change. No safety check is reduced.
+safety:
+  paper_only: true
+  liveAuthority: NONE
+  productionMutationAllowed: false
+  aiAuthority: ZERO_AUTHORITY
+review_round_1: "ACCEPT WITH P2 at d86a315be. Fixed: the Windows inventory now lists all 4 job definitions (7 runs per head) including the aggregate coverage job; the sample is a fixed list of PR numbers with the exact classification rule, the 38-doc and 17-test counting commands, and the recount (0/9/31, 22.5% by count, not a time saving); observed queueing is separated from not-measured queue time."
+review_round_2: "ACCEPT WITH P2 at 65b212f8f. Fixed: the third class is named everything else / full CI set, not code or config changes; the counts remain reported figures with a stated method, not independently re-measured."
+unverified: "No queue time or cost was measured; branch protection and required check names could not be read (403 to the agent token)."
+acceptance:
+  - A non-author review confirms the measurement method, that the 'docs is light' rule is correctly rejected, and that no check is reduced.
