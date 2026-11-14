@@ -1,0 +1,24 @@
+id: WO-OPS-20261114-HEALTH-WATCH-V2-DESIGN
+title: Health watch v2 design - deeper signals (collection, permit evidence) behind a dedicated read-only monitor credential
+status: READY_FOR_REVIEW
+created: 2026-11-14
+implementation_branch: claude/health-watch-v2-design
+owner_decision: "2026-11-14: the owner told the agent to do the improvement list on its own judgement. Adding a secret and the `secrets` permission still needs the owner's approval at W3."
+objective: "Extend the liveness-only watch (#3116) to the signals that were missed in the 2026-11-13/14 incidents, without putting a broad credential into GitHub."
+evidence:
+  design: docs/HEALTH_WATCH_V2_DESIGN_2026-11-14.md
+  key_finding: "The only runtime credential, NUSA_CLOUD_DASHBOARD_TOKEN, carries paper:trade, settings:write and users:manage scopes (apps/cloud/src/cloudRuntimeConfig.ts), so it must never be an Actions secret; a dedicated dashboard:read-only monitor credential on a fixed GET allow-list is needed first."
+scope:
+  - Documentation and this work order only.
+exclusions:
+  - No code, workflow, secret, host or Cloudflare change. No relaxation of any gate.
+safety:
+  paper_only: true
+  liveAuthority: NONE
+  productionMutationAllowed: false
+  aiAuthority: ZERO_AUTHORITY
+review_round_1: "REJECT at c068351ea (1 P1, 2 P2), valid. The permit alarm no longer fires on a normal refusal: it needs ORDER_INTENT PASS or a FILL in a cycle without a PERMISSION PASS (ORDER_INTENT is PASS only for FILLED, FAIL or SKIP otherwise); a separate observation-failure alarm covers missing events. Token handling requirements and the W3 completion conditions were written down; W2 can start without W1."
+review_round_2: "ACCEPT WITH P2 at 9f2f29fa1. P2 fixed: confirmed violation (order success with a PERMISSION event present and not PASS) is separated from an observation failure (PERMISSION missing, window incomplete, cycle not linkable); a missing state is neither a confirmed violation nor proof of safety."
+unverified: "The signal field names (lastMarketEventAt, research row counts, PERMISSION/ORDER_INTENT stages in /api/paper-operations) were read from code, not from a running host; the service is stopped."
+acceptance:
+  - A non-author review confirms the credential finding, the alarm rules and that no broad token reaches GitHub.
