@@ -28,3 +28,6 @@ storybook-static/
 /artifacts/autopilot-execution/cited-run.json
 /artifacts/autopilot-execution/dispatch-freshness.json
 /artifacts/autopilot-execution/cited-workflow-runs.json
+
+# Generated on read (pnpm run aipos:truth); never committed
+.aipos/CURRENT_TRUTH.md
