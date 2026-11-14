@@ -33,10 +33,14 @@ jobs:
         id: decide
         run: |
           set -uo pipefail
-          URL="$(node -e 'process.stdout.write(JSON.parse(require("fs").readFileSync("deploy/health-watch.json","utf8")).healthUrl)')"
-          case "$URL" in https://*) ;; *) echo "health url must be https"; exit 1;; esac
-          CODE="$(curl -sS -m 20 -o /tmp/health.json -w '%{http_code}' "$URL" || true)"
-          RESULT="$(node scripts/health-watch-decide.js deploy/health-watch.json "${CODE:-0}" /tmp/health.json)"
+          # A missing, unparsable or non-https config is a configuration alarm (never a failed step that nobody sees).
+          URL="$(node -e 'const u=JSON.parse(require("fs").readFileSync("deploy/health-watch.json","utf8")).healthUrl;if(typeof u!=="string"||!/^https:\/\/[a-z0-9.-]+\/health$/.test(u))process.exit(1);process.stdout.write(u)' 2>/dev/null)" || URL=""
+          if [ -z "$URL" ]; then
+            RESULT="CONFIG_INVALID unreadable_or_invalid_config"
+          else
+            CODE="$(curl -sS -m 20 -o /tmp/health.json -w '%{http_code}' "$URL" || true)"
+            RESULT="$(node scripts/health-watch-decide.js deploy/health-watch.json "${CODE:-0}" /tmp/health.json 2>/dev/null)" || RESULT="CONFIG_INVALID unreadable_or_invalid_config"
+          fi
           echo "alert=${RESULT%% *}" >> "$GITHUB_OUTPUT"
           echo "reason=${RESULT#* }" >> "$GITHUB_OUTPUT"
           echo "$RESULT"

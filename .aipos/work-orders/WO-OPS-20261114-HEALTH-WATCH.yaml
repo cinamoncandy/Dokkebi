@@ -18,5 +18,6 @@ safety:
   aiAuthority: ZERO_AUTHORITY
 validation:
   - "tests/health-watch.test.js (4) pass; mutation removing the UNEXPECTED_UP branch fails one test. A real probe of the public route returned HTTP 502 (service stopped) which the decision maps to no alert while STOPPED."
+review_round_1: "ACCEPT WITH P2 at 1b5fc2568. P2 fixed: an unreadable, unparsable or non-https deploy/health-watch.json now ends in a CONFIG_INVALID alarm (simulated locally with broken JSON). P2 accepted as a residual: the find-then-create issue step is not atomic; the concurrency group (one run at a time) prevents the realistic race, a second run only comments."
 unverified: "The schedule has not fired and the issue step has not run (only visible on GitHub). Only liveness is watched: the public health route's field names for collection gaps and permit evidence were not read from a running host, so those alarms need a separate read path (follow-up)."
 next: "Non-author review, then un-draft. After the restart PR, confirm expectedState RUNNING and one real alert/no-alert cycle."

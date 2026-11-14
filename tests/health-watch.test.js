@@ -37,4 +37,8 @@ test("the committed config and workflow stay read-only and https", () => {
   assert.doesNotMatch(workflow, /systemctl|ssh /);
   assert.doesNotMatch(workflow, /^\s*(pull_request|pull_request_target|workflow_run)\s*:/m);
   assert.match(workflow, /cron: "7,37 \* \* \* \*"/);
+  // An unreadable or invalid config must end in a CONFIG_INVALID alarm, not in a step failure nobody reads.
+  assert.match(workflow, /RESULT="CONFIG_INVALID unreadable_or_invalid_config"/);
+  assert.match(workflow, /\|\| URL=""/);
+  assert.match(workflow, /\|\| RESULT="CONFIG_INVALID unreadable_or_invalid_config"/);
 });
