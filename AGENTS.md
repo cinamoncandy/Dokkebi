@@ -27,7 +27,7 @@ pre-Audit review rather than independent Audit or Release approval.
 Before planning, editing, or generating code:
 
 1. Read `.aipos/aipos.yaml`.
-2. Generate and read `.aipos/CURRENT_TRUTH.md`: run `pnpm run aipos:truth` (or `node scripts/generate-aipos-current-truth.js --stdout`). The file is generated on read and is not committed, so it is never stale and a PR never needs to regenerate it. Then read `.aipos/state.yaml`.
+2. Generate and read `.aipos/CURRENT_TRUTH.md`: run `pnpm run aipos:truth` (or `node scripts/generate-aipos-current-truth.js --stdout`). The file is generated on read and is not committed, so a PR never needs to regenerate it. Regenerate it at every cold start: a file that already exists locally is not evidence that it is current. Then read `.aipos/state.yaml`.
 3. Follow the recovery protocol and active work order referenced there.
 4. Read `.aipos/architecture.md`, `.aipos/context.md`, and relevant decisions.
 5. Verify changes with the commands recorded in the work order.

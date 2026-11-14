@@ -14,7 +14,9 @@ test("CURRENT_TRUTH.md is generated on read and never committed", () => {
   const ignore = fs.readFileSync(path.join(repo, ".gitignore"), "utf8").replace(/\r\n/g, "\n").split("\n");
   assert.ok(ignore.includes(OUTPUT), `${OUTPUT} must be listed in .gitignore`);
   const tracked = spawnSync("git", ["ls-files", "--", OUTPUT], { cwd: repo, encoding: "utf8" });
-  if (tracked.status === 0) assert.equal(tracked.stdout.trim(), "", `${OUTPUT} must not be tracked (generated on read)`);
+  // A failing git command must fail this test, never skip the check.
+  assert.equal(tracked.status, 0, `git ls-files failed: ${tracked.stderr}`);
+  assert.equal(tracked.stdout.trim(), "", `${OUTPUT} must not be tracked (generated on read)`);
 });
 
 test("--stdout prints exactly what render() returns and writes no file", () => {
@@ -33,6 +35,7 @@ test("the cold-start instructions tell the agent to generate the file", () => {
     const text = fs.readFileSync(path.join(repo, name), "utf8").replace(/\r\n/g, "\n");
     assert.match(text, /aipos:truth|generate-aipos-current-truth/, `${name} must say how to generate CURRENT_TRUTH.md`);
     assert.match(text, /not committed|generated on read|untracked/i, `${name} must say the file is not committed`);
+    assert.match(text, /regenerate it/i, `${name} must say to regenerate it every time, not trust an existing local copy`);
   }
 });
 
