@@ -1,0 +1,22 @@
+id: WO-ARCH-20261114-CLOUDFLARE-REMOVAL-S0
+title: Cloudflare removal S0 - read-only inventory of every Worker call, the Cloudflare-only workflows and the Release HOLD that must be replaced
+status: READY_FOR_REVIEW
+created: 2026-11-14
+implementation_branch: claude/cloudflare-removal-s0-inventory
+owner_decision: "2026-11-14: Cloudflare is not needed; remove the connection in stages (owner message). This is phase S0 of docs/PROPOSAL_SIMPLIFICATION_2026-11-14.md."
+objective: "Name every caller of the Worker, what each call decides and what state it holds, so S1-S3 can replace them without losing a safety control."
+evidence:
+  inventory: docs/CLOUDFLARE_REMOVAL_INVENTORY_2026-11-14.md
+  key_finding: "/control-plane/release-check is the durable Release HOLD and global freeze that the auto-merge path asks (fails closed). Removing Cloudflare removes its storage, so S3 needs an owner-controlled durable replacement before that call is switched."
+scope:
+  - Documentation and this work order only.
+exclusions:
+  - No workflow, code, secret, Cloudflare, host or deployment change; no relaxation of HOLD, freeze, WIP, Audit or Release.
+safety:
+  paper_only: true
+  liveAuthority: NONE
+  productionMutationAllowed: false
+  aiAuthority: ZERO_AUTHORITY
+unverified: "Items marked CONFIRM in the inventory (Coordinator state of the coding routes, the scheduled reconciliation, the convergence workflows) were not read in detail."
+acceptance:
+  - A non-author review confirms the route table matches worker.ts and the workflows, and that the HOLD replacement conditions in section 3 are sufficient.
