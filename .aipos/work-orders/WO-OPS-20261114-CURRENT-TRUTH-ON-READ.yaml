@@ -1,0 +1,23 @@
+id: WO-OPS-20261114-CURRENT-TRUTH-ON-READ
+title: Generate CURRENT_TRUTH.md on read instead of committing it (stop every merge from making every open PR stale)
+status: READY_FOR_REVIEW
+created: 2026-11-14
+implementation_branch: claude/current-truth-generated-on-read
+owner_decision: "2026-11-14: the owner approved improvement I3 (option A) of docs/PROPOSAL_SIMPLIFICATION_2026-11-14.md ('승인'). This changes AGENTS.md and CLAUDE.md wording, so it needs non-author review."
+trigger: "tests/aipos-current-truth.test.js required the committed file to equal the generator output. Any merge that changed a work order made every other open PR stale, so each PR had to merge main and regenerate it again and again; the resulting CI failure was not a product defect."
+change:
+  - "scripts/generate-aipos-current-truth.js: new --stdout mode; --check now verifies the output is non-empty and deterministic; the default mode writes the local file."
+  - ".gitignore lists .aipos/CURRENT_TRUTH.md and the file is removed from git; it is generated on read."
+  - "AGENTS.md step 2 and CLAUDE.md step 1 tell the agent to run `pnpm run aipos:truth` first and say the file is not committed."
+  - "tests/aipos-current-truth.test.js: replaces the stale-file check with three pins (the file is ignored and untracked; --stdout equals render() and writes nothing; AGENTS.md and CLAUDE.md name the generator and say it is not committed). Determinism, handoff-by-date and change-detection tests are kept."
+not_changed:
+  - "The content of the generated summary, the work orders, state files, every validator and every gate. No check was removed or relaxed. The records stay the source of truth."
+safety:
+  paper_only: true
+  liveAuthority: NONE
+  productionMutationAllowed: false
+  aiAuthority: ZERO_AUTHORITY
+validation:
+  - "tests/aipos-current-truth.test.js 6 pass; mutation: tracking the file again fails the untracked test. aipos*/agents/governance tests, validate-aipos-yaml, portability, platform-independent and AI zero-authority validators pass."
+risk: "A cold agent could skip the generator step. The instructions in AGENTS.md and CLAUDE.md say to run it first and a test pins that wording. Open PRs that still modify the committed file will conflict once this merges; they take main and drop their copy of the file."
+next: "Non-author review (governed instruction files changed), CI, then the release path."
