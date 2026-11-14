@@ -1,0 +1,7 @@
+current_ops_health_watch_20261114:
+  work_order: WO-OPS-20261114-HEALTH-WATCH
+  status: LOCAL_VALIDATED_PENDING_REVIEW_CI
+  branch: claude/health-watch-issue
+  validation: "see the work order"
+  next: "CI, non-author review, then un-draft; confirm the first scheduled run."
+  safety: PAPER_ONLY_LIVE_NONE_PRODUCTION_MUTATION_FALSE_AI_ZERO_AUTHORITY
